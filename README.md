@@ -2,9 +2,16 @@
 
 Own your context.
 
-1Context is the cross-agent memory layer for agentic work. This repository is
-currently a tiny public launch stub used to validate the open source plumbing:
-GitHub visibility, licensing, release tags, and Homebrew installation.
+An engine for agentic work.
+
+1Context passively captures what you work on, builds a living wiki for every
+project you touch, updates as you work, and opens in any browser with a
+shareable link. Claude Code, Cursor, and Codex connect via MCP. No
+configuration, no prompts, no workflow changes.
+
+This repository is currently a tiny public launch stub used to validate the
+open source plumbing: GitHub visibility, licensing, release tags, and Homebrew
+installation.
 
 ## Install
 
