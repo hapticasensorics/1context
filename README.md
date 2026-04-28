@@ -24,6 +24,8 @@ To disable the check:
 ONECONTEXT_NO_UPDATE_CHECK=1 1context
 ```
 
+## Thanks
+
 Thanks to [Karpathy](https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f)
 for llm-wiki.
 
