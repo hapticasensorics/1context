@@ -6,6 +6,6 @@ This release validates:
 - `1context --version`
 - `1context --help`
 - `1context`
-- the Homebrew update path
+- update notices from GitHub Releases
 
 The full 1Context runtime is under active development.

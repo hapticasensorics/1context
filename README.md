@@ -13,6 +13,17 @@ prompts, no workflow changes.
 brew install hapticasensorics/tap/1context
 ```
 
+## Updates
+
+1Context checks GitHub Releases at most once per day. No identifiers,
+telemetry, or project data are sent.
+
+To disable the check:
+
+```bash
+ONECONTEXT_NO_UPDATE_CHECK=1 1context
+```
+
 ## License
 
 Apache-2.0. Copyright Aurem, Inc.
