@@ -1,11 +1,11 @@
 # 1Context
 
-Own your context. A memory engine for agentic work.
-
 1Context passively captures what you work on, builds a living wiki for every
 project you touch, updates as you work, and opens in any browser with a
-shareable link. Claude Code, Cursor, and Codex connect via MCP. No
-configuration, no prompts, no workflow changes.
+shareable link. Claude Code and Codex connect via MCP. No configuration, no
+prompts, no workflow changes.
+
+[haptica.ai](https://haptica.ai)
 
 This repository currently contains the public bootstrap CLI and installation
 plumbing for 1Context. The product runtime is under active development.
