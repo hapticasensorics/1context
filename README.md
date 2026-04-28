@@ -1,8 +1,6 @@
 # 1Context
 
-The cross-agent memory layer for your work.
-
-Own your context. An engine for agentic work.
+Own your context. A memory engine for agentic work.
 
 1Context passively captures what you work on, builds a living wiki for every
 project you touch, updates as you work, and opens in any browser with a
