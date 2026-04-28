@@ -8,20 +8,14 @@ prompts, no workflow changes.
 [haptica.ai](https://haptica.ai)
 
 This repository currently contains the public bootstrap CLI and installation
-plumbing for 1Context. The product runtime is under active development.
+plumbing for 1Context. Runtime coming soon.
 
 ## Install
 
 ```bash
 brew install hapticasensorics/tap/1context
+1context
 ```
-
-## Status
-
-Bootstrap preview. The CLI currently validates installation and the future
-update path.
-
-The bootstrap CLI makes no network calls and collects no telemetry.
 
 ## License
 
