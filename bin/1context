@@ -1,0 +1,32 @@
+#!/usr/bin/env sh
+set -eu
+
+VERSION="0.1.0"
+
+case "${1:-}" in
+  --version|-V|version)
+    echo "1context ${VERSION}"
+    ;;
+  doctor)
+    echo "1Context plumbing ok"
+    echo "repo: https://github.com/hapticasensorics/1context"
+    echo "license: Apache-2.0"
+    ;;
+  ""|help|--help|-h)
+    cat <<'EOF'
+1context - cross-agent memory plumbing
+
+Usage:
+  1context doctor
+  1context --version
+
+This is the public launch stub. The full memory runtime will land here after
+the source surface is scrubbed.
+EOF
+    ;;
+  *)
+    echo "unknown command: $1" >&2
+    echo "try: 1context doctor" >&2
+    exit 64
+    ;;
+esac
