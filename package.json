@@ -1,0 +1,12 @@
+{
+  "name": "1context",
+  "version": "0.1.0",
+  "description": "Own your context. An engine for agentic work.",
+  "license": "Apache-2.0",
+  "bin": {
+    "1context": "bin/1context.js"
+  },
+  "scripts": {
+    "test": "node bin/1context.js doctor && node bin/1context.js --version && node bin/1context.js paths"
+  }
+}
