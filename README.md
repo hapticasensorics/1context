@@ -14,7 +14,6 @@ plumbing for 1Context. Runtime coming soon.
 
 ```bash
 brew install hapticasensorics/tap/1context
-1context
 ```
 
 ## License
