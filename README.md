@@ -13,22 +13,13 @@ plumbing for 1Context. The product runtime is under active development.
 ## Install
 
 ```bash
-brew tap hapticasensorics/tap
 brew install hapticasensorics/tap/1context
-```
-
-## Check
-
-```bash
-1context --version
-1context doctor
-1context paths
 ```
 
 ## Status
 
-Bootstrap preview. The CLI currently validates installation, versioning, and
-future runtime paths.
+Bootstrap preview. The CLI currently validates installation and the future
+update path.
 
 The bootstrap CLI makes no network calls and collects no telemetry.
 
