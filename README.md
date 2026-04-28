@@ -7,9 +7,6 @@ prompts, no workflow changes.
 
 [haptica.ai](https://haptica.ai)
 
-This repository currently contains the public bootstrap CLI and installation
-plumbing for 1Context. Runtime coming soon.
-
 ## Install
 
 ```bash
