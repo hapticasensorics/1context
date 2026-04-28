@@ -19,4 +19,4 @@ brew install hapticasensorics/tap/1context
 
 ## License
 
-Apache-2.0. Copyright Haptica, Inc.
+Apache-2.0. Copyright Aurem, Inc.
