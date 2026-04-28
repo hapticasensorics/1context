@@ -7,6 +7,7 @@ const path = require("path");
 
 const repoRoot = path.resolve(__dirname, "..");
 const cliPath = path.join(repoRoot, "bin", "1context.js");
+const pkg = require(path.join(repoRoot, "package.json"));
 
 function startServer(payload) {
   const server = http.createServer((request, response) => {
@@ -66,10 +67,10 @@ function runCli(args, env) {
     const result = await runCli([], env);
 
     assert.strictEqual(result.status, 0);
-    assert.match(result.stdout, /1Context 0\.1\.2/);
+    assert.match(result.stdout, new RegExp(`1Context ${pkg.version}`));
     assert.match(
       result.stderr,
-      /1Context 9\.9\.9 is available\. You have 0\.1\.2\./,
+      new RegExp(`1Context 9\\.9\\.9 is available\\. You have ${pkg.version}\\.`),
     );
     assert.match(
       result.stderr,
@@ -83,7 +84,7 @@ function runCli(args, env) {
 
     const versionResult = await runCli(["--version"], env);
     assert.strictEqual(versionResult.status, 0);
-    assert.strictEqual(versionResult.stdout.trim(), "0.1.2");
+    assert.strictEqual(versionResult.stdout.trim(), pkg.version);
     assert.strictEqual(versionResult.stderr, "");
 
     const disabledResult = await runCli([], {
