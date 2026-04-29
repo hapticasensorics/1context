@@ -1,4 +1,4 @@
-macOS menu bar release.
+macOS public preview.
 
 This release validates:
 
@@ -10,4 +10,4 @@ This release validates:
 - native macOS menu bar packaging
 - local runtime start/status/stop
 
-The full 1Context product runtime is still under active development.
+The full 1Context product is still under active development.

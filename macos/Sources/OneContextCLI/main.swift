@@ -37,7 +37,7 @@ struct OneContextCLI {
   static func printMain() async {
     print("""
     1Context \(oneContextVersion)
-    Public bootstrap. Runtime coming soon.
+    Public macOS preview.
     https://github.com/hapticasensorics/1context
     """)
     await maybeCheckForUpdate()

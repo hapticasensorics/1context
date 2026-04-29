@@ -1,7 +1,7 @@
 import Foundation
 import Darwin
 
-public let oneContextVersion = "0.1.8"
+public let oneContextVersion = "0.1.9"
 public let oneContextGitHubURL = URL(string: "https://github.com/hapticasensorics/1context")!
 public let oneContextLatestReleaseURL = URL(string: "https://api.github.com/repos/hapticasensorics/1context/releases/latest")!
 public let oneContextHomebrewUpdateCommand = "brew upgrade --cask hapticasensorics/tap/1context"
@@ -654,8 +654,6 @@ public final class RuntimeController {
       Bundle.main.bundleURL.deletingLastPathComponent().appendingPathComponent("onecontextd").path,
       executableDirectory?.appendingPathComponent("onecontextd").path,
       "/Applications/1Context.app/Contents/MacOS/onecontextd",
-      "/opt/homebrew/bin/onecontextd",
-      "/usr/local/bin/onecontextd",
       FileManager.default.currentDirectoryPath + "/macos/.build/debug/onecontextd",
       FileManager.default.currentDirectoryPath + "/macos/.build/release/onecontextd",
       findInBuildDirectory(URL(fileURLWithPath: FileManager.default.currentDirectoryPath + "/macos/.build"))

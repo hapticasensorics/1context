@@ -13,9 +13,9 @@ prompts, no workflow changes.
 brew install --cask hapticasensorics/tap/1context
 ```
 
-## macOS Launch Spine
+## Development
 
-This repository includes the public macOS runtime and menu bar prototype:
+This repository includes the public macOS runtime and menu bar app:
 
 ```bash
 ./scripts/test.sh
@@ -30,7 +30,7 @@ Runtime commands use product language:
 1context stop
 ```
 
-The menu bar prototype can be packaged locally with:
+The menu bar app can be packaged locally with:
 
 ```bash
 NOTARIZE=1 ./scripts/package-macos-release.sh
