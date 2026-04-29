@@ -93,7 +93,16 @@ Runtime commands use product language:
 The menu bar app can be packaged locally with:
 
 ```bash
-NOTARIZE=1 ./scripts/package-macos-release.sh
+ALLOW_UNNOTARIZED=1 NOTARIZE=0 ./scripts/package-macos-release.sh
+```
+
+That produces an ad-hoc signed local build under `dist/` and does not require a
+Developer ID certificate.
+
+Maintainer release packaging uses Developer ID signing and notarization:
+
+```bash
+ONECONTEXT_SIGNING_MODE=developer-id NOTARIZE=1 ./scripts/package-macos-release.sh
 ```
 
 Release packaging validates that archives do not contain local owner/group
@@ -104,8 +113,7 @@ fallback paths. To clear local release outputs before packaging:
 ./scripts/clean-release-artifacts.sh
 ```
 
-Developer ID signing is enabled when the signing identity is present. To notarize
-the built app, first configure a `notarytool` keychain profile, then run:
+To notarize the built app, first configure a `notarytool` keychain profile, then run:
 
 ```bash
 NOTARYTOOL_PROFILE=1context-notary ./scripts/notarize-macos-app.sh

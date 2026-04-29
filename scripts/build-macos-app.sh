@@ -7,6 +7,7 @@ APP_DIR="$ROOT/dist/1Context.app"
 CONTENTS_DIR="$APP_DIR/Contents"
 MACOS_APP_DIR="$CONTENTS_DIR/MacOS"
 RESOURCES_DIR="$CONTENTS_DIR/Resources"
+SIGNING_MODE="${ONECONTEXT_SIGNING_MODE:-adhoc}"
 IDENTITY="${CODESIGN_IDENTITY:-Developer ID Application: Paul Han (NBY9V4M69J)}"
 VERSION="${ONECONTEXT_VERSION:-0.1.27}"
 ARCH="${ONECONTEXT_ARCH:-arm64}"
@@ -68,7 +69,12 @@ cat > "$CONTENTS_DIR/Info.plist" <<PLIST
 </plist>
 PLIST
 
-if command -v codesign >/dev/null 2>&1 && security find-identity -v -p codesigning | grep -F "$IDENTITY" >/dev/null; then
+if [[ "$SIGNING_MODE" == "developer-id" ]]; then
+  if ! command -v codesign >/dev/null 2>&1 || ! security find-identity -v -p codesigning | grep -F "$IDENTITY" >/dev/null; then
+    echo "Developer ID identity not found: $IDENTITY" >&2
+    exit 1
+  fi
+
   codesign \
     --force \
     --options runtime \
@@ -97,9 +103,6 @@ if command -v codesign >/dev/null 2>&1 && security find-identity -v -p codesigni
     --entitlements "$MACOS_DIR/entitlements.plist" \
     --sign "$IDENTITY" \
     "$APP_DIR" >/dev/null
-elif [[ "${REQUIRE_DEVELOPER_ID:-0}" == "1" ]]; then
-  echo "Developer ID identity not found: $IDENTITY" >&2
-  exit 1
 elif command -v codesign >/dev/null 2>&1; then
   codesign --force --sign - "$APP_DIR" >/dev/null
 fi

@@ -13,9 +13,9 @@ if [[ "${NOTARIZE:-1}" != "1" && "${ALLOW_UNNOTARIZED:-0}" != "1" ]]; then
 fi
 
 if [[ "${NOTARIZE:-1}" == "1" ]]; then
-  export REQUIRE_DEVELOPER_ID="${REQUIRE_DEVELOPER_ID:-1}"
+  export ONECONTEXT_SIGNING_MODE="${ONECONTEXT_SIGNING_MODE:-developer-id}"
 else
-  export REQUIRE_DEVELOPER_ID="${REQUIRE_DEVELOPER_ID:-0}"
+  export ONECONTEXT_SIGNING_MODE="${ONECONTEXT_SIGNING_MODE:-adhoc}"
 fi
 "$ROOT/scripts/build-macos-app.sh"
 if [[ "${NOTARIZE:-1}" == "1" ]]; then
