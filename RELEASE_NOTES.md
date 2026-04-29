@@ -1,7 +1,10 @@
-# 1Context v0.1.38 Public Preview
+# 1Context v0.1.39 Public Preview
 
 This release includes:
 
+- Terminal updater now forces zsh instead of relying on the user's default shell
+- menu relaunch waits for the old menu process/lock to clear before bootstrapping
+- launchctl helper timeout handling avoids false timeouts on fast commands
 - CLI updater now forwards Terminal stdin to Homebrew so password prompts behave correctly
 - cask postflight fix so the menu bar relaunches after upgrade even when the runtime was stopped
 - safer GUI updater Terminal launch

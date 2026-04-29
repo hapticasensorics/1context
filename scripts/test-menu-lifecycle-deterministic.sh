@@ -125,8 +125,10 @@ awk '
 
 assert_contains "appendingPathComponent(\"1context-cli\")" "$UPDATER_BODY"
 assert_contains "if \\(shellQuote(cliExecutable)) update; then" "$UPDATER_BODY"
+assert_contains "/bin/zsh -lc" "$UPDATER_BODY"
 assert_contains "do script (item 1 of argv)" "$MENU_SOURCE"
-assert_not_contains ".command" "$UPDATER_BODY"
+assert_not_contains "script.write(to:" "$UPDATER_BODY"
+assert_not_contains "NSWorkspace.shared.open" "$UPDATER_BODY"
 
 assert_contains "desiredState == \"stopped\"" "$MENU_SOURCE"
 assert_contains "runtimeState = .stopped" "$MENU_SOURCE"

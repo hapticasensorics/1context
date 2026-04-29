@@ -283,15 +283,15 @@ public final class LaunchAgentManager {
         return
       }
 
+      process.terminationHandler = { process in
+        result.finish(status: process.terminationStatus)
+      }
+
       do {
         try process.run()
       } catch {
         result.finish(status: 1, stderrOverride: error.localizedDescription)
         return
-      }
-
-      process.terminationHandler = { process in
-        result.finish(status: process.terminationStatus)
       }
 
       DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + timeout) {

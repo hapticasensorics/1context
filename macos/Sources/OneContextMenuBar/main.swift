@@ -475,13 +475,14 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
       exit $status
     fi
     """
-    guard runTerminalScript(script) else {
+    let terminalCommand = "/bin/zsh -lc \(shellQuote(script))"
+    guard runTerminalScript(terminalCommand) else {
       showFishAlert("Could not open updater.")
       return
     }
   }
 
-  private func runTerminalScript(_ shellScript: String) -> Bool {
+  private func runTerminalScript(_ terminalCommand: String) -> Bool {
     do {
       let process = Process()
       process.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
@@ -492,7 +493,7 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
         "-e", "do script (item 1 of argv)",
         "-e", "end tell",
         "-e", "end run",
-        shellScript,
+        terminalCommand,
       ]
       try process.run()
       process.waitUntilExit()
