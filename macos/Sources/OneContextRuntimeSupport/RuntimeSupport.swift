@@ -1,7 +1,7 @@
 import Foundation
 import Darwin
 
-public let oneContextVersion = "0.1.6"
+public let oneContextVersion = "0.1.7"
 public let oneContextGitHubURL = URL(string: "https://github.com/hapticasensorics/1context")!
 public let oneContextLatestReleaseURL = URL(string: "https://api.github.com/repos/hapticasensorics/1context/releases/latest")!
 public let oneContextHomebrewUpdateCommand = "brew upgrade --cask hapticasensorics/tap/1context"
@@ -346,13 +346,17 @@ public final class LaunchAgentManager {
   }
 
   public func stop() async {
-    _ = await launchctl(["bootout", guiDomain(), launchAgentPath.path])
+    let byTarget = await launchctl(["bootout", agentTarget()])
+    if byTarget.status != 0 {
+      _ = await launchctl(["bootout", guiDomain(), launchAgentPath.path])
+    }
   }
 
   public func uninstallManagedLaunchAgents() async {
     await quitMenuApp()
     for label in [Self.menuLabel, Self.runtimeLabel] {
       let path = launchAgentPath(label: label)
+      _ = await launchctl(["bootout", "\(guiDomain())/\(label)"])
       _ = await launchctl(["bootout", guiDomain(), path.path])
       try? FileManager.default.removeItem(at: path)
     }
