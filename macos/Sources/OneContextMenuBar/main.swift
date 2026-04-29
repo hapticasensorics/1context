@@ -299,9 +299,19 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
       exit $status
     fi
     """
-    try? script.write(to: fileURL, atomically: true, encoding: .utf8)
-    chmod(fileURL.path, 0o700)
-    NSWorkspace.shared.open(fileURL)
+    do {
+      try script.write(to: fileURL, atomically: true, encoding: .utf8)
+      guard chmod(fileURL.path, 0o700) == 0 else {
+        showFishAlert("Could not prepare updater.")
+        return
+      }
+      guard NSWorkspace.shared.open(fileURL) else {
+        showFishAlert("Could not open updater.")
+        return
+      }
+    } catch {
+      showFishAlert("Could not prepare updater.")
+    }
   }
 
   private func shellQuote(_ value: String) -> String {

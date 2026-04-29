@@ -33,6 +33,9 @@ MENU_LOG_XML="$(xml_escape "$MENU_LOG")"
 
 mkdir -p "$HOME/Library/LaunchAgents"
 mkdir -p "$HOME/Library/Logs/1Context"
+chmod 700 "$HOME/Library/Logs/1Context"
+touch "$MENU_LOG"
+chmod 600 "$MENU_LOG"
 
 cat > "$PLIST" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>

@@ -5,33 +5,40 @@ import OneContextRuntimeSupport
 nonisolated(unsafe) private var signalSocketPath: UnsafeMutablePointer<CChar>?
 nonisolated(unsafe) private var signalPIDPath: UnsafeMutablePointer<CChar>?
 
-final class Logger {
+final class Logger: @unchecked Sendable {
   private let path: String
+  private let queue = DispatchQueue(label: "com.haptica.1contextd.logger")
 
   init(path: String) {
     self.path = path
   }
 
   func write(_ message: String) {
-    let timestamp = ISO8601DateFormatter().string(from: Date())
-    let line = "[\(timestamp)] \(message)\n"
-    guard let data = line.data(using: .utf8) else { return }
+    queue.sync {
+      let timestamp = ISO8601DateFormatter().string(from: Date())
+      let line = "[\(timestamp)] \(message)\n"
+      guard let data = line.data(using: .utf8) else { return }
 
-    if FileManager.default.fileExists(atPath: path),
-      let handle = try? FileHandle(forWritingTo: URL(fileURLWithPath: path))
-    {
-      defer { try? handle.close() }
-      _ = try? handle.seekToEnd()
-      try? handle.write(contentsOf: data)
-    } else {
-      try? data.write(to: URL(fileURLWithPath: path), options: .atomic)
+      if FileManager.default.fileExists(atPath: path),
+        let handle = try? FileHandle(forWritingTo: URL(fileURLWithPath: path))
+      {
+        defer {
+          try? handle.close()
+          RuntimePermissions.ensurePrivateFile(path)
+        }
+        _ = try? handle.seekToEnd()
+        try? handle.write(contentsOf: data)
+      } else {
+        try? RuntimePermissions.writePrivateData(data, to: URL(fileURLWithPath: path))
+      }
     }
   }
 }
 
-final class OneContextDaemon {
+final class OneContextDaemon: @unchecked Sendable {
   private let paths = RuntimePaths.current()
   private let startedAt = Date()
+  private let clientQueue = DispatchQueue(label: "com.haptica.1contextd.clients", attributes: .concurrent)
   private var listenFD: Int32 = -1
   private lazy var logger = Logger(path: paths.logPath)
 
@@ -47,43 +54,18 @@ final class OneContextDaemon {
   }
 
   private func prepareDirectories() throws {
-    try FileManager.default.createDirectory(
-      at: paths.userContentDirectory,
-      withIntermediateDirectories: true
-    )
-    try FileManager.default.createDirectory(
-      at: paths.appSupportDirectory,
-      withIntermediateDirectories: true
-    )
-    try FileManager.default.createDirectory(
-      at: paths.runDirectory,
-      withIntermediateDirectories: true
-    )
-    try FileManager.default.createDirectory(
-      at: paths.logDirectory,
-      withIntermediateDirectories: true
-    )
-    try FileManager.default.createDirectory(
-      at: paths.cacheDirectory,
-      withIntermediateDirectories: true
-    )
-    try FileManager.default.createDirectory(
-      at: paths.renderCacheDirectory,
-      withIntermediateDirectories: true
-    )
-    try FileManager.default.createDirectory(
-      at: paths.downloadCacheDirectory,
-      withIntermediateDirectories: true
-    )
-    chmod(paths.runDirectory.path, 0o700)
+    try RuntimePermissions.ensurePrivateDirectory(paths.userContentDirectory)
+    try RuntimePermissions.ensurePrivateDirectory(paths.appSupportDirectory)
+    try RuntimePermissions.ensurePrivateDirectory(paths.runDirectory)
+    try RuntimePermissions.ensurePrivateDirectory(paths.logDirectory)
+    try RuntimePermissions.ensurePrivateDirectory(paths.cacheDirectory)
+    try RuntimePermissions.ensurePrivateDirectory(paths.renderCacheDirectory)
+    try RuntimePermissions.ensurePrivateDirectory(paths.downloadCacheDirectory)
+    RuntimePermissions.repairRuntimePaths(paths)
   }
 
   private func writePIDFile() throws {
-    try "\(getpid())\n".write(
-      toFile: paths.pidPath,
-      atomically: true,
-      encoding: .utf8
-    )
+    try RuntimePermissions.writePrivateString("\(getpid())\n", toFile: paths.pidPath)
   }
 
   private func startSocket() throws {
@@ -145,8 +127,10 @@ final class OneContextDaemon {
     while listenFD >= 0 {
       let clientFD = accept(listenFD, nil, nil)
       if clientFD < 0 { continue }
-      handle(clientFD: clientFD)
-      close(clientFD)
+      clientQueue.async { [self] in
+        handle(clientFD: clientFD)
+        close(clientFD)
+      }
     }
   }
 
@@ -154,8 +138,24 @@ final class OneContextDaemon {
     setNoSigPipe(clientFD)
     guard let request = readLine(from: clientFD) else { return }
     let response = responseData(for: request)
-    response.withUnsafeBytes { buffer in
-      _ = write(clientFD, buffer.baseAddress, response.count)
+    _ = writeAll(response, to: clientFD)
+  }
+
+  private func writeAll(_ data: Data, to fd: Int32) -> Bool {
+    data.withUnsafeBytes { rawBuffer in
+      guard let baseAddress = rawBuffer.baseAddress else { return false }
+      var sent = 0
+      while sent < data.count {
+        let count = write(fd, baseAddress.advanced(by: sent), data.count - sent)
+        if count > 0 {
+          sent += count
+        } else if count < 0 && errno == EINTR {
+          continue
+        } else {
+          return false
+        }
+      }
+      return true
     }
   }
 

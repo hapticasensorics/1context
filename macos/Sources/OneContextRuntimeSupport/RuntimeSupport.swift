@@ -76,6 +76,59 @@ public struct RuntimePaths {
   }
 }
 
+public enum RuntimePermissions {
+  public static let privateDirectoryMode: mode_t = 0o700
+  public static let privateFileMode: mode_t = 0o600
+
+  public static func ensurePrivateDirectory(_ url: URL) throws {
+    try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+    chmod(url.path, privateDirectoryMode)
+  }
+
+  public static func ensurePrivateFile(_ path: String) {
+    if FileManager.default.fileExists(atPath: path) {
+      chmod(path, privateFileMode)
+    }
+  }
+
+  public static func writePrivateString(_ string: String, toFile path: String) throws {
+    try string.write(toFile: path, atomically: true, encoding: .utf8)
+    chmod(path, privateFileMode)
+  }
+
+  public static func writePrivateData(_ data: Data, to url: URL) throws {
+    try data.write(to: url, options: .atomic)
+    chmod(url.path, privateFileMode)
+  }
+
+  public static func repairRuntimePaths(_ paths: RuntimePaths) {
+    for directory in [
+      paths.userContentDirectory,
+      paths.appSupportDirectory,
+      paths.runDirectory,
+      paths.logDirectory,
+      paths.cacheDirectory,
+      paths.renderCacheDirectory,
+      paths.downloadCacheDirectory
+    ] {
+      if FileManager.default.fileExists(atPath: directory.path) {
+        chmod(directory.path, privateDirectoryMode)
+      }
+    }
+
+    for file in [
+      paths.configPath,
+      paths.desiredStatePath,
+      paths.socketPath,
+      paths.pidPath,
+      paths.logPath,
+      paths.preferencesPath
+    ] {
+      ensurePrivateFile(file)
+    }
+  }
+}
+
 public struct UpdateStatePaths {
   public let directory: URL
   public let file: URL
@@ -184,10 +237,7 @@ public final class UnixJSONRPCClient {
     let requestData = try JSONSerialization.data(withJSONObject: payload)
       + Data([UInt8(ascii: "\n")])
 
-    let written = requestData.withUnsafeBytes { buffer in
-      write(fd, buffer.baseAddress, requestData.count)
-    }
-    guard written == requestData.count else { throw UnixSocketError.writeFailed }
+    guard writeAll(requestData, to: fd) else { throw UnixSocketError.writeFailed }
 
     var response = Data()
     var buffer = [UInt8](repeating: 0, count: 4096)
@@ -217,6 +267,24 @@ public final class UnixJSONRPCClient {
   private func waitForReadable(_ fd: Int32) -> Bool {
     var pollFD = pollfd(fd: fd, events: Int16(POLLIN), revents: 0)
     return poll(&pollFD, 1, timeoutMilliseconds) > 0
+  }
+
+  private func writeAll(_ data: Data, to fd: Int32) -> Bool {
+    data.withUnsafeBytes { rawBuffer in
+      guard let baseAddress = rawBuffer.baseAddress else { return false }
+      var sent = 0
+      while sent < data.count {
+        let count = write(fd, baseAddress.advanced(by: sent), data.count - sent)
+        if count > 0 {
+          sent += count
+        } else if count < 0 && errno == EINTR {
+          continue
+        } else {
+          return false
+        }
+      }
+      return true
+    }
   }
 
   private func setNoSigPipe(_ fd: Int32) {
@@ -368,7 +436,7 @@ public final class UpdateChecker {
   }
 
   private func writeState(_ release: ReleaseInfo, at paths: UpdateStatePaths) {
-    try? FileManager.default.createDirectory(at: paths.directory, withIntermediateDirectories: true)
+    try? RuntimePermissions.ensurePrivateDirectory(paths.directory)
     var state: [String: Any] = [
       "last_checked_at": ISO8601DateFormatter().string(from: Date()),
       "last_seen_latest": release.version
@@ -377,7 +445,7 @@ public final class UpdateChecker {
       state["notes_url"] = notesURL.absoluteString
     }
     if let data = try? JSONSerialization.data(withJSONObject: state, options: [.prettyPrinted, .sortedKeys]) {
-      try? (data + Data([UInt8(ascii: "\n")])).write(to: paths.file, options: .atomic)
+      try? RuntimePermissions.writePrivateData(data + Data([UInt8(ascii: "\n")]), to: paths.file)
     }
   }
 }
@@ -483,16 +551,20 @@ public final class LaunchAgentManager {
 
   private func install(daemonPath: String) throws {
     let paths = RuntimePaths.current(environment: environment)
-    try FileManager.default.createDirectory(at: paths.runDirectory, withIntermediateDirectories: true)
-    chmod(paths.runDirectory.path, 0o700)
-    try FileManager.default.createDirectory(at: paths.logDirectory, withIntermediateDirectories: true)
+    try RuntimePermissions.ensurePrivateDirectory(paths.appSupportDirectory)
+    try RuntimePermissions.ensurePrivateDirectory(paths.runDirectory)
+    try RuntimePermissions.ensurePrivateDirectory(paths.logDirectory)
+    RuntimePermissions.repairRuntimePaths(paths)
     try FileManager.default.createDirectory(at: launchAgentPath.deletingLastPathComponent(), withIntermediateDirectories: true)
     try plist(daemonPath: daemonPath, paths: paths).write(to: launchAgentPath, atomically: true, encoding: .utf8)
   }
 
   private func installMenu(appPath: String) throws {
     let paths = RuntimePaths.current(environment: environment)
-    try FileManager.default.createDirectory(at: paths.logDirectory, withIntermediateDirectories: true)
+    let menuLogPath = paths.logDirectory.appendingPathComponent("menu.log").path
+    try RuntimePermissions.ensurePrivateDirectory(paths.logDirectory)
+    _ = FileManager.default.createFile(atPath: menuLogPath, contents: nil)
+    RuntimePermissions.ensurePrivateFile(menuLogPath)
     try FileManager.default.createDirectory(at: launchAgentPath(label: Self.menuLabel).deletingLastPathComponent(), withIntermediateDirectories: true)
     try menuPlist(appPath: appPath, paths: paths).write(
       to: launchAgentPath(label: Self.menuLabel),
@@ -524,16 +596,7 @@ public final class LaunchAgentManager {
       <key>StandardErrorPath</key>
       <string>\(plistEscape(paths.logPath))</string>
       <key>EnvironmentVariables</key>
-      <dict>
-        <key>ONECONTEXT_APP_SUPPORT_DIR</key>
-        <string>\(plistEscape(paths.appSupportDirectory.path))</string>
-        <key>ONECONTEXT_USER_CONTENT_DIR</key>
-        <string>\(plistEscape(paths.userContentDirectory.path))</string>
-        <key>ONECONTEXT_LOG_DIR</key>
-        <string>\(plistEscape(paths.logDirectory.path))</string>
-        <key>ONECONTEXT_CACHE_DIR</key>
-        <string>\(plistEscape(paths.cacheDirectory.path))</string>
-      </dict>
+      \(environmentPlist(paths: paths))
     </dict>
     </plist>
     """
@@ -561,8 +624,33 @@ public final class LaunchAgentManager {
       <string>\(plistEscape(paths.logDirectory.appendingPathComponent("menu.log").path))</string>
       <key>StandardErrorPath</key>
       <string>\(plistEscape(paths.logDirectory.appendingPathComponent("menu.log").path))</string>
+      <key>EnvironmentVariables</key>
+      \(environmentPlist(paths: paths))
     </dict>
     </plist>
+    """
+  }
+
+  private func environmentPlist(paths: RuntimePaths) -> String {
+    """
+      <dict>
+        <key>ONECONTEXT_APP_SUPPORT_DIR</key>
+        <string>\(plistEscape(paths.appSupportDirectory.path))</string>
+        <key>ONECONTEXT_USER_CONTENT_DIR</key>
+        <string>\(plistEscape(paths.userContentDirectory.path))</string>
+        <key>ONECONTEXT_LOG_DIR</key>
+        <string>\(plistEscape(paths.logDirectory.path))</string>
+        <key>ONECONTEXT_LOG_PATH</key>
+        <string>\(plistEscape(paths.logPath))</string>
+        <key>ONECONTEXT_CACHE_DIR</key>
+        <string>\(plistEscape(paths.cacheDirectory.path))</string>
+        <key>ONECONTEXT_SOCKET_PATH</key>
+        <string>\(plistEscape(paths.socketPath))</string>
+        <key>ONECONTEXT_PREFERENCES_PATH</key>
+        <string>\(plistEscape(paths.preferencesPath))</string>
+        <key>ONECONTEXT_UPDATE_STATE_DIR</key>
+        <string>\(plistEscape(UpdateStatePaths.current(environment: environment).directory.path))</string>
+      </dict>
     """
   }
 
@@ -784,10 +872,11 @@ public final class RuntimeController {
 
   private func startDetached(daemonPath: String) throws {
     let paths = RuntimePaths.current(environment: environment)
-    try FileManager.default.createDirectory(at: paths.runDirectory, withIntermediateDirectories: true)
-    chmod(paths.runDirectory.path, 0o700)
-    try FileManager.default.createDirectory(at: paths.logDirectory, withIntermediateDirectories: true)
-    try FileManager.default.createDirectory(at: paths.cacheDirectory, withIntermediateDirectories: true)
+    try RuntimePermissions.ensurePrivateDirectory(paths.appSupportDirectory)
+    try RuntimePermissions.ensurePrivateDirectory(paths.runDirectory)
+    try RuntimePermissions.ensurePrivateDirectory(paths.logDirectory)
+    try RuntimePermissions.ensurePrivateDirectory(paths.cacheDirectory)
+    RuntimePermissions.repairRuntimePaths(paths)
 
     let process = Process()
     process.executableURL = URL(fileURLWithPath: daemonPath)
@@ -801,12 +890,8 @@ public final class RuntimeController {
   private func setStartDesired(_ desired: Bool) {
     let paths = RuntimePaths.current(environment: environment)
     do {
-      try FileManager.default.createDirectory(at: paths.appSupportDirectory, withIntermediateDirectories: true)
-      try (desired ? "running\n" : "stopped\n").write(
-        toFile: paths.desiredStatePath,
-        atomically: true,
-        encoding: .utf8
-      )
+      try RuntimePermissions.ensurePrivateDirectory(paths.appSupportDirectory)
+      try RuntimePermissions.writePrivateString(desired ? "running\n" : "stopped\n", toFile: paths.desiredStatePath)
     } catch {
       // Desired runtime state is advisory. Lifecycle commands should still proceed.
     }
