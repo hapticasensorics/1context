@@ -1,10 +1,19 @@
 import Foundation
 import Darwin
 
-public let oneContextVersion = "0.1.18"
+public let oneContextVersion = "0.1.19"
 public let oneContextGitHubURL = URL(string: "https://github.com/hapticasensorics/1context")!
 public let oneContextLatestReleaseURL = URL(string: "https://api.github.com/repos/hapticasensorics/1context/releases/latest")!
-public let oneContextHomebrewUpdateCommand = "brew update && brew upgrade --cask hapticasensorics/tap/1context"
+public let oneContextHomebrewUpdateCommand = """
+if brew tap hapticasensorics/tap >/dev/null && \
+  tap_repo="$(brew --repo hapticasensorics/tap)" && \
+  git -C "$tap_repo" fetch --quiet origin && \
+  git -C "$tap_repo" merge --quiet --ff-only origin/main; then
+  HOMEBREW_NO_AUTO_UPDATE=1 brew upgrade --cask hapticasensorics/tap/1context
+else
+  brew update && brew upgrade --cask hapticasensorics/tap/1context
+fi
+"""
 public let oneContextUpdateCheckInterval: TimeInterval = 24 * 60 * 60
 
 public struct RuntimePaths {

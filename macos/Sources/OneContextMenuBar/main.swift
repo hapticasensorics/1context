@@ -290,7 +290,6 @@ private final class AppDelegate: NSObject, NSApplicationDelegate {
     #!/bin/zsh
     if \(oneContextHomebrewUpdateCommand); then
       \(shellQuote(alertExecutable)) --update-success-alert >/dev/null 2>&1 || osascript -e 'display dialog "1Context updated." buttons {"OK"} default button "OK"'
-      osascript -e 'tell application "Terminal" to close front window' >/dev/null 2>&1
     else
       status=$?
       osascript -e 'display dialog "Could not update 1Context." buttons {"OK"} default button "OK" with icon caution'
