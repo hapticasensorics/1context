@@ -30,6 +30,7 @@ xml_escape() {
 EXECUTABLE_XML="$(xml_escape "$EXECUTABLE")"
 MENU_LOG="$HOME/Library/Logs/1Context/menu.log"
 MENU_LOG_XML="$(xml_escape "$MENU_LOG")"
+DESIRED_STATE="$HOME/Library/Application Support/1Context/desired-state"
 
 mkdir -p "$HOME/Library/LaunchAgents"
 mkdir -p "$HOME/Library/Logs/1Context"
@@ -38,6 +39,8 @@ touch "$MENU_LOG"
 chmod 600 "$MENU_LOG"
 
 osascript -e 'tell application id "com.haptica.1context.menu" to quit' >/dev/null 2>&1 || true
+launchctl bootout "gui/$(id -u)/$LABEL" >/dev/null 2>&1 || true
+launchctl bootout "gui/$(id -u)" "$PLIST" >/dev/null 2>&1 || true
 
 cat > "$PLIST" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
@@ -64,14 +67,12 @@ cat > "$PLIST" <<PLIST
 </plist>
 PLIST
 
-launchctl bootout "gui/$(id -u)" "$PLIST" >/dev/null 2>&1 || true
-launchctl bootstrap "gui/$(id -u)" "$PLIST" >/dev/null
-launchctl kickstart -k "gui/$(id -u)/$LABEL" >/dev/null
-
-DESIRED_STATE="$HOME/Library/Application Support/1Context/desired-state"
 if [[ -f "$DESIRED_STATE" ]] && [[ "$(tr -d '[:space:]' < "$DESIRED_STATE")" == "stopped" ]]; then
   exit 0
 fi
+
+launchctl bootstrap "gui/$(id -u)" "$PLIST" >/dev/null
+launchctl kickstart -k "gui/$(id -u)/$LABEL" >/dev/null
 
 if ! "$CLI_PATH" restart >/dev/null 2>&1 && ! "$CLI_PATH" start >/dev/null 2>&1; then
   echo "Warning: 1Context installed, but the runtime did not start. Run '1context diagnose'." >&2
