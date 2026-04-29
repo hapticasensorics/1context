@@ -65,6 +65,7 @@ final class OneContextDaemon: @unchecked Sendable {
   private lazy var logger = Logger(path: paths.logPath)
 
   func run() throws {
+    umask(0o077)
     signal(SIGPIPE, SIG_IGN)
     try prepareDirectories()
     try startSocket()

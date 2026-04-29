@@ -227,20 +227,27 @@ public final class RuntimeController {
 
   private func findDaemonPath() -> String? {
     let fm = FileManager.default
-    let executableDirectory = currentExecutableURL()?.deletingLastPathComponent()
-    var candidates: [String] = [
-      Bundle.main.bundleURL.deletingLastPathComponent().appendingPathComponent("1contextd").path,
-      executableDirectory?.appendingPathComponent("1contextd").path,
-      URL(fileURLWithPath: "/Applications/1Context.app/Contents/MacOS/1contextd").path
-    ].compactMap { $0 }
-
     if environment["ONECONTEXT_ALLOW_DAEMON_OVERRIDE"] == "1",
       let override = environment["ONECONTEXT_DAEMON_PATH"]
     {
-      candidates.insert(override, at: 0)
+      let resolved = URL(fileURLWithPath: override).resolvingSymlinksInPath().path
+      return fm.isExecutableFile(atPath: resolved) ? resolved : nil
     }
 
-    return candidates.first { fm.isExecutableFile(atPath: $0) }
+    guard let executableDirectory = currentExecutableURL()?.deletingLastPathComponent() else {
+      return nil
+    }
+
+    let bundled = executableDirectory.appendingPathComponent("1contextd").resolvingSymlinksInPath()
+    if isBundledMacOSDirectory(executableDirectory), fm.isExecutableFile(atPath: bundled.path) {
+      return bundled.path
+    }
+
+    if environment["ONECONTEXT_LAUNCH_AGENT_DISABLED"] == "1", fm.isExecutableFile(atPath: bundled.path) {
+      return bundled.path
+    }
+
+    return nil
   }
 
   private func startMenuIfAvailable() async throws {
@@ -267,5 +274,16 @@ public final class RuntimeController {
     let pathBytes = buffer.prefix { $0 != 0 }.map { UInt8(bitPattern: $0) }
     let path = String(decoding: pathBytes, as: UTF8.self)
     return URL(fileURLWithPath: path).resolvingSymlinksInPath()
+  }
+
+  private func isBundledMacOSDirectory(_ directory: URL) -> Bool {
+    guard directory.lastPathComponent == "MacOS",
+      directory.deletingLastPathComponent().lastPathComponent == "Contents"
+    else {
+      return false
+    }
+    return FileManager.default.fileExists(
+      atPath: directory.deletingLastPathComponent().appendingPathComponent("Info.plist").path
+    )
   }
 }

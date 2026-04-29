@@ -191,7 +191,7 @@ struct OneContextCLI {
       print("1Context \(latest.version) is available. You have \(oneContextVersion).")
     }
     print("Updating 1Context...")
-    try runShell(oneContextHomebrewUpdateCommand)
+    try updateWithHomebrew()
   }
 
   static func status() async {
@@ -286,17 +286,47 @@ struct OneContextCLI {
     printLogTail(title: "Menu", path: menuLog, lineCount: 80)
   }
 
-  static func runShell(_ command: String) throws {
-    let process = Process()
-    process.executableURL = URL(fileURLWithPath: "/bin/zsh")
-    process.arguments = ["-lc", command]
-    process.standardOutput = FileHandle.standardOutput
-    process.standardError = FileHandle.standardError
-    try process.run()
-    process.waitUntilExit()
+  static func updateWithHomebrew() throws {
+    guard let brew = firstExecutable(["/opt/homebrew/bin/brew", "/usr/local/bin/brew"]) else {
+      throw CLIError.commandFailed("Homebrew is required to update 1Context")
+    }
 
-    guard process.terminationStatus == 0 else {
-      throw CLIError.commandFailed(command)
+    print("Checking Homebrew...")
+    print("Checking 1Context tap...")
+    var tap = runCapture(brew, ["--repo", "hapticasensorics/tap"]).stdout
+      .trimmingCharacters(in: .whitespacesAndNewlines)
+    if tap.isEmpty {
+      try runProcess(brew, ["tap", "hapticasensorics/tap"])
+      tap = runCapture(brew, ["--repo", "hapticasensorics/tap"]).stdout
+        .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+    guard !tap.isEmpty else {
+      throw CLIError.commandFailed("brew --repo hapticasensorics/tap")
+    }
+
+    print("Refreshing 1Context cask metadata...")
+    try runProcess("/usr/bin/git", [
+      "-C", tap,
+      "fetch", "--quiet", "--no-tags", "origin", "main:refs/remotes/origin/main"
+    ])
+    try runProcess("/usr/bin/git", [
+      "-C", tap,
+      "merge", "--quiet", "--ff-only", "refs/remotes/origin/main"
+    ])
+
+    print("Installing 1Context...")
+    try runProcess(
+      brew,
+      ["upgrade", "--cask", "hapticasensorics/tap/1context"],
+      environment: [
+        "HOMEBREW_NO_AUTO_UPDATE": "1",
+        "HOMEBREW_NO_INSTALL_CLEANUP": "1"
+      ]
+    )
+
+    if let cli = firstExecutable(["/opt/homebrew/bin/1context", "/usr/local/bin/1context"]) {
+      _ = runCapture(cli, ["restart"])
+      try runProcess(cli, ["--version"])
     }
   }
 
@@ -433,10 +463,21 @@ struct OneContextCLI {
     )
   }
 
-  static func runProcess(_ executable: String, _ arguments: [String]) throws {
+  static func firstExecutable(_ candidates: [String]) -> String? {
+    candidates.first { FileManager.default.isExecutableFile(atPath: $0) }
+  }
+
+  static func runProcess(
+    _ executable: String,
+    _ arguments: [String],
+    environment: [String: String] = [:]
+  ) throws {
     let process = Process()
     process.executableURL = URL(fileURLWithPath: executable)
     process.arguments = arguments
+    if !environment.isEmpty {
+      process.environment = ProcessInfo.processInfo.environment.merging(environment) { _, new in new }
+    }
     process.standardOutput = FileHandle.standardOutput
     process.standardError = FileHandle.standardError
     try process.run()

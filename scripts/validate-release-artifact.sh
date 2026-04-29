@@ -30,6 +30,7 @@ fi
 tar -C "$TMPDIR" -xzf "$ARCHIVE"
 apps=("$TMPDIR"/1context-*/1Context.app)
 APP="${apps[0]}"
+PACKAGE_ROOT="$(dirname "$APP")"
 
 if [[ ${#apps[@]} -ne 1 || ! -d "$APP" ]]; then
   echo "Release archive does not contain 1Context.app." >&2
@@ -46,9 +47,31 @@ if [[ "$(plutil -extract CFBundleIconFile raw "$APP/Contents/Info.plist" 2>/dev/
   exit 1
 fi
 
+if [[ "$(readlink "$PACKAGE_ROOT/bin/1context" 2>/dev/null || true)" != "../1Context.app/Contents/MacOS/1context-cli" ]]; then
+  echo "Release archive has an unexpected 1context symlink target." >&2
+  exit 1
+fi
+
+codesign --verify --deep --strict "$APP" >/dev/null
+
+if [[ "${ALLOW_UNNOTARIZED:-0}" != "1" ]]; then
+  xcrun stapler validate "$APP" >/dev/null
+  spctl --assess --type execute --verbose "$APP" >/dev/null
+fi
+
 for binary in "$APP/Contents/MacOS/1Context" "$APP/Contents/MacOS/1context-cli" "$APP/Contents/MacOS/1contextd"; do
   if [[ ! -x "$binary" ]]; then
     echo "Missing executable: $binary" >&2
+    exit 1
+  fi
+
+  if [[ "$(lipo -archs "$binary")" != "arm64" ]]; then
+    echo "Release binary is not arm64-only: $binary" >&2
+    exit 1
+  fi
+
+  if [[ "$(stat -f "%Lp" "$binary")" != "755" ]]; then
+    echo "Release binary has unexpected mode: $binary" >&2
     exit 1
   fi
 

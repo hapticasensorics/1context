@@ -28,8 +28,8 @@ export ONECONTEXT_CACHE_DIR="$STATE_DIR/Caches/1Context"
 export ONECONTEXT_UPDATE_STATE_DIR="$STATE_DIR/Application Support/1Context/update"
 export ONECONTEXT_NO_UPDATE_CHECK=1
 
-"$BIN_DIR/1context" | grep -q "1Context 0.1.30"
-test "$("$BIN_DIR/1context" --version)" = "0.1.30"
+"$BIN_DIR/1context" | grep -q "1Context 0.1.31"
+test "$("$BIN_DIR/1context" --version)" = "0.1.31"
 "$BIN_DIR/1context" --help | grep -q "1context status"
 "$BIN_DIR/1context" --help | grep -q "1context quit"
 "$BIN_DIR/1context" --help | grep -q "1context logs"

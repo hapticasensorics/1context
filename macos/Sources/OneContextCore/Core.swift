@@ -1,29 +1,9 @@
 import Foundation
 
-public let oneContextVersion = "0.1.30"
+public let oneContextVersion = "0.1.31"
 public let oneContextGitHubURL = URL(string: "https://github.com/hapticasensorics/1context")!
 public let oneContextLatestReleaseURL = URL(string: "https://github.com/hapticasensorics/1context/releases/latest")!
-public let oneContextHomebrewUpdateCommand = """
-set -e
-echo "Checking Homebrew..."
-if ! command -v brew >/dev/null 2>&1; then
-  echo "Homebrew is required to update 1Context." >&2
-  exit 1
-fi
-echo "Checking 1Context tap..."
-if ! brew --repo hapticasensorics/tap >/dev/null 2>&1; then
-  brew tap hapticasensorics/tap
-fi
-tap_repo="$(brew --repo hapticasensorics/tap)"
-echo "Refreshing 1Context cask metadata..."
-git -C "$tap_repo" fetch --quiet --no-tags origin main:refs/remotes/origin/main
-git -C "$tap_repo" merge --quiet --ff-only refs/remotes/origin/main
-echo "Installing 1Context..."
-HOMEBREW_NO_AUTO_UPDATE=1 HOMEBREW_NO_INSTALL_CLEANUP=1 brew upgrade --cask hapticasensorics/tap/1context
-echo "Checking 1Context..."
-1context restart >/dev/null 2>&1 || true
-1context --version
-"""
+public let oneContextHomebrewUpdateCommand = "brew upgrade --cask hapticasensorics/tap/1context"
 public let oneContextUpdateCheckInterval: TimeInterval = 24 * 60 * 60
 
 

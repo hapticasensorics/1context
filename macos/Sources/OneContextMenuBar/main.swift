@@ -379,7 +379,7 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
     let script = """
     #!/bin/zsh
     trap 'rm -f "$0"' EXIT
-    if \(oneContextHomebrewUpdateCommand); then
+    if \(shellQuote(alertExecutable)) update; then
       \(shellQuote(alertExecutable)) --update-success-alert >/dev/null 2>&1 || osascript -e 'display dialog "1Context updated." buttons {"OK"} default button "OK"'
     else
       status=$?

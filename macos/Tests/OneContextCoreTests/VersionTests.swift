@@ -3,20 +3,20 @@ import XCTest
 
 final class VersionTests: XCTestCase {
   func testCompareVersionsHandlesBasicSemver() {
-    XCTAssertEqual(compareVersions("0.1.30", "0.1.30"), 0)
-    XCTAssertGreaterThan(compareVersions("0.1.31", "0.1.30"), 0)
+    XCTAssertEqual(compareVersions("0.1.31", "0.1.31"), 0)
+    XCTAssertGreaterThan(compareVersions("0.1.32", "0.1.31"), 0)
     XCTAssertLessThan(compareVersions("0.1.9", "0.1.10"), 0)
-    XCTAssertEqual(compareVersions("v0.1.30", "0.1.30"), 0)
+    XCTAssertEqual(compareVersions("v0.1.31", "0.1.31"), 0)
   }
 
   func testRuntimeHealthDecodesFromRPCPayload() throws {
     let data = Data("""
-    {"status":"ok","version":"0.1.30","uptimeSeconds":12,"pid":42}
+    {"status":"ok","version":"0.1.31","uptimeSeconds":12,"pid":42}
     """.utf8)
     let health = try JSONDecoder().decode(RuntimeHealth.self, from: data)
 
     XCTAssertEqual(health.status, "ok")
-    XCTAssertEqual(health.version, "0.1.30")
+    XCTAssertEqual(health.version, "0.1.31")
     XCTAssertEqual(health.uptimeSeconds, 12)
     XCTAssertEqual(health.pid, 42)
   }
@@ -38,9 +38,7 @@ final class VersionTests: XCTestCase {
   }
 
   func testHomebrewUpdateCommandUsesNarrowTapRefresh() {
-    XCTAssertTrue(oneContextHomebrewUpdateCommand.contains("brew --repo hapticasensorics/tap"))
-    XCTAssertTrue(oneContextHomebrewUpdateCommand.contains("git -C \"$tap_repo\" fetch --quiet --no-tags origin main:refs/remotes/origin/main"))
-    XCTAssertTrue(oneContextHomebrewUpdateCommand.contains("HOMEBREW_NO_AUTO_UPDATE=1 HOMEBREW_NO_INSTALL_CLEANUP=1 brew upgrade --cask hapticasensorics/tap/1context"))
+    XCTAssertEqual(oneContextHomebrewUpdateCommand, "brew upgrade --cask hapticasensorics/tap/1context")
     XCTAssertFalse(oneContextHomebrewUpdateCommand.contains("brew update &&"))
   }
 }
