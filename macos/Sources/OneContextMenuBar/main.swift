@@ -461,6 +461,10 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
 
     let alertExecutable = menuExecutable.path
     let script = """
+    #!/bin/zsh
+    set -euo pipefail
+    trap 'rm -f "$0"' EXIT
+
     printf '%s\\n' 'Updating 1Context with Homebrew.'
     printf '%s\\n\\n' 'If macOS asks for your password, type it here. Terminal will not show password characters.'
     if \(shellQuote(cliExecutable)) update; then
@@ -475,25 +479,44 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
       exit $status
     fi
     """
-    let terminalCommand = "/bin/zsh -lc \(shellQuote(script))"
-    guard runTerminalScript(terminalCommand) else {
+    guard let scriptURL = writeUpdaterScript(script) else {
+      showFishAlert("Could not prepare updater.")
+      return
+    }
+
+    guard runTerminalScript(scriptURL.path) else {
+      try? FileManager.default.removeItem(at: scriptURL)
       showFishAlert("Could not open updater.")
       return
     }
   }
 
-  private func runTerminalScript(_ terminalCommand: String) -> Bool {
+  private func writeUpdaterScript(_ script: String) -> URL? {
+    let url = FileManager.default.temporaryDirectory
+      .appendingPathComponent("1context-update-\(UUID().uuidString).zsh")
+
+    do {
+      try script.write(to: url, atomically: true, encoding: .utf8)
+      chmod(url.path, S_IRUSR | S_IWUSR | S_IXUSR)
+      return url
+    } catch {
+      return nil
+    }
+  }
+
+  private func runTerminalScript(_ scriptPath: String) -> Bool {
     do {
       let process = Process()
       process.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
       process.arguments = [
         "-e", "on run argv",
+        "-e", "set scriptPath to item 1 of argv",
         "-e", "tell application \"Terminal\"",
         "-e", "activate",
-        "-e", "do script (item 1 of argv)",
+        "-e", "do script \"/bin/zsh \" & quoted form of scriptPath",
         "-e", "end tell",
         "-e", "end run",
-        terminalCommand,
+        scriptPath,
       ]
       try process.run()
       process.waitUntilExit()

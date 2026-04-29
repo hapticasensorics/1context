@@ -119,15 +119,16 @@ MENU_SOURCE="$ROOT/macos/Sources/OneContextMenuBar/main.swift"
 UPDATER_BODY="$WORK_DIR/updater-body.swift"
 awk '
   /private func runUpdateCommandInTerminal\(\)/ { in_body = 1 }
-  /private func runTerminalScript\(_ shellScript: String\)/ { in_body = 0 }
+  /private func runTerminalScript\(_ scriptPath: String\)/ { in_body = 0 }
   in_body { print }
 ' "$MENU_SOURCE" > "$UPDATER_BODY"
 
 assert_contains "appendingPathComponent(\"1context-cli\")" "$UPDATER_BODY"
 assert_contains "if \\(shellQuote(cliExecutable)) update; then" "$UPDATER_BODY"
-assert_contains "/bin/zsh -lc" "$UPDATER_BODY"
-assert_contains "do script (item 1 of argv)" "$MENU_SOURCE"
-assert_not_contains "script.write(to:" "$UPDATER_BODY"
+assert_contains "writeUpdaterScript(script)" "$UPDATER_BODY"
+assert_contains 'trap '\''rm -f "$0"'\'' EXIT' "$UPDATER_BODY"
+assert_contains 'do script \"/bin/zsh \" & quoted form of scriptPath' "$MENU_SOURCE"
+assert_not_contains "/bin/zsh -lc" "$MENU_SOURCE"
 assert_not_contains "NSWorkspace.shared.open" "$UPDATER_BODY"
 
 assert_contains "desiredState == \"stopped\"" "$MENU_SOURCE"
