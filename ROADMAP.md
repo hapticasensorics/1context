@@ -28,6 +28,16 @@ The client already accepts both the GitHub redirect shape and a simple JSON shap
 - The cask installs the menu bar app, runtime, and `1context` CLI.
 - `1contextd` remains internal implementation plumbing.
 
+## Uninstall
+
+Homebrew Cask only runs `zap` cleanup during the uninstall command that includes `--zap`. If a user runs a normal cask uninstall first, Homebrew no longer has the installed cask state needed for a later zap.
+
+Future path:
+
+- Add `1context uninstall` for friendly app/runtime removal.
+- Add `1context uninstall --delete-data` for full local data cleanup.
+- Internally map Homebrew installs to the right cask uninstall/zap flow so users do not have to remember Homebrew lifecycle details.
+
 ## Product Runtime
 
 The public repo currently validates installation, menu-bar control, local runtime lifecycle, and update plumbing.
