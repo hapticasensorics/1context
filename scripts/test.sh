@@ -3,6 +3,7 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 MACOS_DIR="$ROOT/macos"
+VERSION="$(tr -d '[:space:]' < "$ROOT/VERSION")"
 STATE_DIR="$(mktemp -d /tmp/1ctx-test-XXXXXX)"
 
 cleanup() {
@@ -28,8 +29,9 @@ export ONECONTEXT_CACHE_DIR="$STATE_DIR/Caches/1Context"
 export ONECONTEXT_UPDATE_STATE_DIR="$STATE_DIR/Application Support/1Context/update"
 export ONECONTEXT_NO_UPDATE_CHECK=1
 
-"$BIN_DIR/1context" | grep -q "1Context 0.1.33"
-test "$("$BIN_DIR/1context" --version)" = "0.1.33"
+"$ROOT/scripts/check-version-consistency.sh"
+"$BIN_DIR/1context" | grep -q "1Context $VERSION"
+test "$("$BIN_DIR/1context" --version)" = "$VERSION"
 "$BIN_DIR/1context" --help | grep -q "1context status"
 "$BIN_DIR/1context" --help | grep -q "1context quit"
 "$BIN_DIR/1context" --help | grep -q "1context logs"

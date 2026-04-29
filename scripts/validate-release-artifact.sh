@@ -2,6 +2,7 @@
 set -euo pipefail
 
 ARCHIVE="${1:-}"
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 
 if [[ -z "$ARCHIVE" || ! -f "$ARCHIVE" ]]; then
   echo "Usage: $0 dist/1context-VERSION-macos-ARCH.tar.gz" >&2
@@ -27,6 +28,11 @@ fi
 VERSION="${BASH_REMATCH[1]}"
 ARCH="${BASH_REMATCH[2]}"
 ROOT_NAME="1context-$VERSION-macos-$ARCH"
+
+if [[ -f "$ROOT/VERSION" ]] && [[ "$(tr -d '[:space:]' < "$ROOT/VERSION")" != "$VERSION" ]]; then
+  echo "Release archive version does not match VERSION." >&2
+  exit 1
+fi
 
 EXPECTED_MANIFEST="$TMPDIR/expected-manifest.txt"
 cat > "$EXPECTED_MANIFEST" <<EOF
@@ -56,8 +62,8 @@ if ! diff -u "$EXPECTED_MANIFEST" "$MANIFEST"; then
   exit 1
 fi
 
-if grep -Eq ' paulhan | staff ' "$LISTING"; then
-  echo "Release archive contains local owner/group metadata." >&2
+if ! awk '{ if ($3 != "root" || $4 != "wheel") exit 1 }' "$LISTING"; then
+  echo "Release archive contains unexpected owner/group metadata." >&2
   exit 1
 fi
 
@@ -124,7 +130,7 @@ for binary in "$APP/Contents/MacOS/1Context" "$APP/Contents/MacOS/1context-cli" 
     exit 1
   fi
 
-  if strings "$binary" | grep -Eq '/Users/|paulhan|1context-public-launch|OneContextMac_.*\.bundle|could not load resource bundle'; then
+  if strings "$binary" | grep -Eq '/Users/|/private/var/folders|/var/folders|/\.build/|OneContextMac_.*\.bundle|could not load resource bundle'; then
     echo "Release binary contains local build paths or SwiftPM resource-bundle fallback text: $binary" >&2
     exit 1
   fi

@@ -80,6 +80,7 @@ ONECONTEXT_NO_UPDATE_CHECK=1 1context
 This repository includes the public macOS runtime and menu bar app:
 
 ```bash
+swift test --package-path macos
 ./scripts/test.sh
 ```
 
@@ -114,6 +115,12 @@ fallback paths. To clear local release outputs before packaging:
 
 ```bash
 ./scripts/clean-release-artifacts.sh
+```
+
+For RPC lifecycle stress, run:
+
+```bash
+ONECONTEXT_STRESS_COUNT=1000 ./scripts/stress-runtime-rpc.sh
 ```
 
 To notarize the built app, first configure a `notarytool` keychain profile, then run:

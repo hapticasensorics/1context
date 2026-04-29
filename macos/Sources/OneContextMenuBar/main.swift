@@ -93,7 +93,7 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
     refreshMenuItems()
     cleanupStaleUpdaterFiles()
     loadCachedUpdateState()
-    ensureRuntimeRunning(userInitiated: true)
+    ensureRuntimeRunning(userInitiated: false)
     checkForUpdates(force: false)
 
     timer = Timer.scheduledTimer(withTimeInterval: 30, repeats: true) { [weak self] _ in

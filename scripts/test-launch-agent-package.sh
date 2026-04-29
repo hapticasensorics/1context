@@ -8,7 +8,7 @@ if [[ "${ONECONTEXT_ALLOW_LAUNCH_AGENT_SMOKE:-0}" != "1" ]]; then
 fi
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-VERSION="$(grep -E 'oneContextVersion = ' "$ROOT/macos/Sources/OneContextCore/Core.swift" | sed -E 's/.*"([^"]+)".*/\1/')"
+VERSION="$(tr -d '[:space:]' < "$ROOT/VERSION")"
 ARCH="${ONECONTEXT_ARCH:-arm64}"
 ARCHIVE="$ROOT/dist/1context-$VERSION-macos-$ARCH.tar.gz"
 WORK_DIR="$(mktemp -d /tmp/1ctx-launch-agent-pkg-XXXXXX)"

@@ -23,6 +23,7 @@ jobs:
           swift --version
           xcodebuild -version
           brew --version
+      - run: ./scripts/check-version-consistency.sh
       - run: swift test --package-path macos
       - run: ./scripts/test.sh
       - run: ALLOW_UNNOTARIZED=1 NOTARIZE=0 ./scripts/package-macos-release.sh

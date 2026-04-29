@@ -326,7 +326,9 @@ struct OneContextCLI {
       ]
     )
 
-    if let cli = firstExecutable(["/opt/homebrew/bin/1context", "/usr/local/bin/1context"]) {
+    if RuntimeController().shouldAutoStartRuntime(),
+      let cli = firstExecutable(["/opt/homebrew/bin/1context", "/usr/local/bin/1context"])
+    {
       _ = runCapture(cli, ["restart"])
       try runProcess(cli, ["--version"])
     }

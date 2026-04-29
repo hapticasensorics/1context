@@ -183,7 +183,7 @@ public final class RuntimeController {
   private func waitForRunning(timeout: TimeInterval = 5) async throws -> RuntimeHealth {
     let deadline = Date().addingTimeInterval(timeout)
     repeat {
-      if case .success(let health) = status() { return health }
+      if case .success(let health) = status(), health.version == oneContextVersion { return health }
       try await Task.sleep(nanoseconds: 150_000_000)
     } while Date() < deadline
     throw RuntimeControlError.timedOut("1Context did not start in time")
