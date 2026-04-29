@@ -18,23 +18,37 @@ private func showFishAlert(_ message: String) {
 
 @MainActor
 private func loadFishAlertIcon() -> NSImage? {
+  if let cached = AppDelegate.cachedFishAlertIcon {
+    return cached.copy() as? NSImage
+  }
   let mainURL = Bundle.main.url(forResource: "MenuBarIcon", withExtension: "png")
   guard let image = mainURL.flatMap(NSImage.init(contentsOf:)) else {
     return nil
   }
   image.isTemplate = false
   image.size = NSSize(width: 64, height: 64)
-  return image
+  AppDelegate.cachedFishAlertIcon = image
+  return image.copy() as? NSImage
 }
 
 @MainActor
 private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
+  static var cachedFishAlertIcon: NSImage?
+
   private var statusItem: NSStatusItem!
   private var timer: Timer?
   private var runtimeState: RuntimeState = .checking
   private var updateState: UpdateState = .upToDate
   private var isCheckingForUpdates = false
   private var isRepairingRuntime = false
+  private let menu = NSMenu()
+  private let stateItem = NSMenuItem(title: RuntimeState.checking.title, action: nil, keyEquivalent: "")
+  private let settingsItem = NSMenuItem(title: "Settings", action: nil, keyEquivalent: "")
+  private let settingsMenu = NSMenu()
+  private let versionItem = NSMenuItem(title: "", action: nil, keyEquivalent: "")
+  private let aboutItem = NSMenuItem(title: "About 1Context", action: #selector(showAbout), keyEquivalent: "")
+  private let updateItem = NSMenuItem(title: "", action: nil, keyEquivalent: "")
+  private let quitItem = NSMenuItem(title: "Quit", action: #selector(quit), keyEquivalent: "q")
 
   private var currentVersion: String {
     Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String
@@ -45,8 +59,9 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
     NSApp.setActivationPolicy(.accessory)
     statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
     configureStatusIcon()
+    configureMenu()
+    refreshMenuItems()
     loadCachedUpdateState()
-    rebuildMenu()
     ensureRuntimeRunning(userInitiated: true)
     checkForUpdates(force: false)
 
@@ -74,38 +89,48 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
     return mainURL.flatMap(NSImage.init(contentsOf:))
   }
 
-  private func rebuildMenu() {
-    let menu = NSMenu()
-
-    let stateItem = NSMenuItem(
-      title: runtimeState.title,
-      action: nil,
-      keyEquivalent: ""
-    )
+  private func configureMenu() {
     stateItem.isEnabled = false
     menu.addItem(stateItem)
 
-    let settingsItem = NSMenuItem(title: "Settings", action: nil, keyEquivalent: "")
-    let settingsMenu = NSMenu()
-    let versionItem = NSMenuItem(title: "Version \(currentVersion)", action: nil, keyEquivalent: "")
     versionItem.isEnabled = false
     settingsMenu.addItem(versionItem)
-    settingsMenu.addItem(NSMenuItem(title: "About 1Context", action: #selector(showAbout), keyEquivalent: ""))
+    settingsMenu.addItem(aboutItem)
     settingsItem.submenu = settingsMenu
     menu.addItem(settingsItem)
+    menu.addItem(updateItem)
+    menu.addItem(quitItem)
+    menu.delegate = self
 
+    for item in [stateItem, settingsItem, versionItem, aboutItem, updateItem, quitItem] {
+      item.target = self
+    }
+    statusItem.menu = menu
+  }
+
+  private func refreshMenuItems() {
+    stateItem.title = runtimeState.title
+    versionItem.title = "Version \(currentVersion)"
     switch updateState {
     case .upToDate:
-      menu.addItem(NSMenuItem(title: "Check for Updates", action: #selector(checkForUpdatesNow), keyEquivalent: ""))
+      updateItem.title = "Check for Updates"
+      updateItem.action = #selector(checkForUpdatesNow)
     case .available:
-      menu.addItem(NSMenuItem(title: "Please Update", action: #selector(openUpgradeCommand), keyEquivalent: ""))
+      updateItem.title = "Please Update"
+      updateItem.action = #selector(openUpgradeCommand)
     }
+  }
 
-    menu.addItem(NSMenuItem(title: "Quit", action: #selector(quit), keyEquivalent: "q"))
-    menu.items.forEach { $0.target = self }
-    settingsMenu.items.forEach { $0.target = self }
-    menu.delegate = self
-    statusItem.menu = menu
+  private func setRuntimeState(_ newValue: RuntimeState) {
+    guard runtimeState != newValue else { return }
+    runtimeState = newValue
+    refreshMenuItems()
+  }
+
+  private func setUpdateState(_ newValue: UpdateState) {
+    guard updateState != newValue else { return }
+    updateState = newValue
+    refreshMenuItems()
   }
 
   func menuWillOpen(_ menu: NSMenu) {
@@ -129,34 +154,31 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
         guard health.version == oneContextVersion else {
           _ = try await controller.restart()
           await MainActor.run {
-            self.runtimeState = .running
-            self.rebuildMenu()
+            self.setRuntimeState(.running)
           }
           return
         }
         await MainActor.run {
-          self.runtimeState = .running
-          self.rebuildMenu()
+          self.setRuntimeState(.running)
         }
         return
       } catch let error as UnixSocketError {
         switch error {
         case .connectFailed, .emptyResponse:
-          await MainActor.run {
-            self.runtimeState = .stopped
-            self.rebuildMenu()
+          guard userInitiated || controller.shouldAutoStartRuntime() else {
+            await MainActor.run {
+              self.setRuntimeState(.stopped)
+            }
+            return
           }
-          guard userInitiated || controller.shouldAutoStartRuntime() else { return }
           do {
             _ = try await controller.start()
             await MainActor.run {
-              self.runtimeState = .running
-              self.rebuildMenu()
+              self.setRuntimeState(.running)
             }
           } catch {
             await MainActor.run {
-              self.runtimeState = .needsAttention
-              self.rebuildMenu()
+              self.setRuntimeState(.needsAttention)
             }
           }
         default:
@@ -169,17 +191,20 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
   }
 
   private func markRuntimeNeedsAttention() {
-    runtimeState = .needsAttention
-    rebuildMenu()
+    setRuntimeState(.needsAttention)
   }
 
   private func loadCachedUpdateState() {
-    guard let state = readUpdateState(),
-      let version = state["last_seen_latest"] as? String
-    else {
-      return
+    Task.detached(priority: .utility) {
+      let state = Self.readUpdateStateFromDisk()
+      guard let version = state?["last_seen_latest"] as? String else {
+        return
+      }
+      let cachedState: UpdateState = compareVersions(version, await self.currentVersion) > 0 ? .available : .upToDate
+      await MainActor.run {
+        self.setUpdateState(cachedState)
+      }
     }
-    updateState = compareVersions(version, currentVersion) > 0 ? .available : .upToDate
   }
 
   private func checkForUpdates(force: Bool) {
@@ -197,8 +222,7 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
       do {
         let result = try await UpdateChecker().check(force: force, currentVersion: currentVersion)
         await MainActor.run {
-          self.updateState = result.updateAvailable ? .available : .upToDate
-          self.rebuildMenu()
+          self.setUpdateState(result.updateAvailable ? .available : .upToDate)
         }
       } catch {
         // Update failures stay quiet. The menu remains usable offline.
@@ -207,7 +231,7 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
   }
 
   private func shouldCheckForUpdate() -> Bool {
-    guard let state = readUpdateState(),
+    guard let state = Self.readUpdateStateFromDisk(),
       let checked = state["last_checked_at"] as? String,
       let date = ISO8601DateFormatter().date(from: checked)
     else {
@@ -216,13 +240,9 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
     return Date().timeIntervalSince(date) >= oneContextUpdateCheckInterval
   }
 
-  private func readUpdateState() -> [String: Any]? {
-    guard let data = try? Data(contentsOf: updateStateURL()) else { return nil }
+  nonisolated private static func readUpdateStateFromDisk() -> [String: Any]? {
+    guard let data = try? Data(contentsOf: UpdateStatePaths.current().file) else { return nil }
     return try? JSONSerialization.jsonObject(with: data) as? [String: Any]
-  }
-
-  private func updateStateURL() -> URL {
-    UpdateStatePaths.current().file
   }
 
   @objc private func openUpgradeCommand() {
@@ -244,8 +264,7 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
       do {
         let result = try await UpdateChecker().check(force: true, currentVersion: currentVersion)
         await MainActor.run {
-          self.updateState = result.updateAvailable ? .available : .upToDate
-          self.rebuildMenu()
+          self.setUpdateState(result.updateAvailable ? .available : .upToDate)
           if result.updateAvailable {
             if self.confirmUpdate() {
               self.runUpdateCommandInTerminal()
