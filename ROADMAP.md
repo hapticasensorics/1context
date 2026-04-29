@@ -26,7 +26,7 @@ The client already accepts both the GitHub redirect shape and a simple JSON shap
 - macOS public preview ships as a Homebrew Cask.
 - Apple Silicon and macOS 13 Ventura or newer are required.
 - The cask installs the menu bar app, runtime, and `1context` CLI.
-- `onecontextd` remains internal implementation plumbing.
+- `1contextd` remains internal implementation plumbing.
 
 ## Product Runtime
 

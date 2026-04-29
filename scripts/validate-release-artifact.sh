@@ -46,7 +46,7 @@ if [[ "$(plutil -extract CFBundleIconFile raw "$APP/Contents/Info.plist" 2>/dev/
   exit 1
 fi
 
-for binary in "$APP/Contents/MacOS/1Context" "$APP/Contents/MacOS/1context-cli" "$APP/Contents/MacOS/onecontextd"; do
+for binary in "$APP/Contents/MacOS/1Context" "$APP/Contents/MacOS/1context-cli" "$APP/Contents/MacOS/1contextd"; do
   if [[ ! -x "$binary" ]]; then
     echo "Missing executable: $binary" >&2
     exit 1
