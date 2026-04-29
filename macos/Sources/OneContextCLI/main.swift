@@ -53,9 +53,9 @@ struct OneContextCLI {
       1context
       1context --version
       1context --help
-      1context start
-      1context stop
-      1context restart
+      1context start [--debug]
+      1context stop [--debug]
+      1context restart [--debug]
       1context status [--debug]
       1context update
     """)
@@ -94,18 +94,51 @@ struct OneContextCLI {
   }
 
   static func start() async throws {
-    let result = try await RuntimeController().start()
-    print(result.alreadyRunning ? "1Context is already running." : "1Context is running.")
+    let debug = args.contains("--debug")
+    let startedAt = Date()
+    let controller = RuntimeController()
+    do {
+      let result = try await controller.start()
+      print(result.alreadyRunning ? "1Context is already running." : "1Context is running.")
+      if debug { await printLifecycleDebug(controller: controller, startedAt: startedAt, error: nil) }
+    } catch {
+      if debug { await printLifecycleDebug(controller: controller, startedAt: startedAt, error: error) }
+      throw error
+    }
   }
 
   static func stop() async throws {
-    let stopped = try await RuntimeController().stop()
-    print(stopped ? "1Context is stopped." : "1Context is not running.")
+    let debug = args.contains("--debug")
+    let startedAt = Date()
+    let controller = RuntimeController()
+    do {
+      let stopped = try await controller.stop()
+      print(stopped ? "1Context is stopped." : "1Context is not running.")
+      if debug { await printLifecycleDebug(controller: controller, startedAt: startedAt, error: CLIError.runtimeStopped) }
+    } catch {
+      if debug { await printLifecycleDebug(controller: controller, startedAt: startedAt, error: error) }
+      throw error
+    }
   }
 
   static func restart() async throws {
-    _ = try await RuntimeController().restart()
-    print("1Context is running.")
+    let debug = args.contains("--debug")
+    let startedAt = Date()
+    let controller = RuntimeController()
+    do {
+      _ = try await controller.restart()
+      print("1Context is running.")
+      if debug { await printLifecycleDebug(controller: controller, startedAt: startedAt, error: nil) }
+    } catch {
+      if debug { await printLifecycleDebug(controller: controller, startedAt: startedAt, error: error) }
+      throw error
+    }
+  }
+
+  static func printLifecycleDebug(controller: RuntimeController, startedAt: Date, error: Error?) async {
+    let elapsed = Date().timeIntervalSince(startedAt)
+    print("\nCompleted in \(String(format: "%.2f", elapsed))s.")
+    await printDebug(controller: controller, error: error)
   }
 
   static func update() async throws {
@@ -162,11 +195,14 @@ struct OneContextCLI {
 
 enum CLIError: Error, LocalizedError {
   case commandFailed(String)
+  case runtimeStopped
 
   var errorDescription: String? {
     switch self {
     case .commandFailed(let command):
       return "Command failed: \(command)"
+    case .runtimeStopped:
+      return "1Context is stopped"
     }
   }
 }

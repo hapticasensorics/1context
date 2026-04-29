@@ -1,7 +1,7 @@
 import Foundation
 import Darwin
 
-public let oneContextVersion = "0.1.20"
+public let oneContextVersion = "0.1.21"
 public let oneContextGitHubURL = URL(string: "https://github.com/hapticasensorics/1context")!
 public let oneContextLatestReleaseURL = URL(string: "https://api.github.com/repos/hapticasensorics/1context/releases/latest")!
 public let oneContextHomebrewUpdateCommand = """
@@ -443,6 +443,8 @@ public final class LaunchAgentManager {
       <true/>
       <key>KeepAlive</key>
       <true/>
+      <key>ThrottleInterval</key>
+      <integer>1</integer>
       <key>StandardOutPath</key>
       <string>\(plistEscape(paths.logPath))</string>
       <key>StandardErrorPath</key>

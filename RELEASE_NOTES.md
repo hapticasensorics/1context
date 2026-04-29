@@ -1,4 +1,4 @@
-# 1Context v0.1.20 Public Preview
+# 1Context v0.1.21 Public Preview
 
 This release includes:
 
@@ -7,6 +7,8 @@ This release includes:
 - local runtime start/status/stop
 - `1context --version`
 - `1context --help`
+- faster CLI start/restart after stopping the runtime
+- lifecycle debug output with `1context start --debug`, `stop --debug`, and `restart --debug`
 
 Install:
 
