@@ -49,6 +49,8 @@ cat > "$PLIST" <<PLIST
   <true/>
   <key>KeepAlive</key>
   <false/>
+  <key>ThrottleInterval</key>
+  <integer>1</integer>
   <key>StandardOutPath</key>
   <string>$MENU_LOG_XML</string>
   <key>StandardErrorPath</key>

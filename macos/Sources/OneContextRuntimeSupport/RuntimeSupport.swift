@@ -1,7 +1,7 @@
 import Foundation
 import Darwin
 
-public let oneContextVersion = "0.1.22"
+public let oneContextVersion = "0.1.23"
 public let oneContextGitHubURL = URL(string: "https://github.com/hapticasensorics/1context")!
 public let oneContextLatestReleaseURL = URL(string: "https://github.com/hapticasensorics/1context/releases/latest")!
 public let oneContextHomebrewUpdateCommand = """
@@ -406,6 +406,22 @@ public final class LaunchAgentManager {
     _ = await launchctl(["kickstart", "-k", agentTarget()])
   }
 
+  public func startMenu(appPath: String) async throws {
+    guard !isDisabled else { return }
+    try installMenu(appPath: appPath)
+    let path = launchAgentPath(label: Self.menuLabel)
+    let target = "\(guiDomain())/\(Self.menuLabel)"
+    let current = await launchctl(["print", target])
+    if current.status != 0 {
+      _ = await launchctl(["bootout", guiDomain(), path.path])
+      let boot = await launchctl(["bootstrap", guiDomain(), path.path])
+      if boot.status != 0 {
+        throw RuntimeControlError.launchAgentFailed((boot.stderr + boot.stdout).trimmingCharacters(in: .whitespacesAndNewlines))
+      }
+    }
+    _ = await launchctl(["kickstart", "-k", target])
+  }
+
   public func restart(daemonPath: String) async throws {
     try install(daemonPath: daemonPath)
     let target = agentTarget()
@@ -458,6 +474,17 @@ public final class LaunchAgentManager {
     try plist(daemonPath: daemonPath, paths: paths).write(to: launchAgentPath, atomically: true, encoding: .utf8)
   }
 
+  private func installMenu(appPath: String) throws {
+    let paths = RuntimePaths.current(environment: environment)
+    try FileManager.default.createDirectory(at: paths.logDirectory, withIntermediateDirectories: true)
+    try FileManager.default.createDirectory(at: launchAgentPath(label: Self.menuLabel).deletingLastPathComponent(), withIntermediateDirectories: true)
+    try menuPlist(appPath: appPath, paths: paths).write(
+      to: launchAgentPath(label: Self.menuLabel),
+      atomically: true,
+      encoding: .utf8
+    )
+  }
+
   private func plist(daemonPath: String, paths: RuntimePaths) -> String {
     """
     <?xml version="1.0" encoding="UTF-8"?>
@@ -491,6 +518,33 @@ public final class LaunchAgentManager {
         <key>ONECONTEXT_CACHE_DIR</key>
         <string>\(plistEscape(paths.cacheDirectory.path))</string>
       </dict>
+    </dict>
+    </plist>
+    """
+  }
+
+  private func menuPlist(appPath: String, paths: RuntimePaths) -> String {
+    """
+    <?xml version="1.0" encoding="UTF-8"?>
+    <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+    <plist version="1.0">
+    <dict>
+      <key>Label</key>
+      <string>\(Self.menuLabel)</string>
+      <key>ProgramArguments</key>
+      <array>
+        <string>\(plistEscape(appPath))</string>
+      </array>
+      <key>RunAtLoad</key>
+      <true/>
+      <key>KeepAlive</key>
+      <false/>
+      <key>ThrottleInterval</key>
+      <integer>1</integer>
+      <key>StandardOutPath</key>
+      <string>\(plistEscape(paths.logDirectory.appendingPathComponent("menu.log").path))</string>
+      <key>StandardErrorPath</key>
+      <string>\(plistEscape(paths.logDirectory.appendingPathComponent("menu.log").path))</string>
     </dict>
     </plist>
     """
@@ -590,6 +644,7 @@ public final class RuntimeController {
   public func start() async throws -> (alreadyRunning: Bool, health: RuntimeHealth) {
     setStartDesired(true)
     if case .success(let health) = status() {
+      await startMenuIfAvailable()
       return (true, health)
     }
     guard let daemon = findDaemonPath() else { throw RuntimeControlError.daemonNotFound }
@@ -600,7 +655,9 @@ public final class RuntimeController {
       try await launchAgent.start(daemonPath: daemon)
     }
 
-    return (false, try await waitForRunning())
+    let health = try await waitForRunning()
+    await startMenuIfAvailable()
+    return (false, health)
   }
 
   public func stop() async throws -> Bool {
@@ -631,7 +688,9 @@ public final class RuntimeController {
     }
 
     try await launchAgent.restart(daemonPath: daemon)
-    return try await waitForRunning()
+    let health = try await waitForRunning()
+    await startMenuIfAvailable()
+    return health
   }
 
   public func shouldAutoStartRuntime() -> Bool {
@@ -753,6 +812,22 @@ public final class RuntimeController {
     }
 
     return candidates.first { fm.isExecutableFile(atPath: $0) }
+  }
+
+  private func startMenuIfAvailable() async {
+    guard let menuApp = findMenuAppPath() else { return }
+    try? await launchAgent.startMenu(appPath: menuApp)
+  }
+
+  private func findMenuAppPath() -> String? {
+    let fm = FileManager.default
+    let executableDirectory = currentExecutableURL()?.deletingLastPathComponent()
+    let candidates: [String?] = [
+      executableDirectory?.appendingPathComponent("1Context").path,
+      executableDirectory?.appendingPathComponent("OneContextMenuBar").path,
+      URL(fileURLWithPath: "/Applications/1Context.app/Contents/MacOS/1Context").path
+    ]
+    return candidates.compactMap { $0 }.first { fm.isExecutableFile(atPath: $0) }
   }
 
   private func currentExecutableURL() -> URL? {

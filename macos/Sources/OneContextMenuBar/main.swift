@@ -29,7 +29,7 @@ private func loadFishAlertIcon() -> NSImage? {
 }
 
 @MainActor
-private final class AppDelegate: NSObject, NSApplicationDelegate {
+private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
   private var statusItem: NSStatusItem!
   private var timer: Timer?
   private var runtimeState: RuntimeState = .checking
@@ -48,12 +48,12 @@ private final class AppDelegate: NSObject, NSApplicationDelegate {
     configureStatusIcon()
     loadCachedUpdateState()
     rebuildMenu()
-    ensureRuntimeRunning()
+    ensureRuntimeRunning(userInitiated: true)
     checkForUpdates(force: false)
 
     timer = Timer.scheduledTimer(withTimeInterval: 30, repeats: true) { [weak self] _ in
       Task { @MainActor in
-        self?.ensureRuntimeRunning()
+        self?.ensureRuntimeRunning(userInitiated: false)
       }
     }
   }
@@ -106,10 +106,15 @@ private final class AppDelegate: NSObject, NSApplicationDelegate {
     menu.addItem(NSMenuItem(title: "Quit", action: #selector(quit), keyEquivalent: "q"))
     menu.items.forEach { $0.target = self }
     settingsMenu.items.forEach { $0.target = self }
+    menu.delegate = self
     statusItem.menu = menu
   }
 
-  private func ensureRuntimeRunning() {
+  func menuWillOpen(_ menu: NSMenu) {
+    ensureRuntimeRunning(userInitiated: false)
+  }
+
+  private func ensureRuntimeRunning(userInitiated: Bool) {
     guard !isRepairingRuntime else { return }
     isRepairingRuntime = true
 
@@ -135,7 +140,7 @@ private final class AppDelegate: NSObject, NSApplicationDelegate {
             self.runtimeState = .stopped
             self.rebuildMenu()
           }
-          guard controller.shouldAutoStartRuntime() else { return }
+          guard userInitiated || controller.shouldAutoStartRuntime() else { return }
           do {
             _ = try await controller.start()
             await MainActor.run {

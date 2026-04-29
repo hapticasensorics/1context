@@ -1,4 +1,4 @@
-# 1Context v0.1.22 Public Preview
+# 1Context v0.1.23 Public Preview
 
 This release includes:
 
@@ -10,6 +10,7 @@ This release includes:
 - faster CLI start/restart after stopping the runtime
 - lifecycle debug output with `1context start --debug`, `stop --debug`, and `restart --debug`
 - update checks that avoid GitHub API rate limits
+- menu lifecycle fixes for CLI start/stop and Spotlight launch
 
 Install:
 
