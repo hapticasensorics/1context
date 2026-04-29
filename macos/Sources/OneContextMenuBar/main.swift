@@ -65,30 +65,24 @@ private final class AppDelegate: NSObject, NSApplicationDelegate {
     stateItem.isEnabled = false
     menu.addItem(stateItem)
 
-    let healthItem = NSMenuItem(title: runtimeState.healthTitle, action: nil, keyEquivalent: "")
-    healthItem.isEnabled = false
-    menu.addItem(healthItem)
-
-    switch updateState {
-    case .upToDate:
-      let updateItem = NSMenuItem(title: "Up to Date", action: nil, keyEquivalent: "")
-      updateItem.isEnabled = false
-      menu.addItem(updateItem)
-    case .available:
-      menu.addItem(NSMenuItem(title: "Update 1Context...", action: #selector(openUpgradeCommand), keyEquivalent: ""))
-    }
-
-    menu.addItem(NSMenuItem(title: "Restart 1Context", action: #selector(restartOneContext), keyEquivalent: ""))
-
     let settingsItem = NSMenuItem(title: "Settings", action: nil, keyEquivalent: "")
     let settingsMenu = NSMenu()
     let versionItem = NSMenuItem(title: "Version \(currentVersion)", action: nil, keyEquivalent: "")
     versionItem.isEnabled = false
     settingsMenu.addItem(versionItem)
+    settingsMenu.addItem(NSMenuItem(title: "About 1Context", action: #selector(showAbout), keyEquivalent: ""))
+    switch updateState {
+    case .upToDate:
+      let updateItem = NSMenuItem(title: "Up to Date", action: nil, keyEquivalent: "")
+      updateItem.isEnabled = false
+      settingsMenu.addItem(updateItem)
+    case .available:
+      settingsMenu.addItem(NSMenuItem(title: "Update 1Context...", action: #selector(openUpgradeCommand), keyEquivalent: ""))
+    }
     settingsItem.submenu = settingsMenu
     menu.addItem(settingsItem)
 
-    menu.addItem(NSMenuItem(title: "Quit 1Context", action: #selector(quit), keyEquivalent: "q"))
+    menu.addItem(NSMenuItem(title: "Quit", action: #selector(quit), keyEquivalent: "q"))
     menu.items.forEach { $0.target = self }
     settingsMenu.items.forEach { $0.target = self }
     statusItem.menu = menu
@@ -203,8 +197,13 @@ private final class AppDelegate: NSObject, NSApplicationDelegate {
     runInTerminal(oneContextHomebrewUpdateCommand)
   }
 
-  @objc private func restartOneContext() {
-    runInTerminal("1context restart")
+  @objc private func showAbout() {
+    NSApp.orderFrontStandardAboutPanel(options: [
+      .applicationName: "1Context",
+      .applicationVersion: currentVersion,
+      .version: currentVersion,
+      .credits: NSAttributedString(string: "Own your context.")
+    ])
   }
 
   @objc private func quit() {
@@ -246,20 +245,9 @@ private enum RuntimeState {
     case .running:
       return "1Context Running"
     case .stopped:
-      return "1Context Stopped"
+      return "1Context Paused"
     case .needsAttention:
-      return "1Context Needs Attention"
-    }
-  }
-
-  var healthTitle: String {
-    switch self {
-    case .running:
-      return "Healthy"
-    case .needsAttention:
-      return "Sick"
-    case .checking, .stopped:
-      return "Health Unknown"
+      return "1Context Sick"
     }
   }
 }
