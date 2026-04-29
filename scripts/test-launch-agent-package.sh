@@ -61,7 +61,7 @@ tar -C "$WORK_DIR" -xzf "$ARCHIVE"
 
 PACKAGE_DIR="$WORK_DIR/1context-$VERSION-macos-$ARCH"
 APP_PATH="$PACKAGE_DIR/1Context.app"
-CLI_PATH="$PACKAGE_DIR/bin/1context"
+CLI_PATH="$APP_PATH/Contents/MacOS/1context-cli"
 RUNTIME_LABEL="com.haptica.1context"
 MENU_LABEL="com.haptica.1context.menu"
 RUNTIME_PLIST="$HOME/Library/LaunchAgents/$RUNTIME_LABEL.plist"
@@ -118,7 +118,7 @@ printf 'running\n' > "$CANONICAL_DESIRED_STATE"
 "$PACKAGE_DIR/scripts/install-macos-launch-agents.sh" "$APP_PATH" "$CLI_PATH"
 
 grep -q "agent hook --provider claude --event SessionStart" "$ONECONTEXT_CLAUDE_SETTINGS_PATH"
-grep -q "/opt/homebrew/bin/1context\\|/usr/local/bin/1context\\|1context-cli" "$ONECONTEXT_CLAUDE_SETTINGS_PATH"
+grep -Eq "opt.*homebrew.*bin.*1context|usr.*local.*bin.*1context|1context-cli" "$ONECONTEXT_CLAUDE_SETTINGS_PATH"
 
 launchctl print "gui/$(id -u)/$RUNTIME_LABEL" >/dev/null
 launchctl print "gui/$(id -u)/$MENU_LABEL" >/dev/null

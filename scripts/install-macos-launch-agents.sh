@@ -38,6 +38,34 @@ MENU_LOG_XML="$(xml_escape "$MENU_LOG")"
 DESIRED_STATE="$HOME/Library/Application Support/1Context/desired-state"
 MENU_LOCK="$HOME/Library/Application Support/1Context/run/1context-menu.lock"
 
+menu_environment_xml() {
+  if [[ "${ONECONTEXT_PERSIST_ENV_PATH_OVERRIDES:-0}" != "1" ]]; then
+    return 0
+  fi
+
+  cat <<XML
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>ONECONTEXT_APP_SUPPORT_DIR</key>
+    <string>$(xml_escape "${ONECONTEXT_APP_SUPPORT_DIR:-$HOME/Library/Application Support/1Context}")</string>
+    <key>ONECONTEXT_USER_CONTENT_DIR</key>
+    <string>$(xml_escape "${ONECONTEXT_USER_CONTENT_DIR:-$HOME/1Context}")</string>
+    <key>ONECONTEXT_LOG_DIR</key>
+    <string>$(xml_escape "${ONECONTEXT_LOG_DIR:-$HOME/Library/Logs/1Context}")</string>
+    <key>ONECONTEXT_CACHE_DIR</key>
+    <string>$(xml_escape "${ONECONTEXT_CACHE_DIR:-$HOME/Library/Caches/1Context}")</string>
+    <key>ONECONTEXT_UPDATE_STATE_DIR</key>
+    <string>$(xml_escape "${ONECONTEXT_UPDATE_STATE_DIR:-$HOME/Library/Application Support/1Context/update}")</string>
+    <key>ONECONTEXT_PERSIST_ENV_PATH_OVERRIDES</key>
+    <string>1</string>
+    <key>ONECONTEXT_AGENT_ALLOW_ENV_OVERRIDES</key>
+    <string>$(xml_escape "${ONECONTEXT_AGENT_ALLOW_ENV_OVERRIDES:-0}")</string>
+    <key>ONECONTEXT_CLAUDE_SETTINGS_PATH</key>
+    <string>$(xml_escape "${ONECONTEXT_CLAUDE_SETTINGS_PATH:-}")</string>
+  </dict>
+XML
+}
+
 wait_for_old_menu() {
   local lock_pid=""
 
@@ -100,6 +128,7 @@ cat > "$PLIST" <<PLIST
   <string>$MENU_LOG_XML</string>
   <key>StandardErrorPath</key>
   <string>$MENU_LOG_XML</string>
+$(menu_environment_xml)
 </dict>
 </plist>
 PLIST
