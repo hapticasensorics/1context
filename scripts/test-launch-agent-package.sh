@@ -7,6 +7,17 @@ if [[ "${ONECONTEXT_ALLOW_LAUNCH_AGENT_SMOKE:-0}" != "1" ]]; then
   exit 1
 fi
 
+if [[ "${CI:-}" != "true" && "${ONECONTEXT_ALLOW_INSTALLED_STATE_MUTATION:-0}" != "1" ]]; then
+  if [[ -e "/Applications/1Context.app" ]] ||
+    launchctl print "gui/$(id -u)/com.haptica.1context" >/dev/null 2>&1 ||
+    launchctl print "gui/$(id -u)/com.haptica.1context.menu" >/dev/null 2>&1; then
+    echo "Refusing to run LaunchAgent smoke against an installed local 1Context." >&2
+    echo "This test mutates the real 1Context LaunchAgent labels." >&2
+    echo "Set ONECONTEXT_ALLOW_INSTALLED_STATE_MUTATION=1 to run it anyway." >&2
+    exit 1
+  fi
+fi
+
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 VERSION="$(tr -d '[:space:]' < "$ROOT/VERSION")"
 ARCH="${ONECONTEXT_ARCH:-arm64}"
