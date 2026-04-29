@@ -1,7 +1,8 @@
-# 1Context v0.1.34 Public Preview
+# 1Context v0.1.35 Public Preview
 
 This release includes:
 
+- version-only release to validate the fixed GUI updater path
 - Homebrew Cask installation for Apple Silicon Macs
 - native macOS menu bar app
 - local runtime start/status/stop
