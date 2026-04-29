@@ -91,6 +91,7 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
     configureStatusIcon()
     configureMenu()
     refreshMenuItems()
+    cleanupStaleUpdaterFiles()
     loadCachedUpdateState()
     ensureRuntimeRunning(userInitiated: true)
     checkForUpdates(force: false)

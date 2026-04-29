@@ -24,7 +24,7 @@ public final class UpdateChecker {
 
   public init(
     environment: [String: String] = ProcessInfo.processInfo.environment,
-    session: URLSession = .shared
+    session: URLSession = UpdateChecker.ephemeralSession()
   ) {
     self.environment = environment
     self.session = session
@@ -72,6 +72,7 @@ public final class UpdateChecker {
   private func fetchLatestRelease(currentVersion: String) async throws -> ReleaseInfo {
     let url = environment["ONECONTEXT_UPDATE_URL"].flatMap(URL.init(string:)) ?? oneContextLatestReleaseURL
     var request = URLRequest(url: url)
+    request.cachePolicy = .reloadIgnoringLocalAndRemoteCacheData
     if isGitHubLatestReleaseRedirect(url) {
       request.httpMethod = "HEAD"
     }
@@ -110,6 +111,14 @@ public final class UpdateChecker {
 
   private func isGitHubLatestReleaseRedirect(_ url: URL) -> Bool {
     url.host == "github.com" && url.path.hasSuffix("/releases/latest")
+  }
+
+  public static func ephemeralSession() -> URLSession {
+    let configuration = URLSessionConfiguration.ephemeral
+    configuration.httpCookieAcceptPolicy = .never
+    configuration.httpShouldSetCookies = false
+    configuration.urlCache = nil
+    return URLSession(configuration: configuration)
   }
 
   private func releaseInfo(fromRedirectURL url: URL) -> ReleaseInfo? {
@@ -152,4 +161,3 @@ public final class UpdateChecker {
     }
   }
 }
-

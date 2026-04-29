@@ -4,6 +4,7 @@ import OneContextRuntimeSupport
 
 nonisolated(unsafe) private var signalSocketPath: UnsafeMutablePointer<CChar>?
 nonisolated(unsafe) private var signalPIDPath: UnsafeMutablePointer<CChar>?
+nonisolated(unsafe) private var signalLogPath: UnsafeMutablePointer<CChar>?
 
 private let daemonLogMaxBytes: UInt64 = 1_048_576
 private let cacheMaxBytes: UInt64 = 50 * 1024 * 1024
@@ -125,7 +126,9 @@ final class OneContextDaemon: @unchecked Sendable {
   private func installSignalHandlers() {
     signalSocketPath = strdup(paths.socketPath)
     signalPIDPath = strdup(paths.pidPath)
+    signalLogPath = strdup(paths.logPath)
     signal(SIGTERM) { _ in
+      writeSignalLog("1Context runtime stopping signal=SIGTERM\n")
       if let socketPath = signalSocketPath {
         unlink(socketPath)
       }
@@ -135,6 +138,7 @@ final class OneContextDaemon: @unchecked Sendable {
       _exit(0)
     }
     signal(SIGINT) { _ in
+      writeSignalLog("1Context runtime stopping signal=SIGINT\n")
       if let socketPath = signalSocketPath {
         unlink(socketPath)
       }
@@ -337,8 +341,24 @@ final class OneContextDaemon: @unchecked Sendable {
       free(pidPath)
       signalPIDPath = nil
     }
+    if let logPath = signalLogPath {
+      free(logPath)
+      signalLogPath = nil
+    }
     logger.write("1Context runtime stopped")
   }
+}
+
+private func writeSignalLog(_ message: StaticString) {
+  guard let logPath = signalLogPath else { return }
+  let fd = open(logPath, O_WRONLY | O_CREAT | O_APPEND, S_IRUSR | S_IWUSR)
+  guard fd >= 0 else { return }
+  message.withUTF8Buffer { buffer in
+    if let baseAddress = buffer.baseAddress {
+      _ = write(fd, baseAddress, buffer.count)
+    }
+  }
+  close(fd)
 }
 
 do {
