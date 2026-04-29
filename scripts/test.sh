@@ -52,32 +52,7 @@ grep -q "Unknown argument: --wat" "$STATE_DIR/unknown-arg.out"
 "$BIN_DIR/1context" diagnose | grep -q "Memory Core"
 "$BIN_DIR/1context" debug | grep -q "1Context Diagnose"
 "$BIN_DIR/1context" debug --no-redact | grep -q "$STATE_DIR"
-"$BIN_DIR/1context" memory-core status | grep -q "Health: not configured"
-memory_core_fixture="$STATE_DIR/memory-core-fixture"
-cat > "$memory_core_fixture" <<'SCRIPT'
-#!/bin/sh
-if [ "$1" = "status" ]; then
-  printf '{"status":"ok","kind":"fixture"}\n'
-  exit 0
-fi
-if [ "$1" = "--version" ]; then
-  printf 'fixture-memory-core 0.0.0\n'
-  exit 0
-fi
-printf '{"args":["%s","%s"]}\n' "${1:-}" "${2:-}"
-SCRIPT
-chmod 700 "$memory_core_fixture"
-"$BIN_DIR/1context" memory-core configure --executable "$memory_core_fixture" | grep -q "Health: ok"
-test "$(stat -f "%Lp" "$ONECONTEXT_APP_SUPPORT_DIR/memory-core")" = "700"
-test "$(stat -f "%Lp" "$ONECONTEXT_APP_SUPPORT_DIR/memory-core/config.json")" = "600"
-"$BIN_DIR/1context" memory-core doctor | grep -q "Health: ok"
-"$BIN_DIR/1context" memory-core run -- wiki list | grep -q '"wiki"'
-if "$BIN_DIR/1context" memory-core run -- hire agent >"$STATE_DIR/memory-disallowed.out" 2>&1; then
-  echo "disallowed memory-core command should fail" >&2
-  exit 1
-fi
-grep -q "not allowed" "$STATE_DIR/memory-disallowed.out"
-"$BIN_DIR/1context" memory-core configure --clear | grep -q "Health: not configured"
+BIN_DIR="$BIN_DIR" "$ROOT/scripts/test-memory-core-contract.sh"
 if "$BIN_DIR/1context" status >"$STATE_DIR/status-down.out" 2>&1; then
   echo "status should fail when 1Context is not running" >&2
   exit 1

@@ -113,6 +113,9 @@ The adapter is explicit and bounded: lifecycle commands do not depend on memory
 core, hooks do not run heavy memory work, and `run` only allows top-level
 `status`, `storage`, `wiki`, and `memory` commands.
 
+See [docs/memory-core-contract.md](docs/memory-core-contract.md) for the
+subprocess contract and compatibility fixture.
+
 ## Development
 
 This repository includes the public macOS runtime and menu bar app:
