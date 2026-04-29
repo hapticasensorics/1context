@@ -7,6 +7,28 @@ private enum Constants {
 }
 
 @MainActor
+private func showFishAlert(_ message: String) {
+  let alert = NSAlert()
+  alert.messageText = message
+  alert.icon = loadFishAlertIcon()
+  alert.addButton(withTitle: "OK")
+  NSApp.activate(ignoringOtherApps: true)
+  alert.runModal()
+}
+
+@MainActor
+private func loadFishAlertIcon() -> NSImage? {
+  let bundleURL = Bundle.module.url(forResource: "MenuBarIcon", withExtension: "png")
+  let mainURL = Bundle.main.url(forResource: "MenuBarIcon", withExtension: "png")
+  guard let image = [bundleURL, mainURL].compactMap({ $0 }).compactMap(NSImage.init(contentsOf:)).first else {
+    return nil
+  }
+  image.isTemplate = false
+  image.size = NSSize(width: 64, height: 64)
+  return image
+}
+
+@MainActor
 private final class AppDelegate: NSObject, NSApplicationDelegate {
   private var statusItem: NSStatusItem!
   private var timer: Timer?
@@ -193,7 +215,7 @@ private final class AppDelegate: NSObject, NSApplicationDelegate {
   }
 
   @objc private func openUpgradeCommand() {
-    runInTerminal(oneContextHomebrewUpdateCommand)
+    runUpdateCommandInTerminal()
   }
 
   @objc private func checkForUpdatesNow() {
@@ -227,19 +249,11 @@ private final class AppDelegate: NSObject, NSApplicationDelegate {
   }
 
   private func showUpToDateMessage() {
-    let alert = NSAlert()
-    alert.messageText = "1Context up to date."
-    alert.addButton(withTitle: "OK")
-    NSApp.activate(ignoringOtherApps: true)
-    alert.runModal()
+    showFishAlert("1Context up to date.")
   }
 
   private func showUpdateCheckFailedMessage() {
-    let alert = NSAlert()
-    alert.messageText = "Could not check for updates."
-    alert.addButton(withTitle: "OK")
-    NSApp.activate(ignoringOtherApps: true)
-    alert.runModal()
+    showFishAlert("Could not check for updates.")
   }
 
   @objc private func showAbout() {
@@ -252,12 +266,21 @@ private final class AppDelegate: NSObject, NSApplicationDelegate {
     NSApp.terminate(nil)
   }
 
-  private func runInTerminal(_ command: String) {
+  private func runUpdateCommandInTerminal() {
+    let alertExecutable = URL(fileURLWithPath: CommandLine.arguments[0])
+      .resolvingSymlinksInPath()
+      .path
     let fileURL = FileManager.default.temporaryDirectory
       .appendingPathComponent("1context-\(UUID().uuidString).command")
     let script = """
     #!/bin/zsh
-    \(command)
+    if \(oneContextHomebrewUpdateCommand); then
+      \(shellQuote(alertExecutable)) --update-success-alert >/dev/null 2>&1 || osascript -e 'display dialog "1Context updated." buttons {"OK"} default button "OK"'
+    else
+      status=$?
+      osascript -e 'display dialog "Could not update 1Context." buttons {"OK"} default button "OK" with icon caution'
+      exit $status
+    fi
     echo
     echo "Done. You can close this window."
     """
@@ -265,6 +288,17 @@ private final class AppDelegate: NSObject, NSApplicationDelegate {
     chmod(fileURL.path, 0o700)
     NSWorkspace.shared.open(fileURL)
   }
+
+  private func shellQuote(_ value: String) -> String {
+    "'\(value.replacingOccurrences(of: "'", with: "'\\''"))'"
+  }
+}
+
+if CommandLine.arguments.contains("--update-success-alert") {
+  _ = NSApplication.shared
+  NSApp.setActivationPolicy(.accessory)
+  showFishAlert("1Context updated.")
+  Foundation.exit(0)
 }
 
 private let app = NSApplication.shared
