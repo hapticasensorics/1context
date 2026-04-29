@@ -524,10 +524,12 @@ public final class LaunchAgentManager {
   }
 
   public func stop() async {
+    let path = launchAgentPath
     let byTarget = await launchctl(["bootout", agentTarget()])
     if byTarget.status != 0 {
-      _ = await launchctl(["bootout", guiDomain(), launchAgentPath.path])
+      _ = await launchctl(["bootout", guiDomain(), path.path])
     }
+    try? FileManager.default.removeItem(at: path)
   }
 
   public func uninstallManagedLaunchAgents() async {
@@ -748,8 +750,14 @@ public final class RuntimeController {
   public func start() async throws -> (alreadyRunning: Bool, health: RuntimeHealth) {
     setStartDesired(true)
     if case .success(let health) = status() {
+      if health.version == oneContextVersion {
+        await startMenuIfAvailable()
+        return (true, health)
+      }
+
+      let restarted = try await restartRuntimeForVersionMismatch(existingHealth: health)
       await startMenuIfAvailable()
-      return (true, health)
+      return (false, restarted)
     }
     guard let daemon = findDaemonPath() else { throw RuntimeControlError.daemonNotFound }
 
@@ -779,6 +787,21 @@ public final class RuntimeController {
     kill(health.pid, SIGTERM)
     try await waitForStopped()
     return true
+  }
+
+  private func restartRuntimeForVersionMismatch(existingHealth health: RuntimeHealth) async throws -> RuntimeHealth {
+    guard let daemon = findDaemonPath() else { throw RuntimeControlError.daemonNotFound }
+
+    if launchAgent.isDisabled {
+      guard health.pid > 0 else { throw RuntimeControlError.missingPID }
+      kill(health.pid, SIGTERM)
+      try await waitForStopped()
+      try startDetached(daemonPath: daemon)
+      return try await waitForRunning()
+    }
+
+    try await launchAgent.restart(daemonPath: daemon)
+    return try await waitForRunning()
   }
 
   public func restart() async throws -> RuntimeHealth {
