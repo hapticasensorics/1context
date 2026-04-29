@@ -31,7 +31,7 @@ struct OneContextCLI {
       case "status":
         try rejectUnknownArguments(allowed: ["--debug"])
         await status()
-      case "diagnose":
+      case "diagnose", "debug":
         try rejectUnknownArguments()
         await diagnose()
       case "logs":
@@ -74,6 +74,7 @@ struct OneContextCLI {
       1context restart [--debug]
       1context status [--debug]
       1context diagnose
+      1context debug
       1context logs [--follow]
       1context update
     """)
