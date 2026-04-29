@@ -1,9 +1,9 @@
 import Foundation
 import Darwin
 
-public let oneContextVersion = "0.1.21"
+public let oneContextVersion = "0.1.22"
 public let oneContextGitHubURL = URL(string: "https://github.com/hapticasensorics/1context")!
-public let oneContextLatestReleaseURL = URL(string: "https://api.github.com/repos/hapticasensorics/1context/releases/latest")!
+public let oneContextLatestReleaseURL = URL(string: "https://github.com/hapticasensorics/1context/releases/latest")!
 public let oneContextHomebrewUpdateCommand = """
 if brew tap hapticasensorics/tap >/dev/null && \
   tap_repo="$(brew --repo hapticasensorics/tap)" && \
@@ -286,7 +286,10 @@ public final class UpdateChecker {
   private func fetchLatestRelease(currentVersion: String) async throws -> ReleaseInfo {
     let url = environment["ONECONTEXT_UPDATE_URL"].flatMap(URL.init(string:)) ?? oneContextLatestReleaseURL
     var request = URLRequest(url: url)
-    request.setValue("application/json", forHTTPHeaderField: "accept")
+    if isGitHubLatestReleaseRedirect(url) {
+      request.httpMethod = "HEAD"
+    }
+    request.setValue("application/json, text/html;q=0.8", forHTTPHeaderField: "accept")
     request.setValue("1context/\(currentVersion)", forHTTPHeaderField: "user-agent")
     request.timeoutInterval = 5
 
@@ -297,6 +300,14 @@ public final class UpdateChecker {
       throw URLError(.badServerResponse)
     }
 
+    if let release = releaseInfo(fromRedirectURL: httpResponse.url ?? url) {
+      return release
+    }
+
+    guard !data.isEmpty else {
+      throw URLError(.cannotParseResponse)
+    }
+
     let object = try JSONSerialization.jsonObject(with: data) as? [String: Any]
     let release = (object?["stable"] as? [String: Any]) ?? object
     let rawVersion = release?["version"] as? String
@@ -305,7 +316,27 @@ public final class UpdateChecker {
       ?? ""
     let version = rawVersion.replacingOccurrences(of: "^v", with: "", options: .regularExpression)
     let notesURL = (release?["notes_url"] as? String ?? release?["html_url"] as? String).flatMap(URL.init(string:))
+    guard !version.isEmpty else {
+      throw URLError(.cannotParseResponse)
+    }
     return ReleaseInfo(version: version, notesURL: notesURL)
+  }
+
+  private func isGitHubLatestReleaseRedirect(_ url: URL) -> Bool {
+    url.host == "github.com" && url.path.hasSuffix("/releases/latest")
+  }
+
+  private func releaseInfo(fromRedirectURL url: URL) -> ReleaseInfo? {
+    let components = url.path.split(separator: "/").map(String.init)
+    guard let tagIndex = components.firstIndex(of: "tag"),
+      components.indices.contains(tagIndex + 1)
+    else {
+      return nil
+    }
+
+    let version = components[tagIndex + 1].replacingOccurrences(of: "^v", with: "", options: .regularExpression)
+    guard !version.isEmpty else { return nil }
+    return ReleaseInfo(version: version, notesURL: url)
   }
 
   private func readState(at url: URL) -> [String: Any]? {
