@@ -2,7 +2,7 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-VERSION="${ONECONTEXT_VERSION:-0.1.24}"
+VERSION="${ONECONTEXT_VERSION:-0.1.25}"
 ARCH="${ONECONTEXT_ARCH:-arm64}"
 PACKAGE_DIR="$ROOT/dist/1context-$VERSION-macos-$ARCH"
 ARCHIVE="$ROOT/dist/1context-$VERSION-macos-$ARCH.tar.gz"
@@ -12,7 +12,11 @@ if [[ "${NOTARIZE:-1}" != "1" && "${ALLOW_UNNOTARIZED:-0}" != "1" ]]; then
   exit 1
 fi
 
-export REQUIRE_DEVELOPER_ID="${REQUIRE_DEVELOPER_ID:-1}"
+if [[ "${NOTARIZE:-1}" == "1" ]]; then
+  export REQUIRE_DEVELOPER_ID="${REQUIRE_DEVELOPER_ID:-1}"
+else
+  export REQUIRE_DEVELOPER_ID="${REQUIRE_DEVELOPER_ID:-0}"
+fi
 "$ROOT/scripts/build-macos-app.sh"
 if [[ "${NOTARIZE:-1}" == "1" ]]; then
   "$ROOT/scripts/notarize-macos-app.sh" "$ROOT/dist/1Context.app"

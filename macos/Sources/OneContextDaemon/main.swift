@@ -36,6 +36,7 @@ final class OneContextDaemon {
   private lazy var logger = Logger(path: paths.logPath)
 
   func run() throws {
+    signal(SIGPIPE, SIG_IGN)
     try prepareDirectories()
     try startSocket()
     try writePIDFile()
@@ -89,6 +90,9 @@ final class OneContextDaemon {
     if FileManager.default.fileExists(atPath: paths.socketPath) {
       let attributes = try? FileManager.default.attributesOfItem(atPath: paths.socketPath)
       if attributes?[.type] as? FileAttributeType == .typeSocket {
+        if isSocketAcceptingConnections(paths.socketPath) {
+          throw UnixSocketError.socketPathExists(paths.socketPath)
+        }
         unlink(paths.socketPath)
       } else {
         throw UnixSocketError.socketPathExists(paths.socketPath)
@@ -97,6 +101,7 @@ final class OneContextDaemon {
 
     listenFD = socket(AF_UNIX, SOCK_STREAM, 0)
     guard listenFD >= 0 else { throw UnixSocketError.socketFailed }
+    setNoSigPipe(listenFD)
 
     let bindResult = try withUnixSocketAddress(path: paths.socketPath) { pointer, length in
       Darwin.bind(listenFD, pointer, length)
@@ -146,11 +151,28 @@ final class OneContextDaemon {
   }
 
   private func handle(clientFD: Int32) {
+    setNoSigPipe(clientFD)
     guard let request = readLine(from: clientFD) else { return }
     let response = responseData(for: request)
     response.withUnsafeBytes { buffer in
       _ = write(clientFD, buffer.baseAddress, response.count)
     }
+  }
+
+  private func isSocketAcceptingConnections(_ path: String) -> Bool {
+    let fd = socket(AF_UNIX, SOCK_STREAM, 0)
+    guard fd >= 0 else { return false }
+    defer { close(fd) }
+    setNoSigPipe(fd)
+    let result = try? withUnixSocketAddress(path: path) { pointer, length in
+      connect(fd, pointer, length)
+    }
+    return result == 0
+  }
+
+  private func setNoSigPipe(_ fd: Int32) {
+    var enabled: Int32 = 1
+    setsockopt(fd, SOL_SOCKET, SO_NOSIGPIPE, &enabled, socklen_t(MemoryLayout<Int32>.size))
   }
 
   private func readLine(from fd: Int32) -> Data? {

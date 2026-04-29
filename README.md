@@ -6,6 +6,10 @@ This public preview installs the macOS menu bar app, local runtime, and
 Homebrew Cask plumbing for 1Context. The full project wiki and agent memory
 surfaces are in active development.
 
+The Cask installs user LaunchAgents for the menu bar app and local runtime so
+1Context can stay available after install and login. The runtime stores state
+locally and does not upload project data in this preview.
+
 [haptica.ai](https://haptica.ai)
 
 ## Install

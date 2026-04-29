@@ -17,16 +17,22 @@ struct OneContextCLI {
       case nil:
         await printMain()
       case "start":
+        try rejectUnknownArguments(allowed: ["--debug"])
         try await start()
       case "stop":
+        try rejectUnknownArguments(allowed: ["--debug"])
         try await stop()
       case "restart":
+        try rejectUnknownArguments(allowed: ["--debug"])
         try await restart()
       case "status":
+        try rejectUnknownArguments(allowed: ["--debug"])
         await status()
       case "diagnose":
+        try rejectUnknownArguments()
         await diagnose()
       case "update":
+        try rejectUnknownArguments()
         try await update()
       default:
         FileHandle.standardError.write(Data("Unknown command: \(command ?? "")\n".utf8))
@@ -63,6 +69,13 @@ struct OneContextCLI {
       1context diagnose
       1context update
     """)
+  }
+
+  static func rejectUnknownArguments(allowed: Set<String> = []) throws {
+    let unknown = args.dropFirst().filter { !allowed.contains($0) }
+    if let first = unknown.first {
+      throw CLIError.unknownArgument(first)
+    }
   }
 
   static func maybeCheckForUpdate() async {
@@ -172,13 +185,14 @@ struct OneContextCLI {
       """)
       if debug { await printDebug(controller: controller, error: nil) }
     case .failure(let error):
-      print("""
+      FileHandle.standardError.write(Data("""
       1Context is not running.
 
       Start it with:
         1context start
-      """)
+      """.utf8))
       if debug { await printDebug(controller: controller, error: error) }
+      Foundation.exit(1)
     }
   }
 
@@ -365,6 +379,7 @@ struct OneContextCLI {
 enum CLIError: Error, LocalizedError {
   case commandFailed(String)
   case runtimeStopped
+  case unknownArgument(String)
 
   var errorDescription: String? {
     switch self {
@@ -372,6 +387,8 @@ enum CLIError: Error, LocalizedError {
       return "Command failed: \(command)"
     case .runtimeStopped:
       return "1Context is stopped"
+    case .unknownArgument(let argument):
+      return "Unknown argument: \(argument)"
     }
   }
 }

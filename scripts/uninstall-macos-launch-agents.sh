@@ -9,6 +9,35 @@ if [[ "${1:-}" == "--delete-data" ]]; then
   DELETE_DATA=1
 fi
 
+safe_remove() {
+  local target="$1"
+  local home_prefix="$HOME/"
+
+  if [[ -z "$target" || "$target" == "/" || "$target" == "$HOME" ]]; then
+    echo "Refusing to delete unsafe path: $target" >&2
+    exit 1
+  fi
+
+  if [[ "$target" != "$home_prefix"* ]]; then
+    echo "Refusing to delete path outside home: $target" >&2
+    exit 1
+  fi
+
+  case "$target" in
+    "$HOME/1Context"|\
+    "$HOME/Library/Application Support/1Context"|\
+    "$HOME/Library/Logs/1Context"|\
+    "$HOME/Library/Caches/1Context"|\
+    "$HOME/Library/Preferences/com.haptica.1context.plist")
+      rm -rf "$target"
+      ;;
+    *)
+      echo "Refusing to delete unapproved path: $target" >&2
+      exit 1
+      ;;
+  esac
+}
+
 for label in "$MENU_LABEL" "$RUNTIME_LABEL"; do
   plist="$HOME/Library/LaunchAgents/$label.plist"
   launchctl bootout "gui/$(id -u)" "$plist" >/dev/null 2>&1 || true
@@ -16,10 +45,9 @@ for label in "$MENU_LABEL" "$RUNTIME_LABEL"; do
 done
 
 if [[ "$DELETE_DATA" == "1" ]]; then
-  rm -rf \
-    "$HOME/1Context" \
-    "$HOME/Library/Application Support/1Context" \
-    "$HOME/Library/Logs/1Context" \
-    "$HOME/Library/Caches/1Context" \
-    "$HOME/Library/Preferences/com.haptica.1context.plist"
+  safe_remove "$HOME/1Context"
+  safe_remove "$HOME/Library/Application Support/1Context"
+  safe_remove "$HOME/Library/Logs/1Context"
+  safe_remove "$HOME/Library/Caches/1Context"
+  safe_remove "$HOME/Library/Preferences/com.haptica.1context.plist"
 fi

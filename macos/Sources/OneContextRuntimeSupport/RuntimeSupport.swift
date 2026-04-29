@@ -1,7 +1,7 @@
 import Foundation
 import Darwin
 
-public let oneContextVersion = "0.1.24"
+public let oneContextVersion = "0.1.25"
 public let oneContextGitHubURL = URL(string: "https://github.com/hapticasensorics/1context")!
 public let oneContextLatestReleaseURL = URL(string: "https://github.com/hapticasensorics/1context/releases/latest")!
 public let oneContextHomebrewUpdateCommand = """
@@ -157,6 +157,8 @@ public func withUnixSocketAddress<T>(
 
 public final class UnixJSONRPCClient {
   private let socketPath: String
+  private let timeoutMilliseconds: Int32 = 2_000
+  private let maxResponseBytes = 64 * 1024
 
   public init(socketPath: String = RuntimePaths.current().socketPath) {
     self.socketPath = socketPath
@@ -166,6 +168,7 @@ public final class UnixJSONRPCClient {
     let fd = socket(AF_UNIX, SOCK_STREAM, 0)
     guard fd >= 0 else { throw UnixSocketError.socketFailed }
     defer { close(fd) }
+    setNoSigPipe(fd)
 
     let connected = try withUnixSocketAddress(path: socketPath) { pointer, length in
       connect(fd, pointer, length)
@@ -189,9 +192,11 @@ public final class UnixJSONRPCClient {
     var response = Data()
     var buffer = [UInt8](repeating: 0, count: 4096)
     while true {
+      guard waitForReadable(fd) else { throw UnixSocketError.emptyResponse }
       let count = read(fd, &buffer, buffer.count)
       if count <= 0 { break }
       response.append(buffer, count: count)
+      guard response.count <= maxResponseBytes else { throw UnixSocketError.invalidResponse }
       if response.contains(UInt8(ascii: "\n")) { break }
     }
 
@@ -207,6 +212,16 @@ public final class UnixJSONRPCClient {
     }
 
     return dictionary["result"] as? [String: Any] ?? [:]
+  }
+
+  private func waitForReadable(_ fd: Int32) -> Bool {
+    var pollFD = pollfd(fd: fd, events: Int16(POLLIN), revents: 0)
+    return poll(&pollFD, 1, timeoutMilliseconds) > 0
+  }
+
+  private func setNoSigPipe(_ fd: Int32) {
+    var enabled: Int32 = 1
+    setsockopt(fd, SOL_SOCKET, SO_NOSIGPIPE, &enabled, socklen_t(MemoryLayout<Int32>.size))
   }
 
   public func health() throws -> RuntimeHealth {
