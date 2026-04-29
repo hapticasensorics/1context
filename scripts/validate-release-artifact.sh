@@ -36,6 +36,16 @@ if [[ ${#apps[@]} -ne 1 || ! -d "$APP" ]]; then
   exit 1
 fi
 
+if [[ ! -f "$APP/Contents/Resources/AppIcon.icns" ]]; then
+  echo "Release app is missing AppIcon.icns." >&2
+  exit 1
+fi
+
+if [[ "$(plutil -extract CFBundleIconFile raw "$APP/Contents/Info.plist" 2>/dev/null || true)" != "AppIcon" ]]; then
+  echo "Release app Info.plist does not set CFBundleIconFile to AppIcon." >&2
+  exit 1
+fi
+
 for binary in "$APP/Contents/MacOS/1Context" "$APP/Contents/MacOS/1context-cli" "$APP/Contents/MacOS/onecontextd"; do
   if [[ ! -x "$binary" ]]; then
     echo "Missing executable: $binary" >&2

@@ -1,4 +1,4 @@
-# 1Context v0.1.25 Public Preview
+# 1Context v0.1.26 Public Preview
 
 This release includes:
 
@@ -13,6 +13,7 @@ This release includes:
 - menu lifecycle fixes for CLI start/stop and Spotlight launch
 - release-artifact hygiene checks and `1context diagnose`
 - IPC and installer hardening from red-team review
+- AppIcon.icns for Finder and Spotlight
 
 Install:
 
