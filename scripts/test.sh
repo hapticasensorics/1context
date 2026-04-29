@@ -28,10 +28,11 @@ export ONECONTEXT_CACHE_DIR="$STATE_DIR/Caches/1Context"
 export ONECONTEXT_UPDATE_STATE_DIR="$STATE_DIR/Application Support/1Context/update"
 export ONECONTEXT_NO_UPDATE_CHECK=1
 
-"$BIN_DIR/1context" | grep -q "1Context 0.1.27"
-test "$("$BIN_DIR/1context" --version)" = "0.1.27"
+"$BIN_DIR/1context" | grep -q "1Context 0.1.28"
+test "$("$BIN_DIR/1context" --version)" = "0.1.28"
 "$BIN_DIR/1context" --help | grep -q "1context status"
 "$BIN_DIR/1context" --help | grep -q "1context quit"
+"$BIN_DIR/1context" --help | grep -q "1context logs"
 if "$BIN_DIR/1context" status --wat >"$STATE_DIR/unknown-arg.out" 2>&1; then
   echo "unknown arguments should fail" >&2
   exit 1
@@ -61,6 +62,7 @@ test "$(stat -f "%Lp" "$ONECONTEXT_APP_SUPPORT_DIR/run/1contextd.pid")" = "600"
 test "$(stat -f "%Lp" "$ONECONTEXT_LOG_DIR/1contextd.log")" = "600"
 "$BIN_DIR/1context" status | grep -q "Health: OK"
 "$BIN_DIR/1context" status --debug | grep -q "Socket: responding"
+"$BIN_DIR/1context" logs | grep -q "1Context Logs"
 "$BIN_DIR/1context" restart --debug | grep -q "Completed in"
 "$BIN_DIR/1context" stop | grep -q "1Context is stopped"
 if "$BIN_DIR/1context" status >"$STATE_DIR/status-down-again.out" 2>&1; then

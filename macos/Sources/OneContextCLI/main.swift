@@ -34,6 +34,9 @@ struct OneContextCLI {
       case "diagnose":
         try rejectUnknownArguments()
         await diagnose()
+      case "logs":
+        try rejectUnknownArguments(allowed: ["--follow"])
+        try logs()
       case "update":
         try rejectUnknownArguments()
         try await update()
@@ -71,6 +74,7 @@ struct OneContextCLI {
       1context restart [--debug]
       1context status [--debug]
       1context diagnose
+      1context logs [--follow]
       1context update
     """)
   }
@@ -267,6 +271,21 @@ struct OneContextCLI {
     printLogTail(title: "Menu", path: paths.logDirectory.appendingPathComponent("menu.log").path)
   }
 
+  static func logs() throws {
+    let paths = RuntimePaths.current()
+    let runtimeLog = paths.logPath
+    let menuLog = paths.logDirectory.appendingPathComponent("menu.log").path
+
+    if args.contains("--follow") {
+      try runProcess("/usr/bin/tail", ["-n", "80", "-F", runtimeLog, menuLog])
+      return
+    }
+
+    print("1Context Logs\n")
+    printLogTail(title: "Runtime", path: runtimeLog, lineCount: 80)
+    printLogTail(title: "Menu", path: menuLog, lineCount: 80)
+  }
+
   static func runShell(_ command: String) throws {
     let process = Process()
     process.executableURL = URL(fileURLWithPath: "/bin/zsh")
@@ -349,13 +368,13 @@ struct OneContextCLI {
     return first
   }
 
-  static func printLogTail(title: String, path: String) {
+  static func printLogTail(title: String, path: String, lineCount: Int = 5) {
     print("  \(title): \(path)")
     guard let text = try? String(contentsOfFile: path, encoding: .utf8) else {
       print("    missing")
       return
     }
-    let lines = text.split(separator: "\n").suffix(5)
+    let lines = text.split(separator: "\n").suffix(lineCount)
     if lines.isEmpty {
       print("    empty")
     } else {
@@ -412,6 +431,19 @@ struct OneContextCLI {
       String(data: stdoutData, encoding: .utf8) ?? "",
       String(data: stderrData, encoding: .utf8) ?? ""
     )
+  }
+
+  static func runProcess(_ executable: String, _ arguments: [String]) throws {
+    let process = Process()
+    process.executableURL = URL(fileURLWithPath: executable)
+    process.arguments = arguments
+    process.standardOutput = FileHandle.standardOutput
+    process.standardError = FileHandle.standardError
+    try process.run()
+    process.waitUntilExit()
+    guard process.terminationStatus == 0 else {
+      throw CLIError.commandFailed(([executable] + arguments).joined(separator: " "))
+    }
   }
 }
 
