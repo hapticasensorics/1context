@@ -542,6 +542,7 @@ public final class AgentIntegrationManager {
     }
     return command == "\(AgentHookPolicy.managedStatusLinePrefix) \(shellQuote(executablePath)) agent statusline --provider claude"
       || (command.hasPrefix("\(AgentHookPolicy.managedStatusLinePrefix) ") && command.hasSuffix(" agent statusline --provider claude"))
+      || isLegacyOneContextCommand(command, suffix: " agent statusline --provider claude")
   }
 
   private func matcherGroup(event: AgentHookEvent) -> [String: Any] {
@@ -604,6 +605,27 @@ public final class AgentIntegrationManager {
     return command == self.command(for: event)
       || (command.hasPrefix("\(AgentHookPolicy.managedHookPrefix) ")
         && command.hasSuffix(" agent hook --provider claude --event \(event.rawValue)"))
+      || isLegacyOneContextCommand(command, suffix: " agent hook --provider claude --event \(event.rawValue)")
+  }
+
+  private func isLegacyOneContextCommand(_ command: String, suffix: String) -> Bool {
+    guard command.hasSuffix(suffix) else { return false }
+    let executable = String(command.dropLast(suffix.count))
+      .trimmingCharacters(in: .whitespacesAndNewlines)
+    let unquoted = unquoteShellToken(executable)
+    return unquoted == "1context" || unquoted.hasSuffix("/1context") || unquoted.hasSuffix("/1context-cli")
+  }
+
+  private func unquoteShellToken(_ value: String) -> String {
+    guard value.count >= 2 else { return value }
+    if value.first == "'", value.last == "'" {
+      let inner = value.dropFirst().dropLast()
+      return inner.replacingOccurrences(of: "'\\''", with: "'")
+    }
+    if value.first == "\"", value.last == "\"" {
+      return String(value.dropFirst().dropLast())
+    }
+    return value
   }
 
   private func readClaudeSettings() -> ClaudeSettingsReadResult {

@@ -161,6 +161,62 @@ final class AgentIntegrationTests: XCTestCase {
     XCTAssertNil(uninstalled["statusLine"])
   }
 
+  func testUninstallRemovesLegacyUnmarkedOneContextHooks() throws {
+    let root = try temporaryRoot()
+    defer { try? FileManager.default.removeItem(at: root) }
+    let settings = root.appendingPathComponent("settings.json")
+    try writeObject([
+      "hooks": [
+        "SessionStart": [
+          [
+            "hooks": [
+              [
+                "type": "command",
+                "command": "'/Users/example/dev/1context-agent-public-hooks/macos/.build/debug/1context' agent hook --provider claude --event SessionStart"
+              ],
+              [
+                "type": "command",
+                "command": "python3 /Users/example/dev/1Context-private-4/tools/wiki-startup-context.py"
+              ]
+            ]
+          ]
+        ],
+        "UserPromptSubmit": [
+          [
+            "hooks": [
+              [
+                "type": "command",
+                "command": "'/Users/example/dev/1context-agent-public-hooks/macos/.build/debug/1context' agent hook --provider claude --event UserPromptSubmit"
+              ]
+            ]
+          ]
+        ]
+      ],
+      "statusLine": [
+        "type": "command",
+        "command": "python3 /Users/example/dev/1Context-private-4/tools/wiki-statusline.py"
+      ]
+    ], to: settings)
+
+    let manager = AgentIntegrationManager(
+      paths: AgentPaths(directory: root.appendingPathComponent("agent", isDirectory: true)),
+      claudeSettingsPath: settings,
+      executablePath: "/opt/homebrew/bin/1context"
+    )
+
+    _ = try manager.uninstall()
+
+    let object = try readObject(settings)
+    let hooks = try XCTUnwrap(object["hooks"] as? [String: Any])
+    let sessionGroups = try XCTUnwrap(hooks["SessionStart"] as? [[String: Any]])
+    let commands = sessionGroups.flatMap { ($0["hooks"] as? [[String: Any]]) ?? [] }
+      .compactMap { $0["command"] as? String }
+    XCTAssertEqual(commands, ["python3 /Users/example/dev/1Context-private-4/tools/wiki-startup-context.py"])
+    XCTAssertNil(hooks["UserPromptSubmit"])
+    let statusLine = try XCTUnwrap(object["statusLine"] as? [String: Any])
+    XCTAssertEqual(statusLine["command"] as? String, "python3 /Users/example/dev/1Context-private-4/tools/wiki-statusline.py")
+  }
+
   func testDisableAllHooksReportsManualReviewAndDoesNotModifySettings() throws {
     let root = try temporaryRoot()
     defer { try? FileManager.default.removeItem(at: root) }
