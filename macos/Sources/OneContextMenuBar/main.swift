@@ -98,7 +98,7 @@ private final class AppDelegate: NSObject, NSApplicationDelegate {
 
     switch updateState {
     case .upToDate:
-      menu.addItem(NSMenuItem(title: "Update", action: #selector(checkForUpdatesNow), keyEquivalent: ""))
+      menu.addItem(NSMenuItem(title: "Check for Updates", action: #selector(checkForUpdatesNow), keyEquivalent: ""))
     case .available:
       menu.addItem(NSMenuItem(title: "Please Update", action: #selector(openUpgradeCommand), keyEquivalent: ""))
     }
@@ -215,6 +215,7 @@ private final class AppDelegate: NSObject, NSApplicationDelegate {
   }
 
   @objc private func openUpgradeCommand() {
+    guard confirmUpdate() else { return }
     runUpdateCommandInTerminal()
   }
 
@@ -235,7 +236,9 @@ private final class AppDelegate: NSObject, NSApplicationDelegate {
           self.updateState = result.updateAvailable ? .available : .upToDate
           self.rebuildMenu()
           if result.updateAvailable {
-            self.openUpgradeCommand()
+            if self.confirmUpdate() {
+              self.runUpdateCommandInTerminal()
+            }
           } else {
             self.showUpToDateMessage()
           }
@@ -254,6 +257,17 @@ private final class AppDelegate: NSObject, NSApplicationDelegate {
 
   private func showUpdateCheckFailedMessage() {
     showFishAlert("Could not check for updates.")
+  }
+
+  private func confirmUpdate() -> Bool {
+    let alert = NSAlert()
+    alert.messageText = "Update 1Context with Homebrew?"
+    alert.informativeText = "This may ask for your Mac password."
+    alert.icon = loadFishAlertIcon()
+    alert.addButton(withTitle: "Update")
+    alert.addButton(withTitle: "Cancel")
+    NSApp.activate(ignoringOtherApps: true)
+    return alert.runModal() == .alertFirstButtonReturn
   }
 
   @objc private func showAbout() {
@@ -276,13 +290,12 @@ private final class AppDelegate: NSObject, NSApplicationDelegate {
     #!/bin/zsh
     if \(oneContextHomebrewUpdateCommand); then
       \(shellQuote(alertExecutable)) --update-success-alert >/dev/null 2>&1 || osascript -e 'display dialog "1Context updated." buttons {"OK"} default button "OK"'
+      osascript -e 'tell application "Terminal" to close front window' >/dev/null 2>&1
     else
       status=$?
       osascript -e 'display dialog "Could not update 1Context." buttons {"OK"} default button "OK" with icon caution'
       exit $status
     fi
-    echo
-    echo "Done. You can close this window."
     """
     try? script.write(to: fileURL, atomically: true, encoding: .utf8)
     chmod(fileURL.path, 0o700)
