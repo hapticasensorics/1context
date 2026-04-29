@@ -5,6 +5,10 @@ import OneContextRuntimeSupport
 nonisolated(unsafe) private var signalSocketPath: UnsafeMutablePointer<CChar>?
 nonisolated(unsafe) private var signalPIDPath: UnsafeMutablePointer<CChar>?
 
+private let daemonLogMaxBytes: UInt64 = 1_048_576
+private let cacheMaxBytes: UInt64 = 50 * 1024 * 1024
+private let cacheMaxAge: TimeInterval = 7 * 24 * 60 * 60
+
 final class Logger: @unchecked Sendable {
   private let path: String
   private let queue = DispatchQueue(label: "com.haptica.1contextd.logger")
@@ -15,6 +19,7 @@ final class Logger: @unchecked Sendable {
 
   func write(_ message: String) {
     queue.sync {
+      rotateIfNeeded()
       let timestamp = ISO8601DateFormatter().string(from: Date())
       let line = "[\(timestamp)] \(message)\n"
       guard let data = line.data(using: .utf8) else { return }
@@ -32,6 +37,22 @@ final class Logger: @unchecked Sendable {
         try? RuntimePermissions.writePrivateData(data, to: URL(fileURLWithPath: path))
       }
     }
+  }
+
+  private func rotateIfNeeded() {
+    let fileManager = FileManager.default
+    guard let attributes = try? fileManager.attributesOfItem(atPath: path),
+      let size = attributes[.size] as? NSNumber,
+      size.uint64Value >= daemonLogMaxBytes
+    else {
+      return
+    }
+
+    let current = URL(fileURLWithPath: path)
+    let rotated = URL(fileURLWithPath: path + ".1")
+    try? fileManager.removeItem(at: rotated)
+    try? fileManager.moveItem(at: current, to: rotated)
+    RuntimePermissions.ensurePrivateFile(rotated.path)
   }
 }
 
@@ -62,6 +83,7 @@ final class OneContextDaemon: @unchecked Sendable {
     try RuntimePermissions.ensurePrivateDirectory(paths.renderCacheDirectory)
     try RuntimePermissions.ensurePrivateDirectory(paths.downloadCacheDirectory)
     RuntimePermissions.repairRuntimePaths(paths)
+    pruneCaches()
   }
 
   private func writePIDFile() throws {
@@ -128,7 +150,9 @@ final class OneContextDaemon: @unchecked Sendable {
       let clientFD = accept(listenFD, nil, nil)
       if clientFD < 0 { continue }
       clientQueue.async { [self] in
-        handle(clientFD: clientFD)
+        autoreleasepool {
+          handle(clientFD: clientFD)
+        }
         close(clientFD)
       }
     }
@@ -252,6 +276,51 @@ final class OneContextDaemon: @unchecked Sendable {
   private func encode(_ payload: [String: Any]) -> Data {
     let data = (try? JSONSerialization.data(withJSONObject: payload)) ?? Data("{}".utf8)
     return data + Data([UInt8(ascii: "\n")])
+  }
+
+  private func pruneCaches() {
+    pruneCacheDirectory(paths.renderCacheDirectory)
+    pruneCacheDirectory(paths.downloadCacheDirectory)
+  }
+
+  private func pruneCacheDirectory(_ directory: URL) {
+    let fileManager = FileManager.default
+    guard let enumerator = fileManager.enumerator(
+      at: directory,
+      includingPropertiesForKeys: [.isRegularFileKey, .contentModificationDateKey, .fileSizeKey],
+      options: [.skipsHiddenFiles]
+    ) else {
+      return
+    }
+
+    let now = Date()
+    var files: [(url: URL, size: UInt64, modifiedAt: Date)] = []
+
+    for case let url as URL in enumerator {
+      guard let values = try? url.resourceValues(
+        forKeys: [.isRegularFileKey, .contentModificationDateKey, .fileSizeKey]
+      ), values.isRegularFile == true
+      else {
+        continue
+      }
+
+      let modifiedAt = values.contentModificationDate ?? .distantPast
+      if now.timeIntervalSince(modifiedAt) > cacheMaxAge {
+        try? fileManager.removeItem(at: url)
+        continue
+      }
+
+      files.append((url, UInt64(values.fileSize ?? 0), modifiedAt))
+    }
+
+    var totalBytes = files.reduce(UInt64(0)) { $0 + $1.size }
+    guard totalBytes > cacheMaxBytes else { return }
+
+    for file in files.sorted(by: { $0.modifiedAt < $1.modifiedAt }) {
+      try? fileManager.removeItem(at: file.url)
+      totalBytes = totalBytes > file.size ? totalBytes - file.size : 0
+      if totalBytes <= cacheMaxBytes { break }
+    }
   }
 
   private func cleanup() {
