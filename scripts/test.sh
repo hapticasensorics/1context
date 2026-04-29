@@ -28,6 +28,7 @@ export ONECONTEXT_LOG_DIR="$STATE_DIR/Logs/1Context"
 export ONECONTEXT_CACHE_DIR="$STATE_DIR/Caches/1Context"
 export ONECONTEXT_UPDATE_STATE_DIR="$STATE_DIR/Application Support/1Context/update"
 export ONECONTEXT_NO_UPDATE_CHECK=1
+export ONECONTEXT_CLAUDE_SETTINGS_PATH="$STATE_DIR/.claude/settings.json"
 
 "$ROOT/scripts/check-version-consistency.sh"
 "$ROOT/scripts/test-menu-lifecycle-deterministic.sh"
@@ -37,6 +38,8 @@ test "$("$BIN_DIR/1context" --version)" = "$VERSION"
 "$BIN_DIR/1context" --help | grep -q "1context quit"
 "$BIN_DIR/1context" --help | grep -q "1context logs"
 "$BIN_DIR/1context" --help | grep -q "1context debug"
+"$BIN_DIR/1context" --help | grep -q "1context agent integrations"
+"$BIN_DIR/1context" --help | grep -q "1context agent statusline"
 if "$BIN_DIR/1context" status --wat >"$STATE_DIR/unknown-arg.out" 2>&1; then
   echo "unknown arguments should fail" >&2
   exit 1
@@ -83,5 +86,38 @@ PATH="$BIN_DIR:$PATH" 1context start | grep -q "1Context is running"
 PATH="$BIN_DIR:$PATH" 1context stop | grep -q "1Context is stopped"
 PATH="$BIN_DIR:$PATH" 1context start | grep -q "1Context is running"
 PATH="$BIN_DIR:$PATH" 1context quit | grep -q "1Context quit"
+
+"$BIN_DIR/1context" agent integrations uninstall | grep -q "Claude: not installed"
+"$BIN_DIR/1context" agent integrations status | grep -q "Codex: plan only"
+"$BIN_DIR/1context" agent integrations install | grep -q "Claude: installed"
+test -f "$ONECONTEXT_APP_SUPPORT_DIR/agent/config.json"
+test -f "$ONECONTEXT_APP_SUPPORT_DIR/agent/integrations.json"
+grep -q "agent hook --provider claude --event SessionStart" "$ONECONTEXT_CLAUDE_SETTINGS_PATH"
+grep -q "agent statusline --provider claude" "$ONECONTEXT_CLAUDE_SETTINGS_PATH"
+printf '{"cwd":"%s"}\n' "$ROOT" \
+  | "$BIN_DIR/1context" agent hook --provider claude --event SessionStart \
+  | grep -q '"systemMessage"'
+printf '{"cwd":"%s"}\n' "$ROOT" \
+  | "$BIN_DIR/1context" agent hook --provider claude --event SessionStart \
+  | grep -q "localhost:3210"
+printf '{}\n' \
+  | "$BIN_DIR/1context" agent hook --provider claude --event PostToolUse \
+  | grep -q '"hookEventName":"PostToolUse"'
+printf '{}\n' \
+  | "$BIN_DIR/1context" agent statusline --provider claude \
+  | grep -q "1Context wiki: http://localhost:3210"
+perl -0pi -e 's|localhost:3210|localhost:4101|' "$ONECONTEXT_APP_SUPPORT_DIR/agent/config.json"
+printf '{}\n' \
+  | "$BIN_DIR/1context" agent hook --provider claude --event SessionStart \
+  | grep -q "localhost:4101"
+printf '{}\n' \
+  | "$BIN_DIR/1context" agent statusline --provider claude \
+  | grep -q "1Context wiki: http://localhost:4101"
+"$BIN_DIR/1context" agent integrations repair | grep -q "Claude: installed"
+"$BIN_DIR/1context" agent integrations uninstall | grep -q "Claude: not installed"
+if grep -q "agent hook --provider claude" "$ONECONTEXT_CLAUDE_SETTINGS_PATH"; then
+  echo "agent uninstall should remove managed Claude hooks" >&2
+  exit 1
+fi
 
 echo "1Context smoke tests passed."

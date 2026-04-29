@@ -75,6 +75,23 @@ Disable update checks for a command invocation with:
 ONECONTEXT_NO_UPDATE_CHECK=1 1context
 ```
 
+## Agent Integrations
+
+1Context includes a first-party Claude Code hook bridge. It installs only
+managed command hooks and can remove them again without touching your other
+Claude settings:
+
+```bash
+1context agent integrations status
+1context agent integrations install
+1context agent integrations repair
+1context agent integrations uninstall
+```
+
+The current hook behavior is intentionally small: Claude receives a local wiki
+pointer and repo-aware pointer when available. Codex integration is status-only
+until its hook configuration is verified.
+
 ## Development
 
 This repository includes the public macOS runtime and menu bar app:

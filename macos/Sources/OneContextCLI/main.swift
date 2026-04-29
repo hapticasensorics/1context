@@ -1,5 +1,6 @@
 import Darwin
 import Foundation
+import OneContextAgent
 import OneContextRuntimeSupport
 
 @main
@@ -40,6 +41,8 @@ struct OneContextCLI {
       case "update":
         try rejectUnknownArguments()
         try await update()
+      case "agent":
+        try agent()
       default:
         FileHandle.standardError.write(Data("Unknown command: \(command ?? "")\n".utf8))
         printHelp()
@@ -77,6 +80,9 @@ struct OneContextCLI {
       1context debug [--no-redact]
       1context logs [--follow]
       1context update
+      1context agent hook --provider claude --event <event>
+      1context agent statusline --provider claude
+      1context agent integrations <status|install|repair|uninstall>
     """)
   }
 
@@ -359,6 +365,112 @@ struct OneContextCLI {
 
     if let installedAppVersion = appVersion(), installedAppVersion != expectedVersion {
       throw CLIError.commandFailed("Installed 1Context.app version is \(installedAppVersion), expected \(expectedVersion)")
+    }
+  }
+
+  static func agent() throws {
+    guard args.count >= 2 else {
+      throw CLIError.commandFailed("agent requires a subcommand")
+    }
+
+    switch args[1] {
+    case "hook":
+      try agentHook()
+    case "integrations":
+      try agentIntegrations()
+    case "statusline":
+      try agentStatusLine()
+    default:
+      throw CLIError.commandFailed("Unknown agent subcommand: \(args[1])")
+    }
+  }
+
+  static func agentHook() throws {
+    let values = Array(args.dropFirst(2))
+    let providerValue = try optionValue("--provider", in: values)
+    let eventValue = try optionValue("--event", in: values)
+    try rejectUnknownAgentOptions(values, allowed: ["--provider", "--event"])
+
+    guard let provider = AgentProvider(rawValue: providerValue) else {
+      throw CLIError.commandFailed("Unsupported agent provider: \(providerValue)")
+    }
+    guard let event = AgentHookEvent(rawValue: eventValue) else {
+      throw CLIError.commandFailed("Unsupported agent hook event: \(eventValue)")
+    }
+
+    let input = FileHandle.standardInput.readDataToEndOfFile()
+    let paths = RuntimePaths.current()
+    let executor = AgentHookExecutor(
+      paths: .current(),
+      userContentDirectory: paths.userContentDirectory
+    )
+    let output = executor.execute(provider: provider, event: event, inputData: input)
+    let encoder = JSONEncoder()
+    let data = try encoder.encode(output)
+    FileHandle.standardOutput.write(data)
+    FileHandle.standardOutput.write(Data("\n".utf8))
+  }
+
+  static func agentStatusLine() throws {
+    let values = Array(args.dropFirst(2))
+    let providerValue = try optionValue("--provider", in: values)
+    try rejectUnknownAgentOptions(values, allowed: ["--provider"])
+
+    guard let provider = AgentProvider(rawValue: providerValue) else {
+      throw CLIError.commandFailed("Unsupported agent provider: \(providerValue)")
+    }
+
+    let input = FileHandle.standardInput.readDataToEndOfFile()
+    let output = AgentStatusLineRenderer().render(provider: provider, inputData: input)
+    print(output)
+  }
+
+  static func agentIntegrations() throws {
+    guard args.count == 3 else {
+      throw CLIError.commandFailed("Usage: 1context agent integrations <status|install|repair|uninstall>")
+    }
+
+    let manager = AgentIntegrationManager(
+      claudeSettingsPath: AgentIntegrationManager.defaultClaudeSettingsPath(),
+      executablePath: currentExecutablePath() ?? CommandLine.arguments[0]
+    )
+
+    let report: AgentIntegrationsReport
+    switch args[2] {
+    case "status":
+      report = manager.status()
+    case "install":
+      report = try manager.install()
+    case "repair":
+      report = try manager.repair()
+    case "uninstall":
+      report = try manager.uninstall()
+    default:
+      throw CLIError.commandFailed("Unknown integrations command: \(args[2])")
+    }
+
+    print(manager.render(report))
+  }
+
+  static func optionValue(_ name: String, in values: [String]) throws -> String {
+    guard let index = values.firstIndex(of: name), index + 1 < values.count else {
+      throw CLIError.commandFailed("Missing \(name)")
+    }
+    let value = values[index + 1]
+    guard !value.hasPrefix("--") else {
+      throw CLIError.commandFailed("Missing value for \(name)")
+    }
+    return value
+  }
+
+  static func rejectUnknownAgentOptions(_ values: [String], allowed: Set<String>) throws {
+    var index = 0
+    while index < values.count {
+      let value = values[index]
+      guard allowed.contains(value) else {
+        throw CLIError.unknownArgument(value)
+      }
+      index += 2
     }
   }
 
