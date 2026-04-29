@@ -13,7 +13,33 @@ let package = Package(
     .executable(name: "OneContextMenuBar", targets: ["OneContextMenuBar"])
   ],
   targets: [
-    .target(name: "OneContextRuntimeSupport"),
+    .target(name: "OneContextCore"),
+    .target(
+      name: "OneContextPlatform",
+      dependencies: ["OneContextCore"]
+    ),
+    .target(
+      name: "OneContextProtocol",
+      dependencies: ["OneContextCore", "OneContextPlatform"]
+    ),
+    .target(
+      name: "OneContextUpdate",
+      dependencies: ["OneContextCore", "OneContextPlatform"]
+    ),
+    .target(
+      name: "OneContextSupervisor",
+      dependencies: ["OneContextCore", "OneContextPlatform", "OneContextProtocol"]
+    ),
+    .target(
+      name: "OneContextRuntimeSupport",
+      dependencies: [
+        "OneContextCore",
+        "OneContextPlatform",
+        "OneContextProtocol",
+        "OneContextUpdate",
+        "OneContextSupervisor"
+      ]
+    ),
     .executableTarget(
       name: "OneContextCLI",
       dependencies: ["OneContextRuntimeSupport"]
@@ -26,6 +52,22 @@ let package = Package(
       name: "OneContextMenuBar",
       dependencies: ["OneContextRuntimeSupport"],
       exclude: ["Resources"]
+    ),
+    .testTarget(
+      name: "OneContextCoreTests",
+      dependencies: ["OneContextCore"]
+    ),
+    .testTarget(
+      name: "OneContextPlatformTests",
+      dependencies: ["OneContextPlatform"]
+    ),
+    .testTarget(
+      name: "OneContextProtocolTests",
+      dependencies: ["OneContextProtocol"]
+    ),
+    .testTarget(
+      name: "OneContextUpdateTests",
+      dependencies: ["OneContextUpdate"]
     )
   ]
 )

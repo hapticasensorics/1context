@@ -10,5 +10,6 @@ jobs:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v6
+      - run: swift test --package-path macos
       - run: ./scripts/test.sh
       - run: ALLOW_UNNOTARIZED=1 NOTARIZE=0 ./scripts/package-macos-release.sh
