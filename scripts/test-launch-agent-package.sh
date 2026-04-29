@@ -66,6 +66,42 @@ RUNTIME_LABEL="com.haptica.1context"
 MENU_LABEL="com.haptica.1context.menu"
 RUNTIME_PLIST="$HOME/Library/LaunchAgents/$RUNTIME_LABEL.plist"
 MENU_PLIST="$HOME/Library/LaunchAgents/$MENU_LABEL.plist"
+STATUS_LOG="/tmp/1ctx-launch-agent-status.log"
+STATUS_ERR="/tmp/1ctx-launch-agent-status.err"
+
+dump_diagnostics() {
+  {
+    echo "=== 1Context LaunchAgent smoke diagnostics ==="
+    echo "Version: $VERSION"
+    echo "Package: $PACKAGE_DIR"
+    echo "App: $APP_PATH"
+    echo "CLI: $CLI_PATH"
+    echo
+    echo "=== status stdout ==="
+    cat "$STATUS_LOG" 2>/dev/null || true
+    echo
+    echo "=== status stderr ==="
+    cat "$STATUS_ERR" 2>/dev/null || true
+    echo
+    echo "=== runtime launchctl ==="
+    launchctl print "gui/$(id -u)/$RUNTIME_LABEL" 2>&1 || true
+    echo
+    echo "=== menu launchctl ==="
+    launchctl print "gui/$(id -u)/$MENU_LABEL" 2>&1 || true
+    echo
+    echo "=== runtime plist ==="
+    cat "$RUNTIME_PLIST" 2>/dev/null || true
+    echo
+    echo "=== menu plist ==="
+    cat "$MENU_PLIST" 2>/dev/null || true
+    echo
+    echo "=== runtime log ==="
+    tail -n 120 "$ONECONTEXT_LOG_DIR/1contextd.log" 2>/dev/null || true
+    echo
+    echo "=== menu log ==="
+    tail -n 120 "$ONECONTEXT_LOG_DIR/menu.log" 2>/dev/null || true
+  } >&2
+}
 
 export ONECONTEXT_APP_SUPPORT_DIR="$STATE_DIR/Application Support/1Context"
 export ONECONTEXT_USER_CONTENT_DIR="$STATE_DIR/1Context"
@@ -82,12 +118,13 @@ printf 'running\n' > "$CANONICAL_DESIRED_STATE"
 launchctl print "gui/$(id -u)/$RUNTIME_LABEL" >/dev/null
 launchctl print "gui/$(id -u)/$MENU_LABEL" >/dev/null
 
-for attempt in {1..20}; do
-  if "$CLI_PATH" status --debug 2>/tmp/1ctx-launch-agent-status.log | grep -q "Socket: responding"; then
+for attempt in {1..60}; do
+  if "$CLI_PATH" status --debug >"$STATUS_LOG" 2>"$STATUS_ERR" &&
+    grep -q "Socket: responding" "$STATUS_LOG"; then
     break
   fi
-  if [[ "$attempt" == "20" ]]; then
-    cat /tmp/1ctx-launch-agent-status.log >&2
+  if [[ "$attempt" == "60" ]]; then
+    dump_diagnostics
     exit 1
   fi
   sleep 0.25
