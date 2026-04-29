@@ -332,7 +332,7 @@ private enum RuntimeState {
     case .running:
       return "1Context Running"
     case .stopped:
-      return "1Context Paused"
+      return "1Context Stopped"
     case .needsAttention:
       return "1Context Sick"
     }

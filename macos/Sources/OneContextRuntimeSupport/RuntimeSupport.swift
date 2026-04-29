@@ -1,7 +1,7 @@
 import Foundation
 import Darwin
 
-public let oneContextVersion = "0.1.17"
+public let oneContextVersion = "0.1.18"
 public let oneContextGitHubURL = URL(string: "https://github.com/hapticasensorics/1context")!
 public let oneContextLatestReleaseURL = URL(string: "https://api.github.com/repos/hapticasensorics/1context/releases/latest")!
 public let oneContextHomebrewUpdateCommand = "brew update && brew upgrade --cask hapticasensorics/tap/1context"
@@ -673,11 +673,11 @@ public final class RuntimeController {
 
   private func findDaemonPath() -> String? {
     let fm = FileManager.default
-    let executableDirectory = CommandLine.arguments.first
-      .map { URL(fileURLWithPath: $0).resolvingSymlinksInPath().deletingLastPathComponent() }
+    let executableDirectory = currentExecutableURL()?.deletingLastPathComponent()
     var candidates: [String] = [
       Bundle.main.bundleURL.deletingLastPathComponent().appendingPathComponent("onecontextd").path,
-      executableDirectory?.appendingPathComponent("onecontextd").path
+      executableDirectory?.appendingPathComponent("onecontextd").path,
+      URL(fileURLWithPath: "/Applications/1Context.app/Contents/MacOS/onecontextd").path
     ].compactMap { $0 }
 
     if environment["ONECONTEXT_ALLOW_DAEMON_OVERRIDE"] == "1",
@@ -687,6 +687,16 @@ public final class RuntimeController {
     }
 
     return candidates.first { fm.isExecutableFile(atPath: $0) }
+  }
+
+  private func currentExecutableURL() -> URL? {
+    var size = UInt32(0)
+    _NSGetExecutablePath(nil, &size)
+    var buffer = [CChar](repeating: 0, count: Int(size))
+    guard _NSGetExecutablePath(&buffer, &size) == 0 else { return nil }
+    let pathBytes = buffer.prefix { $0 != 0 }.map { UInt8(bitPattern: $0) }
+    let path = String(decoding: pathBytes, as: UTF8.self)
+    return URL(fileURLWithPath: path).resolvingSymlinksInPath()
   }
 }
 
