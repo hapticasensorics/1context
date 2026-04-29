@@ -1,7 +1,13 @@
-# 1Context v0.1.42 Public Preview
+# 1Context v0.1.43 Public Preview
 
 This release includes:
 
+- memory-core adapter boundary hardening
+- exact memory-core command-shape validation
+- memory-core configure/doctor contract checks via `status --json`
+- memory-core JSON contract validation before successful runs
+- redacted memory-core process errors
+- private temp capture files and timeout escalation for memory-core subprocesses
 - GUI updater now launches a short temp zsh script instead of a fragile quoted command
 - cleaner updater Terminal copy and completion text
 - version-only release to validate the fixed `0.1.40` GUI updater path
