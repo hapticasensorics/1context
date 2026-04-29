@@ -1,7 +1,8 @@
-# 1Context v0.1.36 Public Preview
+# 1Context v0.1.37 Public Preview
 
 This release includes:
 
+- cask postflight fix so the menu bar relaunches after upgrade even when the runtime was stopped
 - safer GUI updater Terminal launch
 - immediate menu reflection when `1context stop` stops the runtime
 - version-only release to validate the fixed GUI updater path
