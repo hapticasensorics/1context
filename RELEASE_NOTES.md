@@ -1,7 +1,9 @@
-# 1Context v0.1.43 Public Preview
+# 1Context v0.1.44 Public Preview
 
 This release includes:
 
+- automatically installs the managed Claude `SessionStart` hook during setup/update
+- package smoke coverage for Claude hook install/uninstall behavior
 - memory-core adapter boundary hardening
 - exact memory-core command-shape validation
 - memory-core configure/doctor contract checks via `status --json`
