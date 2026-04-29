@@ -1,6 +1,8 @@
 import Foundation
 import Darwin
+import OneContextCore
 import OneContextPlatform
+import OneContextProtocol
 
 public enum AgentProvider: String, Codable, CaseIterable, Sendable {
   case claude
@@ -555,9 +557,7 @@ public final class AgentIntegrationManager {
         ] as [String: Any]
       ]
     ]
-    if event.requiresMatcher {
-      group["matcher"] = "*"
-    }
+    group["matcher"] = "*"
     return group
   }
 
@@ -739,13 +739,15 @@ public struct AgentHookExecutor {
   private let wikiURL: String
   private let environment: [String: String]
   private let fileManager: FileManager
+  private let runtimeHealth: () throws -> RuntimeHealth
 
   public init(
     paths: AgentPaths = .current(),
     userContentDirectory: URL = RuntimePaths.current().userContentDirectory,
     wikiURL: String? = nil,
     environment: [String: String] = ProcessInfo.processInfo.environment,
-    fileManager: FileManager = .default
+    fileManager: FileManager = .default,
+    runtimeHealth: @escaping () throws -> RuntimeHealth = { try UnixJSONRPCClient().health() }
   ) {
     self.paths = paths
     self.userContentDirectory = userContentDirectory
@@ -754,6 +756,7 @@ public struct AgentHookExecutor {
       ?? Self.configuredWikiURL(paths: paths)
     self.environment = environment
     self.fileManager = fileManager
+    self.runtimeHealth = runtimeHealth
   }
 
   public static func configuredWikiURL(paths: AgentPaths = .current()) -> String {
@@ -805,8 +808,17 @@ public struct AgentHookExecutor {
     if let repo = repoName(from: input?.cwd) {
       pointers.append("Current repo: \(repo)")
     }
+    if let runtimeLine = runtimeProofLine() {
+      pointers.append(runtimeLine)
+    }
     guard !pointers.isEmpty else { return nil }
     return pointers.joined(separator: "\n")
+  }
+
+  private func runtimeProofLine() -> String? {
+    guard let health = try? runtimeHealth() else { return nil }
+    let time = health.currentTime ?? ISO8601DateFormatter().string(from: Date())
+    return "1Context runtime time: \(time) (runtime \(health.version), pid \(health.pid))"
   }
 
   private func userPromptContext(input: AgentHookInput?) -> String? {

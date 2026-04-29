@@ -1,6 +1,6 @@
 import Foundation
 
-public let oneContextVersion = "0.1.45"
+public let oneContextVersion = "0.1.46"
 public let oneContextGitHubURL = URL(string: "https://github.com/hapticasensorics/1context")!
 public let oneContextLatestReleaseURL = URL(string: "https://github.com/hapticasensorics/1context/releases/latest")!
 public let oneContextHomebrewUpdateCommand = "brew upgrade --cask hapticasensorics/tap/1context"
@@ -12,12 +12,14 @@ public struct RuntimeHealth: Codable, Sendable {
   public let version: String
   public let uptimeSeconds: Int
   public let pid: Int32
+  public let currentTime: String?
 
-  public init(status: String, version: String, uptimeSeconds: Int, pid: Int32) {
+  public init(status: String, version: String, uptimeSeconds: Int, pid: Int32, currentTime: String? = nil) {
     self.status = status
     self.version = version
     self.uptimeSeconds = uptimeSeconds
     self.pid = pid
+    self.currentTime = currentTime
   }
 }
 

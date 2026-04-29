@@ -11,12 +11,13 @@ final class VersionTests: XCTestCase {
 
   func testRuntimeHealthDecodesFromRPCPayload() throws {
     let data = Data("""
-    {"status":"ok","version":"0.1.33","uptimeSeconds":12,"pid":42}
+    {"status":"ok","version":"0.1.33","currentTime":"2026-04-29T11:30:00Z","uptimeSeconds":12,"pid":42}
     """.utf8)
     let health = try JSONDecoder().decode(RuntimeHealth.self, from: data)
 
     XCTAssertEqual(health.status, "ok")
     XCTAssertEqual(health.version, "0.1.33")
+    XCTAssertEqual(health.currentTime, "2026-04-29T11:30:00Z")
     XCTAssertEqual(health.uptimeSeconds, 12)
     XCTAssertEqual(health.pid, 42)
   }

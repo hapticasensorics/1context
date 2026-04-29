@@ -1,5 +1,6 @@
 import Foundation
 import XCTest
+import OneContextCore
 @testable import OneContextAgent
 
 final class AgentIntegrationTests: XCTestCase {
@@ -49,6 +50,7 @@ final class AgentIntegrationTests: XCTestCase {
     let hooks = try XCTUnwrap(object["hooks"] as? [String: Any])
 
     let sessionGroups = try XCTUnwrap(hooks["SessionStart"] as? [[String: Any]])
+    XCTAssertEqual(sessionGroups.first?["matcher"] as? String, "*")
     let managedSessionCount = sessionGroups.flatMap { ($0["hooks"] as? [[String: Any]]) ?? [] }
       .filter { ($0["command"] as? String) == "\(AgentHookPolicy.managedHookPrefix) '/opt/homebrew/bin/1context' agent hook --provider claude --event SessionStart" }
       .count
@@ -254,7 +256,16 @@ final class AgentIntegrationTests: XCTestCase {
       paths: AgentPaths(directory: root.appendingPathComponent("agent", isDirectory: true)),
       userContentDirectory: wiki,
       wikiURL: "http://localhost:3210",
-      environment: [:]
+      environment: [:],
+      runtimeHealth: {
+        RuntimeHealth(
+          status: "ok",
+          version: "0.1.46",
+          uptimeSeconds: 12,
+          pid: 123,
+          currentTime: "2026-04-29T11:30:00Z"
+        )
+      }
     )
     let input = Data("""
     {"session_id":"abc","cwd":"\(repo.path)","hook_event_name":"SessionStart"}
@@ -266,6 +277,7 @@ final class AgentIntegrationTests: XCTestCase {
     XCTAssertTrue(start.hookSpecificOutput?.additionalContext?.contains("View your 1Context wiki at http://localhost:3210") == true)
     XCTAssertTrue(start.hookSpecificOutput?.additionalContext?.contains("1Context local wiki") == true)
     XCTAssertTrue(start.hookSpecificOutput?.additionalContext?.contains("Current repo: repo") == true)
+    XCTAssertTrue(start.hookSpecificOutput?.additionalContext?.contains("1Context runtime time: 2026-04-29T11:30:00Z") == true)
 
     let postTool = executor.execute(provider: .claude, event: .postToolUse, inputData: Data("{}".utf8))
     XCTAssertNil(postTool.systemMessage)

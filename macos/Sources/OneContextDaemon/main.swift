@@ -266,6 +266,7 @@ final class OneContextDaemon: @unchecked Sendable {
     [
       "status": "ok",
       "version": oneContextVersion,
+      "currentTime": ISO8601DateFormatter().string(from: Date()),
       "uptimeSeconds": max(0, Int(Date().timeIntervalSince(startedAt))),
       "pid": Int(getpid())
     ]

@@ -28,7 +28,7 @@ let package = Package(
     ),
     .target(
       name: "OneContextAgent",
-      dependencies: ["OneContextCore", "OneContextPlatform"]
+      dependencies: ["OneContextCore", "OneContextPlatform", "OneContextProtocol"]
     ),
     .target(
       name: "OneContextMemoryCore",
