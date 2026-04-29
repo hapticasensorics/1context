@@ -5,11 +5,26 @@ on:
   push:
     branches: [main]
 
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   test:
-    runs-on: macos-latest
+    runs-on: macos-14
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v6
+      - name: Tool versions
+        run: |
+          swift --version
+          xcodebuild -version
+          brew --version
       - run: swift test --package-path macos
       - run: ./scripts/test.sh
       - run: ALLOW_UNNOTARIZED=1 NOTARIZE=0 ./scripts/package-macos-release.sh
+      - name: Packaged LaunchAgent smoke
+        run: ONECONTEXT_ALLOW_LAUNCH_AGENT_SMOKE=1 ./scripts/test-launch-agent-package.sh

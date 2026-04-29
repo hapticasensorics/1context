@@ -8,7 +8,7 @@ CONTENTS_DIR="$APP_DIR/Contents"
 MACOS_APP_DIR="$CONTENTS_DIR/MacOS"
 RESOURCES_DIR="$CONTENTS_DIR/Resources"
 SIGNING_MODE="${ONECONTEXT_SIGNING_MODE:-adhoc}"
-IDENTITY="${CODESIGN_IDENTITY:-Developer ID Application: Paul Han (NBY9V4M69J)}"
+IDENTITY="${CODESIGN_IDENTITY:-}"
 VERSION="${ONECONTEXT_VERSION:-0.1.33}"
 ARCH="${ONECONTEXT_ARCH:-arm64}"
 MENU_ICON_SOURCE="$MACOS_DIR/Sources/OneContextMenuBar/Resources/MenuBarIcon.png"
@@ -70,6 +70,11 @@ cat > "$CONTENTS_DIR/Info.plist" <<PLIST
 PLIST
 
 if [[ "$SIGNING_MODE" == "developer-id" ]]; then
+  if [[ -z "$IDENTITY" ]]; then
+    echo "Set CODESIGN_IDENTITY to the Developer ID Application identity for release signing." >&2
+    exit 1
+  fi
+
   if ! command -v codesign >/dev/null 2>&1 || ! security find-identity -v -p codesigning | grep -F "$IDENTITY" >/dev/null; then
     echo "Developer ID identity not found: $IDENTITY" >&2
     exit 1

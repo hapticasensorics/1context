@@ -1,0 +1,75 @@
+name: Release
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: macos-14
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+      - name: Tool versions
+        run: |
+          swift --version
+          xcodebuild -version
+          brew --version
+      - name: Import Developer ID certificate
+        env:
+          DEVELOPER_ID_CERTIFICATE_BASE64: ${{ secrets.DEVELOPER_ID_CERTIFICATE_BASE64 }}
+          DEVELOPER_ID_CERTIFICATE_PASSWORD: ${{ secrets.DEVELOPER_ID_CERTIFICATE_PASSWORD }}
+          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
+        run: |
+          if [[ -z "$DEVELOPER_ID_CERTIFICATE_BASE64" || -z "$DEVELOPER_ID_CERTIFICATE_PASSWORD" || -z "$KEYCHAIN_PASSWORD" ]]; then
+            echo "Missing Developer ID certificate secrets." >&2
+            echo "Required: DEVELOPER_ID_CERTIFICATE_BASE64, DEVELOPER_ID_CERTIFICATE_PASSWORD, KEYCHAIN_PASSWORD." >&2
+            exit 1
+          fi
+
+          security create-keychain -p "$KEYCHAIN_PASSWORD" build.keychain
+          security set-keychain-settings -lut 21600 build.keychain
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" build.keychain
+          security list-keychains -d user -s build.keychain
+
+          echo "$DEVELOPER_ID_CERTIFICATE_BASE64" | base64 --decode > developer-id.p12
+          security import developer-id.p12 \
+            -k build.keychain \
+            -P "$DEVELOPER_ID_CERTIFICATE_PASSWORD" \
+            -T /usr/bin/codesign \
+            -T /usr/bin/security
+          security set-key-partition-list \
+            -S apple-tool:,apple:,codesign: \
+            -s \
+            -k "$KEYCHAIN_PASSWORD" \
+            build.keychain
+      - name: Build notarized artifact
+        env:
+          NOTARIZE: "1"
+          ONECONTEXT_SIGNING_MODE: developer-id
+          CODESIGN_IDENTITY: ${{ secrets.CODESIGN_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+        run: ./scripts/package-macos-release.sh
+      - name: Write checksum
+        run: |
+          artifact="$(ls dist/1context-*-macos-arm64.tar.gz | tail -1)"
+          shasum -a 256 "$artifact" > "$artifact.sha256"
+          cat "$artifact.sha256"
+      - name: Upload GitHub release artifacts
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          artifact="$(ls dist/1context-*-macos-arm64.tar.gz | tail -1)"
+          gh release upload "${GITHUB_REF_NAME}" "$artifact" "$artifact.sha256" --clobber

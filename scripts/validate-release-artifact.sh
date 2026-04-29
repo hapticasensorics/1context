@@ -16,6 +16,44 @@ trap cleanup EXIT
 
 LISTING="$TMPDIR/listing.txt"
 tar -tvzf "$ARCHIVE" > "$LISTING"
+MANIFEST="$TMPDIR/manifest.txt"
+tar -tzf "$ARCHIVE" | sort > "$MANIFEST"
+
+archive_name="$(basename "$ARCHIVE")"
+if [[ ! "$archive_name" =~ ^1context-([0-9]+\.[0-9]+\.[0-9]+)-macos-(arm64)\.tar\.gz$ ]]; then
+  echo "Release archive name does not match expected version/arch pattern." >&2
+  exit 1
+fi
+VERSION="${BASH_REMATCH[1]}"
+ARCH="${BASH_REMATCH[2]}"
+ROOT_NAME="1context-$VERSION-macos-$ARCH"
+
+EXPECTED_MANIFEST="$TMPDIR/expected-manifest.txt"
+cat > "$EXPECTED_MANIFEST" <<EOF
+$ROOT_NAME/
+$ROOT_NAME/1Context.app/
+$ROOT_NAME/1Context.app/Contents/
+$ROOT_NAME/1Context.app/Contents/Info.plist
+$ROOT_NAME/1Context.app/Contents/MacOS/
+$ROOT_NAME/1Context.app/Contents/MacOS/1Context
+$ROOT_NAME/1Context.app/Contents/MacOS/1context-cli
+$ROOT_NAME/1Context.app/Contents/MacOS/1contextd
+$ROOT_NAME/1Context.app/Contents/Resources/
+$ROOT_NAME/1Context.app/Contents/Resources/AppIcon.icns
+$ROOT_NAME/1Context.app/Contents/Resources/MenuBarIcon.png
+$ROOT_NAME/1Context.app/Contents/_CodeSignature/
+$ROOT_NAME/1Context.app/Contents/_CodeSignature/CodeResources
+$ROOT_NAME/bin/
+$ROOT_NAME/bin/1context
+$ROOT_NAME/scripts/
+$ROOT_NAME/scripts/install-macos-launch-agents.sh
+$ROOT_NAME/scripts/uninstall-macos-launch-agents.sh
+EOF
+
+if ! diff -u "$EXPECTED_MANIFEST" "$MANIFEST"; then
+  echo "Release archive manifest does not match expected contents." >&2
+  exit 1
+fi
 
 if grep -Eq ' paulhan | staff ' "$LISTING"; then
   echo "Release archive contains local owner/group metadata." >&2
@@ -44,6 +82,16 @@ fi
 
 if [[ "$(plutil -extract CFBundleIconFile raw "$APP/Contents/Info.plist" 2>/dev/null || true)" != "AppIcon" ]]; then
   echo "Release app Info.plist does not set CFBundleIconFile to AppIcon." >&2
+  exit 1
+fi
+
+if [[ "$(plutil -extract CFBundleShortVersionString raw "$APP/Contents/Info.plist" 2>/dev/null || true)" != "$VERSION" ]]; then
+  echo "Release app Info.plist version does not match archive version." >&2
+  exit 1
+fi
+
+if [[ "$("$APP/Contents/MacOS/1context-cli" --version)" != "$VERSION" ]]; then
+  echo "Release CLI version does not match archive version." >&2
   exit 1
 fi
 
