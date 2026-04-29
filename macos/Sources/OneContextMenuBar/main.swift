@@ -436,15 +436,23 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
   private func runUpdateCommandInTerminal() {
     cleanupStaleUpdaterFiles()
 
-    let alertExecutable = URL(fileURLWithPath: CommandLine.arguments[0])
+    let menuExecutable = URL(fileURLWithPath: CommandLine.arguments[0])
       .resolvingSymlinksInPath()
+    let cliExecutable = menuExecutable.deletingLastPathComponent()
+      .appendingPathComponent("1context-cli")
       .path
+    guard FileManager.default.isExecutableFile(atPath: cliExecutable) else {
+      showFishAlert("Could not find 1Context updater.")
+      return
+    }
+
+    let alertExecutable = menuExecutable.path
     let fileURL = FileManager.default.temporaryDirectory
       .appendingPathComponent("1context-\(UUID().uuidString).command")
     let script = """
     #!/bin/zsh
     trap 'rm -f "$0"' EXIT
-    if \(shellQuote(alertExecutable)) update; then
+    if \(shellQuote(cliExecutable)) update; then
       \(shellQuote(alertExecutable)) --update-success-alert >/dev/null 2>&1 || osascript -e 'display dialog "1Context updated." buttons {"OK"} default button "OK"'
     else
       status=$?

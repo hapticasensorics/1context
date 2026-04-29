@@ -47,6 +47,7 @@ export ONECONTEXT_LOG_DIR="$STATE_DIR/Logs/1Context"
 export ONECONTEXT_CACHE_DIR="$STATE_DIR/Caches/1Context"
 export ONECONTEXT_UPDATE_STATE_DIR="$STATE_DIR/Application Support/1Context/update"
 export ONECONTEXT_NO_UPDATE_CHECK=1
+export ONECONTEXT_PERSIST_ENV_PATH_OVERRIDES=1
 
 "$PACKAGE_DIR/scripts/install-macos-launch-agents.sh" "$APP_PATH" "$CLI_PATH"
 

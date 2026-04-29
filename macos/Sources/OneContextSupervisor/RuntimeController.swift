@@ -49,6 +49,7 @@ public final class RuntimeController {
   }
 
   public func start(startMenu: Bool) async throws -> (alreadyRunning: Bool, health: RuntimeHealth) {
+    try ensureNormalUserLifecycle()
     setStartDesired(true)
     if case .success(let health) = status() {
       if health.version == oneContextVersion {
@@ -74,6 +75,7 @@ public final class RuntimeController {
   }
 
   public func stop() async throws -> Bool {
+    try ensureNormalUserLifecycle()
     setStartDesired(false)
     let current = status()
     if !launchAgent.isDisabled {
@@ -95,6 +97,7 @@ public final class RuntimeController {
   }
 
   public func quit(stopMenu: Bool) async throws -> Bool {
+    try ensureNormalUserLifecycle()
     let stopped = try await stop()
     if stopMenu, !launchAgent.isDisabled {
       await launchAgent.stopMenu()
@@ -122,6 +125,7 @@ public final class RuntimeController {
   }
 
   public func restart(startMenu: Bool) async throws -> RuntimeHealth {
+    try ensureNormalUserLifecycle()
     setStartDesired(true)
     guard let daemon = findDaemonPath() else { throw RuntimeControlError.daemonNotFound }
 
@@ -146,6 +150,7 @@ public final class RuntimeController {
   }
 
   public func uninstall(deleteData: Bool = false) async throws {
+    try ensureNormalUserLifecycle()
     _ = try? await stop()
     await launchAgent.uninstallManagedLaunchAgents()
     if deleteData {
@@ -234,6 +239,12 @@ public final class RuntimeController {
       try RuntimePermissions.writePrivateString(desired ? "running\n" : "stopped\n", toFile: paths.desiredStatePath)
     } catch {
       // Desired runtime state is advisory. Lifecycle commands should still proceed.
+    }
+  }
+
+  private func ensureNormalUserLifecycle() throws {
+    if geteuid() == 0 || environment["SUDO_USER"] != nil {
+      throw RuntimeControlError.rootUserUnsupported
     }
   }
 

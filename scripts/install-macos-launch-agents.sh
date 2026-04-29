@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+if [[ "$(id -u)" == "0" || -n "${SUDO_USER:-}" ]]; then
+  echo "Run 1Context as your normal macOS user, not with sudo or as root." >&2
+  exit 1
+fi
+
 APP_PATH="${ONECONTEXT_APP_PATH:-${1:-}}"
 CLI_PATH="${ONECONTEXT_CLI_PATH:-${2:-1context}}"
 LABEL="com.haptica.1context.menu"

@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+if [[ "$(id -u)" == "0" || -n "${SUDO_USER:-}" ]]; then
+  echo "Run 1Context as your normal macOS user, not with sudo or as root." >&2
+  exit 1
+fi
+
 MENU_LABEL="com.haptica.1context.menu"
 RUNTIME_LABEL="com.haptica.1context"
 DELETE_DATA=0
@@ -48,6 +53,7 @@ safe_remove() {
 
 for label in "$MENU_LABEL" "$RUNTIME_LABEL"; do
   plist="$HOME/Library/LaunchAgents/$label.plist"
+  launchctl bootout "gui/$(id -u)/$label" >/dev/null 2>&1 || true
   launchctl bootout "gui/$(id -u)" "$plist" >/dev/null 2>&1 || true
   rm -f "$plist"
 done

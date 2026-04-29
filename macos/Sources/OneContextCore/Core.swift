@@ -53,6 +53,7 @@ public enum RuntimeControlError: Error, LocalizedError {
   case launchAgentFailed(String)
   case timedOut(String)
   case unsafeDeletionPath(String)
+  case rootUserUnsupported
 
   public var errorDescription: String? {
     switch self {
@@ -66,6 +67,8 @@ public enum RuntimeControlError: Error, LocalizedError {
       return message
     case .unsafeDeletionPath(let path):
       return "Refusing to delete unsafe path: \(path)"
+    case .rootUserUnsupported:
+      return "Run 1Context as your normal macOS user, not with sudo or as root"
     }
   }
 }

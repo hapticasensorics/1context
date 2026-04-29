@@ -24,6 +24,14 @@ jobs:
           swift --version
           xcodebuild -version
           brew --version
+      - name: Check release version
+        run: |
+          version="$(tr -d '[:space:]' < VERSION)"
+          if [[ "${GITHUB_REF}" == refs/tags/* && "${GITHUB_REF_NAME}" != "v${version}" ]]; then
+            echo "Tag ${GITHUB_REF_NAME} does not match VERSION ${version}." >&2
+            exit 1
+          fi
+          ./scripts/check-version-consistency.sh
       - name: Import Developer ID certificate
         env:
           DEVELOPER_ID_CERTIFICATE_BASE64: ${{ secrets.DEVELOPER_ID_CERTIFICATE_BASE64 }}
@@ -64,7 +72,12 @@ jobs:
       - name: Write checksum
         run: |
           artifact="$(ls dist/1context-*-macos-arm64.tar.gz | tail -1)"
-          shasum -a 256 "$artifact" > "$artifact.sha256"
+          (
+            cd dist
+            shasum -a 256 "$(basename "$artifact")" > "$(basename "$artifact").sha256"
+          )
+          artifact_sha="dist/$(basename "$artifact").sha256"
+          mv "$artifact_sha" "$artifact.sha256"
           cat "$artifact.sha256"
       - name: Upload GitHub release artifacts
         if: startsWith(github.ref, 'refs/tags/')
@@ -72,4 +85,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           artifact="$(ls dist/1context-*-macos-arm64.tar.gz | tail -1)"
+          gh release view "${GITHUB_REF_NAME}" >/dev/null 2>&1 || \
+            gh release create "${GITHUB_REF_NAME}" \
+              --title "1Context ${GITHUB_REF_NAME}" \
+              --notes-file RELEASE_NOTES.md
           gh release upload "${GITHUB_REF_NAME}" "$artifact" "$artifact.sha256" --clobber

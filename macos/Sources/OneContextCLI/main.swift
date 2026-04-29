@@ -201,6 +201,17 @@ struct OneContextCLI {
     switch controller.status() {
     case .success(let health):
       let menuStatus = launchAgentSummary(label: LaunchAgentManager.menuLabel)
+      guard health.version == oneContextVersion else {
+        FileHandle.standardError.write(Data("""
+        1Context needs attention.
+
+        Runtime version \(health.version) does not match CLI version \(oneContextVersion).
+        Restart it with:
+          1context restart
+        """.utf8))
+        if debug { await printDebug(controller: controller, error: RuntimeControlError.launchAgentFailed("runtime version mismatch")) }
+        Foundation.exit(1)
+      }
       print("""
       1Context is running.
 

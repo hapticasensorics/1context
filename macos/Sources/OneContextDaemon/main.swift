@@ -9,6 +9,8 @@ nonisolated(unsafe) private var signalLogPath: UnsafeMutablePointer<CChar>?
 private let daemonLogMaxBytes: UInt64 = 1_048_576
 private let cacheMaxBytes: UInt64 = 50 * 1024 * 1024
 private let cacheMaxAge: TimeInterval = 7 * 24 * 60 * 60
+private let maxActiveClients = 32
+private let requestDeadlineSeconds: TimeInterval = 2
 
 final class Logger: @unchecked Sendable {
   private let path: String
@@ -61,6 +63,7 @@ final class OneContextDaemon: @unchecked Sendable {
   private let paths = RuntimePaths.current()
   private let startedAt = Date()
   private let clientQueue = DispatchQueue(label: "com.haptica.1contextd.clients", attributes: .concurrent)
+  private let activeClients = DispatchSemaphore(value: maxActiveClients)
   private var listenFD: Int32 = -1
   private lazy var logger = Logger(path: paths.logPath)
 
@@ -154,11 +157,18 @@ final class OneContextDaemon: @unchecked Sendable {
     while listenFD >= 0 {
       let clientFD = accept(listenFD, nil, nil)
       if clientFD < 0 { continue }
+      guard activeClients.wait(timeout: .now()) == .success else {
+        close(clientFD)
+        continue
+      }
       clientQueue.async { [self] in
+        defer {
+          close(clientFD)
+          activeClients.signal()
+        }
         autoreleasepool {
           handle(clientFD: clientFD)
         }
-        close(clientFD)
       }
     }
   }
@@ -207,10 +217,14 @@ final class OneContextDaemon: @unchecked Sendable {
   private func readLine(from fd: Int32) -> Data? {
     var data = Data()
     var byte: UInt8 = 0
+    let deadline = Date().addingTimeInterval(requestDeadlineSeconds)
 
     while true {
+      let remaining = deadline.timeIntervalSinceNow
+      guard remaining > 0 else { return nil }
+      let timeoutMs = max(1, min(2_000, Int32(remaining * 1_000)))
       var pollFD = pollfd(fd: fd, events: Int16(POLLIN), revents: 0)
-      guard poll(&pollFD, 1, 2_000) > 0 else { return nil }
+      guard poll(&pollFD, 1, timeoutMs) > 0 else { return nil }
       guard read(fd, &byte, 1) == 1 else { break }
       if byte == UInt8(ascii: "\n") { break }
       data.append(byte)

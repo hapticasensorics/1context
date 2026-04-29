@@ -35,6 +35,7 @@ public final class LaunchAgentManager {
   }
 
   public func start(daemonPath: String) async throws {
+    try ensureNormalUserLifecycle()
     try install(daemonPath: daemonPath)
     _ = await launchctl(["bootout", guiDomain(), launchAgentPath.path])
     let boot = await launchctl(["bootstrap", guiDomain(), launchAgentPath.path])
@@ -45,6 +46,7 @@ public final class LaunchAgentManager {
 
   public func startMenu(appPath: String) async throws {
     guard !isDisabled else { return }
+    try ensureNormalUserLifecycle()
     try installMenu(appPath: appPath)
     let path = launchAgentPath(label: Self.menuLabel)
     let target = "\(guiDomain())/\(Self.menuLabel)"
@@ -65,6 +67,7 @@ public final class LaunchAgentManager {
   }
 
   public func restart(daemonPath: String) async throws {
+    try ensureNormalUserLifecycle()
     try install(daemonPath: daemonPath)
     let target = agentTarget()
     let current = await launchctl(["print", target])
@@ -120,7 +123,7 @@ public final class LaunchAgentManager {
   }
 
   private func install(daemonPath: String) throws {
-    let paths = RuntimePaths.current(environment: environment)
+    let paths = launchAgentRuntimePaths()
     try RuntimePermissions.ensurePrivateDirectory(paths.appSupportDirectory)
     try RuntimePermissions.ensurePrivateDirectory(paths.runDirectory)
     try RuntimePermissions.ensurePrivateDirectory(paths.logDirectory)
@@ -130,7 +133,7 @@ public final class LaunchAgentManager {
   }
 
   private func installMenu(appPath: String) throws {
-    let paths = RuntimePaths.current(environment: environment)
+    let paths = launchAgentRuntimePaths()
     let menuLogPath = paths.logDirectory.appendingPathComponent("menu.log").path
     try RuntimePermissions.ensurePrivateDirectory(paths.logDirectory)
     _ = FileManager.default.createFile(atPath: menuLogPath, contents: nil)
@@ -219,9 +222,23 @@ public final class LaunchAgentManager {
         <key>ONECONTEXT_PREFERENCES_PATH</key>
         <string>\(plistEscape(paths.preferencesPath))</string>
         <key>ONECONTEXT_UPDATE_STATE_DIR</key>
-        <string>\(plistEscape(UpdateStatePaths.current(environment: environment).directory.path))</string>
+        <string>\(plistEscape(UpdateStatePaths.current(environment: launchAgentPathEnvironment()).directory.path))</string>
       </dict>
     """
+  }
+
+  private func launchAgentRuntimePaths() -> RuntimePaths {
+    RuntimePaths.current(environment: launchAgentPathEnvironment())
+  }
+
+  private func launchAgentPathEnvironment() -> [String: String] {
+    environment["ONECONTEXT_PERSIST_ENV_PATH_OVERRIDES"] == "1" ? environment : [:]
+  }
+
+  private func ensureNormalUserLifecycle() throws {
+    if geteuid() == 0 || environment["SUDO_USER"] != nil {
+      throw RuntimeControlError.rootUserUnsupported
+    }
   }
 
   private func guiDomain() -> String {
