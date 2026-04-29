@@ -1,7 +1,7 @@
 import Foundation
 import Darwin
 
-public let oneContextVersion = "0.1.19"
+public let oneContextVersion = "0.1.20"
 public let oneContextGitHubURL = URL(string: "https://github.com/hapticasensorics/1context")!
 public let oneContextLatestReleaseURL = URL(string: "https://api.github.com/repos/hapticasensorics/1context/releases/latest")!
 public let oneContextHomebrewUpdateCommand = """
@@ -375,6 +375,23 @@ public final class LaunchAgentManager {
     _ = await launchctl(["kickstart", "-k", agentTarget()])
   }
 
+  public func restart(daemonPath: String) async throws {
+    try install(daemonPath: daemonPath)
+    let target = agentTarget()
+    let current = await launchctl(["print", target])
+    if current.status != 0 {
+      try await start(daemonPath: daemonPath)
+      return
+    }
+
+    let kickstart = await launchctl(["kickstart", "-k", target])
+    if kickstart.status != 0 {
+      throw RuntimeControlError.launchAgentFailed(
+        (kickstart.stderr + kickstart.stdout).trimmingCharacters(in: .whitespacesAndNewlines)
+      )
+    }
+  }
+
   public func stop() async {
     let byTarget = await launchctl(["bootout", agentTarget()])
     if byTarget.status != 0 {
@@ -572,9 +589,16 @@ public final class RuntimeController {
 
   public func restart() async throws -> RuntimeHealth {
     setStartDesired(true)
-    _ = try await stop()
-    setStartDesired(true)
-    return try await start().health
+    guard let daemon = findDaemonPath() else { throw RuntimeControlError.daemonNotFound }
+
+    if launchAgent.isDisabled {
+      _ = try await stop()
+      setStartDesired(true)
+      return try await start().health
+    }
+
+    try await launchAgent.restart(daemonPath: daemon)
+    return try await waitForRunning()
   }
 
   public func shouldAutoStartRuntime() -> Bool {
