@@ -17,7 +17,9 @@ done
 
 if [[ "$DELETE_DATA" == "1" ]]; then
   rm -rf \
+    "$HOME/1Context" \
     "$HOME/Library/Application Support/1Context" \
     "$HOME/Library/Logs/1Context" \
-    "$HOME/.config/1context"
+    "$HOME/Library/Caches/1Context" \
+    "$HOME/Library/Preferences/com.haptica.1context.plist"
 fi

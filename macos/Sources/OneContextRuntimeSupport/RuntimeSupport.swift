@@ -1,25 +1,42 @@
 import Foundation
 import Darwin
 
-public let oneContextVersion = "0.1.9"
+public let oneContextVersion = "0.1.10"
 public let oneContextGitHubURL = URL(string: "https://github.com/hapticasensorics/1context")!
 public let oneContextLatestReleaseURL = URL(string: "https://api.github.com/repos/hapticasensorics/1context/releases/latest")!
-public let oneContextHomebrewUpdateCommand = "brew upgrade --cask hapticasensorics/tap/1context"
+public let oneContextHomebrewUpdateCommand = "brew update && brew upgrade --cask hapticasensorics/tap/1context"
 public let oneContextUpdateCheckInterval: TimeInterval = 24 * 60 * 60
 
 public struct RuntimePaths {
+  public let userContentDirectory: URL
   public let appSupportDirectory: URL
+  public let configPath: String
   public let runDirectory: URL
   public let desiredStatePath: String
   public let socketPath: String
+  public let pidPath: String
   public let logDirectory: URL
   public let logPath: String
+  public let cacheDirectory: URL
+  public let renderCacheDirectory: URL
+  public let downloadCacheDirectory: URL
+  public let preferencesPath: String
 
   public static func current(environment: [String: String] = ProcessInfo.processInfo.environment) -> RuntimePaths {
     let home = FileManager.default.homeDirectoryForCurrentUser
+    let userContentDirectory = URL(
+      fileURLWithPath: environment["ONECONTEXT_USER_CONTENT_DIR"]
+        ?? home.appendingPathComponent("1Context").path,
+      isDirectory: true
+    )
     let appSupport = URL(
       fileURLWithPath: environment["ONECONTEXT_APP_SUPPORT_DIR"]
         ?? home.appendingPathComponent("Library/Application Support/1Context").path,
+      isDirectory: true
+    )
+    let cacheDirectory = URL(
+      fileURLWithPath: environment["ONECONTEXT_CACHE_DIR"]
+        ?? home.appendingPathComponent("Library/Caches/1Context").path,
       isDirectory: true
     )
     let runDirectory = appSupport.appendingPathComponent("run", isDirectory: true)
@@ -30,14 +47,22 @@ public struct RuntimePaths {
     )
 
     return RuntimePaths(
+      userContentDirectory: userContentDirectory,
       appSupportDirectory: appSupport,
+      configPath: appSupport.appendingPathComponent("config.json").path,
       runDirectory: runDirectory,
       desiredStatePath: appSupport.appendingPathComponent("desired-state").path,
       socketPath: environment["ONECONTEXT_SOCKET_PATH"]
         ?? runDirectory.appendingPathComponent("1context.sock").path,
+      pidPath: runDirectory.appendingPathComponent("onecontextd.pid").path,
       logDirectory: logDirectory,
       logPath: environment["ONECONTEXT_LOG_PATH"]
-        ?? logDirectory.appendingPathComponent("1contextd.log").path
+        ?? logDirectory.appendingPathComponent("onecontextd.log").path,
+      cacheDirectory: cacheDirectory,
+      renderCacheDirectory: cacheDirectory.appendingPathComponent("render-cache", isDirectory: true),
+      downloadCacheDirectory: cacheDirectory.appendingPathComponent("download-cache", isDirectory: true),
+      preferencesPath: environment["ONECONTEXT_PREFERENCES_PATH"]
+        ?? home.appendingPathComponent("Library/Preferences/com.haptica.1context.plist").path
     )
   }
 }
@@ -47,9 +72,10 @@ public struct UpdateStatePaths {
   public let file: URL
 
   public static func current(environment: [String: String] = ProcessInfo.processInfo.environment) -> UpdateStatePaths {
+    let runtimePaths = RuntimePaths.current(environment: environment)
     let directory = URL(
       fileURLWithPath: environment["ONECONTEXT_UPDATE_STATE_DIR"]
-        ?? FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".config/1context").path,
+        ?? runtimePaths.appSupportDirectory.appendingPathComponent("update").path,
       isDirectory: true
     )
     return UpdateStatePaths(directory: directory, file: directory.appendingPathComponent("update-check.json"))
@@ -184,12 +210,10 @@ public final class UnixJSONRPCClient {
 public struct ReleaseInfo: Sendable {
   public let version: String
   public let notesURL: URL?
-  public let installCommand: String
 
-  public init(version: String, notesURL: URL?, installCommand: String) {
+  public init(version: String, notesURL: URL?) {
     self.version = version
     self.notesURL = notesURL
-    self.installCommand = installCommand
   }
 }
 
@@ -272,8 +296,7 @@ public final class UpdateChecker {
       ?? ""
     let version = rawVersion.replacingOccurrences(of: "^v", with: "", options: .regularExpression)
     let notesURL = (release?["notes_url"] as? String ?? release?["html_url"] as? String).flatMap(URL.init(string:))
-    let install = ((release?["install"] as? [String: Any])?["homebrew"] as? String) ?? oneContextHomebrewUpdateCommand
-    return ReleaseInfo(version: version, notesURL: notesURL, installCommand: install)
+    return ReleaseInfo(version: version, notesURL: notesURL)
   }
 
   private func readState(at url: URL) -> [String: Any]? {
@@ -285,8 +308,7 @@ public final class UpdateChecker {
     guard let version = state["last_seen_latest"] as? String else { return nil }
     return ReleaseInfo(
       version: version,
-      notesURL: (state["notes_url"] as? String).flatMap(URL.init(string:)),
-      installCommand: (state["install"] as? String) ?? oneContextHomebrewUpdateCommand
+      notesURL: (state["notes_url"] as? String).flatMap(URL.init(string:))
     )
   }
 
@@ -294,8 +316,7 @@ public final class UpdateChecker {
     try? FileManager.default.createDirectory(at: paths.directory, withIntermediateDirectories: true)
     var state: [String: Any] = [
       "last_checked_at": ISO8601DateFormatter().string(from: Date()),
-      "last_seen_latest": release.version,
-      "install": release.installCommand
+      "last_seen_latest": release.version
     ]
     if let notesURL = release.notesURL {
       state["notes_url"] = notesURL.absoluteString
@@ -404,8 +425,12 @@ public final class LaunchAgentManager {
       <dict>
         <key>ONECONTEXT_APP_SUPPORT_DIR</key>
         <string>\(plistEscape(paths.appSupportDirectory.path))</string>
+        <key>ONECONTEXT_USER_CONTENT_DIR</key>
+        <string>\(plistEscape(paths.userContentDirectory.path))</string>
         <key>ONECONTEXT_LOG_DIR</key>
         <string>\(plistEscape(paths.logDirectory.path))</string>
+        <key>ONECONTEXT_CACHE_DIR</key>
+        <string>\(plistEscape(paths.cacheDirectory.path))</string>
       </dict>
     </dict>
     </plist>
@@ -562,18 +587,18 @@ public final class RuntimeController {
   private func removeLocalData() throws {
     let fileManager = FileManager.default
     let runtimePaths = RuntimePaths.current(environment: environment)
-    let updateStatePaths = UpdateStatePaths.current(environment: environment)
-
     for url in [
+      runtimePaths.userContentDirectory,
       runtimePaths.appSupportDirectory,
       runtimePaths.logDirectory,
-      updateStatePaths.directory
+      runtimePaths.cacheDirectory,
+      URL(fileURLWithPath: runtimePaths.preferencesPath)
     ] {
-      try removeLocalDataDirectory(url, fileManager: fileManager)
+      try removeLocalDataItem(url, fileManager: fileManager)
     }
   }
 
-  private func removeLocalDataDirectory(_ url: URL, fileManager: FileManager) throws {
+  private func removeLocalDataItem(_ url: URL, fileManager: FileManager) throws {
     let standardized = url.standardizedFileURL
     guard isSafeLocalDataDirectory(standardized) else {
       throw RuntimeControlError.unsafeDeletionPath(standardized.path)
@@ -621,6 +646,7 @@ public final class RuntimeController {
     try FileManager.default.createDirectory(at: paths.runDirectory, withIntermediateDirectories: true)
     chmod(paths.runDirectory.path, 0o700)
     try FileManager.default.createDirectory(at: paths.logDirectory, withIntermediateDirectories: true)
+    try FileManager.default.createDirectory(at: paths.cacheDirectory, withIntermediateDirectories: true)
 
     let process = Process()
     process.executableURL = URL(fileURLWithPath: daemonPath)
@@ -649,28 +675,18 @@ public final class RuntimeController {
     let fm = FileManager.default
     let executableDirectory = CommandLine.arguments.first
       .map { URL(fileURLWithPath: $0).resolvingSymlinksInPath().deletingLastPathComponent() }
-    let candidates: [String] = [
-      environment["ONECONTEXT_DAEMON_PATH"],
+    var candidates: [String] = [
       Bundle.main.bundleURL.deletingLastPathComponent().appendingPathComponent("onecontextd").path,
-      executableDirectory?.appendingPathComponent("onecontextd").path,
-      "/Applications/1Context.app/Contents/MacOS/onecontextd",
-      FileManager.default.currentDirectoryPath + "/macos/.build/debug/onecontextd",
-      FileManager.default.currentDirectoryPath + "/macos/.build/release/onecontextd",
-      findInBuildDirectory(URL(fileURLWithPath: FileManager.default.currentDirectoryPath + "/macos/.build"))
+      executableDirectory?.appendingPathComponent("onecontextd").path
     ].compactMap { $0 }
-    return candidates.first { fm.isExecutableFile(atPath: $0) }
-  }
 
-  private func findInBuildDirectory(_ directory: URL) -> String? {
-    guard let enumerator = FileManager.default.enumerator(at: directory, includingPropertiesForKeys: nil) else {
-      return nil
+    if environment["ONECONTEXT_ALLOW_DAEMON_OVERRIDE"] == "1",
+      let override = environment["ONECONTEXT_DAEMON_PATH"]
+    {
+      candidates.insert(override, at: 0)
     }
-    for case let url as URL in enumerator where url.lastPathComponent == "onecontextd" {
-      if FileManager.default.isExecutableFile(atPath: url.path) {
-        return url.path
-      }
-    }
-    return nil
+
+    return candidates.first { fm.isExecutableFile(atPath: $0) }
   }
 }
 

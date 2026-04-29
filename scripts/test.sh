@@ -7,8 +7,11 @@ STATE_DIR="$(mktemp -d /tmp/1ctx-test-XXXXXX)"
 
 cleanup() {
   ONECONTEXT_APP_SUPPORT_DIR="$STATE_DIR/Application Support/1Context" \
+  ONECONTEXT_USER_CONTENT_DIR="$STATE_DIR/1Context" \
   ONECONTEXT_LAUNCH_AGENT_DISABLED=1 \
   ONECONTEXT_LOG_DIR="$STATE_DIR/Logs/1Context" \
+  ONECONTEXT_CACHE_DIR="$STATE_DIR/Caches/1Context" \
+  ONECONTEXT_UPDATE_STATE_DIR="$STATE_DIR/Application Support/1Context/update" \
   "$BIN_DIR/1context" stop >/dev/null 2>&1 || true
   rm -rf "$STATE_DIR"
 }
@@ -18,15 +21,25 @@ BIN_DIR="$(swift build --package-path "$MACOS_DIR" --show-bin-path)"
 trap cleanup EXIT
 
 export ONECONTEXT_APP_SUPPORT_DIR="$STATE_DIR/Application Support/1Context"
+export ONECONTEXT_USER_CONTENT_DIR="$STATE_DIR/1Context"
 export ONECONTEXT_LAUNCH_AGENT_DISABLED=1
 export ONECONTEXT_LOG_DIR="$STATE_DIR/Logs/1Context"
+export ONECONTEXT_CACHE_DIR="$STATE_DIR/Caches/1Context"
+export ONECONTEXT_UPDATE_STATE_DIR="$STATE_DIR/Application Support/1Context/update"
 export ONECONTEXT_NO_UPDATE_CHECK=1
 
-"$BIN_DIR/1context" | grep -q "1Context 0.1.9"
-test "$("$BIN_DIR/1context" --version)" = "0.1.9"
+"$BIN_DIR/1context" | grep -q "1Context 0.1.10"
+test "$("$BIN_DIR/1context" --version)" = "0.1.10"
 "$BIN_DIR/1context" --help | grep -q "1context status"
 "$BIN_DIR/1context" status | grep -q "1Context is not running"
 "$BIN_DIR/1context" start | grep -q "1Context is running"
+test -d "$ONECONTEXT_USER_CONTENT_DIR"
+test -d "$ONECONTEXT_APP_SUPPORT_DIR/run"
+test -f "$ONECONTEXT_APP_SUPPORT_DIR/run/onecontextd.pid"
+test -d "$ONECONTEXT_LOG_DIR"
+test -d "$ONECONTEXT_CACHE_DIR"
+test -d "$ONECONTEXT_CACHE_DIR/render-cache"
+test -d "$ONECONTEXT_CACHE_DIR/download-cache"
 "$BIN_DIR/1context" status | grep -q "Health: OK"
 "$BIN_DIR/1context" status --debug | grep -q "Socket: responding"
 "$BIN_DIR/1context" restart | grep -q "1Context is running"

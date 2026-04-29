@@ -64,7 +64,7 @@ struct OneContextCLI {
       if result.updateAvailable, let latest = result.latest {
         FileHandle.standardError.write(Data("""
         1Context \(latest.version) is available. You have \(oneContextVersion).
-        Update: \(latest.installCommand)
+        Update: \(oneContextHomebrewUpdateCommand)
 
         """.utf8))
       }
@@ -82,8 +82,11 @@ struct OneContextCLI {
       LaunchAgent: \(launchAgent.loaded ? "loaded" : launchAgent.configured ? "installed" : "not installed")
       Process: \(error == nil ? "running" : "not confirmed")
       Socket: \(error == nil ? "responding" : "no response")
+      User Content: \(paths.userContentDirectory.path)
+      App Support: \(paths.appSupportDirectory.path)
       Socket Path: \(paths.socketPath)
       Log: \(paths.logPath)
+      Cache: \(paths.cacheDirectory.path)
     """)
   }
 

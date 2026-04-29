@@ -28,8 +28,11 @@ xml_escape() {
 }
 
 EXECUTABLE_XML="$(xml_escape "$EXECUTABLE")"
+MENU_LOG="$HOME/Library/Logs/1Context/menu.log"
+MENU_LOG_XML="$(xml_escape "$MENU_LOG")"
 
 mkdir -p "$HOME/Library/LaunchAgents"
+mkdir -p "$HOME/Library/Logs/1Context"
 
 cat > "$PLIST" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
@@ -46,6 +49,10 @@ cat > "$PLIST" <<PLIST
   <true/>
   <key>KeepAlive</key>
   <false/>
+  <key>StandardOutPath</key>
+  <string>$MENU_LOG_XML</string>
+  <key>StandardErrorPath</key>
+  <string>$MENU_LOG_XML</string>
 </dict>
 </plist>
 PLIST
@@ -54,4 +61,4 @@ launchctl bootout "gui/$(id -u)" "$PLIST" >/dev/null 2>&1 || true
 launchctl bootstrap "gui/$(id -u)" "$PLIST" >/dev/null
 launchctl kickstart -k "gui/$(id -u)/$LABEL" >/dev/null
 
-"$CLI_PATH" start >/dev/null 2>&1 || true
+"$CLI_PATH" restart >/dev/null 2>&1 || "$CLI_PATH" start >/dev/null 2>&1 || true

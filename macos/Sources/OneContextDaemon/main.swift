@@ -3,6 +3,7 @@ import Darwin
 import OneContextRuntimeSupport
 
 nonisolated(unsafe) private var signalSocketPath: UnsafeMutablePointer<CChar>?
+nonisolated(unsafe) private var signalPIDPath: UnsafeMutablePointer<CChar>?
 
 final class Logger {
   private let path: String
@@ -37,6 +38,7 @@ final class OneContextDaemon {
   func run() throws {
     try prepareDirectories()
     try startSocket()
+    try writePIDFile()
     installSignalHandlers()
     logger.write("1Context runtime started pid=\(getpid()) socket=\(paths.socketPath)")
     acceptLoop()
@@ -44,6 +46,10 @@ final class OneContextDaemon {
   }
 
   private func prepareDirectories() throws {
+    try FileManager.default.createDirectory(
+      at: paths.userContentDirectory,
+      withIntermediateDirectories: true
+    )
     try FileManager.default.createDirectory(
       at: paths.appSupportDirectory,
       withIntermediateDirectories: true
@@ -56,7 +62,27 @@ final class OneContextDaemon {
       at: paths.logDirectory,
       withIntermediateDirectories: true
     )
+    try FileManager.default.createDirectory(
+      at: paths.cacheDirectory,
+      withIntermediateDirectories: true
+    )
+    try FileManager.default.createDirectory(
+      at: paths.renderCacheDirectory,
+      withIntermediateDirectories: true
+    )
+    try FileManager.default.createDirectory(
+      at: paths.downloadCacheDirectory,
+      withIntermediateDirectories: true
+    )
     chmod(paths.runDirectory.path, 0o700)
+  }
+
+  private func writePIDFile() throws {
+    try "\(getpid())\n".write(
+      toFile: paths.pidPath,
+      atomically: true,
+      encoding: .utf8
+    )
   }
 
   private func startSocket() throws {
@@ -89,15 +115,22 @@ final class OneContextDaemon {
 
   private func installSignalHandlers() {
     signalSocketPath = strdup(paths.socketPath)
+    signalPIDPath = strdup(paths.pidPath)
     signal(SIGTERM) { _ in
       if let socketPath = signalSocketPath {
         unlink(socketPath)
+      }
+      if let pidPath = signalPIDPath {
+        unlink(pidPath)
       }
       _exit(0)
     }
     signal(SIGINT) { _ in
       if let socketPath = signalSocketPath {
         unlink(socketPath)
+      }
+      if let pidPath = signalPIDPath {
+        unlink(pidPath)
       }
       _exit(0)
     }
@@ -124,7 +157,10 @@ final class OneContextDaemon {
     var data = Data()
     var byte: UInt8 = 0
 
-    while read(fd, &byte, 1) == 1 {
+    while true {
+      var pollFD = pollfd(fd: fd, events: Int16(POLLIN), revents: 0)
+      guard poll(&pollFD, 1, 2_000) > 0 else { return nil }
+      guard read(fd, &byte, 1) == 1 else { break }
       if byte == UInt8(ascii: "\n") { break }
       data.append(byte)
       if data.count > 64 * 1024 { return nil }
@@ -201,9 +237,14 @@ final class OneContextDaemon {
       close(listenFD)
     }
     unlink(paths.socketPath)
+    unlink(paths.pidPath)
     if let socketPath = signalSocketPath {
       free(socketPath)
       signalSocketPath = nil
+    }
+    if let pidPath = signalPIDPath {
+      free(pidPath)
+      signalPIDPath = nil
     }
     logger.write("1Context runtime stopped")
   }
