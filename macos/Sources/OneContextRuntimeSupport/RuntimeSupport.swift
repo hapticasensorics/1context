@@ -1,7 +1,7 @@
 import Foundation
 import Darwin
 
-public let oneContextVersion = "0.1.4"
+public let oneContextVersion = "0.1.5"
 public let oneContextGitHubURL = URL(string: "https://github.com/hapticasensorics/1context")!
 public let oneContextLatestReleaseURL = URL(string: "https://api.github.com/repos/hapticasensorics/1context/releases/latest")!
 public let oneContextHomebrewUpdateCommand = "brew upgrade --cask hapticasensorics/tap/1context"
@@ -643,10 +643,15 @@ public final class RuntimeController {
 
   private func findDaemonPath() -> String? {
     let fm = FileManager.default
+    let executableDirectory = CommandLine.arguments.first
+      .map { URL(fileURLWithPath: $0).resolvingSymlinksInPath().deletingLastPathComponent() }
     let candidates: [String] = [
       environment["ONECONTEXT_DAEMON_PATH"],
       Bundle.main.bundleURL.deletingLastPathComponent().appendingPathComponent("onecontextd").path,
-      CommandLine.arguments.first.map { URL(fileURLWithPath: $0).deletingLastPathComponent().appendingPathComponent("onecontextd").path },
+      executableDirectory?.appendingPathComponent("onecontextd").path,
+      "/Applications/1Context.app/Contents/MacOS/onecontextd",
+      "/opt/homebrew/bin/onecontextd",
+      "/usr/local/bin/onecontextd",
       FileManager.default.currentDirectoryPath + "/macos/.build/debug/onecontextd",
       FileManager.default.currentDirectoryPath + "/macos/.build/release/onecontextd",
       findInBuildDirectory(URL(fileURLWithPath: FileManager.default.currentDirectoryPath + "/macos/.build"))
