@@ -188,11 +188,12 @@ struct OneContextCLI {
       return
     }
 
-    if let latest = result.latest {
-      print("1Context \(latest.version) is available. You have \(oneContextVersion).")
+    guard let latest = result.latest else {
+      throw CLIError.commandFailed("Could not determine latest 1Context version")
     }
+    print("1Context \(latest.version) is available. You have \(oneContextVersion).")
     print("Updating 1Context...")
-    try updateWithHomebrew()
+    try updateWithHomebrew(expectedVersion: latest.version)
   }
 
   static func status() async {
@@ -299,7 +300,7 @@ struct OneContextCLI {
     printLogTail(title: "Menu", path: menuLog, lineCount: 80)
   }
 
-  static func updateWithHomebrew() throws {
+  static func updateWithHomebrew(expectedVersion: String) throws {
     guard let brew = firstExecutable(["/opt/homebrew/bin/brew", "/usr/local/bin/brew"]) else {
       throw CLIError.commandFailed("Homebrew is required to update 1Context")
     }
@@ -341,7 +342,23 @@ struct OneContextCLI {
       let cli = firstExecutable(["/opt/homebrew/bin/1context", "/usr/local/bin/1context"])
     {
       _ = runCapture(cli, ["restart"])
-      try runProcess(cli, ["--version"])
+    }
+
+    try verifyInstalledVersion(expectedVersion)
+  }
+
+  static func verifyInstalledVersion(_ expectedVersion: String) throws {
+    guard let cli = firstExecutable(["/opt/homebrew/bin/1context", "/usr/local/bin/1context"]) else {
+      throw CLIError.commandFailed("Could not find installed 1context after update")
+    }
+
+    let version = runCapture(cli, ["--version"]).stdout.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard version == expectedVersion else {
+      throw CLIError.commandFailed("Installed 1Context version is \(version.isEmpty ? "unknown" : version), expected \(expectedVersion)")
+    }
+
+    if let installedAppVersion = appVersion(), installedAppVersion != expectedVersion {
+      throw CLIError.commandFailed("Installed 1Context.app version is \(installedAppVersion), expected \(expectedVersion)")
     }
   }
 
@@ -499,6 +516,7 @@ struct OneContextCLI {
     if !environment.isEmpty {
       process.environment = ProcessInfo.processInfo.environment.merging(environment) { _, new in new }
     }
+    process.standardInput = FileHandle.standardInput
     process.standardOutput = FileHandle.standardOutput
     process.standardError = FileHandle.standardError
     try process.run()
