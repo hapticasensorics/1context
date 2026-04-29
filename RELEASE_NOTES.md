@@ -1,4 +1,4 @@
-# 1Context v0.1.33 Public Preview
+# 1Context v0.1.34 Public Preview
 
 This release includes:
 
@@ -14,6 +14,8 @@ This release includes:
 - release-artifact hygiene checks and `1context diagnose`
 - IPC and installer hardening from red-team review
 - AppIcon.icns for Finder and Spotlight
+- menu responsiveness and lifecycle hardening
+- safer menu updater, release workflow guards, and stale runtime detection
 
 Install:
 

@@ -55,6 +55,9 @@ $ROOT_NAME/scripts/
 $ROOT_NAME/scripts/install-macos-launch-agents.sh
 $ROOT_NAME/scripts/uninstall-macos-launch-agents.sh
 EOF
+if grep -Fxq "$ROOT_NAME/1Context.app/Contents/CodeResources" "$MANIFEST"; then
+  echo "$ROOT_NAME/1Context.app/Contents/CodeResources" >> "$EXPECTED_MANIFEST"
+fi
 LC_ALL=C sort -o "$EXPECTED_MANIFEST" "$EXPECTED_MANIFEST"
 
 if ! diff -u "$EXPECTED_MANIFEST" "$MANIFEST"; then
