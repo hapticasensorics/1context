@@ -22,6 +22,9 @@ struct OneContextCLI {
       case "stop":
         try rejectUnknownArguments(allowed: ["--debug"])
         try await stop()
+      case "quit":
+        try rejectUnknownArguments(allowed: ["--debug"])
+        try await quit()
       case "restart":
         try rejectUnknownArguments(allowed: ["--debug"])
         try await restart()
@@ -64,6 +67,7 @@ struct OneContextCLI {
       1context --help
       1context start [--debug]
       1context stop [--debug]
+      1context quit [--debug]
       1context restart [--debug]
       1context status [--debug]
       1context diagnose
@@ -131,6 +135,20 @@ struct OneContextCLI {
     do {
       let stopped = try await controller.stop()
       print(stopped ? "1Context is stopped." : "1Context is not running.")
+      if debug { await printLifecycleDebug(controller: controller, startedAt: startedAt, error: CLIError.runtimeStopped) }
+    } catch {
+      if debug { await printLifecycleDebug(controller: controller, startedAt: startedAt, error: error) }
+      throw error
+    }
+  }
+
+  static func quit() async throws {
+    let debug = args.contains("--debug")
+    let startedAt = Date()
+    let controller = RuntimeController()
+    do {
+      _ = try await controller.quit()
+      print("1Context quit.")
       if debug { await printLifecycleDebug(controller: controller, startedAt: startedAt, error: CLIError.runtimeStopped) }
     } catch {
       if debug { await printLifecycleDebug(controller: controller, startedAt: startedAt, error: error) }

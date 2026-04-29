@@ -86,6 +86,14 @@ public final class RuntimeController {
     return true
   }
 
+  public func quit() async throws -> Bool {
+    let stopped = try await stop()
+    if !launchAgent.isDisabled {
+      await launchAgent.stopMenu()
+    }
+    return stopped
+  }
+
   private func restartRuntimeForVersionMismatch(existingHealth health: RuntimeHealth) async throws -> RuntimeHealth {
     guard let daemon = findDaemonPath() else { throw RuntimeControlError.daemonNotFound }
 

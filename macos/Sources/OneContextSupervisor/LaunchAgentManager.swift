@@ -85,6 +85,14 @@ public final class LaunchAgentManager {
     try? FileManager.default.removeItem(at: path)
   }
 
+  public func stopMenu() async {
+    await quitMenuApp()
+    let path = launchAgentPath(label: Self.menuLabel)
+    _ = await launchctl(["bootout", "\(guiDomain())/\(Self.menuLabel)"])
+    _ = await launchctl(["bootout", guiDomain(), path.path])
+    try? FileManager.default.removeItem(at: path)
+  }
+
   public func uninstallManagedLaunchAgents() async {
     await quitMenuApp()
     for label in [Self.menuLabel, Self.runtimeLabel] {
@@ -257,4 +265,3 @@ public final class LaunchAgentManager {
     }
   }
 }
-

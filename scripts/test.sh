@@ -31,6 +31,7 @@ export ONECONTEXT_NO_UPDATE_CHECK=1
 "$BIN_DIR/1context" | grep -q "1Context 0.1.27"
 test "$("$BIN_DIR/1context" --version)" = "0.1.27"
 "$BIN_DIR/1context" --help | grep -q "1context status"
+"$BIN_DIR/1context" --help | grep -q "1context quit"
 if "$BIN_DIR/1context" status --wat >"$STATE_DIR/unknown-arg.out" 2>&1; then
   echo "unknown arguments should fail" >&2
   exit 1
@@ -70,5 +71,7 @@ grep -q "1Context is not running" "$STATE_DIR/status-down-again.out"
 
 PATH="$BIN_DIR:$PATH" 1context start | grep -q "1Context is running"
 PATH="$BIN_DIR:$PATH" 1context stop | grep -q "1Context is stopped"
+PATH="$BIN_DIR:$PATH" 1context start | grep -q "1Context is running"
+PATH="$BIN_DIR:$PATH" 1context quit | grep -q "1Context quit"
 
 echo "1Context smoke tests passed."
