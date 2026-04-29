@@ -29,6 +29,7 @@ export ONECONTEXT_CACHE_DIR="$STATE_DIR/Caches/1Context"
 export ONECONTEXT_UPDATE_STATE_DIR="$STATE_DIR/Application Support/1Context/update"
 export ONECONTEXT_NO_UPDATE_CHECK=1
 export ONECONTEXT_CLAUDE_SETTINGS_PATH="$STATE_DIR/.claude/settings.json"
+export ONECONTEXT_AGENT_ALLOW_ENV_OVERRIDES=1
 
 "$ROOT/scripts/check-version-consistency.sh"
 "$ROOT/scripts/test-menu-lifecycle-deterministic.sh"
@@ -94,6 +95,10 @@ test -f "$ONECONTEXT_APP_SUPPORT_DIR/agent/config.json"
 test -f "$ONECONTEXT_APP_SUPPORT_DIR/agent/integrations.json"
 grep -q "agent hook --provider claude --event SessionStart" "$ONECONTEXT_CLAUDE_SETTINGS_PATH"
 grep -q "agent statusline --provider claude" "$ONECONTEXT_CLAUDE_SETTINGS_PATH"
+if grep -q "agent hook --provider claude --event UserPromptSubmit" "$ONECONTEXT_CLAUDE_SETTINGS_PATH"; then
+  echo "public preview should not install prompt-submit hooks by default" >&2
+  exit 1
+fi
 printf '{"cwd":"%s"}\n' "$ROOT" \
   | "$BIN_DIR/1context" agent hook --provider claude --event SessionStart \
   | grep -q '"systemMessage"'

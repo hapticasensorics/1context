@@ -54,8 +54,39 @@ Current public preview:
 
 - Starts a user LaunchAgent for the menu bar app and local runtime.
 - Checks GitHub Releases for updates using a non-cookie, nonpersistent session.
+- Can optionally install managed Claude Code settings in `~/.claude/settings.json`.
 - Does not upload project data.
 - Does not request Screen Recording, Accessibility, Microphone, Calendar, Contacts, or broad file permissions.
+
+### Agent Hooks
+
+`1context agent integrations install` currently modifies Claude Code user
+settings only. It adds:
+
+```text
+~/.claude/settings.json
+  hooks.SessionStart[] -> 1context agent hook --provider claude --event SessionStart
+  statusLine          -> 1context agent statusline --provider claude
+```
+
+The public preview does not install prompt-submit, tool-use, pre-compact, or
+session-end hooks by default. Those hook commands exist as safe no-op/fallback
+entry points for future compatibility, but they require explicit future
+product consent before installation.
+
+`1context agent integrations uninstall` removes only 1Context-managed hook and
+status-line commands. It preserves unrelated Claude settings and user hooks.
+Homebrew uninstall also makes a best-effort call to this cleanup path before the
+app bundle is removed, so Claude should not keep calling a deleted binary.
+
+If Claude settings contain `disableAllHooks`, 1Context reports manual review and
+does not install or repair hooks.
+
+Hook commands receive Claude's event JSON on stdin. The public preview uses only
+minimal fields such as `cwd` to return a small local wiki/repo pointer. It does
+not upload hook payloads. Release hooks ignore `ONECONTEXT_*` environment
+overrides unless `ONECONTEXT_AGENT_ALLOW_ENV_OVERRIDES=1` is explicitly set for
+local development/testing.
 
 Future capture/orchestration features must ask only when needed and explain why the permission is needed before relying on it.
 

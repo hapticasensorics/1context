@@ -88,9 +88,11 @@ Claude settings:
 1context agent integrations uninstall
 ```
 
-The current hook behavior is intentionally small: Claude receives a local wiki
-pointer and repo-aware pointer when available. Codex integration is status-only
-until its hook configuration is verified.
+The current hook behavior is intentionally small: install adds only a Claude
+`SessionStart` hook plus the status line. Claude receives a local wiki pointer
+and repo-aware pointer when available. Prompt, tool, compact, and session-end
+hooks are implemented as safe no-ops but are not installed by default. Codex
+integration is status-only until its hook configuration is verified.
 
 ## Development
 

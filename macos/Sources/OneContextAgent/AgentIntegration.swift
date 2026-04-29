@@ -2,12 +2,12 @@ import Foundation
 import Darwin
 import OneContextPlatform
 
-public enum AgentProvider: String, Codable, CaseIterable {
+public enum AgentProvider: String, Codable, CaseIterable, Sendable {
   case claude
   case codex
 }
 
-public enum AgentHookEvent: String, Codable, CaseIterable {
+public enum AgentHookEvent: String, Codable, CaseIterable, Sendable {
   case sessionStart = "SessionStart"
   case userPromptSubmit = "UserPromptSubmit"
   case postToolUse = "PostToolUse"
@@ -21,6 +21,19 @@ public enum AgentHookEvent: String, Codable, CaseIterable {
     case .sessionStart, .userPromptSubmit, .preCompact, .sessionEnd:
       return false
     }
+  }
+}
+
+public enum AgentHookPolicy {
+  public static let installedClaudeEvents: [AgentHookEvent] = [.sessionStart]
+  public static let uninstallClaudeEvents: [AgentHookEvent] = AgentHookEvent.allCases
+  public static let managedHookPrefix = "ONECONTEXT_MANAGED_HOOK=1"
+  public static let managedStatusLinePrefix = "ONECONTEXT_MANAGED_STATUSLINE=1"
+
+  public static func allowsEnvironmentOverrides(
+    _ environment: [String: String] = ProcessInfo.processInfo.environment
+  ) -> Bool {
+    environment["ONECONTEXT_AGENT_ALLOW_ENV_OVERRIDES"] == "1"
   }
 }
 
@@ -46,6 +59,12 @@ public struct AgentPaths: Equatable {
     )
     return AgentPaths(directory: directory)
   }
+}
+
+public func oneContextAgentRuntimeEnvironment(
+  _ environment: [String: String] = ProcessInfo.processInfo.environment
+) -> [String: String] {
+  AgentHookPolicy.allowsEnvironmentOverrides(environment) ? environment : [:]
 }
 
 public struct AgentHookInput: Codable, Equatable {
@@ -229,11 +248,25 @@ public final class AgentIntegrationManager {
   public static func defaultClaudeSettingsPath(
     environment: [String: String] = ProcessInfo.processInfo.environment
   ) -> URL {
-    if let override = environment["ONECONTEXT_CLAUDE_SETTINGS_PATH"] {
+    if AgentHookPolicy.allowsEnvironmentOverrides(environment),
+      let override = environment["ONECONTEXT_CLAUDE_SETTINGS_PATH"]
+    {
       return URL(fileURLWithPath: override)
     }
     return FileManager.default.homeDirectoryForCurrentUser
       .appendingPathComponent(".claude/settings.json")
+  }
+
+  public static func preferredExecutablePath(
+    currentExecutablePath: String?,
+    fileManager: FileManager = .default
+  ) -> String {
+    for candidate in ["/opt/homebrew/bin/1context", "/usr/local/bin/1context"] {
+      if fileManager.isExecutableFile(atPath: candidate) {
+        return candidate
+      }
+    }
+    return currentExecutablePath ?? "1context"
   }
 
   public func status() -> AgentIntegrationsReport {
@@ -330,11 +363,23 @@ public final class AgentIntegrationManager {
         installedEvents: [],
         missingEvents: AgentHookEvent.allCases
       )
+    case .disabled(let root):
+      let installed = AgentHookPolicy.installedClaudeEvents.filter { hasManagedClaudeHook(root: root, event: $0) }
+      let missing = AgentHookPolicy.installedClaudeEvents.filter { !installed.contains($0) }
+      return ProviderIntegrationStatus(
+        provider: .claude,
+        state: .manualReview,
+        detail: "Claude hooks are disabled by disableAllHooks; 1Context will not install or repair hooks while they are disabled.",
+        settingsPath: claudeSettingsPath.path,
+        statusLineDetail: claudeStatusLineDetail(root: root),
+        installedEvents: installed,
+        missingEvents: missing
+      )
     case .loaded(let root):
-      let installed = AgentHookEvent.allCases.filter { hasManagedClaudeHook(root: root, event: $0) }
-      let missing = AgentHookEvent.allCases.filter { !installed.contains($0) }
+      let installed = AgentHookPolicy.installedClaudeEvents.filter { hasManagedClaudeHook(root: root, event: $0) }
+      let missing = AgentHookPolicy.installedClaudeEvents.filter { !installed.contains($0) }
       let state: ProviderIntegrationStatus.State
-      if installed.count == AgentHookEvent.allCases.count {
+      if installed.count == AgentHookPolicy.installedClaudeEvents.count {
         state = .installed
       } else if installed.isEmpty {
         state = .notInstalled
@@ -385,7 +430,7 @@ public final class AgentIntegrationManager {
 
   private func mergeClaudeHooks(action: AgentIntegrationAction) throws -> AgentIntegrationsReport {
     switch readClaudeSettings() {
-    case .unsafe:
+    case .unsafe, .disabled:
       let report = status()
       try writeState(report: report, action: action)
       return report
@@ -416,11 +461,11 @@ public final class AgentIntegrationManager {
       throw AgentIntegrationError.unsafeSettings("Claude settings has a non-object hooks value; leaving it unchanged.")
     }
 
-    for event in AgentHookEvent.allCases {
+    for event in AgentHookPolicy.uninstallClaudeEvents {
       var groups = (hooks[event.rawValue] as? [[String: Any]]) ?? []
       groups = removeManagedHandlers(from: groups, event: event)
 
-      if action == .install || action == .repair {
+      if (action == .install || action == .repair) && AgentHookPolicy.installedClaudeEvents.contains(event) {
         groups.append(matcherGroup(event: event))
       }
 
@@ -468,7 +513,7 @@ public final class AgentIntegrationManager {
   private func managedStatusLine() -> [String: Any] {
     [
       "type": "command",
-      "command": "\(shellQuote(executablePath)) agent statusline --provider claude",
+      "command": "\(AgentHookPolicy.managedStatusLinePrefix) \(shellQuote(executablePath)) agent statusline --provider claude",
       "padding": 1,
       "refreshInterval": 30
     ]
@@ -495,7 +540,8 @@ public final class AgentIntegrationManager {
     else {
       return false
     }
-    return command.contains(" agent statusline --provider claude")
+    return command == "\(AgentHookPolicy.managedStatusLinePrefix) \(shellQuote(executablePath)) agent statusline --provider claude"
+      || (command.hasPrefix("\(AgentHookPolicy.managedStatusLinePrefix) ") && command.hasSuffix(" agent statusline --provider claude"))
   }
 
   private func matcherGroup(event: AgentHookEvent) -> [String: Any] {
@@ -515,7 +561,7 @@ public final class AgentIntegrationManager {
   }
 
   private func command(for event: AgentHookEvent) -> String {
-    "\(shellQuote(executablePath)) agent hook --provider claude --event \(event.rawValue)"
+    "\(AgentHookPolicy.managedHookPrefix) \(shellQuote(executablePath)) agent hook --provider claude --event \(event.rawValue)"
   }
 
   private func hasManagedClaudeHook(root: [String: Any], event: AgentHookEvent) -> Bool {
@@ -555,7 +601,9 @@ public final class AgentIntegrationManager {
     else {
       return false
     }
-    return command.contains(" agent hook --provider claude --event \(event.rawValue)")
+    return command == self.command(for: event)
+      || (command.hasPrefix("\(AgentHookPolicy.managedHookPrefix) ")
+        && command.hasSuffix(" agent hook --provider claude --event \(event.rawValue)"))
   }
 
   private func readClaudeSettings() -> ClaudeSettingsReadResult {
@@ -572,7 +620,13 @@ public final class AgentIntegrationManager {
       if let hooks = root["hooks"], !(hooks is [String: Any]) {
         return .unsafe("Claude settings has a non-object hooks value; leaving it unchanged.")
       }
+      if root["disableAllHooks"] as? Bool == true {
+        return .disabled(root)
+      }
       if let hooks = root["hooks"] as? [String: Any] {
+        if hooks["disableAllHooks"] as? Bool == true {
+          return .disabled(root)
+        }
         for event in AgentHookEvent.allCases {
           if let value = hooks[event.rawValue], !(value is [[String: Any]]) {
             return .unsafe("Claude hooks.\(event.rawValue) is not an array of matcher groups; leaving it unchanged.")
@@ -639,6 +693,7 @@ public final class AgentIntegrationManager {
   private enum ClaudeSettingsReadResult {
     case missing
     case unsafe(String)
+    case disabled([String: Any])
     case loaded([String: Any])
   }
 }
@@ -672,7 +727,9 @@ public struct AgentHookExecutor {
   ) {
     self.paths = paths
     self.userContentDirectory = userContentDirectory
-    self.wikiURL = wikiURL ?? environment["ONECONTEXT_WIKI_URL"] ?? Self.configuredWikiURL(paths: paths)
+    self.wikiURL = wikiURL
+      ?? (AgentHookPolicy.allowsEnvironmentOverrides(environment) ? environment["ONECONTEXT_WIKI_URL"] : nil)
+      ?? Self.configuredWikiURL(paths: paths)
     self.environment = environment
     self.fileManager = fileManager
   }
@@ -783,7 +840,9 @@ public struct AgentStatusLineRenderer {
   public func render(provider: AgentProvider, inputData: Data) -> String {
     guard provider == .claude else { return "" }
     let config = readConfig()
-    let url = environment["ONECONTEXT_WIKI_URL"] ?? config.wikiURL
+    let url = AgentHookPolicy.allowsEnvironmentOverrides(environment)
+      ? environment["ONECONTEXT_WIKI_URL"] ?? config.wikiURL
+      : config.wikiURL
     return "\(config.statusLineLabel): \(url)"
   }
 

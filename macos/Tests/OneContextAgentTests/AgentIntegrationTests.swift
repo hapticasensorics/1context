@@ -14,7 +14,7 @@ final class AgentIntegrationTests: XCTestCase {
     XCTAssertEqual(paths.hookLogFile.path, "/tmp/1ctx-agent-test/support/agent/hook.log")
   }
 
-  func testInstallMergesClaudeHooksIdempotently() throws {
+  func testInstallMergesOnlySessionStartHookIdempotently() throws {
     let root = try temporaryRoot()
     defer { try? FileManager.default.removeItem(at: root) }
     let settings = root.appendingPathComponent(".claude/settings.json")
@@ -48,24 +48,26 @@ final class AgentIntegrationTests: XCTestCase {
     XCTAssertEqual(object["theme"] as? String, "dark")
     let hooks = try XCTUnwrap(object["hooks"] as? [String: Any])
 
-    for event in AgentHookEvent.allCases {
-      let groups = try XCTUnwrap(hooks[event.rawValue] as? [[String: Any]])
-      let managedCount = groups.flatMap { ($0["hooks"] as? [[String: Any]]) ?? [] }
-        .filter { ($0["command"] as? String)?.contains(" agent hook --provider claude --event \(event.rawValue)") == true }
-        .count
-      XCTAssertEqual(managedCount, 1, event.rawValue)
-    }
+    let sessionGroups = try XCTUnwrap(hooks["SessionStart"] as? [[String: Any]])
+    let managedSessionCount = sessionGroups.flatMap { ($0["hooks"] as? [[String: Any]]) ?? [] }
+      .filter { ($0["command"] as? String) == "\(AgentHookPolicy.managedHookPrefix) '/opt/homebrew/bin/1context' agent hook --provider claude --event SessionStart" }
+      .count
+    XCTAssertEqual(managedSessionCount, 1)
 
     let promptGroups = try XCTUnwrap(hooks["UserPromptSubmit"] as? [[String: Any]])
     let promptCommands = promptGroups.flatMap { ($0["hooks"] as? [[String: Any]]) ?? [] }
       .compactMap { $0["command"] as? String }
-    XCTAssertTrue(promptCommands.contains("echo existing"))
+    XCTAssertEqual(promptCommands, ["echo existing"])
 
-    let postGroups = try XCTUnwrap(hooks["PostToolUse"] as? [[String: Any]])
-    XCTAssertEqual(postGroups.last?["matcher"] as? String, "*")
+    XCTAssertNil(hooks["PostToolUse"])
+    XCTAssertNil(hooks["PreCompact"])
+    XCTAssertNil(hooks["SessionEnd"])
     let statusLine = try XCTUnwrap(object["statusLine"] as? [String: Any])
     XCTAssertEqual(statusLine["type"] as? String, "command")
-    XCTAssertTrue((statusLine["command"] as? String)?.contains(" agent statusline --provider claude") == true)
+    XCTAssertEqual(
+      statusLine["command"] as? String,
+      "\(AgentHookPolicy.managedStatusLinePrefix) '/opt/homebrew/bin/1context' agent statusline --provider claude"
+    )
     XCTAssertEqual(statusLine["refreshInterval"] as? Int, 30)
     XCTAssertTrue(FileManager.default.fileExists(atPath: state.configFile.path))
     XCTAssertTrue(FileManager.default.fileExists(atPath: state.stateFile.path))
@@ -134,6 +136,15 @@ final class AgentIntegrationTests: XCTestCase {
       ]
     ])
     hooks["SessionStart"] = groups
+    hooks["PostToolUse"] = [[
+      "matcher": "*",
+      "hooks": [
+        [
+          "type": "command",
+          "command": "\(AgentHookPolicy.managedHookPrefix) '/opt/homebrew/bin/1context' agent hook --provider claude --event PostToolUse"
+        ]
+      ]
+    ]]
     object["hooks"] = hooks
     try writeObject(object, to: settings)
 
@@ -148,6 +159,31 @@ final class AgentIntegrationTests: XCTestCase {
     XCTAssertEqual(commands, ["echo keep"])
     XCTAssertNil(uninstalledHooks["PostToolUse"])
     XCTAssertNil(uninstalled["statusLine"])
+  }
+
+  func testDisableAllHooksReportsManualReviewAndDoesNotModifySettings() throws {
+    let root = try temporaryRoot()
+    defer { try? FileManager.default.removeItem(at: root) }
+    let settings = root.appendingPathComponent("settings.json")
+    try writeObject([
+      "disableAllHooks": true,
+      "theme": "dark"
+    ], to: settings)
+
+    let manager = AgentIntegrationManager(
+      paths: AgentPaths(directory: root.appendingPathComponent("agent", isDirectory: true)),
+      claudeSettingsPath: settings,
+      executablePath: "/opt/homebrew/bin/1context"
+    )
+
+    let report = try manager.install()
+
+    XCTAssertEqual(report.claudeStatus.state, .manualReview)
+    XCTAssertTrue(report.claudeStatus.detail.contains("disableAllHooks"))
+    let object = try readObject(settings)
+    XCTAssertEqual(object["theme"] as? String, "dark")
+    XCTAssertEqual(object["disableAllHooks"] as? Bool, true)
+    XCTAssertNil(object["hooks"])
   }
 
   func testHookExecutorReturnsTinyContextAndNoOpSuccess() throws {
@@ -219,6 +255,29 @@ final class AgentIntegrationTests: XCTestCase {
     let second = AgentStatusLineRenderer(paths: paths, environment: [:])
       .render(provider: .claude, inputData: Data("{}".utf8))
     XCTAssertEqual(second, "1Context wiki: http://localhost:5201")
+  }
+
+  func testHookEnvironmentOverridesAreIgnoredUnlessExplicitlyAllowed() throws {
+    let root = try temporaryRoot()
+    defer { try? FileManager.default.removeItem(at: root) }
+    let paths = AgentPaths(directory: root.appendingPathComponent("agent", isDirectory: true))
+    try FileManager.default.createDirectory(at: paths.directory, withIntermediateDirectories: true)
+    try writeAgentConfig(AgentConfig(wikiURL: "http://localhost:5200"), to: paths.configFile)
+
+    let ignored = AgentHookExecutor(
+      paths: paths,
+      environment: ["ONECONTEXT_WIKI_URL": "http://evil.local"]
+    ).execute(provider: .claude, event: .sessionStart, inputData: Data("{}".utf8))
+    XCTAssertTrue(ignored.systemMessage?.contains("http://localhost:5200") == true)
+
+    let allowed = AgentHookExecutor(
+      paths: paths,
+      environment: [
+        "ONECONTEXT_AGENT_ALLOW_ENV_OVERRIDES": "1",
+        "ONECONTEXT_WIKI_URL": "http://localhost:7777"
+      ]
+    ).execute(provider: .claude, event: .sessionStart, inputData: Data("{}".utf8))
+    XCTAssertTrue(allowed.systemMessage?.contains("http://localhost:7777") == true)
   }
 
   private func temporaryRoot() throws -> URL {

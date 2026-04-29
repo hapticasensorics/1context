@@ -10,6 +10,7 @@ MENU_LABEL="com.haptica.1context.menu"
 RUNTIME_LABEL="com.haptica.1context"
 DELETE_DATA=0
 TEMP_DIR="${TMPDIR:-/tmp}"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
 if [[ "${1:-}" == "--delete-data" ]]; then
   DELETE_DATA=1
@@ -50,6 +51,22 @@ safe_remove() {
       ;;
   esac
 }
+
+uninstall_agent_hooks() {
+  local cli
+  for cli in \
+    "/opt/homebrew/bin/1context" \
+    "/usr/local/bin/1context" \
+    "/Applications/1Context.app/Contents/MacOS/1context-cli" \
+    "$SCRIPT_DIR/../bin/1context"; do
+    if [[ -x "$cli" ]]; then
+      ONECONTEXT_AGENT_ALLOW_ENV_OVERRIDES=0 "$cli" agent integrations uninstall >/dev/null 2>&1 || true
+      return
+    fi
+  done
+}
+
+uninstall_agent_hooks
 
 for label in "$MENU_LABEL" "$RUNTIME_LABEL"; do
   plist="$HOME/Library/LaunchAgents/$label.plist"

@@ -399,10 +399,12 @@ struct OneContextCLI {
     }
 
     let input = FileHandle.standardInput.readDataToEndOfFile()
-    let paths = RuntimePaths.current()
+    let agentEnvironment = oneContextAgentRuntimeEnvironment()
+    let paths = RuntimePaths.current(environment: agentEnvironment)
     let executor = AgentHookExecutor(
-      paths: .current(),
-      userContentDirectory: paths.userContentDirectory
+      paths: AgentPaths.current(environment: agentEnvironment),
+      userContentDirectory: paths.userContentDirectory,
+      environment: agentEnvironment
     )
     let output = executor.execute(provider: provider, event: event, inputData: input)
     let encoder = JSONEncoder()
@@ -421,7 +423,11 @@ struct OneContextCLI {
     }
 
     let input = FileHandle.standardInput.readDataToEndOfFile()
-    let output = AgentStatusLineRenderer().render(provider: provider, inputData: input)
+    let agentEnvironment = oneContextAgentRuntimeEnvironment()
+    let output = AgentStatusLineRenderer(
+      paths: AgentPaths.current(environment: agentEnvironment),
+      environment: agentEnvironment
+    ).render(provider: provider, inputData: input)
     print(output)
   }
 
@@ -431,8 +437,11 @@ struct OneContextCLI {
     }
 
     let manager = AgentIntegrationManager(
+      paths: AgentPaths.current(environment: oneContextAgentRuntimeEnvironment()),
       claudeSettingsPath: AgentIntegrationManager.defaultClaudeSettingsPath(),
-      executablePath: currentExecutablePath() ?? CommandLine.arguments[0]
+      executablePath: AgentIntegrationManager.preferredExecutablePath(
+        currentExecutablePath: currentExecutablePath() ?? CommandLine.arguments[0]
+      )
     )
 
     let report: AgentIntegrationsReport
