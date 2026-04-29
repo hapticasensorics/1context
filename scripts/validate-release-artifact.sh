@@ -17,7 +17,7 @@ trap cleanup EXIT
 LISTING="$TMPDIR/listing.txt"
 tar -tvzf "$ARCHIVE" > "$LISTING"
 MANIFEST="$TMPDIR/manifest.txt"
-tar -tzf "$ARCHIVE" | sort > "$MANIFEST"
+tar -tzf "$ARCHIVE" | LC_ALL=C sort > "$MANIFEST"
 
 archive_name="$(basename "$ARCHIVE")"
 if [[ ! "$archive_name" =~ ^1context-([0-9]+\.[0-9]+\.[0-9]+)-macos-(arm64)\.tar\.gz$ ]]; then
@@ -49,6 +49,7 @@ $ROOT_NAME/scripts/
 $ROOT_NAME/scripts/install-macos-launch-agents.sh
 $ROOT_NAME/scripts/uninstall-macos-launch-agents.sh
 EOF
+LC_ALL=C sort -o "$EXPECTED_MANIFEST" "$EXPECTED_MANIFEST"
 
 if ! diff -u "$EXPECTED_MANIFEST" "$MANIFEST"; then
   echo "Release archive manifest does not match expected contents." >&2
