@@ -1,7 +1,8 @@
-# 1Context v0.1.40 Public Preview
+# 1Context v0.1.41 Public Preview
 
 This release includes:
 
+- version-only release to validate the fixed `0.1.40` GUI updater path
 - version-only release to validate the fixed `0.1.39` GUI updater path
 - Terminal updater now forces zsh instead of relying on the user's default shell
 - menu relaunch waits for the old menu process/lock to clear before bootstrapping
