@@ -36,4 +36,11 @@ final class VersionTests: XCTestCase {
     XCTAssertEqual(decoded.health?.version, "0.1.25")
     XCTAssertEqual(decoded.recommendedAction, "Restart 1Context")
   }
+
+  func testHomebrewUpdateCommandUsesNarrowTapRefresh() {
+    XCTAssertTrue(oneContextHomebrewUpdateCommand.contains("brew --repo hapticasensorics/tap"))
+    XCTAssertTrue(oneContextHomebrewUpdateCommand.contains("git -C \"$tap_repo\" fetch --quiet --no-tags origin main:refs/remotes/origin/main"))
+    XCTAssertTrue(oneContextHomebrewUpdateCommand.contains("HOMEBREW_NO_AUTO_UPDATE=1 HOMEBREW_NO_INSTALL_CLEANUP=1 brew upgrade --cask hapticasensorics/tap/1context"))
+    XCTAssertFalse(oneContextHomebrewUpdateCommand.contains("brew update &&"))
+  }
 }
