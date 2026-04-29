@@ -1,4 +1,4 @@
-# 1Context v0.1.11 Public Preview
+# 1Context v0.1.12 Public Preview
 
 This release includes:
 

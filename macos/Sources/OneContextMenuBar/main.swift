@@ -71,16 +71,17 @@ private final class AppDelegate: NSObject, NSApplicationDelegate {
     versionItem.isEnabled = false
     settingsMenu.addItem(versionItem)
     settingsMenu.addItem(NSMenuItem(title: "About 1Context", action: #selector(showAbout), keyEquivalent: ""))
+    settingsItem.submenu = settingsMenu
+    menu.addItem(settingsItem)
+
     switch updateState {
     case .upToDate:
       let updateItem = NSMenuItem(title: "Up to Date", action: nil, keyEquivalent: "")
       updateItem.isEnabled = false
-      settingsMenu.addItem(updateItem)
+      menu.addItem(updateItem)
     case .available:
-      settingsMenu.addItem(NSMenuItem(title: "Update 1Context...", action: #selector(openUpgradeCommand), keyEquivalent: ""))
+      menu.addItem(NSMenuItem(title: "Update 1Context...", action: #selector(openUpgradeCommand), keyEquivalent: ""))
     }
-    settingsItem.submenu = settingsMenu
-    menu.addItem(settingsItem)
 
     menu.addItem(NSMenuItem(title: "Quit", action: #selector(quit), keyEquivalent: "q"))
     menu.items.forEach { $0.target = self }
@@ -198,12 +199,7 @@ private final class AppDelegate: NSObject, NSApplicationDelegate {
   }
 
   @objc private func showAbout() {
-    NSApp.orderFrontStandardAboutPanel(options: [
-      .applicationName: "1Context",
-      .applicationVersion: currentVersion,
-      .version: currentVersion,
-      .credits: NSAttributedString(string: "Own your context.")
-    ])
+    NSWorkspace.shared.open(oneContextGitHubURL)
   }
 
   @objc private func quit() {
