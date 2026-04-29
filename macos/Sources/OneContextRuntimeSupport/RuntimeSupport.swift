@@ -63,10 +63,10 @@ public struct RuntimePaths {
       desiredStatePath: appSupport.appendingPathComponent("desired-state").path,
       socketPath: environment["ONECONTEXT_SOCKET_PATH"]
         ?? runDirectory.appendingPathComponent("1context.sock").path,
-      pidPath: runDirectory.appendingPathComponent("onecontextd.pid").path,
+      pidPath: runDirectory.appendingPathComponent("1contextd.pid").path,
       logDirectory: logDirectory,
       logPath: environment["ONECONTEXT_LOG_PATH"]
-        ?? logDirectory.appendingPathComponent("onecontextd.log").path,
+        ?? logDirectory.appendingPathComponent("1contextd.log").path,
       cacheDirectory: cacheDirectory,
       renderCacheDirectory: cacheDirectory.appendingPathComponent("render-cache", isDirectory: true),
       downloadCacheDirectory: cacheDirectory.appendingPathComponent("download-cache", isDirectory: true),
@@ -801,9 +801,9 @@ public final class RuntimeController {
     let fm = FileManager.default
     let executableDirectory = currentExecutableURL()?.deletingLastPathComponent()
     var candidates: [String] = [
-      Bundle.main.bundleURL.deletingLastPathComponent().appendingPathComponent("onecontextd").path,
-      executableDirectory?.appendingPathComponent("onecontextd").path,
-      URL(fileURLWithPath: "/Applications/1Context.app/Contents/MacOS/onecontextd").path
+      Bundle.main.bundleURL.deletingLastPathComponent().appendingPathComponent("1contextd").path,
+      executableDirectory?.appendingPathComponent("1contextd").path,
+      URL(fileURLWithPath: "/Applications/1Context.app/Contents/MacOS/1contextd").path
     ].compactMap { $0 }
 
     if environment["ONECONTEXT_ALLOW_DAEMON_OVERRIDE"] == "1",

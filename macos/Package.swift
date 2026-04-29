@@ -9,7 +9,7 @@ let package = Package(
   ],
   products: [
     .executable(name: "1context", targets: ["OneContextCLI"]),
-    .executable(name: "onecontextd", targets: ["OneContextDaemon"]),
+    .executable(name: "1contextd", targets: ["OneContextDaemon"]),
     .executable(name: "OneContextMenuBar", targets: ["OneContextMenuBar"])
   ],
   targets: [

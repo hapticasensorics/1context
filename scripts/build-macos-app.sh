@@ -19,7 +19,7 @@ mkdir -p "$MACOS_APP_DIR" "$RESOURCES_DIR"
 
 cp "$BIN_DIR/OneContextMenuBar" "$MACOS_APP_DIR/1Context"
 cp "$BIN_DIR/1context" "$MACOS_APP_DIR/1context-cli"
-cp "$BIN_DIR/onecontextd" "$MACOS_APP_DIR/onecontextd"
+cp "$BIN_DIR/1contextd" "$MACOS_APP_DIR/1contextd"
 cp "$MACOS_DIR/Sources/OneContextMenuBar/Resources/MenuBarIcon.png" "$RESOURCES_DIR/MenuBarIcon.png"
 
 cat > "$CONTENTS_DIR/Info.plist" <<PLIST
@@ -63,7 +63,7 @@ if command -v codesign >/dev/null 2>&1 && security find-identity -v -p codesigni
     --timestamp \
     --entitlements "$MACOS_DIR/entitlements.plist" \
     --sign "$IDENTITY" \
-    "$MACOS_APP_DIR/onecontextd" >/dev/null
+    "$MACOS_APP_DIR/1contextd" >/dev/null
   codesign \
     --force \
     --options runtime \
