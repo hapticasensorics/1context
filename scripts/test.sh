@@ -30,6 +30,7 @@ export ONECONTEXT_UPDATE_STATE_DIR="$STATE_DIR/Application Support/1Context/upda
 export ONECONTEXT_NO_UPDATE_CHECK=1
 
 "$ROOT/scripts/check-version-consistency.sh"
+"$ROOT/scripts/test-menu-lifecycle-deterministic.sh"
 "$BIN_DIR/1context" | grep -q "1Context $VERSION"
 test "$("$BIN_DIR/1context" --version)" = "$VERSION"
 "$BIN_DIR/1context" --help | grep -q "1context status"
@@ -71,6 +72,7 @@ test "$(stat -f "%Lp" "$ONECONTEXT_LOG_DIR/1contextd.log")" = "600"
 "$BIN_DIR/1context" logs | grep -q "1Context Logs"
 "$BIN_DIR/1context" restart --debug | grep -q "Completed in"
 "$BIN_DIR/1context" stop | grep -q "1Context is stopped"
+test "$(tr -d '[:space:]' < "$ONECONTEXT_APP_SUPPORT_DIR/desired-state")" = "stopped"
 if "$BIN_DIR/1context" status >"$STATE_DIR/status-down-again.out" 2>&1; then
   echo "status should fail after 1Context stops" >&2
   exit 1

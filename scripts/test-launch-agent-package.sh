@@ -24,6 +24,15 @@ ARCH="${ONECONTEXT_ARCH:-arm64}"
 ARCHIVE="$ROOT/dist/1context-$VERSION-macos-$ARCH.tar.gz"
 WORK_DIR="$(mktemp -d /tmp/1ctx-launch-agent-pkg-XXXXXX)"
 STATE_DIR="$(mktemp -d /tmp/1ctx-launch-agent-state-XXXXXX)"
+CANONICAL_APP_SUPPORT="$HOME/Library/Application Support/1Context"
+CANONICAL_DESIRED_STATE="$CANONICAL_APP_SUPPORT/desired-state"
+CANONICAL_DESIRED_STATE_BACKUP="$STATE_DIR/canonical-desired-state.backup"
+CANONICAL_DESIRED_STATE_EXISTED=0
+
+if [[ -f "$CANONICAL_DESIRED_STATE" ]]; then
+  cp "$CANONICAL_DESIRED_STATE" "$CANONICAL_DESIRED_STATE_BACKUP"
+  CANONICAL_DESIRED_STATE_EXISTED=1
+fi
 
 cleanup() {
   set +e
@@ -37,6 +46,12 @@ cleanup() {
   for label in com.haptica.1context.menu com.haptica.1context; do
     launchctl bootout "gui/$(id -u)/$label" >/dev/null 2>&1
   done
+  if [[ "$CANONICAL_DESIRED_STATE_EXISTED" == "1" ]]; then
+    mkdir -p "$CANONICAL_APP_SUPPORT"
+    cp "$CANONICAL_DESIRED_STATE_BACKUP" "$CANONICAL_DESIRED_STATE"
+  else
+    rm -f "$CANONICAL_DESIRED_STATE"
+  fi
   rm -rf "$WORK_DIR" "$STATE_DIR"
 }
 trap cleanup EXIT
@@ -60,6 +75,8 @@ export ONECONTEXT_UPDATE_STATE_DIR="$STATE_DIR/Application Support/1Context/upda
 export ONECONTEXT_NO_UPDATE_CHECK=1
 export ONECONTEXT_PERSIST_ENV_PATH_OVERRIDES=1
 
+mkdir -p "$CANONICAL_APP_SUPPORT"
+printf 'running\n' > "$CANONICAL_DESIRED_STATE"
 "$PACKAGE_DIR/scripts/install-macos-launch-agents.sh" "$APP_PATH" "$CLI_PATH"
 
 launchctl print "gui/$(id -u)/$RUNTIME_LABEL" >/dev/null
@@ -88,6 +105,23 @@ fi
 
 if launchctl print "gui/$(id -u)/$MENU_LABEL" >/dev/null 2>&1; then
   echo "Menu LaunchAgent still loaded after uninstall." >&2
+  exit 1
+fi
+
+printf 'stopped\n' > "$CANONICAL_DESIRED_STATE"
+"$PACKAGE_DIR/scripts/install-macos-launch-agents.sh" "$APP_PATH" "$CLI_PATH"
+
+launchctl print "gui/$(id -u)/$MENU_LABEL" >/dev/null
+
+if launchctl print "gui/$(id -u)/$RUNTIME_LABEL" >/dev/null 2>&1; then
+  echo "Runtime LaunchAgent should not start when desired-state is stopped." >&2
+  exit 1
+fi
+
+"$PACKAGE_DIR/scripts/uninstall-macos-launch-agents.sh"
+
+if launchctl print "gui/$(id -u)/$MENU_LABEL" >/dev/null 2>&1; then
+  echo "Menu LaunchAgent still loaded after stopped-state uninstall." >&2
   exit 1
 fi
 
