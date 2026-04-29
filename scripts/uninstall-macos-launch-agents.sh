@@ -60,7 +60,8 @@ uninstall_agent_hooks() {
     "/Applications/1Context.app/Contents/MacOS/1context-cli" \
     "$SCRIPT_DIR/../bin/1context"; do
     if [[ -x "$cli" ]]; then
-      ONECONTEXT_AGENT_ALLOW_ENV_OVERRIDES=0 "$cli" agent integrations uninstall >/dev/null 2>&1 || true
+      ONECONTEXT_AGENT_ALLOW_ENV_OVERRIDES="${ONECONTEXT_AGENT_ALLOW_ENV_OVERRIDES:-0}" \
+        "$cli" agent integrations uninstall >/dev/null 2>&1 || true
       return
     fi
   done

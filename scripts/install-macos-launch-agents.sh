@@ -59,6 +59,15 @@ wait_for_old_menu() {
   return 1
 }
 
+install_agent_hooks() {
+  if "$CLI_PATH" agent integrations install >/dev/null 2>&1; then
+    return 0
+  fi
+
+  echo "1Context installed, but Claude hook setup needs attention. Run '1context agent integrations status'." >&2
+  return 0
+}
+
 mkdir -p "$HOME/Library/LaunchAgents"
 mkdir -p "$HOME/Library/Logs/1Context"
 chmod 700 "$HOME/Library/Logs/1Context"
@@ -96,6 +105,7 @@ cat > "$PLIST" <<PLIST
 PLIST
 
 launchctl bootstrap "gui/$(id -u)" "$PLIST" >/dev/null
+install_agent_hooks
 
 if [[ -f "$DESIRED_STATE" ]] && [[ "$(tr -d '[:space:]' < "$DESIRED_STATE")" == "stopped" ]]; then
   exit 0

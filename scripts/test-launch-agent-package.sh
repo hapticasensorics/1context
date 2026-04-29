@@ -110,10 +110,15 @@ export ONECONTEXT_CACHE_DIR="$STATE_DIR/Caches/1Context"
 export ONECONTEXT_UPDATE_STATE_DIR="$STATE_DIR/Application Support/1Context/update"
 export ONECONTEXT_NO_UPDATE_CHECK=1
 export ONECONTEXT_PERSIST_ENV_PATH_OVERRIDES=1
+export ONECONTEXT_AGENT_ALLOW_ENV_OVERRIDES=1
+export ONECONTEXT_CLAUDE_SETTINGS_PATH="$STATE_DIR/.claude/settings.json"
 
 mkdir -p "$CANONICAL_APP_SUPPORT"
 printf 'running\n' > "$CANONICAL_DESIRED_STATE"
 "$PACKAGE_DIR/scripts/install-macos-launch-agents.sh" "$APP_PATH" "$CLI_PATH"
+
+grep -q "agent hook --provider claude --event SessionStart" "$ONECONTEXT_CLAUDE_SETTINGS_PATH"
+grep -q "/opt/homebrew/bin/1context\\|/usr/local/bin/1context\\|1context-cli" "$ONECONTEXT_CLAUDE_SETTINGS_PATH"
 
 launchctl print "gui/$(id -u)/$RUNTIME_LABEL" >/dev/null
 launchctl print "gui/$(id -u)/$MENU_LABEL" >/dev/null
@@ -135,6 +140,11 @@ test "$(plutil -extract ProgramArguments.0 raw "$MENU_PLIST")" = "$APP_PATH/Cont
 
 "$PACKAGE_DIR/scripts/uninstall-macos-launch-agents.sh"
 
+if grep -q "agent hook --provider claude" "$ONECONTEXT_CLAUDE_SETTINGS_PATH" 2>/dev/null; then
+  echo "Claude hook remained after package uninstall." >&2
+  exit 1
+fi
+
 if launchctl print "gui/$(id -u)/$RUNTIME_LABEL" >/dev/null 2>&1; then
   echo "Runtime LaunchAgent still loaded after uninstall." >&2
   exit 1
@@ -148,6 +158,8 @@ fi
 printf 'stopped\n' > "$CANONICAL_DESIRED_STATE"
 "$PACKAGE_DIR/scripts/install-macos-launch-agents.sh" "$APP_PATH" "$CLI_PATH"
 
+grep -q "agent hook --provider claude --event SessionStart" "$ONECONTEXT_CLAUDE_SETTINGS_PATH"
+
 launchctl print "gui/$(id -u)/$MENU_LABEL" >/dev/null
 
 if launchctl print "gui/$(id -u)/$RUNTIME_LABEL" >/dev/null 2>&1; then
@@ -156,6 +168,11 @@ if launchctl print "gui/$(id -u)/$RUNTIME_LABEL" >/dev/null 2>&1; then
 fi
 
 "$PACKAGE_DIR/scripts/uninstall-macos-launch-agents.sh"
+
+if grep -q "agent hook --provider claude" "$ONECONTEXT_CLAUDE_SETTINGS_PATH" 2>/dev/null; then
+  echo "Claude hook remained after stopped-state package uninstall." >&2
+  exit 1
+fi
 
 if launchctl print "gui/$(id -u)/$MENU_LABEL" >/dev/null 2>&1; then
   echo "Menu LaunchAgent still loaded after stopped-state uninstall." >&2
