@@ -10,7 +10,37 @@ prompts, no workflow changes.
 ## Install
 
 ```bash
-brew install hapticasensorics/tap/1context
+brew install --cask hapticasensorics/tap/1context
+```
+
+## macOS Launch Spine
+
+This repository includes the public macOS runtime and menu bar prototype:
+
+```bash
+./scripts/test.sh
+```
+
+Runtime commands use product language:
+
+```bash
+1context start
+1context status
+1context restart
+1context stop
+```
+
+The menu bar prototype can be packaged locally with:
+
+```bash
+NOTARIZE=1 ./scripts/package-macos-release.sh
+```
+
+Developer ID signing is enabled when the signing identity is present. To notarize
+the built app, first configure a `notarytool` keychain profile, then run:
+
+```bash
+NOTARYTOOL_PROFILE=1context-notary ./scripts/notarize-macos-app.sh
 ```
 
 ## Thanks
