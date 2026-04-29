@@ -1,9 +1,36 @@
 import AppKit
+import Darwin
 import Foundation
 import OneContextRuntimeSupport
 
 private enum Constants {
   static let appName = "1Context"
+}
+
+nonisolated(unsafe) private var menuInstanceLockFD: Int32 = -1
+
+private func acquireMenuInstanceLock() -> Bool {
+  let paths = RuntimePaths.current()
+  try? RuntimePermissions.ensurePrivateDirectory(paths.appSupportDirectory)
+  try? RuntimePermissions.ensurePrivateDirectory(paths.runDirectory)
+
+  let lockPath = paths.runDirectory.appendingPathComponent("1context-menu.lock").path
+  let fd = open(lockPath, O_CREAT | O_RDWR, S_IRUSR | S_IWUSR)
+  guard fd >= 0 else { return true }
+
+  if flock(fd, LOCK_EX | LOCK_NB) != 0 {
+    close(fd)
+    return false
+  }
+
+  ftruncate(fd, 0)
+  let pid = "\(getpid())\n"
+  _ = pid.withCString { pointer in
+    write(fd, pointer, strlen(pointer))
+  }
+  RuntimePermissions.ensurePrivateFile(lockPath)
+  menuInstanceLockFD = fd
+  return true
 }
 
 @MainActor
@@ -41,6 +68,9 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
   private var updateState: UpdateState = .upToDate
   private var isCheckingForUpdates = false
   private var isRepairingRuntime = false
+  private var isMenuOpen = false
+  private var pendingRuntimeState: RuntimeState?
+  private var pendingUpdateState: UpdateState?
   private let menu = NSMenu()
   private let stateItem = NSMenuItem(title: RuntimeState.checking.title, action: nil, keyEquivalent: "")
   private let settingsItem = NSMenuItem(title: "Settings", action: nil, keyEquivalent: "")
@@ -123,17 +153,39 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
 
   private func setRuntimeState(_ newValue: RuntimeState) {
     guard runtimeState != newValue else { return }
+    if isMenuOpen {
+      pendingRuntimeState = newValue
+      return
+    }
     runtimeState = newValue
     refreshMenuItems()
   }
 
   private func setUpdateState(_ newValue: UpdateState) {
     guard updateState != newValue else { return }
+    if isMenuOpen {
+      pendingUpdateState = newValue
+      return
+    }
     updateState = newValue
     refreshMenuItems()
   }
 
   func menuWillOpen(_ menu: NSMenu) {
+    isMenuOpen = true
+  }
+
+  func menuDidClose(_ menu: NSMenu) {
+    isMenuOpen = false
+    if let pendingRuntimeState {
+      runtimeState = pendingRuntimeState
+      self.pendingRuntimeState = nil
+    }
+    if let pendingUpdateState {
+      updateState = pendingUpdateState
+      self.pendingUpdateState = nil
+    }
+    refreshMenuItems()
     ensureRuntimeRunning(userInitiated: false)
   }
 
@@ -351,6 +403,10 @@ if CommandLine.arguments.contains("--update-success-alert") {
   _ = NSApplication.shared
   NSApp.setActivationPolicy(.accessory)
   showFishAlert("1Context updated.")
+  Foundation.exit(0)
+}
+
+guard acquireMenuInstanceLock() else {
   Foundation.exit(0)
 }
 

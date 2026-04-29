@@ -37,6 +37,8 @@ chmod 700 "$HOME/Library/Logs/1Context"
 touch "$MENU_LOG"
 chmod 600 "$MENU_LOG"
 
+osascript -e 'tell application id "com.haptica.1context.menu" to quit' >/dev/null 2>&1 || true
+
 cat > "$PLIST" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
