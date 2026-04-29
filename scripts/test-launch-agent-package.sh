@@ -53,7 +53,17 @@ export ONECONTEXT_PERSIST_ENV_PATH_OVERRIDES=1
 
 launchctl print "gui/$(id -u)/$RUNTIME_LABEL" >/dev/null
 launchctl print "gui/$(id -u)/$MENU_LABEL" >/dev/null
-"$CLI_PATH" status --debug | grep -q "Socket: responding"
+
+for attempt in {1..20}; do
+  if "$CLI_PATH" status --debug 2>/tmp/1ctx-launch-agent-status.log | grep -q "Socket: responding"; then
+    break
+  fi
+  if [[ "$attempt" == "20" ]]; then
+    cat /tmp/1ctx-launch-agent-status.log >&2
+    exit 1
+  fi
+  sleep 0.25
+done
 
 test "$(plutil -extract ProgramArguments.0 raw "$RUNTIME_PLIST")" = "$APP_PATH/Contents/MacOS/1contextd"
 test "$(plutil -extract ProgramArguments.0 raw "$MENU_PLIST")" = "$APP_PATH/Contents/MacOS/1Context"
