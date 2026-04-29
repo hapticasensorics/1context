@@ -54,4 +54,4 @@ launchctl bootout "gui/$(id -u)" "$PLIST" >/dev/null 2>&1 || true
 launchctl bootstrap "gui/$(id -u)" "$PLIST" >/dev/null
 launchctl kickstart -k "gui/$(id -u)/$LABEL" >/dev/null
 
-"$CLI_PATH" restart >/dev/null || "$CLI_PATH" start >/dev/null || true
+"$CLI_PATH" start >/dev/null 2>&1 || true
