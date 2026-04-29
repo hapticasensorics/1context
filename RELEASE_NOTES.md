@@ -1,7 +1,8 @@
-# 1Context v0.1.44 Public Preview
+# 1Context v0.1.45 Public Preview
 
 This release includes:
 
+- throttled menu runtime refreshes so menu open/close stays responsive during long-running sessions
 - automatically installs the managed Claude `SessionStart` hook during setup/update
 - package smoke coverage for Claude hook install/uninstall behavior
 - memory-core adapter boundary hardening
