@@ -181,7 +181,7 @@ public final class UnixJSONRPCClient {
   }
 }
 
-public struct ReleaseInfo {
+public struct ReleaseInfo: Sendable {
   public let version: String
   public let notesURL: URL?
   public let installCommand: String
@@ -193,7 +193,7 @@ public struct ReleaseInfo {
   }
 }
 
-public struct UpdateCheckResult {
+public struct UpdateCheckResult: Sendable {
   public let latest: ReleaseInfo?
   public let updateAvailable: Bool
   public let checked: Bool
