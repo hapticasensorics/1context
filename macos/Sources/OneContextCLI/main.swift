@@ -177,12 +177,21 @@ struct OneContextCLI {
     let controller = RuntimeController()
     switch controller.status() {
     case .success(let health):
+      let menuStatus = launchAgentSummary(label: LaunchAgentManager.menuLabel)
       print("""
       1Context is running.
 
       Version: \(health.version)
       Health: OK
+      Menu Bar: \(menuStatus.userFacingStatus)
       """)
+      if !menuStatus.running {
+        print("""
+
+        Start the menu bar with:
+          1context start
+        """)
+      }
       if debug { await printDebug(controller: controller, error: nil) }
     case .failure(let error):
       FileHandle.standardError.write(Data("""
@@ -271,6 +280,18 @@ struct OneContextCLI {
     print("    Minimum Runtime: \(loadedFields["minimum runtime"] ?? "missing")")
     print("    Last Exit Code: \(loadedFields["last exit code"] ?? "missing")")
     print("    Last Signal: \(loadedFields["last terminating signal"] ?? "missing")")
+  }
+
+  static func launchAgentSummary(label: String) -> (loaded: Bool, running: Bool, userFacingStatus: String) {
+    guard let output = launchctlPrint(label: label) else {
+      return (false, false, "not loaded")
+    }
+    let fields = launchctlFields(output)
+    if let pid = fields["pid"], !pid.isEmpty {
+      return (true, true, "running")
+    }
+    let state = fields["state"] ?? "loaded"
+    return (true, false, "\(state), no process")
   }
 
   static func launchctlPrint(label: String) -> String? {

@@ -359,7 +359,16 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
   @objc private func quit() {
     timer?.invalidate()
     timer = nil
-    NSApp.terminate(nil)
+    Task.detached {
+      let process = Process()
+      process.executableURL = URL(fileURLWithPath: "/bin/launchctl")
+      process.arguments = ["bootout", "gui/\(getuid())/\(LaunchAgentManager.menuLabel)"]
+      try? process.run()
+      process.waitUntilExit()
+      await MainActor.run {
+        NSApp.terminate(nil)
+      }
+    }
   }
 
   private func runUpdateCommandInTerminal() {
