@@ -419,8 +419,8 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
 
   private func confirmUpdate() -> Bool {
     let alert = NSAlert()
-    alert.messageText = "Update 1Context with Homebrew?"
-    alert.informativeText = "This may ask for your Mac password."
+    alert.messageText = "Update 1Context?"
+    alert.informativeText = "A Terminal window will open and run Homebrew. If macOS asks for your password, Terminal will hide password characters."
     alert.icon = loadFishAlertIcon()
     alert.addButton(withTitle: "Update")
     alert.addButton(withTitle: "Cancel")
@@ -465,12 +465,11 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
     set -euo pipefail
     trap 'rm -f "$0"' EXIT
 
-    printf '%s\\n' 'Updating 1Context with Homebrew.'
-    printf '%s\\n\\n' 'If macOS asks for your password, type it here. Terminal will not show password characters.'
+    printf '%s\\n' 'Updating 1Context...'
+    printf '%s\\n\\n' 'If prompted, enter your Mac password. Terminal will hide password characters.'
     if \(shellQuote(cliExecutable)) update; then
       \(shellQuote(alertExecutable)) --update-success-alert >/dev/null 2>&1 || osascript -e 'display dialog "1Context updated." buttons {"OK"} default button "OK"'
-      printf '\\n%s\\n' 'Done. This window will close in 3 seconds.'
-      sleep 3
+      printf '\\n%s\\n' 'Done.'
       exit 0
     else
       status=$?

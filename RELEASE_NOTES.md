@@ -1,7 +1,9 @@
-# 1Context v0.1.41 Public Preview
+# 1Context v0.1.42 Public Preview
 
 This release includes:
 
+- GUI updater now launches a short temp zsh script instead of a fragile quoted command
+- cleaner updater Terminal copy and completion text
 - version-only release to validate the fixed `0.1.40` GUI updater path
 - version-only release to validate the fixed `0.1.39` GUI updater path
 - Terminal updater now forces zsh instead of relying on the user's default shell
