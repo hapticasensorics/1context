@@ -31,6 +31,10 @@ let package = Package(
       dependencies: ["OneContextCore", "OneContextPlatform"]
     ),
     .target(
+      name: "OneContextMemoryCore",
+      dependencies: ["OneContextCore", "OneContextPlatform"]
+    ),
+    .target(
       name: "OneContextSupervisor",
       dependencies: ["OneContextCore", "OneContextPlatform", "OneContextProtocol"]
     ),
@@ -46,7 +50,7 @@ let package = Package(
     ),
     .executableTarget(
       name: "OneContextCLI",
-      dependencies: ["OneContextRuntimeSupport", "OneContextAgent"]
+      dependencies: ["OneContextRuntimeSupport", "OneContextAgent", "OneContextMemoryCore"]
     ),
     .executableTarget(
       name: "OneContextDaemon",
@@ -76,6 +80,10 @@ let package = Package(
     .testTarget(
       name: "OneContextAgentTests",
       dependencies: ["OneContextAgent"]
+    ),
+    .testTarget(
+      name: "OneContextMemoryCoreTests",
+      dependencies: ["OneContextMemoryCore"]
     )
   ]
 )

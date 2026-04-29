@@ -34,6 +34,17 @@ sockets:     0600
 
 This includes config, update state, sockets, pid files, queues, indexes, caches, and logs. The runtime should repair these permissions on startup.
 
+Memory-core adapter state lives under:
+
+```text
+~/Library/Application Support/1Context/memory-core/
+~/Library/Logs/1Context/memory-core.log
+```
+
+The adapter stores only configuration, state, and support logs. It does not
+bundle private memory logic, run implicitly during install, or scan files on its
+own. Configuring a memory core requires an explicit executable path.
+
 ### Installer Owns
 
 The installer owns placement and registration only:
@@ -55,6 +66,7 @@ Current public preview:
 - Starts a user LaunchAgent for the menu bar app and local runtime.
 - Checks GitHub Releases for updates using a non-cookie, nonpersistent session.
 - Can optionally install managed Claude Code settings in `~/.claude/settings.json`.
+- Can optionally configure an external memory-core executable under the public app support directory.
 - Does not upload project data.
 - Does not request Screen Recording, Accessibility, Microphone, Calendar, Contacts, or broad file permissions.
 
@@ -111,6 +123,8 @@ Diagnostics            user-initiated support flow
 - Do not persist dev environment overrides into release LaunchAgents.
 - Make install/start failures visible.
 - Redact user home paths in default diagnostic output.
+- Never run memory-core commands implicitly from install, diagnose, or lifecycle commands.
+- Keep memory-core subprocess calls explicit, allowlisted, timeout-bounded, and JSON-validated.
 
 ## Diagnostics
 

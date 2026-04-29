@@ -94,6 +94,25 @@ and repo-aware pointer when available. Prompt, tool, compact, and session-end
 hooks are implemented as safe no-ops but are not installed by default. Codex
 integration is status-only until its hook configuration is verified.
 
+## Memory Core Adapter
+
+The public macOS app can be configured to call an external memory-core
+executable through a narrow JSON subprocess boundary. This is the future bridge
+for the private memory engine; the public app does not bundle or copy that
+business logic.
+
+```bash
+1context memory-core status
+1context memory-core doctor
+1context memory-core configure --executable /path/to/memory-core
+1context memory-core run -- status --json
+1context memory-core configure --clear
+```
+
+The adapter is explicit and bounded: lifecycle commands do not depend on memory
+core, hooks do not run heavy memory work, and `run` only allows top-level
+`status`, `storage`, `wiki`, and `memory` commands.
+
 ## Development
 
 This repository includes the public macOS runtime and menu bar app:

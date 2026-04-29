@@ -1,6 +1,7 @@
 import Darwin
 import Foundation
 import OneContextAgent
+import OneContextMemoryCore
 import OneContextRuntimeSupport
 
 @main
@@ -43,6 +44,8 @@ struct OneContextCLI {
         try await update()
       case "agent":
         try agent()
+      case "memory-core":
+        try memoryCore()
       default:
         FileHandle.standardError.write(Data("Unknown command: \(command ?? "")\n".utf8))
         printHelp()
@@ -83,6 +86,7 @@ struct OneContextCLI {
       1context agent hook --provider claude --event <event>
       1context agent statusline --provider claude
       1context agent integrations <status|install|repair|uninstall>
+      1context memory-core <status|doctor|configure|run>
     """)
   }
 
@@ -286,6 +290,9 @@ struct OneContextCLI {
     print("  Latest Seen: \(updateState?["last_seen_latest"] as? String ?? "missing")")
     print("  Notes URL: \(updateState?["notes_url"] as? String ?? "missing")")
 
+    print("\nMemory Core:")
+    printMemoryCoreStatus(MemoryCoreAdapter().status(forceCheck: false), redact: redact)
+
     print("\nLogs:")
     printLogTail(title: "Runtime", path: paths.logPath, redact: redact)
     printLogTail(title: "Menu", path: paths.logDirectory.appendingPathComponent("menu.log").path, redact: redact)
@@ -459,6 +466,69 @@ struct OneContextCLI {
     }
 
     print(manager.render(report))
+  }
+
+  static func memoryCore() throws {
+    guard args.count >= 2 else {
+      throw CLIError.commandFailed("memory-core requires a subcommand")
+    }
+
+    let adapter = MemoryCoreAdapter()
+    switch args[1] {
+    case "status":
+      guard args.count == 2 else { throw CLIError.commandFailed("Usage: 1context memory-core status") }
+      print("Memory Core\n")
+      printMemoryCoreStatus(adapter.status(forceCheck: true), redact: false)
+    case "doctor":
+      guard args.count == 2 else { throw CLIError.commandFailed("Usage: 1context memory-core doctor") }
+      print("Memory Core Doctor\n")
+      printMemoryCoreStatus(adapter.doctor(), redact: false)
+    case "configure":
+      try memoryCoreConfigure(adapter: adapter)
+    case "run":
+      try memoryCoreRun(adapter: adapter)
+    default:
+      throw CLIError.commandFailed("Unknown memory-core subcommand: \(args[1])")
+    }
+  }
+
+  static func memoryCoreConfigure(adapter: MemoryCoreAdapter) throws {
+    let values = Array(args.dropFirst(2))
+    if values == ["--clear"] {
+      printMemoryCoreStatus(try adapter.clear(), redact: false)
+      return
+    }
+    let executable = try optionValue("--executable", in: values)
+    try rejectUnknownAgentOptions(values, allowed: ["--executable"])
+    printMemoryCoreStatus(try adapter.configure(executable: executable), redact: false)
+  }
+
+  static func memoryCoreRun(adapter: MemoryCoreAdapter) throws {
+    guard args.count >= 4, args[2] == "--" else {
+      throw CLIError.commandFailed("Usage: 1context memory-core run -- <memory-core args...>")
+    }
+    let runArgs = Array(args.dropFirst(3))
+    let result = try adapter.run(arguments: runArgs)
+    print(result.stdout, terminator: result.stdout.hasSuffix("\n") ? "" : "\n")
+    if !result.stderr.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+      FileHandle.standardError.write(Data(result.stderr.utf8))
+    }
+  }
+
+  static func printMemoryCoreStatus(_ status: MemoryCoreStatus, redact: Bool) {
+    print("  Configured: \(status.configured ? "yes" : "no")")
+    print("  Enabled: \(status.enabled ? "yes" : "no")")
+    print("  Executable: \(status.executable.map { displayPath($0, redact: redact) } ?? "missing")")
+    print("  Health: \(status.health.rawValue)")
+    print("  Config: \(displayPath(status.paths.configFile.path, redact: redact))")
+    print("  State: \(displayPath(status.paths.stateFile.path, redact: redact))")
+    print("  Log: \(displayPath(status.paths.logFile.path, redact: redact))")
+    if let lastCheckedAt = status.lastCheckedAt {
+      print("  Last Checked: \(ISO8601DateFormatter().string(from: lastCheckedAt))")
+    }
+    if let lastError = status.lastError {
+      print("  Last Error: \(displayPath(lastError, redact: redact))")
+    }
   }
 
   static func optionValue(_ name: String, in values: [String]) throws -> String {
