@@ -76,11 +76,9 @@ private final class AppDelegate: NSObject, NSApplicationDelegate {
 
     switch updateState {
     case .upToDate:
-      let updateItem = NSMenuItem(title: "Up to Date", action: nil, keyEquivalent: "")
-      updateItem.isEnabled = false
-      menu.addItem(updateItem)
+      menu.addItem(NSMenuItem(title: "Update", action: #selector(checkForUpdatesNow), keyEquivalent: ""))
     case .available:
-      menu.addItem(NSMenuItem(title: "Update 1Context...", action: #selector(openUpgradeCommand), keyEquivalent: ""))
+      menu.addItem(NSMenuItem(title: "Please Update", action: #selector(openUpgradeCommand), keyEquivalent: ""))
     }
 
     menu.addItem(NSMenuItem(title: "Quit", action: #selector(quit), keyEquivalent: "q"))
@@ -196,6 +194,52 @@ private final class AppDelegate: NSObject, NSApplicationDelegate {
 
   @objc private func openUpgradeCommand() {
     runInTerminal(oneContextHomebrewUpdateCommand)
+  }
+
+  @objc private func checkForUpdatesNow() {
+    guard !isCheckingForUpdates else { return }
+    isCheckingForUpdates = true
+
+    Task {
+      defer {
+        Task { @MainActor in
+          self.isCheckingForUpdates = false
+        }
+      }
+
+      do {
+        let result = try await UpdateChecker().check(force: true, currentVersion: currentVersion)
+        await MainActor.run {
+          self.updateState = result.updateAvailable ? .available : .upToDate
+          self.rebuildMenu()
+          if result.updateAvailable {
+            self.openUpgradeCommand()
+          } else {
+            self.showUpToDateMessage()
+          }
+        }
+      } catch {
+        await MainActor.run {
+          self.showUpdateCheckFailedMessage()
+        }
+      }
+    }
+  }
+
+  private func showUpToDateMessage() {
+    let alert = NSAlert()
+    alert.messageText = "1Context up to date."
+    alert.addButton(withTitle: "OK")
+    NSApp.activate(ignoringOtherApps: true)
+    alert.runModal()
+  }
+
+  private func showUpdateCheckFailedMessage() {
+    let alert = NSAlert()
+    alert.messageText = "Could not check for updates."
+    alert.addButton(withTitle: "OK")
+    NSApp.activate(ignoringOtherApps: true)
+    alert.runModal()
   }
 
   @objc private func showAbout() {

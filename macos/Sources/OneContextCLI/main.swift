@@ -23,6 +23,8 @@ struct OneContextCLI {
         try await restart()
       case "status":
         await status()
+      case "update":
+        try await update()
       default:
         FileHandle.standardError.write(Data("Unknown command: \(command ?? "")\n".utf8))
         printHelp()
@@ -55,6 +57,7 @@ struct OneContextCLI {
       1context stop
       1context restart
       1context status [--debug]
+      1context update
     """)
   }
 
@@ -105,6 +108,20 @@ struct OneContextCLI {
     print("1Context is running.")
   }
 
+  static func update() async throws {
+    let result = try await UpdateChecker().check(force: true, currentVersion: oneContextVersion)
+    guard result.updateAvailable else {
+      print("1Context up to date.")
+      return
+    }
+
+    if let latest = result.latest {
+      print("1Context \(latest.version) is available. You have \(oneContextVersion).")
+    }
+    print("Updating 1Context...")
+    try runShell(oneContextHomebrewUpdateCommand)
+  }
+
   static func status() async {
     let debug = args.contains("--debug")
     let controller = RuntimeController()
@@ -125,6 +142,31 @@ struct OneContextCLI {
         1context start
       """)
       if debug { await printDebug(controller: controller, error: error) }
+    }
+  }
+
+  static func runShell(_ command: String) throws {
+    let process = Process()
+    process.executableURL = URL(fileURLWithPath: "/bin/zsh")
+    process.arguments = ["-lc", command]
+    process.standardOutput = FileHandle.standardOutput
+    process.standardError = FileHandle.standardError
+    try process.run()
+    process.waitUntilExit()
+
+    guard process.terminationStatus == 0 else {
+      throw CLIError.commandFailed(command)
+    }
+  }
+}
+
+enum CLIError: Error, LocalizedError {
+  case commandFailed(String)
+
+  var errorDescription: String? {
+    switch self {
+    case .commandFailed(let command):
+      return "Command failed: \(command)"
     }
   }
 }
