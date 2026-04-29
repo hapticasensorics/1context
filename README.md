@@ -110,8 +110,9 @@ business logic.
 ```
 
 The adapter is explicit and bounded: lifecycle commands do not depend on memory
-core, hooks do not run heavy memory work, and `run` only allows top-level
-`status`, `storage`, `wiki`, and `memory` commands.
+core, hooks do not run heavy memory work, and `run` only accepts documented JSON
+command shapes such as `status --json`, `wiki list --json`, and
+`memory tick --wiki-only --json`.
 
 See [docs/memory-core-contract.md](docs/memory-core-contract.md) for the
 subprocess contract and compatibility fixture.

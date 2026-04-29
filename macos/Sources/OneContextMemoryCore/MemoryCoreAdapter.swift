@@ -154,6 +154,7 @@ public enum MemoryCoreError: Error, LocalizedError, Equatable {
   case processFailed(String)
   case timeout(Double)
   case invalidJSON
+  case invalidContract(String)
 
   public var errorDescription: String? {
     switch self {
@@ -175,6 +176,8 @@ public enum MemoryCoreError: Error, LocalizedError, Equatable {
       return "Memory core process timed out after \(seconds)s"
     case .invalidJSON:
       return "Memory core returned invalid JSON"
+    case .invalidContract(let detail):
+      return detail.isEmpty ? "Memory core returned JSON outside the public contract" : detail
     }
   }
 }
@@ -209,7 +212,7 @@ public final class MemoryCoreAdapter {
     config.enabled = true
     config.executable = executable
     try writeConfig(config)
-    let status = self.status(forceCheck: false)
+    let status = self.status(forceCheck: true)
     try writeState(status: status)
     return status
   }
@@ -337,9 +340,7 @@ public final class MemoryCoreAdapter {
     guard let command = arguments.first else {
       throw MemoryCoreError.missingRunArguments
     }
-    guard config.allowedCommands.contains(command) else {
-      throw MemoryCoreError.commandNotAllowed(command)
-    }
+    try Self.validateCommandShape(arguments, allowedTopLevelCommands: config.allowedCommands)
 
     let result = try processRunner.run(
       executable: executable,
@@ -349,11 +350,15 @@ public final class MemoryCoreAdapter {
     )
     guard result.exitCode == 0 else {
       try? appendLog("run command=\(command) exit=\(result.exitCode)")
-      throw MemoryCoreError.processFailed(result.stderr.trimmingCharacters(in: .whitespacesAndNewlines))
+      throw MemoryCoreError.processFailed(Self.redactDiagnostic(result.stderr.trimmingCharacters(in: .whitespacesAndNewlines)))
     }
     guard Self.isJSON(result.stdout) else {
       try? appendLog("run command=\(command) invalid_json")
       throw MemoryCoreError.invalidJSON
+    }
+    try Self.validateContractJSON(result.stdout)
+    if !result.stderr.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+      try? appendLog("run command=\(command) stderr_bytes=\(result.stderr.utf8.count)")
     }
     try? appendLog("run command=\(command) exit=0")
     return result
@@ -390,6 +395,66 @@ public final class MemoryCoreAdapter {
     }
   }
 
+  public static func validateCommandShape(_ arguments: [String], allowedTopLevelCommands: [String]) throws {
+    guard let command = arguments.first else {
+      throw MemoryCoreError.missingRunArguments
+    }
+    guard allowedTopLevelCommands.contains(command) else {
+      throw MemoryCoreError.commandNotAllowed(command)
+    }
+
+    let allowedShapes: Set<[String]> = [
+      ["status", "--json"],
+      ["storage", "init", "--json"],
+      ["wiki", "list", "--json"],
+      ["wiki", "ensure", "--json"],
+      ["wiki", "render", "--json"],
+      ["wiki", "routes", "--json"],
+      ["memory", "tick", "--wiki-only", "--json"],
+      ["memory", "replay-dry-run", "--json"],
+      ["memory", "cycles", "list", "--json"],
+      ["memory", "cycles", "show", "--json"],
+      ["memory", "cycles", "validate", "--json"]
+    ]
+
+    guard allowedShapes.contains(arguments) else {
+      throw MemoryCoreError.commandNotAllowed(arguments.joined(separator: " "))
+    }
+  }
+
+  public static func validateContractJSON(_ text: String) throws {
+    guard let data = text.data(using: .utf8) else {
+      throw MemoryCoreError.invalidJSON
+    }
+    let object: Any
+    do {
+      object = try JSONSerialization.jsonObject(with: data)
+    } catch {
+      throw MemoryCoreError.invalidJSON
+    }
+    guard let payload = object as? [String: Any] else {
+      throw MemoryCoreError.invalidContract("Memory core JSON must be an object")
+    }
+    guard payload["status"] as? String == "ok" else {
+      throw MemoryCoreError.invalidContract("Memory core JSON must include status: ok")
+    }
+    guard let schemaVersion = payload["schema_version"] as? Int, schemaVersion >= 1 else {
+      throw MemoryCoreError.invalidContract("Memory core JSON must include schema_version")
+    }
+  }
+
+  public static func redactDiagnostic(_ text: String, limit: Int = 800) -> String {
+    var redacted = text
+    let home = FileManager.default.homeDirectoryForCurrentUser.path
+    redacted = redacted.replacingOccurrences(of: home, with: "~")
+    redacted = redacted.replacingOccurrences(of: NSTemporaryDirectory(), with: "$TMPDIR/")
+    if redacted.count > limit {
+      let index = redacted.index(redacted.startIndex, offsetBy: limit)
+      redacted = String(redacted[..<index]) + "... [truncated]"
+    }
+    return redacted
+  }
+
   private func probe(executable: String, timeout: Double) throws -> MemoryCoreRunResult {
     let status = try processRunner.run(
       executable: executable,
@@ -397,21 +462,11 @@ public final class MemoryCoreAdapter {
       stdinData: Data(),
       timeout: timeout
     )
-    if status.exitCode == 0, Self.isJSON(status.stdout) {
-      return status
+    guard status.exitCode == 0 else {
+      throw MemoryCoreError.processFailed(Self.redactDiagnostic(status.stderr.trimmingCharacters(in: .whitespacesAndNewlines)))
     }
-
-    let version = try processRunner.run(
-      executable: executable,
-      arguments: ["--version"],
-      stdinData: Data(),
-      timeout: timeout
-    )
-    if version.exitCode == 0, !version.stdout.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-      return version
-    }
-
-    throw MemoryCoreError.processFailed(status.stderr + version.stderr)
+    try Self.validateContractJSON(status.stdout)
+    return status
   }
 
   private func degraded(executable: String?, error: String) -> MemoryCoreStatus {
@@ -472,7 +527,11 @@ public protocol MemoryCoreProcessRunning: Sendable {
 }
 
 public struct MemoryCoreProcessRunner: MemoryCoreProcessRunning {
-  public init() {}
+  private let environment: [String: String]
+
+  public init(environment: [String: String] = ProcessInfo.processInfo.environment) {
+    self.environment = environment
+  }
 
   public func run(
     executable: String,
@@ -489,11 +548,14 @@ public struct MemoryCoreProcessRunner: MemoryCoreProcessRunning {
     let captureDirectory = URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
       .appendingPathComponent("1context-memory-core-\(UUID().uuidString)", isDirectory: true)
     try FileManager.default.createDirectory(at: captureDirectory, withIntermediateDirectories: true)
+    chmod(captureDirectory.path, RuntimePermissions.privateDirectoryMode)
     defer { try? FileManager.default.removeItem(at: captureDirectory) }
     let stdoutURL = captureDirectory.appendingPathComponent("stdout")
     let stderrURL = captureDirectory.appendingPathComponent("stderr")
     FileManager.default.createFile(atPath: stdoutURL.path, contents: nil)
     FileManager.default.createFile(atPath: stderrURL.path, contents: nil)
+    chmod(stdoutURL.path, RuntimePermissions.privateFileMode)
+    chmod(stderrURL.path, RuntimePermissions.privateFileMode)
     let stdoutHandle = try FileHandle(forWritingTo: stdoutURL)
     let stderrHandle = try FileHandle(forWritingTo: stderrURL)
     defer {
@@ -521,7 +583,10 @@ public struct MemoryCoreProcessRunner: MemoryCoreProcessRunning {
     let deadline = DispatchTime.now() + timeout
     if group.wait(timeout: deadline) == .timedOut {
       process.terminate()
-      _ = group.wait(timeout: .now() + 1)
+      if group.wait(timeout: .now() + 1) == .timedOut {
+        killProcessTree(rootPID: process.processIdentifier, signal: SIGKILL)
+        _ = group.wait(timeout: .now() + 1)
+      }
       throw MemoryCoreError.timeout(timeout)
     }
 
@@ -543,12 +608,18 @@ public struct MemoryCoreProcessRunner: MemoryCoreProcessRunning {
       "LOGNAME",
       "LANG",
       "LC_ALL",
-      "LC_CTYPE"
+      "LC_CTYPE",
+      "ONECONTEXT_APP_SUPPORT_DIR",
+      "ONECONTEXT_USER_CONTENT_DIR",
+      "ONECONTEXT_LOG_DIR",
+      "ONECONTEXT_CACHE_DIR",
+      "ONECONTEXT_UPDATE_STATE_DIR",
+      "ONECONTEXT_MEMORY_CORE_DIR",
+      "ONECONTEXT_MEMORY_CORE_LOG_PATH"
     ]
     var result: [String: String] = [:]
-    let source = ProcessInfo.processInfo.environment
     for key in keep {
-      if let value = source[key] {
+      if let value = environment[key] {
         result[key] = value
       }
     }
@@ -556,5 +627,33 @@ public struct MemoryCoreProcessRunner: MemoryCoreProcessRunning {
       result["PATH"] = "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
     }
     return result
+  }
+
+  private func killProcessTree(rootPID: Int32, signal: Int32) {
+    for child in childPIDs(of: rootPID) {
+      killProcessTree(rootPID: child, signal: signal)
+    }
+    kill(rootPID, signal)
+  }
+
+  private func childPIDs(of pid: Int32) -> [Int32] {
+    let process = Process()
+    process.executableURL = URL(fileURLWithPath: "/usr/bin/pgrep")
+    process.arguments = ["-P", "\(pid)"]
+    let stdout = Pipe()
+    process.standardOutput = stdout
+    process.standardError = Pipe()
+    do {
+      try process.run()
+      process.waitUntilExit()
+    } catch {
+      return []
+    }
+    guard process.terminationStatus == 0 else { return [] }
+    let data = stdout.fileHandleForReading.readDataToEndOfFile()
+    let text = String(data: data, encoding: .utf8) ?? ""
+    return text
+      .split(whereSeparator: \.isNewline)
+      .compactMap { Int32($0.trimmingCharacters(in: .whitespacesAndNewlines)) }
   }
 }

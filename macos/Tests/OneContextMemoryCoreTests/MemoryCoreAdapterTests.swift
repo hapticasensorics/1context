@@ -19,7 +19,7 @@ final class MemoryCoreAdapterTests: XCTestCase {
   func testConfigureWritesPrivateConfig() throws {
     let root = try temporaryRoot()
     defer { try? FileManager.default.removeItem(at: root) }
-    let executable = try writeScript(root: root, name: "memory-core", body: "printf '{\"ok\":true}\\n'\n")
+    let executable = try writeScript(root: root, name: "memory-core", body: "printf '{\"status\":\"ok\",\"schema_version\":1}\\n'\n")
     let paths = paths(root: root)
     let adapter = MemoryCoreAdapter(paths: paths)
 
@@ -36,7 +36,7 @@ final class MemoryCoreAdapterTests: XCTestCase {
   func testConfigureClearDisablesMemoryCore() throws {
     let root = try temporaryRoot()
     defer { try? FileManager.default.removeItem(at: root) }
-    let executable = try writeScript(root: root, name: "memory-core", body: "printf '{\"ok\":true}\\n'\n")
+    let executable = try writeScript(root: root, name: "memory-core", body: "printf '{\"status\":\"ok\",\"schema_version\":1}\\n'\n")
     let adapter = adapter(root: root)
 
     _ = try adapter.configure(executable: executable.path)
@@ -73,13 +73,13 @@ final class MemoryCoreAdapterTests: XCTestCase {
     let root = try temporaryRoot()
     defer { try? FileManager.default.removeItem(at: root) }
     let executable = try writeScript(root: root, name: "memory-core", body: """
-    if [ "$1" = "status" ]; then printf '{"status":"ok"}\\n'; exit 0; fi
-    printf '{"args":["%s","%s"]}\\n' "$1" "$2"
+    if [ "$1" = "status" ]; then printf '{"status":"ok","schema_version":1}\\n'; exit 0; fi
+    printf '{"status":"ok","schema_version":1,"args":["%s","%s"]}\\n' "$1" "$2"
     """)
     let adapter = adapter(root: root)
     _ = try adapter.configure(executable: executable.path)
 
-    let result = try adapter.run(arguments: ["wiki", "list"])
+    let result = try adapter.run(arguments: ["wiki", "list", "--json"])
 
     XCTAssertEqual(result.exitCode, 0)
     XCTAssertTrue(result.stdout.contains("\"wiki\""))
@@ -93,7 +93,7 @@ final class MemoryCoreAdapterTests: XCTestCase {
     let adapter = adapter(root: root)
     _ = try adapter.configure(executable: executable.path)
 
-    XCTAssertThrowsError(try adapter.run(arguments: ["status"])) { error in
+    XCTAssertThrowsError(try adapter.run(arguments: ["status", "--json"])) { error in
       XCTAssertEqual(error as? MemoryCoreError, .invalidJSON)
     }
   }
@@ -101,7 +101,7 @@ final class MemoryCoreAdapterTests: XCTestCase {
   func testRunTimesOutCleanly() throws {
     let root = try temporaryRoot()
     defer { try? FileManager.default.removeItem(at: root) }
-    let executable = try writeScript(root: root, name: "memory-core", body: "sleep 2\nprintf '{\"late\":true}\\n'\n")
+    let executable = try writeScript(root: root, name: "memory-core", body: "sleep 2\nprintf '{\"status\":\"ok\",\"schema_version\":1,\"late\":true}\\n'\n")
     let paths = paths(root: root)
     try writeConfig(
       MemoryCoreConfig(enabled: true, executable: executable.path, defaultTimeoutSeconds: 0.1),
@@ -109,7 +109,7 @@ final class MemoryCoreAdapterTests: XCTestCase {
     )
     let adapter = MemoryCoreAdapter(paths: paths)
 
-    XCTAssertThrowsError(try adapter.run(arguments: ["status"])) { error in
+    XCTAssertThrowsError(try adapter.run(arguments: ["status", "--json"])) { error in
       guard case MemoryCoreError.timeout = error else {
         return XCTFail("expected timeout, got \(error)")
       }
@@ -119,13 +119,99 @@ final class MemoryCoreAdapterTests: XCTestCase {
   func testRunRejectsDisallowedCommand() throws {
     let root = try temporaryRoot()
     defer { try? FileManager.default.removeItem(at: root) }
-    let executable = try writeScript(root: root, name: "memory-core", body: "printf '{\"ok\":true}\\n'\n")
+    let executable = try writeScript(root: root, name: "memory-core", body: "printf '{\"status\":\"ok\",\"schema_version\":1}\\n'\n")
     let adapter = adapter(root: root)
     _ = try adapter.configure(executable: executable.path)
 
     XCTAssertThrowsError(try adapter.run(arguments: ["hire"])) { error in
       XCTAssertEqual(error as? MemoryCoreError, .commandNotAllowed("hire"))
     }
+  }
+
+  func testRunRejectsUnsafeSubcommandsWithinAllowedFamilies() throws {
+    let root = try temporaryRoot()
+    defer { try? FileManager.default.removeItem(at: root) }
+    let executable = try writeScript(root: root, name: "memory-core", body: "printf '{\"status\":\"ok\",\"schema_version\":1}\\n'\n")
+    let adapter = adapter(root: root)
+    _ = try adapter.configure(executable: executable.path)
+
+    XCTAssertThrowsError(try adapter.run(arguments: ["wiki", "apply", "--json"])) { error in
+      XCTAssertEqual(error as? MemoryCoreError, .commandNotAllowed("wiki apply --json"))
+    }
+    XCTAssertThrowsError(try adapter.run(arguments: ["memory", "migrations", "run", "--json"])) { error in
+      XCTAssertEqual(error as? MemoryCoreError, .commandNotAllowed("memory migrations run --json"))
+    }
+  }
+
+  func testDoctorRequiresStatusJSONContract() throws {
+    let root = try temporaryRoot()
+    defer { try? FileManager.default.removeItem(at: root) }
+    let executable = try writeScript(root: root, name: "memory-core", body: """
+    if [ "$1" = "--version" ]; then printf 'fake 1.0.0\\n'; exit 0; fi
+    printf 'not json\\n'
+    """)
+    let adapter = adapter(root: root)
+    _ = try adapter.configure(executable: executable.path)
+
+    let status = adapter.doctor()
+
+    XCTAssertEqual(status.health, .degraded)
+    XCTAssertTrue(status.lastError?.contains("invalid JSON") == true)
+  }
+
+  func testRunRejectsJSONOutsideContract() throws {
+    let root = try temporaryRoot()
+    defer { try? FileManager.default.removeItem(at: root) }
+    let executable = try writeScript(root: root, name: "memory-core", body: "printf '{\"status\":\"error\",\"schema_version\":1}\\n'\n")
+    let adapter = adapter(root: root)
+    _ = try adapter.configure(executable: executable.path)
+
+    XCTAssertThrowsError(try adapter.run(arguments: ["status", "--json"])) { error in
+      XCTAssertEqual(error as? MemoryCoreError, .invalidContract("Memory core JSON must include status: ok"))
+    }
+  }
+
+  func testRunRedactsProcessFailureStderr() throws {
+    let root = try temporaryRoot()
+    defer { try? FileManager.default.removeItem(at: root) }
+    let executable = try writeScript(root: root, name: "memory-core", body: """
+    printf 'failed at \(root.path)/secret.txt\\n' >&2
+    exit 2
+    """)
+    let adapter = adapter(root: root)
+    _ = try adapter.configure(executable: executable.path)
+
+    XCTAssertThrowsError(try adapter.run(arguments: ["status", "--json"])) { error in
+      guard case MemoryCoreError.processFailed(let message) = error else {
+        return XCTFail("expected process failure, got \(error)")
+      }
+      XCTAssertFalse(message.contains(root.path))
+    }
+  }
+
+  func testRunnerPassesOneContextPathOverrides() throws {
+    let runner = MemoryCoreProcessRunner(environment: [
+      "HOME": "/Users/example",
+      "PATH": "/usr/bin:/bin",
+      "ONECONTEXT_APP_SUPPORT_DIR": "/tmp/app-support",
+      "ONECONTEXT_USER_CONTENT_DIR": "/tmp/user-content",
+      "ONECONTEXT_LOG_DIR": "/tmp/logs",
+      "ONECONTEXT_CACHE_DIR": "/tmp/cache",
+      "ONECONTEXT_UPDATE_STATE_DIR": "/tmp/update",
+      "ONECONTEXT_MEMORY_CORE_DIR": "/tmp/memory-core",
+      "ONECONTEXT_MEMORY_CORE_LOG_PATH": "/tmp/memory-core.log",
+      "ONECONTEXT_UNRELATED": "drop-me"
+    ])
+    let root = try temporaryRoot()
+    defer { try? FileManager.default.removeItem(at: root) }
+    let executable = try writeScript(root: root, name: "memory-core", body: """
+    printf '{"status":"ok","schema_version":1,"app_support":"%s","unrelated":"%s"}\\n' "${ONECONTEXT_APP_SUPPORT_DIR:-}" "${ONECONTEXT_UNRELATED:-}"
+    """)
+
+    let result = try runner.run(executable: executable.path, arguments: ["status", "--json"], stdinData: Data(), timeout: 2)
+
+    XCTAssertTrue(result.stdout.contains("/tmp/app-support"))
+    XCTAssertTrue(result.stdout.contains("\"unrelated\":\"\""))
   }
 
   func testRenderStatusRedactsPaths() throws {

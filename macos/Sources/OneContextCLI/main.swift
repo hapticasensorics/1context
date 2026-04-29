@@ -478,11 +478,11 @@ struct OneContextCLI {
     case "status":
       guard args.count == 2 else { throw CLIError.commandFailed("Usage: 1context memory-core status") }
       print("Memory Core\n")
-      printMemoryCoreStatus(adapter.status(forceCheck: true), redact: false)
+      try printMemoryCoreStatusAndFailIfDegraded(adapter.status(forceCheck: true), redact: false)
     case "doctor":
       guard args.count == 2 else { throw CLIError.commandFailed("Usage: 1context memory-core doctor") }
       print("Memory Core Doctor\n")
-      printMemoryCoreStatus(adapter.doctor(), redact: false)
+      try printMemoryCoreStatusAndFailIfDegraded(adapter.doctor(), redact: false)
     case "configure":
       try memoryCoreConfigure(adapter: adapter)
     case "run":
@@ -500,7 +500,7 @@ struct OneContextCLI {
     }
     let executable = try optionValue("--executable", in: values)
     try rejectUnknownAgentOptions(values, allowed: ["--executable"])
-    printMemoryCoreStatus(try adapter.configure(executable: executable), redact: false)
+    try printMemoryCoreStatusAndFailIfDegraded(try adapter.configure(executable: executable), redact: false)
   }
 
   static func memoryCoreRun(adapter: MemoryCoreAdapter) throws {
@@ -510,8 +510,12 @@ struct OneContextCLI {
     let runArgs = Array(args.dropFirst(3))
     let result = try adapter.run(arguments: runArgs)
     print(result.stdout, terminator: result.stdout.hasSuffix("\n") ? "" : "\n")
-    if !result.stderr.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-      FileHandle.standardError.write(Data(result.stderr.utf8))
+  }
+
+  static func printMemoryCoreStatusAndFailIfDegraded(_ status: MemoryCoreStatus, redact: Bool) throws {
+    printMemoryCoreStatus(status, redact: redact)
+    if status.health == .degraded {
+      throw CLIError.commandFailed("Memory core health is degraded")
     }
   }
 

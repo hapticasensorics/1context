@@ -84,5 +84,11 @@ fi
 grep -q "not allowed" "$STATE_DIR/disallowed.out"
 
 "$CLI" memory-core configure --clear | grep -q "Health: not configured"
+if "$CLI" memory-core configure --executable /bin/echo >"$STATE_DIR/bad-config.out" 2>&1; then
+  echo "non-contract memory-core executable should fail configure" >&2
+  exit 1
+fi
+grep -q "Health: degraded" "$STATE_DIR/bad-config.out"
+"$CLI" memory-core configure --clear | grep -q "Health: not configured"
 
 echo "Memory core contract tests passed."
