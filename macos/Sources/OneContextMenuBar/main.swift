@@ -5,6 +5,7 @@ import OneContextRuntimeSupport
 
 private enum Constants {
   static let appName = "1Context"
+  static let runtimeRefreshMinimumInterval: TimeInterval = 5
 }
 
 nonisolated(unsafe) private var menuInstanceLockFD: Int32 = -1
@@ -76,6 +77,7 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
   private var pendingRuntimeState: RuntimeState?
   private var pendingUpdateState: UpdateState?
   private var renderGeneration = 0
+  private var lastRuntimeRefreshStartedAt: Date?
   private let menu = NSMenu()
   private let stateItem = NSMenuItem(title: RuntimeState.checking.title, action: nil, keyEquivalent: "")
   private let settingsItem = NSMenuItem(title: "Settings", action: nil, keyEquivalent: "")
@@ -100,11 +102,11 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
     configureMenu()
     refreshMenuItems()
     runLaunchChores()
-    ensureRuntimeRunning(userInitiated: false)
+    ensureRuntimeRunning(userInitiated: false, force: true)
 
     timer = Timer.scheduledTimer(withTimeInterval: 30, repeats: true) { [weak self] _ in
       Task { @MainActor in
-        self?.ensureRuntimeRunning(userInitiated: false)
+        self?.ensureRuntimeRunning(userInitiated: false, force: true)
       }
     }
     perfLog("launch.ready", start: start)
@@ -208,9 +210,9 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
 
   func menuWillOpen(_ menu: NSMenu) {
     let start = perfStart()
-    refreshRuntimeStateForMenuOpen()
     isMenuOpen = true
     renderGeneration += 1
+    refreshRuntimeStateForMenuOpen()
     perfLog("menu.willOpen", start: start)
   }
 
@@ -218,9 +220,11 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
     let desiredState = (try? String(contentsOfFile: RuntimePaths.current().desiredStatePath, encoding: .utf8))?
       .trimmingCharacters(in: .whitespacesAndNewlines)
     if desiredState == "stopped" {
-      runtimeState = .stopped
       pendingRuntimeState = nil
-      refreshMenuItems()
+      if runtimeState != .stopped {
+        runtimeState = .stopped
+        refreshMenuItems()
+      }
       return
     }
     ensureRuntimeRunning(userInitiated: false)
@@ -251,9 +255,14 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
     }
   }
 
-  private func ensureRuntimeRunning(userInitiated: Bool) {
+  private func ensureRuntimeRunning(userInitiated: Bool, force: Bool = false) {
     guard !isRepairingRuntime else { return }
+    if !userInitiated && !force && !shouldRefreshRuntimeState() {
+      perfLog("runtime.refresh.skipped")
+      return
+    }
     isRepairingRuntime = true
+    lastRuntimeRefreshStartedAt = Date()
 
     Task.detached(priority: .utility) {
       let healthStart = await self.perfStart()
@@ -265,7 +274,9 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
       }
 
       do {
-        let health = try UnixJSONRPCClient().health()
+        let health = try autoreleasepool {
+          try UnixJSONRPCClient().health()
+        }
         guard health.version == oneContextVersion else {
           _ = try await controller.restart(startMenu: false)
           await MainActor.run {
@@ -306,6 +317,11 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
         await self.markRuntimeNeedsAttention()
       }
     }
+  }
+
+  private func shouldRefreshRuntimeState() -> Bool {
+    guard let lastRuntimeRefreshStartedAt else { return true }
+    return Date().timeIntervalSince(lastRuntimeRefreshStartedAt) >= Constants.runtimeRefreshMinimumInterval
   }
 
   private func markRuntimeNeedsAttention() {
