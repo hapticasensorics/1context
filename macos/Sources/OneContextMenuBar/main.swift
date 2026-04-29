@@ -18,9 +18,8 @@ private func showFishAlert(_ message: String) {
 
 @MainActor
 private func loadFishAlertIcon() -> NSImage? {
-  let bundleURL = Bundle.module.url(forResource: "MenuBarIcon", withExtension: "png")
   let mainURL = Bundle.main.url(forResource: "MenuBarIcon", withExtension: "png")
-  guard let image = [bundleURL, mainURL].compactMap({ $0 }).compactMap(NSImage.init(contentsOf:)).first else {
+  guard let image = mainURL.flatMap(NSImage.init(contentsOf:)) else {
     return nil
   }
   image.isTemplate = false
@@ -71,9 +70,8 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
   }
 
   private func loadMenuIcon() -> NSImage? {
-    let bundleURL = Bundle.module.url(forResource: "MenuBarIcon", withExtension: "png")
     let mainURL = Bundle.main.url(forResource: "MenuBarIcon", withExtension: "png")
-    return [bundleURL, mainURL].compactMap { $0 }.compactMap(NSImage.init(contentsOf:)).first
+    return mainURL.flatMap(NSImage.init(contentsOf:))
   }
 
   private func rebuildMenu() {

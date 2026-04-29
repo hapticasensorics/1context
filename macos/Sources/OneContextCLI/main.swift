@@ -1,3 +1,4 @@
+import Darwin
 import Foundation
 import OneContextRuntimeSupport
 
@@ -23,6 +24,8 @@ struct OneContextCLI {
         try await restart()
       case "status":
         await status()
+      case "diagnose":
+        await diagnose()
       case "update":
         try await update()
       default:
@@ -57,6 +60,7 @@ struct OneContextCLI {
       1context stop [--debug]
       1context restart [--debug]
       1context status [--debug]
+      1context diagnose
       1context update
     """)
   }
@@ -178,6 +182,50 @@ struct OneContextCLI {
     }
   }
 
+  static func diagnose() async {
+    let paths = RuntimePaths.current()
+    let controller = RuntimeController()
+    let health = controller.status()
+    let updateState = readJSON(paths: UpdateStatePaths.current().file)
+
+    print("1Context Diagnose\n")
+    print("CLI:")
+    print("  Version: \(oneContextVersion)")
+    print("  Executable: \(currentExecutablePath() ?? CommandLine.arguments[0])")
+    print("  App Bundle: /Applications/1Context.app")
+    print("  App Version: \(appVersion() ?? "not installed")")
+
+    print("\nRuntime:")
+    print("  Desired State: \(readTrimmed(paths.desiredStatePath) ?? "missing")")
+    switch health {
+    case .success(let runtime):
+      print("  Health: OK")
+      print("  Runtime Version: \(runtime.version)")
+      print("  PID: \(runtime.pid)")
+      print("  Uptime Seconds: \(runtime.uptimeSeconds)")
+    case .failure(let error):
+      print("  Health: no response")
+      print("  Error: \(error.localizedDescription)")
+    }
+    print("  User Content: \(paths.userContentDirectory.path)")
+    print("  App Support: \(paths.appSupportDirectory.path)")
+    print("  Socket: \(paths.socketPath)")
+
+    print("\nLaunchAgents:")
+    printLaunchAgent(label: LaunchAgentManager.runtimeLabel)
+    printLaunchAgent(label: LaunchAgentManager.menuLabel)
+
+    print("\nUpdate:")
+    print("  Cache: \(UpdateStatePaths.current().file.path)")
+    print("  Last Checked: \(updateState?["last_checked_at"] as? String ?? "missing")")
+    print("  Latest Seen: \(updateState?["last_seen_latest"] as? String ?? "missing")")
+    print("  Notes URL: \(updateState?["notes_url"] as? String ?? "missing")")
+
+    print("\nLogs:")
+    printLogTail(title: "Runtime", path: paths.logPath)
+    printLogTail(title: "Menu", path: paths.logDirectory.appendingPathComponent("menu.log").path)
+  }
+
   static func runShell(_ command: String) throws {
     let process = Process()
     process.executableURL = URL(fileURLWithPath: "/bin/zsh")
@@ -190,6 +238,127 @@ struct OneContextCLI {
     guard process.terminationStatus == 0 else {
       throw CLIError.commandFailed(command)
     }
+  }
+
+  static func printLaunchAgent(label: String) {
+    let home = FileManager.default.homeDirectoryForCurrentUser
+    let plist = home.appendingPathComponent("Library/LaunchAgents/\(label).plist")
+    let loaded = launchctlPrint(label: label)
+    let loadedFields = loaded.map(launchctlFields) ?? [:]
+
+    print("  \(label):")
+    print("    Plist: \(plist.path)")
+    print("    Plist Exists: \(FileManager.default.fileExists(atPath: plist.path) ? "yes" : "no")")
+    print("    Plist Program: \(plistProgram(path: plist.path) ?? "missing")")
+    print("    Loaded: \(loaded == nil ? "no" : "yes")")
+    print("    State: \(loadedFields["state"] ?? "missing")")
+    print("    Loaded Program: \(loadedFields["program"] ?? "missing")")
+    print("    PID: \(loadedFields["pid"] ?? "missing")")
+    print("    Minimum Runtime: \(loadedFields["minimum runtime"] ?? "missing")")
+    print("    Last Exit Code: \(loadedFields["last exit code"] ?? "missing")")
+    print("    Last Signal: \(loadedFields["last terminating signal"] ?? "missing")")
+  }
+
+  static func launchctlPrint(label: String) -> String? {
+    let result = runCapture("/bin/launchctl", ["print", "gui/\(getuid())/\(label)"])
+    guard result.status == 0 else { return nil }
+    return result.stdout
+  }
+
+  static func launchctlFields(_ output: String) -> [String: String] {
+    var fields: [String: String] = [:]
+    let wanted = [
+      "state",
+      "program",
+      "pid",
+      "minimum runtime",
+      "last exit code",
+      "last terminating signal"
+    ]
+
+    for line in output.split(separator: "\n").map(String.init) {
+      let trimmed = line.trimmingCharacters(in: .whitespaces)
+      for key in wanted where trimmed.hasPrefix("\(key) =") {
+        fields[key] = trimmed.replacingOccurrences(of: "\(key) =", with: "")
+          .trimmingCharacters(in: .whitespaces)
+      }
+    }
+    return fields
+  }
+
+  static func plistProgram(path: String) -> String? {
+    guard let dictionary = NSDictionary(contentsOfFile: path),
+      let arguments = dictionary["ProgramArguments"] as? [String],
+      let first = arguments.first
+    else {
+      return nil
+    }
+    return first
+  }
+
+  static func printLogTail(title: String, path: String) {
+    print("  \(title): \(path)")
+    guard let text = try? String(contentsOfFile: path, encoding: .utf8) else {
+      print("    missing")
+      return
+    }
+    let lines = text.split(separator: "\n").suffix(5)
+    if lines.isEmpty {
+      print("    empty")
+    } else {
+      for line in lines {
+        print("    \(line)")
+      }
+    }
+  }
+
+  static func readTrimmed(_ path: String) -> String? {
+    try? String(contentsOfFile: path, encoding: .utf8)
+      .trimmingCharacters(in: .whitespacesAndNewlines)
+  }
+
+  static func readJSON(paths path: URL) -> [String: Any]? {
+    guard let data = try? Data(contentsOf: path) else { return nil }
+    return try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+  }
+
+  static func appVersion() -> String? {
+    NSDictionary(contentsOfFile: "/Applications/1Context.app/Contents/Info.plist")?["CFBundleShortVersionString"] as? String
+  }
+
+  static func currentExecutablePath() -> String? {
+    var size = UInt32(0)
+    _NSGetExecutablePath(nil, &size)
+    var buffer = [CChar](repeating: 0, count: Int(size))
+    guard _NSGetExecutablePath(&buffer, &size) == 0 else { return nil }
+    let pathBytes = buffer.prefix { $0 != 0 }.map { UInt8(bitPattern: $0) }
+    let path = String(decoding: pathBytes, as: UTF8.self)
+    return URL(fileURLWithPath: path).resolvingSymlinksInPath().path
+  }
+
+  static func runCapture(_ executable: String, _ arguments: [String]) -> (status: Int32, stdout: String, stderr: String) {
+    let process = Process()
+    process.executableURL = URL(fileURLWithPath: executable)
+    process.arguments = arguments
+    let stdout = Pipe()
+    let stderr = Pipe()
+    process.standardOutput = stdout
+    process.standardError = stderr
+
+    do {
+      try process.run()
+      process.waitUntilExit()
+    } catch {
+      return (1, "", error.localizedDescription)
+    }
+
+    let stdoutData = stdout.fileHandleForReading.readDataToEndOfFile()
+    let stderrData = stderr.fileHandleForReading.readDataToEndOfFile()
+    return (
+      process.terminationStatus,
+      String(data: stdoutData, encoding: .utf8) ?? "",
+      String(data: stderrData, encoding: .utf8) ?? ""
+    )
   }
 }
 

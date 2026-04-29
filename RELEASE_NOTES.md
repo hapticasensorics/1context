@@ -1,4 +1,4 @@
-# 1Context v0.1.23 Public Preview
+# 1Context v0.1.24 Public Preview
 
 This release includes:
 
@@ -11,6 +11,7 @@ This release includes:
 - lifecycle debug output with `1context start --debug`, `stop --debug`, and `restart --debug`
 - update checks that avoid GitHub API rate limits
 - menu lifecycle fixes for CLI start/stop and Spotlight launch
+- release-artifact hygiene checks and `1context diagnose`
 
 Install:
 

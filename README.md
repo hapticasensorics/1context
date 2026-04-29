@@ -22,6 +22,12 @@ Verify:
 1context status
 ```
 
+Support report:
+
+```bash
+1context diagnose
+```
+
 Uninstall:
 
 ```bash
@@ -75,6 +81,7 @@ Runtime commands use product language:
 ```bash
 1context start
 1context status
+1context diagnose
 1context restart
 1context stop
 ```
@@ -83,6 +90,14 @@ The menu bar app can be packaged locally with:
 
 ```bash
 NOTARIZE=1 ./scripts/package-macos-release.sh
+```
+
+Release packaging validates that archives do not contain local owner/group
+metadata, AppleDouble files, local build paths, or SwiftPM resource-bundle
+fallback paths. To clear local release outputs before packaging:
+
+```bash
+./scripts/clean-release-artifacts.sh
 ```
 
 Developer ID signing is enabled when the signing identity is present. To notarize

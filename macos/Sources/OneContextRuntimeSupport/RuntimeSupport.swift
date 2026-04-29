@@ -1,7 +1,7 @@
 import Foundation
 import Darwin
 
-public let oneContextVersion = "0.1.23"
+public let oneContextVersion = "0.1.24"
 public let oneContextGitHubURL = URL(string: "https://github.com/hapticasensorics/1context")!
 public let oneContextLatestReleaseURL = URL(string: "https://github.com/hapticasensorics/1context/releases/latest")!
 public let oneContextHomebrewUpdateCommand = """
@@ -411,13 +411,11 @@ public final class LaunchAgentManager {
     try installMenu(appPath: appPath)
     let path = launchAgentPath(label: Self.menuLabel)
     let target = "\(guiDomain())/\(Self.menuLabel)"
-    let current = await launchctl(["print", target])
-    if current.status != 0 {
-      _ = await launchctl(["bootout", guiDomain(), path.path])
-      let boot = await launchctl(["bootstrap", guiDomain(), path.path])
-      if boot.status != 0 {
-        throw RuntimeControlError.launchAgentFailed((boot.stderr + boot.stdout).trimmingCharacters(in: .whitespacesAndNewlines))
-      }
+    _ = await launchctl(["bootout", target])
+    _ = await launchctl(["bootout", guiDomain(), path.path])
+    let boot = await launchctl(["bootstrap", guiDomain(), path.path])
+    if boot.status != 0 {
+      throw RuntimeControlError.launchAgentFailed((boot.stderr + boot.stdout).trimmingCharacters(in: .whitespacesAndNewlines))
     }
     _ = await launchctl(["kickstart", "-k", target])
   }
@@ -431,12 +429,15 @@ public final class LaunchAgentManager {
       return
     }
 
-    let kickstart = await launchctl(["kickstart", "-k", target])
-    if kickstart.status != 0 {
+    _ = await launchctl(["bootout", target])
+    _ = await launchctl(["bootout", guiDomain(), launchAgentPath.path])
+    let boot = await launchctl(["bootstrap", guiDomain(), launchAgentPath.path])
+    if boot.status != 0 {
       throw RuntimeControlError.launchAgentFailed(
-        (kickstart.stderr + kickstart.stdout).trimmingCharacters(in: .whitespacesAndNewlines)
+        (boot.stderr + boot.stdout).trimmingCharacters(in: .whitespacesAndNewlines)
       )
     }
+    _ = await launchctl(["kickstart", "-k", target])
   }
 
   public func stop() async {
@@ -823,8 +824,8 @@ public final class RuntimeController {
     let fm = FileManager.default
     let executableDirectory = currentExecutableURL()?.deletingLastPathComponent()
     let candidates: [String?] = [
-      executableDirectory?.appendingPathComponent("1Context").path,
       executableDirectory?.appendingPathComponent("OneContextMenuBar").path,
+      executableDirectory?.appendingPathComponent("1Context").path,
       URL(fileURLWithPath: "/Applications/1Context.app/Contents/MacOS/1Context").path
     ]
     return candidates.compactMap { $0 }.first { fm.isExecutableFile(atPath: $0) }

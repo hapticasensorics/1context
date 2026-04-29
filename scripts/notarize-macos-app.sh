@@ -12,7 +12,16 @@ if [[ ! -d "$APP_DIR" ]]; then
   exit 1
 fi
 
-ditto -c -k --keepParent "$APP_DIR" "$ZIP_PATH"
+COPYFILE_DISABLE=1 ditto \
+  --norsrc \
+  --noextattr \
+  --noqtn \
+  --noacl \
+  -c \
+  -k \
+  --keepParent \
+  "$APP_DIR" \
+  "$ZIP_PATH"
 xcrun notarytool submit "$ZIP_PATH" --keychain-profile "$PROFILE" --wait
 xcrun stapler staple "$APP_DIR"
 xcrun stapler validate "$APP_DIR"

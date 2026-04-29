@@ -25,9 +25,7 @@ let package = Package(
     .executableTarget(
       name: "OneContextMenuBar",
       dependencies: ["OneContextRuntimeSupport"],
-      resources: [
-        .process("Resources")
-      ]
+      exclude: ["Resources"]
     )
   ]
 )
