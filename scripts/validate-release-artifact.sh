@@ -17,12 +17,12 @@ trap cleanup EXIT
 LISTING="$TMPDIR/listing.txt"
 tar -tvzf "$ARCHIVE" > "$LISTING"
 
-if rg -q ' paulhan | staff ' "$LISTING"; then
+if grep -Eq ' paulhan | staff ' "$LISTING"; then
   echo "Release archive contains local owner/group metadata." >&2
   exit 1
 fi
 
-if rg -q '(^|/)\._|(^|/)\.DS_Store' "$LISTING"; then
+if grep -Eq '(^|/)\._|(^|/)\.DS_Store' "$LISTING"; then
   echo "Release archive contains macOS metadata files." >&2
   exit 1
 fi
@@ -52,13 +52,13 @@ for binary in "$APP/Contents/MacOS/1Context" "$APP/Contents/MacOS/1context-cli" 
     exit 1
   fi
 
-  if strings "$binary" | rg -q '/Users/|paulhan|1context-public-launch|OneContextMac_.*\.bundle|could not load resource bundle'; then
+  if strings "$binary" | grep -Eq '/Users/|paulhan|1context-public-launch|OneContextMac_.*\.bundle|could not load resource bundle'; then
     echo "Release binary contains local build paths or SwiftPM resource-bundle fallback text: $binary" >&2
     exit 1
   fi
 done
 
-if find "$TMPDIR" \( -name '._*' -o -name '.DS_Store' \) | rg -q .; then
+if find "$TMPDIR" \( -name '._*' -o -name '.DS_Store' \) | grep -q .; then
   echo "Release archive extracted macOS metadata files." >&2
   exit 1
 fi
