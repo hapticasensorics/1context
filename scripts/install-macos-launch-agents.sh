@@ -72,7 +72,6 @@ if [[ -f "$DESIRED_STATE" ]] && [[ "$(tr -d '[:space:]' < "$DESIRED_STATE")" == 
 fi
 
 launchctl bootstrap "gui/$(id -u)" "$PLIST" >/dev/null
-launchctl kickstart -k "gui/$(id -u)/$LABEL" >/dev/null
 
 if ! "$CLI_PATH" restart >/dev/null 2>&1 && ! "$CLI_PATH" start >/dev/null 2>&1; then
   echo "Warning: 1Context installed, but the runtime did not start. Run '1context diagnose'." >&2

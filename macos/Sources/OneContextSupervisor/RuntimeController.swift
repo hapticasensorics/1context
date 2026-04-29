@@ -48,12 +48,12 @@ public final class RuntimeController {
     setStartDesired(true)
     if case .success(let health) = status() {
       if health.version == oneContextVersion {
-        await startMenuIfAvailable()
+        try await startMenuIfAvailable()
         return (true, health)
       }
 
       let restarted = try await restartRuntimeForVersionMismatch(existingHealth: health)
-      await startMenuIfAvailable()
+      try await startMenuIfAvailable()
       return (false, restarted)
     }
     guard let daemon = findDaemonPath() else { throw RuntimeControlError.daemonNotFound }
@@ -65,7 +65,7 @@ public final class RuntimeController {
     }
 
     let health = try await waitForRunning()
-    await startMenuIfAvailable()
+    try await startMenuIfAvailable()
     return (false, health)
   }
 
@@ -121,7 +121,7 @@ public final class RuntimeController {
 
     try await launchAgent.restart(daemonPath: daemon)
     let health = try await waitForRunning()
-    await startMenuIfAvailable()
+    try await startMenuIfAvailable()
     return health
   }
 
@@ -243,9 +243,9 @@ public final class RuntimeController {
     return candidates.first { fm.isExecutableFile(atPath: $0) }
   }
 
-  private func startMenuIfAvailable() async {
+  private func startMenuIfAvailable() async throws {
     guard let menuApp = findMenuAppPath() else { return }
-    try? await launchAgent.startMenu(appPath: menuApp)
+    try await launchAgent.startMenu(appPath: menuApp)
   }
 
   private func findMenuAppPath() -> String? {

@@ -39,7 +39,6 @@ public final class LaunchAgentManager {
     if boot.status != 0 {
       throw RuntimeControlError.launchAgentFailed((boot.stderr + boot.stdout).trimmingCharacters(in: .whitespacesAndNewlines))
     }
-    _ = await launchctl(["kickstart", "-k", agentTarget()])
   }
 
   public func startMenu(appPath: String) async throws {
@@ -47,13 +46,20 @@ public final class LaunchAgentManager {
     try installMenu(appPath: appPath)
     let path = launchAgentPath(label: Self.menuLabel)
     let target = "\(guiDomain())/\(Self.menuLabel)"
-    _ = await launchctl(["bootout", target])
-    _ = await launchctl(["bootout", guiDomain(), path.path])
+
+    let current = await launchctl(["print", target])
+    if current.status == 0 {
+      if launchAgentHasPID(current.stdout) {
+        return
+      }
+      _ = await launchctl(["kickstart", "-k", target])
+      return
+    }
+
     let boot = await launchctl(["bootstrap", guiDomain(), path.path])
     if boot.status != 0 {
       throw RuntimeControlError.launchAgentFailed((boot.stderr + boot.stdout).trimmingCharacters(in: .whitespacesAndNewlines))
     }
-    _ = await launchctl(["kickstart", "-k", target])
   }
 
   public func restart(daemonPath: String) async throws {
@@ -73,7 +79,6 @@ public final class LaunchAgentManager {
         (boot.stderr + boot.stdout).trimmingCharacters(in: .whitespacesAndNewlines)
       )
     }
-    _ = await launchctl(["kickstart", "-k", target])
   }
 
   public func stop() async {
@@ -227,6 +232,12 @@ public final class LaunchAgentManager {
 
   private func launchctl(_ args: [String]) async -> (status: Int32, stdout: String, stderr: String) {
     await runProcess(executable: "/bin/launchctl", arguments: args)
+  }
+
+  private func launchAgentHasPID(_ output: String) -> Bool {
+    output.split(separator: "\n").contains { line in
+      line.trimmingCharacters(in: .whitespaces).hasPrefix("pid =")
+    }
   }
 
   private func quitMenuApp() async {
