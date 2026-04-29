@@ -32,7 +32,7 @@ struct OneContextCLI {
         try rejectUnknownArguments(allowed: ["--debug"])
         await status()
       case "diagnose", "debug":
-        try rejectUnknownArguments()
+        try rejectUnknownArguments(allowed: ["--no-redact"])
         await diagnose()
       case "logs":
         try rejectUnknownArguments(allowed: ["--follow"])
@@ -73,8 +73,8 @@ struct OneContextCLI {
       1context quit [--debug]
       1context restart [--debug]
       1context status [--debug]
-      1context diagnose
-      1context debug
+      1context diagnose [--no-redact]
+      1context debug [--no-redact]
       1context logs [--follow]
       1context update
     """)
@@ -229,6 +229,7 @@ struct OneContextCLI {
   }
 
   static func diagnose() async {
+    let redact = !args.contains("--no-redact")
     let paths = RuntimePaths.current()
     let controller = RuntimeController()
     let health = controller.status()
@@ -237,7 +238,7 @@ struct OneContextCLI {
     print("1Context Diagnose\n")
     print("CLI:")
     print("  Version: \(oneContextVersion)")
-    print("  Executable: \(currentExecutablePath() ?? CommandLine.arguments[0])")
+    print("  Executable: \(displayPath(currentExecutablePath() ?? CommandLine.arguments[0], redact: redact))")
     print("  App Bundle: /Applications/1Context.app")
     print("  App Version: \(appVersion() ?? "not installed")")
 
@@ -253,23 +254,23 @@ struct OneContextCLI {
       print("  Health: no response")
       print("  Error: \(error.localizedDescription)")
     }
-    print("  User Content: \(paths.userContentDirectory.path)")
-    print("  App Support: \(paths.appSupportDirectory.path)")
-    print("  Socket: \(paths.socketPath)")
+    print("  User Content: \(displayPath(paths.userContentDirectory.path, redact: redact))")
+    print("  App Support: \(displayPath(paths.appSupportDirectory.path, redact: redact))")
+    print("  Socket: \(displayPath(paths.socketPath, redact: redact))")
 
     print("\nLaunchAgents:")
-    printLaunchAgent(label: LaunchAgentManager.runtimeLabel)
-    printLaunchAgent(label: LaunchAgentManager.menuLabel)
+    printLaunchAgent(label: LaunchAgentManager.runtimeLabel, redact: redact)
+    printLaunchAgent(label: LaunchAgentManager.menuLabel, redact: redact)
 
     print("\nUpdate:")
-    print("  Cache: \(UpdateStatePaths.current().file.path)")
+    print("  Cache: \(displayPath(UpdateStatePaths.current().file.path, redact: redact))")
     print("  Last Checked: \(updateState?["last_checked_at"] as? String ?? "missing")")
     print("  Latest Seen: \(updateState?["last_seen_latest"] as? String ?? "missing")")
     print("  Notes URL: \(updateState?["notes_url"] as? String ?? "missing")")
 
     print("\nLogs:")
-    printLogTail(title: "Runtime", path: paths.logPath)
-    printLogTail(title: "Menu", path: paths.logDirectory.appendingPathComponent("menu.log").path)
+    printLogTail(title: "Runtime", path: paths.logPath, redact: redact)
+    printLogTail(title: "Menu", path: paths.logDirectory.appendingPathComponent("menu.log").path, redact: redact)
   }
 
   static func logs() throws {
@@ -331,19 +332,19 @@ struct OneContextCLI {
     }
   }
 
-  static func printLaunchAgent(label: String) {
+  static func printLaunchAgent(label: String, redact: Bool = false) {
     let home = FileManager.default.homeDirectoryForCurrentUser
     let plist = home.appendingPathComponent("Library/LaunchAgents/\(label).plist")
     let loaded = launchctlPrint(label: label)
     let loadedFields = loaded.map(launchctlFields) ?? [:]
 
     print("  \(label):")
-    print("    Plist: \(plist.path)")
+    print("    Plist: \(displayPath(plist.path, redact: redact))")
     print("    Plist Exists: \(FileManager.default.fileExists(atPath: plist.path) ? "yes" : "no")")
-    print("    Plist Program: \(plistProgram(path: plist.path) ?? "missing")")
+    print("    Plist Program: \(displayPath(plistProgram(path: plist.path) ?? "missing", redact: redact))")
     print("    Loaded: \(loaded == nil ? "no" : "yes")")
     print("    State: \(loadedFields["state"] ?? "missing")")
-    print("    Loaded Program: \(loadedFields["program"] ?? "missing")")
+    print("    Loaded Program: \(displayPath(loadedFields["program"] ?? "missing", redact: redact))")
     print("    PID: \(loadedFields["pid"] ?? "missing")")
     print("    Minimum Runtime: \(loadedFields["minimum runtime"] ?? "missing")")
     print("    Last Exit Code: \(loadedFields["last exit code"] ?? "missing")")
@@ -399,8 +400,8 @@ struct OneContextCLI {
     return first
   }
 
-  static func printLogTail(title: String, path: String, lineCount: Int = 5) {
-    print("  \(title): \(path)")
+  static func printLogTail(title: String, path: String, lineCount: Int = 5, redact: Bool = false) {
+    print("  \(title): \(displayPath(path, redact: redact))")
     guard let text = try? String(contentsOfFile: path, encoding: .utf8) else {
       print("    missing")
       return
@@ -410,9 +411,15 @@ struct OneContextCLI {
       print("    empty")
     } else {
       for line in lines {
-        print("    \(line)")
+        print("    \(displayPath(String(line), redact: redact))")
       }
     }
+  }
+
+  static func displayPath(_ value: String, redact: Bool) -> String {
+    guard redact else { return value }
+    let home = FileManager.default.homeDirectoryForCurrentUser.path
+    return value.replacingOccurrences(of: home, with: "~")
   }
 
   static func readTrimmed(_ path: String) -> String? {

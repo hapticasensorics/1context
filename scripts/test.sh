@@ -28,8 +28,8 @@ export ONECONTEXT_CACHE_DIR="$STATE_DIR/Caches/1Context"
 export ONECONTEXT_UPDATE_STATE_DIR="$STATE_DIR/Application Support/1Context/update"
 export ONECONTEXT_NO_UPDATE_CHECK=1
 
-"$BIN_DIR/1context" | grep -q "1Context 0.1.32"
-test "$("$BIN_DIR/1context" --version)" = "0.1.32"
+"$BIN_DIR/1context" | grep -q "1Context 0.1.33"
+test "$("$BIN_DIR/1context" --version)" = "0.1.33"
 "$BIN_DIR/1context" --help | grep -q "1context status"
 "$BIN_DIR/1context" --help | grep -q "1context quit"
 "$BIN_DIR/1context" --help | grep -q "1context logs"
@@ -40,7 +40,9 @@ if "$BIN_DIR/1context" status --wat >"$STATE_DIR/unknown-arg.out" 2>&1; then
 fi
 grep -q "Unknown argument: --wat" "$STATE_DIR/unknown-arg.out"
 "$BIN_DIR/1context" diagnose | grep -q "1Context Diagnose"
+"$BIN_DIR/1context" diagnose | grep -q "~/"
 "$BIN_DIR/1context" debug | grep -q "1Context Diagnose"
+"$BIN_DIR/1context" debug --no-redact | grep -q "$STATE_DIR"
 if "$BIN_DIR/1context" status >"$STATE_DIR/status-down.out" 2>&1; then
   echo "status should fail when 1Context is not running" >&2
   exit 1

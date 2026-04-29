@@ -20,7 +20,7 @@ final class RPCEnvelopeTests: XCTestCase {
       "id": 1,
       "result": {
         "status": "ok",
-        "version": "0.1.32",
+        "version": "0.1.33",
         "uptimeSeconds": 3,
         "pid": 44
       }
@@ -30,7 +30,7 @@ final class RPCEnvelopeTests: XCTestCase {
     let response = try JSONDecoder().decode(JSONRPCResponse<RuntimeHealth>.self, from: data)
 
     XCTAssertEqual(response.result?.status, "ok")
-    XCTAssertEqual(response.result?.version, "0.1.32")
+    XCTAssertEqual(response.result?.version, "0.1.33")
     XCTAssertNil(response.error)
   }
 }

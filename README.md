@@ -62,11 +62,14 @@ brew uninstall --cask --zap hapticasensorics/tap/1context
   disposable cache, safe to delete
 ```
 
+See [PERMISSIONS.md](PERMISSIONS.md) for the ownership, consent, and privacy contract used by the runtime and installer.
+
 ## Privacy
 
-The public preview makes no telemetry calls and does not upload project data.
-It checks GitHub Releases at most once per day to show whether an update is
-available. Disable update checks with:
+The public preview makes no product telemetry calls and does not upload project
+data. It checks GitHub Releases at most once per day to show whether an update
+is available. The update check uses a non-cookie, nonpersistent network session.
+Disable update checks for a command invocation with:
 
 ```bash
 ONECONTEXT_NO_UPDATE_CHECK=1 1context

@@ -178,16 +178,18 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
 
   func menuDidClose(_ menu: NSMenu) {
     isMenuOpen = false
-    if let pendingRuntimeState {
-      runtimeState = pendingRuntimeState
-      self.pendingRuntimeState = nil
+    DispatchQueue.main.async { [weak self] in
+      guard let self else { return }
+      if let pendingRuntimeState {
+        runtimeState = pendingRuntimeState
+        self.pendingRuntimeState = nil
+      }
+      if let pendingUpdateState {
+        updateState = pendingUpdateState
+        self.pendingUpdateState = nil
+      }
+      refreshMenuItems()
     }
-    if let pendingUpdateState {
-      updateState = pendingUpdateState
-      self.pendingUpdateState = nil
-    }
-    refreshMenuItems()
-    ensureRuntimeRunning(userInitiated: false)
   }
 
   private func ensureRuntimeRunning(userInitiated: Bool) {

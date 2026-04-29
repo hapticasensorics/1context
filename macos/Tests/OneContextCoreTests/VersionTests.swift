@@ -3,20 +3,20 @@ import XCTest
 
 final class VersionTests: XCTestCase {
   func testCompareVersionsHandlesBasicSemver() {
-    XCTAssertEqual(compareVersions("0.1.32", "0.1.32"), 0)
-    XCTAssertGreaterThan(compareVersions("0.1.33", "0.1.32"), 0)
+    XCTAssertEqual(compareVersions("0.1.33", "0.1.33"), 0)
+    XCTAssertGreaterThan(compareVersions("0.1.34", "0.1.33"), 0)
     XCTAssertLessThan(compareVersions("0.1.9", "0.1.10"), 0)
-    XCTAssertEqual(compareVersions("v0.1.32", "0.1.32"), 0)
+    XCTAssertEqual(compareVersions("v0.1.33", "0.1.33"), 0)
   }
 
   func testRuntimeHealthDecodesFromRPCPayload() throws {
     let data = Data("""
-    {"status":"ok","version":"0.1.32","uptimeSeconds":12,"pid":42}
+    {"status":"ok","version":"0.1.33","uptimeSeconds":12,"pid":42}
     """.utf8)
     let health = try JSONDecoder().decode(RuntimeHealth.self, from: data)
 
     XCTAssertEqual(health.status, "ok")
-    XCTAssertEqual(health.version, "0.1.32")
+    XCTAssertEqual(health.version, "0.1.33")
     XCTAssertEqual(health.uptimeSeconds, 12)
     XCTAssertEqual(health.pid, 42)
   }

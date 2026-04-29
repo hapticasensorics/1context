@@ -2,7 +2,7 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-VERSION="${ONECONTEXT_VERSION:-0.1.32}"
+VERSION="${ONECONTEXT_VERSION:-0.1.33}"
 ARCH="${ONECONTEXT_ARCH:-arm64}"
 PACKAGE_DIR="$ROOT/dist/1context-$VERSION-macos-$ARCH"
 ARCHIVE="$ROOT/dist/1context-$VERSION-macos-$ARCH.tar.gz"
