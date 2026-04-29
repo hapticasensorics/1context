@@ -45,15 +45,19 @@ public final class RuntimeController {
   }
 
   public func start() async throws -> (alreadyRunning: Bool, health: RuntimeHealth) {
+    try await start(startMenu: true)
+  }
+
+  public func start(startMenu: Bool) async throws -> (alreadyRunning: Bool, health: RuntimeHealth) {
     setStartDesired(true)
     if case .success(let health) = status() {
       if health.version == oneContextVersion {
-        try await startMenuIfAvailable()
+        if startMenu { try await startMenuIfAvailable() }
         return (true, health)
       }
 
       let restarted = try await restartRuntimeForVersionMismatch(existingHealth: health)
-      try await startMenuIfAvailable()
+      if startMenu { try await startMenuIfAvailable() }
       return (false, restarted)
     }
     guard let daemon = findDaemonPath() else { throw RuntimeControlError.daemonNotFound }
@@ -65,7 +69,7 @@ public final class RuntimeController {
     }
 
     let health = try await waitForRunning()
-    try await startMenuIfAvailable()
+    if startMenu { try await startMenuIfAvailable() }
     return (false, health)
   }
 
@@ -87,8 +91,12 @@ public final class RuntimeController {
   }
 
   public func quit() async throws -> Bool {
+    try await quit(stopMenu: true)
+  }
+
+  public func quit(stopMenu: Bool) async throws -> Bool {
     let stopped = try await stop()
-    if !launchAgent.isDisabled {
+    if stopMenu, !launchAgent.isDisabled {
       await launchAgent.stopMenu()
     }
     return stopped
@@ -110,18 +118,22 @@ public final class RuntimeController {
   }
 
   public func restart() async throws -> RuntimeHealth {
+    try await restart(startMenu: true)
+  }
+
+  public func restart(startMenu: Bool) async throws -> RuntimeHealth {
     setStartDesired(true)
     guard let daemon = findDaemonPath() else { throw RuntimeControlError.daemonNotFound }
 
     if launchAgent.isDisabled {
       _ = try await stop()
       setStartDesired(true)
-      return try await start().health
+      return try await start(startMenu: startMenu).health
     }
 
     try await launchAgent.restart(daemonPath: daemon)
     let health = try await waitForRunning()
-    try await startMenuIfAvailable()
+    if startMenu { try await startMenuIfAvailable() }
     return health
   }
 

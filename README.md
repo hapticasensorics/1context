@@ -123,6 +123,13 @@ For RPC lifecycle stress, run:
 ONECONTEXT_STRESS_COUNT=1000 ./scripts/stress-runtime-rpc.sh
 ```
 
+For menu responsiveness work, launch the app with perf timing enabled and inspect
+`~/Library/Logs/1Context/menu.log`:
+
+```bash
+ONECONTEXT_MENU_PERF_LOG=1 open /Applications/1Context.app
+```
+
 To notarize the built app, first configure a `notarytool` keychain profile, then run:
 
 ```bash

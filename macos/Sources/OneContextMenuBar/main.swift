@@ -66,11 +66,16 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
   private var timer: Timer?
   private var runtimeState: RuntimeState = .checking
   private var updateState: UpdateState = .upToDate
+  private var renderedStateTitle: String?
+  private var renderedVersionTitle: String?
+  private var renderedUpdateTitle: String?
+  private var renderedUpdateAction: Selector?
   private var isCheckingForUpdates = false
   private var isRepairingRuntime = false
   private var isMenuOpen = false
   private var pendingRuntimeState: RuntimeState?
   private var pendingUpdateState: UpdateState?
+  private var renderGeneration = 0
   private let menu = NSMenu()
   private let stateItem = NSMenuItem(title: RuntimeState.checking.title, action: nil, keyEquivalent: "")
   private let settingsItem = NSMenuItem(title: "Settings", action: nil, keyEquivalent: "")
@@ -79,28 +84,30 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
   private let aboutItem = NSMenuItem(title: "About 1Context", action: #selector(showAbout), keyEquivalent: "")
   private let updateItem = NSMenuItem(title: "", action: nil, keyEquivalent: "")
   private let quitItem = NSMenuItem(title: "Quit", action: #selector(quit), keyEquivalent: "q")
+  private let appVersion = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String
+    ?? oneContextVersion
+  private let perfLoggingEnabled = ProcessInfo.processInfo.environment["ONECONTEXT_MENU_PERF_LOG"] == "1"
 
   private var currentVersion: String {
-    Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String
-      ?? oneContextVersion
+    appVersion
   }
 
   func applicationDidFinishLaunching(_ notification: Notification) {
+    let start = perfStart()
     NSApp.setActivationPolicy(.accessory)
     statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
     configureStatusIcon()
     configureMenu()
     refreshMenuItems()
-    cleanupStaleUpdaterFiles()
-    loadCachedUpdateState()
+    runLaunchChores()
     ensureRuntimeRunning(userInitiated: false)
-    checkForUpdates(force: false)
 
     timer = Timer.scheduledTimer(withTimeInterval: 30, repeats: true) { [weak self] _ in
       Task { @MainActor in
         self?.ensureRuntimeRunning(userInitiated: false)
       }
     }
+    perfLog("launch.ready", start: start)
   }
 
   private func configureStatusIcon() {
@@ -121,6 +128,7 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
   }
 
   private func configureMenu() {
+    menu.autoenablesItems = false
     stateItem.isEnabled = false
     menu.addItem(stateItem)
 
@@ -135,21 +143,47 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
 
     for item in [stateItem, settingsItem, versionItem, aboutItem, updateItem, quitItem] {
       item.target = self
+      item.isEnabled = true
     }
+    stateItem.isEnabled = false
+    versionItem.isEnabled = false
     statusItem.menu = menu
   }
 
   private func refreshMenuItems() {
-    stateItem.title = runtimeState.title
-    versionItem.title = "Version \(currentVersion)"
+    let start = perfStart()
+    let stateTitle = runtimeState.title
+    if renderedStateTitle != stateTitle {
+      stateItem.title = stateTitle
+      renderedStateTitle = stateTitle
+    }
+
+    let versionTitle = "Version \(appVersion)"
+    if renderedVersionTitle != versionTitle {
+      versionItem.title = versionTitle
+      renderedVersionTitle = versionTitle
+    }
+
+    let updateTitle: String
+    let updateAction: Selector
     switch updateState {
     case .upToDate:
-      updateItem.title = "Check for Updates"
-      updateItem.action = #selector(checkForUpdatesNow)
+      updateTitle = "Check for Updates"
+      updateAction = #selector(checkForUpdatesNow)
     case .available:
-      updateItem.title = "Please Update"
-      updateItem.action = #selector(openUpgradeCommand)
+      updateTitle = "Please Update"
+      updateAction = #selector(openUpgradeCommand)
     }
+
+    if renderedUpdateTitle != updateTitle {
+      updateItem.title = updateTitle
+      renderedUpdateTitle = updateTitle
+    }
+    if renderedUpdateAction != updateAction {
+      updateItem.action = updateAction
+      renderedUpdateAction = updateAction
+    }
+    perfLog("menu.render", start: start)
   }
 
   private func setRuntimeState(_ newValue: RuntimeState) {
@@ -173,13 +207,24 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
   }
 
   func menuWillOpen(_ menu: NSMenu) {
+    let start = perfStart()
     isMenuOpen = true
+    renderGeneration += 1
+    perfLog("menu.willOpen", start: start)
   }
 
   func menuDidClose(_ menu: NSMenu) {
+    let start = perfStart()
     isMenuOpen = false
+    guard pendingRuntimeState != nil || pendingUpdateState != nil else {
+      perfLog("menu.didClose.noop", start: start)
+      return
+    }
+    renderGeneration += 1
+    let generation = renderGeneration
     DispatchQueue.main.async { [weak self] in
       guard let self else { return }
+      guard !isMenuOpen, generation == renderGeneration else { return }
       if let pendingRuntimeState {
         runtimeState = pendingRuntimeState
         self.pendingRuntimeState = nil
@@ -189,6 +234,7 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
         self.pendingUpdateState = nil
       }
       refreshMenuItems()
+      perfLog("menu.didClose.deferredRender", start: start)
     }
   }
 
@@ -197,6 +243,7 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
     isRepairingRuntime = true
 
     Task.detached(priority: .utility) {
+      let healthStart = await self.perfStart()
       let controller = RuntimeController()
       defer {
         Task { @MainActor in
@@ -207,13 +254,15 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
       do {
         let health = try UnixJSONRPCClient().health()
         guard health.version == oneContextVersion else {
-          _ = try await controller.restart()
+          _ = try await controller.restart(startMenu: false)
           await MainActor.run {
+            self.perfLog("runtime.repair.versionMismatch", start: healthStart)
             self.setRuntimeState(.running)
           }
           return
         }
         await MainActor.run {
+          self.perfLog("runtime.health.ok", start: healthStart)
           self.setRuntimeState(.running)
         }
         return
@@ -227,8 +276,9 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
             return
           }
           do {
-            _ = try await controller.start()
+            _ = try await controller.start(startMenu: false)
             await MainActor.run {
+              self.perfLog("runtime.start.ok", start: healthStart)
               self.setRuntimeState(.running)
             }
           } catch {
@@ -251,23 +301,26 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
 
   private func loadCachedUpdateState() {
     Task.detached(priority: .utility) {
+      let start = await self.perfStart()
       let state = Self.readUpdateStateFromDisk()
       guard let version = state?["last_seen_latest"] as? String else {
         return
       }
-      let cachedState: UpdateState = compareVersions(version, await self.currentVersion) > 0 ? .available : .upToDate
+      let currentVersion = self.appVersion
+      let cachedState: UpdateState = compareVersions(version, currentVersion) > 0 ? .available : .upToDate
       await MainActor.run {
+        self.perfLog("update.cache.read", start: start)
         self.setUpdateState(cachedState)
       }
     }
   }
 
   private func checkForUpdates(force: Bool) {
-    guard force || shouldCheckForUpdate() else { return }
     guard !isCheckingForUpdates else { return }
     isCheckingForUpdates = true
 
-    Task {
+    Task.detached(priority: .utility) {
+      let start = await self.perfStart()
       defer {
         Task { @MainActor in
           self.isCheckingForUpdates = false
@@ -275,8 +328,15 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
       }
 
       do {
-        let result = try await UpdateChecker().check(force: force, currentVersion: currentVersion)
+        guard force || Self.shouldCheckForUpdateFromDisk() else {
+          await MainActor.run {
+            self.perfLog("update.check.skipped", start: start)
+          }
+          return
+        }
+        let result = try await UpdateChecker().check(force: force, currentVersion: self.appVersion)
         await MainActor.run {
+          self.perfLog("update.check.done", start: start)
           self.setUpdateState(result.updateAvailable ? .available : .upToDate)
         }
       } catch {
@@ -285,8 +345,8 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
     }
   }
 
-  private func shouldCheckForUpdate() -> Bool {
-    guard let state = Self.readUpdateStateFromDisk(),
+  nonisolated private static func shouldCheckForUpdateFromDisk() -> Bool {
+    guard let state = readUpdateStateFromDisk(),
       let checked = state["last_checked_at"] as? String,
       let date = ISO8601DateFormatter().date(from: checked)
     else {
@@ -362,8 +422,11 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
   @objc private func quit() {
     timer?.invalidate()
     timer = nil
+    if let statusItem {
+      NSStatusBar.system.removeStatusItem(statusItem)
+    }
     Task.detached {
-      _ = try? await RuntimeController().quit()
+      _ = try? await RuntimeController().quit(stopMenu: false)
       await MainActor.run {
         NSApp.terminate(nil)
       }
@@ -427,6 +490,54 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
         try? FileManager.default.removeItem(at: url)
       }
     }
+  }
+
+  private func runLaunchChores() {
+    Task.detached(priority: .utility) {
+      let cleanupStart = await self.perfStart()
+      Self.cleanupStaleUpdaterFilesOnDisk()
+      await MainActor.run {
+        self.perfLog("launch.cleanupTemp", start: cleanupStart)
+      }
+      await self.loadCachedUpdateState()
+      await self.checkForUpdates(force: false)
+    }
+  }
+
+  nonisolated private static func cleanupStaleUpdaterFilesOnDisk() {
+    let temporaryDirectory = FileManager.default.temporaryDirectory
+    guard let contents = try? FileManager.default.contentsOfDirectory(
+      at: temporaryDirectory,
+      includingPropertiesForKeys: [.isDirectoryKey],
+      options: [.skipsHiddenFiles]
+    ) else {
+      return
+    }
+
+    for url in contents {
+      let name = url.lastPathComponent
+      if (name.hasPrefix("1context-") && name.hasSuffix(".command"))
+        || name.hasPrefix("1context-update-")
+      {
+        try? FileManager.default.removeItem(at: url)
+      }
+    }
+  }
+
+  private func perfStart() -> UInt64 {
+    DispatchTime.now().uptimeNanoseconds
+  }
+
+  private func perfLog(_ event: String, start: UInt64? = nil) {
+    guard perfLoggingEnabled else { return }
+    let suffix: String
+    if let start {
+      let elapsedMs = Double(DispatchTime.now().uptimeNanoseconds - start) / 1_000_000
+      suffix = String(format: " %.2fms", elapsedMs)
+    } else {
+      suffix = ""
+    }
+    fputs("[1context-menu-perf] \(event)\(suffix)\n", stderr)
   }
 }
 

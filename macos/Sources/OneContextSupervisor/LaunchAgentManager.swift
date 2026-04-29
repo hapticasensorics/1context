@@ -8,6 +8,8 @@ public struct LaunchAgentState {
   public let loaded: Bool
 }
 
+private typealias ProcessResult = (status: Int32, stdout: String, stderr: String)
+
 public final class LaunchAgentManager {
   public static let runtimeLabel = "com.haptica.1context"
   public static let menuLabel = "com.haptica.1context.menu"
@@ -230,8 +232,8 @@ public final class LaunchAgentManager {
     "\(guiDomain())/\(Self.runtimeLabel)"
   }
 
-  private func launchctl(_ args: [String]) async -> (status: Int32, stdout: String, stderr: String) {
-    await runProcess(executable: "/bin/launchctl", arguments: args)
+  private func launchctl(_ args: [String]) async -> ProcessResult {
+    await runProcess(executable: "/bin/launchctl", arguments: args, timeout: 2)
   }
 
   private func launchAgentHasPID(_ output: String) -> Bool {
@@ -243,35 +245,124 @@ public final class LaunchAgentManager {
   private func quitMenuApp() async {
     _ = await runProcess(
       executable: "/usr/bin/osascript",
-      arguments: ["-e", "tell application id \"com.haptica.1context.menu\" to quit"]
+      arguments: ["-e", "tell application id \"com.haptica.1context.menu\" to quit"],
+      timeout: 2
     )
   }
 
-  private func runProcess(executable: String, arguments: [String]) async -> (status: Int32, stdout: String, stderr: String) {
+  private func runProcess(executable: String, arguments: [String], timeout: TimeInterval) async -> ProcessResult {
     await withCheckedContinuation { continuation in
       let process = Process()
+      let processBox = ProcessBox(process)
       process.executableURL = URL(fileURLWithPath: executable)
       process.arguments = arguments
-      let stdout = Pipe()
-      let stderr = Pipe()
-      process.standardOutput = stdout
-      process.standardError = stderr
+      let result = ProcessResultState(continuation: continuation, executable: executable)
+
+      do {
+        process.standardOutput = try result.stdoutWriteHandle()
+        process.standardError = try result.stderrWriteHandle()
+      } catch {
+        result.finish(status: 1, stderrOverride: error.localizedDescription)
+        return
+      }
 
       do {
         try process.run()
       } catch {
-        continuation.resume(returning: (1, "", error.localizedDescription))
+        result.finish(status: 1, stderrOverride: error.localizedDescription)
         return
       }
 
       process.terminationHandler = { process in
-        let stdoutData = stdout.fileHandleForReading.readDataToEndOfFile()
-        let stderrData = stderr.fileHandleForReading.readDataToEndOfFile()
-        continuation.resume(returning: (
-          process.terminationStatus,
-          String(data: stdoutData, encoding: .utf8) ?? "",
-          String(data: stderrData, encoding: .utf8) ?? ""
-        ))
+        result.finish(status: process.terminationStatus)
+      }
+
+      DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + timeout) {
+        guard result.markTimedOut() else { return }
+        processBox.terminate()
+        result.finish(status: 124, stderrOverride: "\(executable) timed out")
+      }
+    }
+  }
+}
+
+private final class ProcessResultState: @unchecked Sendable {
+  private let continuation: CheckedContinuation<ProcessResult, Never>
+  private let lock = NSLock()
+  private let stdoutURL: URL
+  private let stderrURL: URL
+  private var completed = false
+  private var stdoutHandle: FileHandle?
+  private var stderrHandle: FileHandle?
+  private let outputLimit = 64 * 1024
+
+  init(continuation: CheckedContinuation<ProcessResult, Never>, executable: String) {
+    self.continuation = continuation
+    let base = FileManager.default.temporaryDirectory
+      .appendingPathComponent("1context-process-\(UUID().uuidString)")
+    self.stdoutURL = base.appendingPathExtension("out")
+    self.stderrURL = base.appendingPathExtension("err")
+  }
+
+  func stdoutWriteHandle() throws -> FileHandle {
+    try makeHandle(url: stdoutURL, assign: { stdoutHandle = $0 })
+  }
+
+  func stderrWriteHandle() throws -> FileHandle {
+    try makeHandle(url: stderrURL, assign: { stderrHandle = $0 })
+  }
+
+  private func makeHandle(url: URL, assign: (FileHandle) -> Void) throws -> FileHandle {
+    FileManager.default.createFile(atPath: url.path, contents: nil)
+    let handle = try FileHandle(forWritingTo: url)
+    assign(handle)
+    return handle
+  }
+
+  func markTimedOut() -> Bool {
+    lock.lock()
+    defer { lock.unlock() }
+    return !completed
+  }
+
+  func finish(status: Int32, stderrOverride: String? = nil) {
+    lock.lock()
+    guard !completed else {
+      lock.unlock()
+      return
+    }
+    completed = true
+    stdoutHandle?.closeFile()
+    stderrHandle?.closeFile()
+    let stdoutString = readOutput(stdoutURL)
+    let stderrString = stderrOverride ?? readOutput(stderrURL)
+    try? FileManager.default.removeItem(at: stdoutURL)
+    try? FileManager.default.removeItem(at: stderrURL)
+    lock.unlock()
+    continuation.resume(returning: (status, stdoutString, stderrString))
+  }
+
+  private func readOutput(_ url: URL) -> String {
+    guard let handle = try? FileHandle(forReadingFrom: url) else { return "" }
+    defer { try? handle.close() }
+    let data = (try? handle.read(upToCount: outputLimit)) ?? Data()
+    return String(data: data, encoding: .utf8) ?? ""
+  }
+}
+
+private final class ProcessBox: @unchecked Sendable {
+  private let process: Process
+
+  init(_ process: Process) {
+    self.process = process
+  }
+
+  func terminate() {
+    if process.isRunning {
+      process.terminate()
+      usleep(100_000)
+      if process.isRunning {
+        kill(process.processIdentifier, SIGKILL)
       }
     }
   }
