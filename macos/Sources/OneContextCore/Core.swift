@@ -1,6 +1,6 @@
 import Foundation
 
-public let oneContextVersion = "0.1.28"
+public let oneContextVersion = "0.1.29"
 public let oneContextGitHubURL = URL(string: "https://github.com/hapticasensorics/1context")!
 public let oneContextLatestReleaseURL = URL(string: "https://github.com/hapticasensorics/1context/releases/latest")!
 public let oneContextHomebrewUpdateCommand = """

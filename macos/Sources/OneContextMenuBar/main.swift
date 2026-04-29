@@ -368,6 +368,8 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
   }
 
   private func runUpdateCommandInTerminal() {
+    cleanupStaleUpdaterFiles()
+
     let alertExecutable = URL(fileURLWithPath: CommandLine.arguments[0])
       .resolvingSymlinksInPath()
       .path
@@ -391,6 +393,7 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
         return
       }
       guard NSWorkspace.shared.open(fileURL) else {
+        try? FileManager.default.removeItem(at: fileURL)
         showFishAlert("Could not open updater.")
         return
       }
@@ -401,6 +404,26 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
 
   private func shellQuote(_ value: String) -> String {
     "'\(value.replacingOccurrences(of: "'", with: "'\\''"))'"
+  }
+
+  private func cleanupStaleUpdaterFiles() {
+    let temporaryDirectory = FileManager.default.temporaryDirectory
+    guard let contents = try? FileManager.default.contentsOfDirectory(
+      at: temporaryDirectory,
+      includingPropertiesForKeys: [.isDirectoryKey],
+      options: [.skipsHiddenFiles]
+    ) else {
+      return
+    }
+
+    for url in contents {
+      let name = url.lastPathComponent
+      if (name.hasPrefix("1context-") && name.hasSuffix(".command"))
+        || name.hasPrefix("1context-update-")
+      {
+        try? FileManager.default.removeItem(at: url)
+      }
+    }
   }
 }
 

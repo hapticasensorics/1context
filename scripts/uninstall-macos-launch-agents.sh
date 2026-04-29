@@ -4,6 +4,7 @@ set -euo pipefail
 MENU_LABEL="com.haptica.1context.menu"
 RUNTIME_LABEL="com.haptica.1context"
 DELETE_DATA=0
+TEMP_DIR="${TMPDIR:-/tmp}"
 
 if [[ "${1:-}" == "--delete-data" ]]; then
   DELETE_DATA=1
@@ -28,7 +29,14 @@ safe_remove() {
     "$HOME/Library/Application Support/1Context"|\
     "$HOME/Library/Logs/1Context"|\
     "$HOME/Library/Caches/1Context"|\
-    "$HOME/Library/Preferences/com.haptica.1context.plist")
+    "$HOME/Library/Caches/com.haptica.1context.menu"|\
+    "$HOME/Library/HTTPStorages/1context"|\
+    "$HOME/Library/HTTPStorages/1context.binarycookies"|\
+    "$HOME/Library/HTTPStorages/com.haptica.1context.menu"|\
+    "$HOME/Library/HTTPStorages/com.haptica.1context.menu.binarycookies"|\
+    "$HOME/Library/Preferences/com.haptica.1context.plist"|\
+    "$HOME/Library/Saved Application State/com.haptica.1context.menu.savedState"|\
+    "$HOME/Library/WebKit/com.haptica.1context.menu")
       rm -rf "$target"
       ;;
     *)
@@ -49,5 +57,14 @@ if [[ "$DELETE_DATA" == "1" ]]; then
   safe_remove "$HOME/Library/Application Support/1Context"
   safe_remove "$HOME/Library/Logs/1Context"
   safe_remove "$HOME/Library/Caches/1Context"
+  safe_remove "$HOME/Library/Caches/com.haptica.1context.menu"
+  safe_remove "$HOME/Library/HTTPStorages/1context"
+  safe_remove "$HOME/Library/HTTPStorages/1context.binarycookies"
+  safe_remove "$HOME/Library/HTTPStorages/com.haptica.1context.menu"
+  safe_remove "$HOME/Library/HTTPStorages/com.haptica.1context.menu.binarycookies"
   safe_remove "$HOME/Library/Preferences/com.haptica.1context.plist"
+  safe_remove "$HOME/Library/Saved Application State/com.haptica.1context.menu.savedState"
+  safe_remove "$HOME/Library/WebKit/com.haptica.1context.menu"
+  rm -f "$TEMP_DIR"/1context-*.command
+  rm -rf "$TEMP_DIR"/1context-update-*
 fi
