@@ -1,7 +1,9 @@
-# 1Context v0.1.35 Public Preview
+# 1Context v0.1.36 Public Preview
 
 This release includes:
 
+- safer GUI updater Terminal launch
+- immediate menu reflection when `1context stop` stops the runtime
 - version-only release to validate the fixed GUI updater path
 - Homebrew Cask installation for Apple Silicon Macs
 - native macOS menu bar app

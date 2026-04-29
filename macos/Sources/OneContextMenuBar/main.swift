@@ -208,9 +208,22 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
 
   func menuWillOpen(_ menu: NSMenu) {
     let start = perfStart()
+    refreshRuntimeStateForMenuOpen()
     isMenuOpen = true
     renderGeneration += 1
     perfLog("menu.willOpen", start: start)
+  }
+
+  private func refreshRuntimeStateForMenuOpen() {
+    let desiredState = (try? String(contentsOfFile: RuntimePaths.current().desiredStatePath, encoding: .utf8))?
+      .trimmingCharacters(in: .whitespacesAndNewlines)
+    if desiredState == "stopped" {
+      runtimeState = .stopped
+      pendingRuntimeState = nil
+      refreshMenuItems()
+      return
+    }
+    ensureRuntimeRunning(userInitiated: false)
   }
 
   func menuDidClose(_ menu: NSMenu) {
@@ -447,32 +460,45 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
     }
 
     let alertExecutable = menuExecutable.path
-    let fileURL = FileManager.default.temporaryDirectory
-      .appendingPathComponent("1context-\(UUID().uuidString).command")
     let script = """
-    #!/bin/zsh
-    trap 'rm -f "$0"' EXIT
+    printf '%s\\n' 'Updating 1Context with Homebrew.'
+    printf '%s\\n\\n' 'If macOS asks for your password, type it here. Terminal will not show password characters.'
     if \(shellQuote(cliExecutable)) update; then
       \(shellQuote(alertExecutable)) --update-success-alert >/dev/null 2>&1 || osascript -e 'display dialog "1Context updated." buttons {"OK"} default button "OK"'
+      printf '\\n%s\\n' 'Done. This window will close in 3 seconds.'
+      sleep 3
+      exit 0
     else
       status=$?
       osascript -e 'display dialog "Could not update 1Context." buttons {"OK"} default button "OK" with icon caution'
+      printf '\\n%s\\n' 'Update failed. You can close this window.'
       exit $status
     fi
     """
+    guard runTerminalScript(script) else {
+      showFishAlert("Could not open updater.")
+      return
+    }
+  }
+
+  private func runTerminalScript(_ shellScript: String) -> Bool {
     do {
-      try script.write(to: fileURL, atomically: true, encoding: .utf8)
-      guard chmod(fileURL.path, 0o700) == 0 else {
-        showFishAlert("Could not prepare updater.")
-        return
-      }
-      guard NSWorkspace.shared.open(fileURL) else {
-        try? FileManager.default.removeItem(at: fileURL)
-        showFishAlert("Could not open updater.")
-        return
-      }
+      let process = Process()
+      process.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
+      process.arguments = [
+        "-e", "on run argv",
+        "-e", "tell application \"Terminal\"",
+        "-e", "activate",
+        "-e", "do script (item 1 of argv)",
+        "-e", "end tell",
+        "-e", "end run",
+        shellScript,
+      ]
+      try process.run()
+      process.waitUntilExit()
+      return process.terminationStatus == 0
     } catch {
-      showFishAlert("Could not prepare updater.")
+      return false
     }
   }
 
