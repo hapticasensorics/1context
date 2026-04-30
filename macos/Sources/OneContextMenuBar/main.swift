@@ -8,6 +8,7 @@ import OneContextRuntimeSupport
 private enum Constants {
   static let appName = "1Context"
   static let runtimeRefreshMinimumInterval: TimeInterval = 5
+  static let localWebStartupRetryDelays: [TimeInterval] = [1, 3, 10]
 }
 
 nonisolated(unsafe) private var menuInstanceLockFD: Int32 = -1
@@ -152,12 +153,14 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
     refreshMenuItems()
     startDesiredStateMonitor()
     startLocalWebEdge()
+    scheduleLocalWebEdgeStartupRetries()
     runLaunchChores()
     ensureRuntimeRunning(userInitiated: false, force: true)
 
     timer = Timer.scheduledTimer(withTimeInterval: 30, repeats: true) { [weak self] _ in
       Task { @MainActor in
         self?.ensureRuntimeRunning(userInitiated: false, force: true)
+        self?.startLocalWebEdge()
       }
     }
     perfLog("launch.ready", start: start)
@@ -353,6 +356,7 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
         await MainActor.run {
           self.perfLog("runtime.health.ok", start: healthStart)
           self.setRuntimeState(.running)
+          self.startLocalWebEdge()
         }
         return
       } catch let error as UnixSocketError {
@@ -369,6 +373,7 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
             await MainActor.run {
               self.perfLog("runtime.start.ok", start: healthStart)
               self.setRuntimeState(.running)
+              self.startLocalWebEdge()
             }
           } catch {
             await MainActor.run {
@@ -687,8 +692,44 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
 
   private func startLocalWebEdge() {
     localWebQueue.async { [localWeb] in
-      guard let snapshot = try? localWeb.start() else { return }
-      try? AgentConfigStore.writeWikiURL(snapshot.url)
+      AppDelegate.startLocalWebEdge(localWeb)
+    }
+  }
+
+  private func scheduleLocalWebEdgeStartupRetries() {
+    for delay in Constants.localWebStartupRetryDelays {
+      localWebQueue.asyncAfter(deadline: .now() + delay) { [localWeb] in
+        AppDelegate.startLocalWebEdge(localWeb)
+      }
+    }
+  }
+
+  nonisolated private static func startLocalWebEdge(_ localWeb: CaddyManager) {
+    do {
+      let current = localWeb.status()
+      let snapshot = current.running ? current : try localWeb.start()
+      try AgentConfigStore.writeWikiURL(snapshot.url)
+    } catch {
+      recordLocalWebStartFailure(error)
+    }
+  }
+
+  nonisolated private static func recordLocalWebStartFailure(_ error: Error) {
+    let paths = RuntimePaths.current()
+    let log = paths.logDirectory.appendingPathComponent("menu.log")
+    let line = "[\(ISO8601DateFormatter().string(from: Date()))] local-web.start failed: \(error.localizedDescription)\n"
+    do {
+      try RuntimePermissions.ensurePrivateDirectory(paths.logDirectory)
+      if !FileManager.default.fileExists(atPath: log.path) {
+        FileManager.default.createFile(atPath: log.path, contents: nil)
+        chmod(log.path, RuntimePermissions.privateFileMode)
+      }
+      let handle = try FileHandle(forWritingTo: log)
+      try handle.seekToEnd()
+      try handle.write(contentsOf: Data(line.utf8))
+      try handle.close()
+    } catch {
+      // Menu bar logging must never affect startup.
     }
   }
 
