@@ -1,4 +1,5 @@
 import Darwin
+import CryptoKit
 import Foundation
 import OneContextCore
 import OneContextPlatform
@@ -100,24 +101,90 @@ public struct MemoryCoreSetup {
       throw MemoryCoreSetupError.bundleMissing
     }
 
-    let marker = coreDirectory.appendingPathComponent(".1context-bundle-version")
-    let serveMain = coreDirectory.appendingPathComponent("src/onectx/wiki/serve_main.py")
-    let installedVersion = (try? String(contentsOf: marker, encoding: .utf8))?
+    let versionMarker = coreDirectory.appendingPathComponent(".1context-bundle-version")
+    let fingerprintMarker = coreDirectory.appendingPathComponent(".1context-bundle-fingerprint")
+    let sourceFingerprint = try bundleFingerprint(source)
+    let installedVersion = (try? String(contentsOf: versionMarker, encoding: .utf8))?
+      .trimmingCharacters(in: .whitespacesAndNewlines)
+    let installedFingerprint = (try? String(contentsOf: fingerprintMarker, encoding: .utf8))?
       .trimmingCharacters(in: .whitespacesAndNewlines)
 
     let needsInstall = installedVersion != oneContextVersion
+      || installedFingerprint != sourceFingerprint
       || !fileManager.fileExists(atPath: executable.path)
-      || !fileManager.fileExists(atPath: serveMain.path)
     if needsInstall {
       try? fileManager.removeItem(at: coreDirectory)
       try RuntimePermissions.ensurePrivateDirectory(paths.directory)
       try fileManager.copyItem(at: source, to: coreDirectory)
-      try RuntimePermissions.writePrivateString("\(oneContextVersion)\n", toFile: marker.path)
+      try RuntimePermissions.writePrivateString("\(oneContextVersion)\n", toFile: versionMarker.path)
+      try RuntimePermissions.writePrivateString("\(sourceFingerprint)\n", toFile: fingerprintMarker.path)
     }
 
     chmod(executable.path, 0o755)
     try rewriteManagedConfig()
     return needsInstall
+  }
+
+  public func bundleFingerprint(_ source: URL) throws -> String {
+    var hasher = SHA256()
+    let selected = [
+      "pyproject.toml",
+      "uv.lock",
+      "bin",
+      "src",
+      "wiki-engine/src",
+      "wiki-engine/tools",
+      "wiki-engine/theme",
+      "wiki/menu",
+    ]
+
+    for relative in selected {
+      let url = source.appendingPathComponent(relative)
+      guard fileManager.fileExists(atPath: url.path) else { continue }
+      if isDirectory(url) {
+        for file in filesUnder(url) {
+          try hash(file: file, relativeTo: source, into: &hasher)
+        }
+      } else {
+        try hash(file: url, relativeTo: source, into: &hasher)
+      }
+    }
+
+    return hasher.finalize().map { String(format: "%02x", $0) }.joined()
+  }
+
+  private func hash(file: URL, relativeTo root: URL, into hasher: inout SHA256) throws {
+    guard let relative = relativePath(file, from: root) else { return }
+    hasher.update(data: Data(relative.utf8))
+    hasher.update(data: Data([0]))
+    hasher.update(data: try Data(contentsOf: file))
+    hasher.update(data: Data([0]))
+  }
+
+  private func relativePath(_ url: URL, from root: URL) -> String? {
+    let rootPath = root.standardizedFileURL.path
+    let path = url.standardizedFileURL.path
+    guard path.hasPrefix(rootPath + "/") else { return nil }
+    return String(path.dropFirst(rootPath.count + 1))
+  }
+
+  private func filesUnder(_ root: URL) -> [URL] {
+    guard let enumerator = fileManager.enumerator(at: root, includingPropertiesForKeys: [.isRegularFileKey]) else {
+      return []
+    }
+    return enumerator.compactMap { item in
+      guard let url = item as? URL,
+        (try? url.resourceValues(forKeys: [.isRegularFileKey]).isRegularFile) == true
+      else {
+        return nil
+      }
+      return url
+    }.sorted { $0.path < $1.path }
+  }
+
+  private func isDirectory(_ url: URL) -> Bool {
+    var isDirectory: ObjCBool = false
+    return fileManager.fileExists(atPath: url.path, isDirectory: &isDirectory) && isDirectory.boolValue
   }
 
   private func rewriteManagedConfig() throws {
@@ -164,12 +231,6 @@ public struct MemoryCoreSetup {
       arguments: ["-m", "compileall", "-q", coreDirectory.appendingPathComponent("src", isDirectory: true).path],
       currentDirectory: coreDirectory,
       timeout: 120
-    )
-    try runProcess(
-      executable: python,
-      arguments: ["-m", "onectx.wiki.serve_main", "--help"],
-      currentDirectory: coreDirectory,
-      timeout: 30
     )
   }
 

@@ -122,6 +122,34 @@ def test_content_index_excludes_private_source_and_private_outputs(tmp_path: Pat
     assert "markdown" not in index["pages"][0]
 
 
+def test_talk_folder_renders_private_chrome_from_talk_audience(tmp_path: Path) -> None:
+    make_tier_family(tmp_path)
+    talk = tmp_path / "wiki" / "menu" / "10-test" / "10-tiers" / "talk" / "example.talk"
+    talk.mkdir(parents=True)
+    (talk / "_meta.yaml").write_text(
+        "\n".join(
+            [
+                "title: Example - Talk",
+                "slug: example.talk",
+                "talk_for: example",
+                "talk_audience: private",
+                "lede: Talk folder for Example.",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    render_family(tmp_path, "tiers")
+
+    html = (
+        tmp_path / "wiki" / "menu" / "10-test" / "10-tiers" / "generated" / "example.talk.html"
+    ).read_text(encoding="utf-8")
+    assert 'class="opctx-visibility-bar" data-tier="private"' in html
+    assert 'class="opctx-tier-badge" data-tier="private" title="Only you">Private</span>' in html
+    assert 'data-tier="public" title="Anyone with the URL can read">Public</span>' not in html
+
+
 def test_family_paths_cannot_escape_family_directory(tmp_path: Path) -> None:
     make_tier_family(tmp_path)
     manifest = tmp_path / "wiki" / "menu" / "10-test" / "10-tiers" / "family.toml"

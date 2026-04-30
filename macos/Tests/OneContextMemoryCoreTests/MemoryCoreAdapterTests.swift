@@ -184,6 +184,7 @@ final class MemoryCoreAdapterTests: XCTestCase {
     ]))
     XCTAssertNoThrow(try adapter.run(arguments: ["memory", "cycles", "show", "cycle:test-1", "--json"]))
     XCTAssertNoThrow(try adapter.run(arguments: ["memory", "cycles", "validate", "cycle:test-1", "--json"]))
+    XCTAssertNoThrow(try adapter.run(arguments: ["wiki", "render", "--no-evidence", "--json"]))
   }
 
   func testDoctorRequiresStatusJSONContract() throws {
@@ -296,6 +297,39 @@ final class MemoryCoreAdapterTests: XCTestCase {
     XCTAssertTrue(rendered.contains("~/memory-core"))
   }
 
+  func testBundleFingerprintChangesWhenRendererFilesChange() throws {
+    let root = try temporaryRoot()
+    defer { try? FileManager.default.removeItem(at: root) }
+    let bundle = try writeMinimalBundle(root: root, marker: "one")
+    let setup = MemoryCoreSetup(paths: paths(root: root), environment: ["ONECONTEXT_MEMORY_CORE_BUNDLE_DIR": bundle.path])
+
+    let first = try setup.bundleFingerprint(bundle)
+    try "two\n".write(to: bundle.appendingPathComponent("wiki-engine/tools/render-to-dir.mjs"), atomically: true, encoding: .utf8)
+    let second = try setup.bundleFingerprint(bundle)
+
+    XCTAssertNotEqual(first, second)
+  }
+
+  func testEnsureReadyReinstallsBundledCoreWhenFingerprintChangesWithoutVersionChange() throws {
+    let root = try temporaryRoot()
+    defer { try? FileManager.default.removeItem(at: root) }
+    let bundle = try writeMinimalBundle(root: root, marker: "one")
+    try writeFakePython(root: root)
+    let setup = MemoryCoreSetup(
+      paths: paths(root: root),
+      environment: ["ONECONTEXT_MEMORY_CORE_BUNDLE_DIR": bundle.path]
+    )
+
+    _ = try setup.ensureReady(validateContract: false)
+    let installedRenderer = setup.coreDirectory.appendingPathComponent("wiki-engine/tools/render-to-dir.mjs")
+    XCTAssertEqual(try String(contentsOf: installedRenderer, encoding: .utf8), "one\n")
+
+    try "two\n".write(to: bundle.appendingPathComponent("wiki-engine/tools/render-to-dir.mjs"), atomically: true, encoding: .utf8)
+    _ = try setup.ensureReady(validateContract: false)
+
+    XCTAssertEqual(try String(contentsOf: installedRenderer, encoding: .utf8), "two\n")
+  }
+
   private func adapter(root: URL) -> MemoryCoreAdapter {
     MemoryCoreAdapter(paths: paths(root: root))
   }
@@ -327,6 +361,35 @@ final class MemoryCoreAdapterTests: XCTestCase {
     encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
     try encoder.encode(config).write(to: url)
     chmod(url.path, 0o600)
+  }
+
+  private func writeMinimalBundle(root: URL, marker: String) throws -> URL {
+    let bundle = root.appendingPathComponent("bundle", isDirectory: true)
+    try FileManager.default.createDirectory(at: bundle.appendingPathComponent("bin", isDirectory: true), withIntermediateDirectories: true)
+    try FileManager.default.createDirectory(at: bundle.appendingPathComponent("src/onectx/wiki", isDirectory: true), withIntermediateDirectories: true)
+    try FileManager.default.createDirectory(at: bundle.appendingPathComponent("wiki-engine/tools", isDirectory: true), withIntermediateDirectories: true)
+    try FileManager.default.createDirectory(at: bundle.appendingPathComponent("wiki-engine/theme/css", isDirectory: true), withIntermediateDirectories: true)
+    try FileManager.default.createDirectory(at: bundle.appendingPathComponent("wiki/menu", isDirectory: true), withIntermediateDirectories: true)
+    try "fixture\n".write(to: bundle.appendingPathComponent("pyproject.toml"), atomically: true, encoding: .utf8)
+    try "fixture\n".write(to: bundle.appendingPathComponent("uv.lock"), atomically: true, encoding: .utf8)
+    try marker.appending("\n").write(
+      to: bundle.appendingPathComponent("wiki-engine/tools/render-to-dir.mjs"),
+      atomically: true,
+      encoding: .utf8
+    )
+    try "body {}\n".write(to: bundle.appendingPathComponent("wiki-engine/theme/css/theme.css"), atomically: true, encoding: .utf8)
+    try "render\n".write(to: bundle.appendingPathComponent("src/onectx/wiki/render.py"), atomically: true, encoding: .utf8)
+    let executable = bundle.appendingPathComponent("bin/1context-memory-core")
+    try "#!/bin/sh\nprintf '{\"status\":\"ok\",\"schema_version\":1}\\n'\n".write(to: executable, atomically: true, encoding: .utf8)
+    chmod(executable.path, 0o700)
+    return bundle
+  }
+
+  private func writeFakePython(root: URL) throws {
+    let python = paths(root: root).directory.appendingPathComponent("venv/bin/python3")
+    try FileManager.default.createDirectory(at: python.deletingLastPathComponent(), withIntermediateDirectories: true)
+    try "#!/bin/sh\nexit 0\n".write(to: python, atomically: true, encoding: .utf8)
+    chmod(python.path, 0o700)
   }
 
   private func fileMode(_ url: URL) -> String {

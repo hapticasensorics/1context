@@ -28,7 +28,10 @@ public enum AgentHookEvent: String, Codable, CaseIterable, Sendable {
 
 public enum AgentHookPolicy {
   public static let installedClaudeEvents: [AgentHookEvent] = [.sessionStart]
+  public static let installedCodexEvents: [AgentHookEvent] = [.sessionStart]
+  public static let codexSessionStartMatchers: [String] = ["startup", "resume", "clear", "compact"]
   public static let uninstallClaudeEvents: [AgentHookEvent] = AgentHookEvent.allCases
+  public static let uninstallCodexEvents: [AgentHookEvent] = AgentHookEvent.allCases
   public static let managedHookPrefix = "ONECONTEXT_MANAGED_HOOK=1"
   public static let managedStatusLinePrefix = "ONECONTEXT_MANAGED_STATUSLINE=1"
 
@@ -139,6 +142,27 @@ public struct AgentConfig: Codable, Equatable {
   }
 }
 
+public enum AgentConfigStore {
+  public static func writeWikiURL(_ url: String, paths: AgentPaths = .current()) throws {
+    try RuntimePermissions.ensurePrivateDirectory(paths.directory)
+
+    var root: [String: Any] = [:]
+    if let data = try? Data(contentsOf: paths.configFile),
+      let existing = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+    {
+      root = existing
+    }
+
+    root["wiki_url"] = AgentHookExecutor.normalizedWikiURL(url)
+    if root["status_line_label"] == nil {
+      root["status_line_label"] = "1Context wiki"
+    }
+
+    let data = try JSONSerialization.data(withJSONObject: root, options: [.prettyPrinted, .sortedKeys])
+    try RuntimePermissions.writePrivateData(data, to: paths.configFile)
+  }
+}
+
 public struct AgentIntegrationState: Codable, Equatable {
   public var schemaVersion: Int
   public var updatedAt: Date
@@ -234,17 +258,20 @@ public enum AgentIntegrationAction: String {
 public final class AgentIntegrationManager {
   private let paths: AgentPaths
   private let claudeSettingsPath: URL
+  private let codexConfigPath: URL
   private let executablePath: String
   private let fileManager: FileManager
 
   public init(
     paths: AgentPaths = .current(),
     claudeSettingsPath: URL? = nil,
+    codexConfigPath: URL? = nil,
     executablePath: String,
     fileManager: FileManager = .default
   ) {
     self.paths = paths
     self.claudeSettingsPath = claudeSettingsPath ?? Self.defaultClaudeSettingsPath()
+    self.codexConfigPath = codexConfigPath ?? Self.defaultCodexConfigPath()
     self.executablePath = executablePath
     self.fileManager = fileManager
   }
@@ -259,6 +286,18 @@ public final class AgentIntegrationManager {
     }
     return FileManager.default.homeDirectoryForCurrentUser
       .appendingPathComponent(".claude/settings.json")
+  }
+
+  public static func defaultCodexConfigPath(
+    environment: [String: String] = ProcessInfo.processInfo.environment
+  ) -> URL {
+    if AgentHookPolicy.allowsEnvironmentOverrides(environment),
+      let override = environment["ONECONTEXT_CODEX_CONFIG_PATH"]
+    {
+      return URL(fileURLWithPath: override)
+    }
+    return FileManager.default.homeDirectoryForCurrentUser
+      .appendingPathComponent(".codex/config.toml")
   }
 
   public static func preferredExecutablePath(
@@ -283,15 +322,15 @@ public final class AgentIntegrationManager {
   }
 
   public func install() throws -> AgentIntegrationsReport {
-    try mergeClaudeHooks(action: .install)
+    try mergeAgentHooks(action: .install)
   }
 
   public func repair() throws -> AgentIntegrationsReport {
-    try mergeClaudeHooks(action: .repair)
+    try mergeAgentHooks(action: .repair)
   }
 
   public func uninstall() throws -> AgentIntegrationsReport {
-    try mergeClaudeHooks(action: .uninstall)
+    try mergeAgentHooks(action: .uninstall)
   }
 
   public func render(_ report: AgentIntegrationsReport, title: String = "1Context Agent Integrations") -> String {
@@ -414,36 +453,59 @@ public final class AgentIntegrationManager {
   }
 
   private func codexStatus() -> ProviderIntegrationStatus {
-    ProviderIntegrationStatus(
-        provider: .codex,
-        state: .planOnly,
-        detail: "No public Codex hook configuration is modified by this build.",
-        settingsPath: nil,
-        statusLineDetail: nil,
-        installedEvents: [],
-        missingEvents: AgentHookEvent.allCases
+    let text = (try? String(contentsOf: codexConfigPath, encoding: .utf8)) ?? ""
+    let installed = AgentHookPolicy.installedCodexEvents.filter { hasManagedCodexHook(in: text, event: $0) }
+    let missing = AgentHookPolicy.installedCodexEvents.filter { !installed.contains($0) }
+    let state: ProviderIntegrationStatus.State
+    if !fileManager.fileExists(atPath: codexConfigPath.path) || installed.isEmpty {
+      state = .notInstalled
+    } else if installed.count == AgentHookPolicy.installedCodexEvents.count {
+      state = .installed
+    } else {
+      state = .partiallyInstalled
+    }
+    let detail: String
+    switch state {
+    case .installed:
+      detail = "Uses Codex command hooks in the user config file."
+    case .notInstalled:
+      detail = fileManager.fileExists(atPath: codexConfigPath.path)
+        ? "Codex config exists, but no 1Context-managed hooks are installed."
+        : "Codex config is missing; install can create a user config file with 1Context hooks."
+    case .partiallyInstalled:
+      detail = "Some 1Context-managed Codex hooks are missing; repair can restore them."
+    case .planOnly, .manualReview:
+      detail = "Codex hook settings need manual review."
+    }
+    return ProviderIntegrationStatus(
+      provider: .codex,
+      state: state,
+      detail: detail,
+      settingsPath: codexConfigPath.path,
+      statusLineDetail: nil,
+      installedEvents: installed,
+      missingEvents: missing
     )
   }
 
   private func codexTodos() -> [String] {
-    [
-      "Verify Codex hook configuration from local repo docs or first-party files before enabling install/repair.",
-      "Keep Codex integration plan/status-only until the config schema and lifecycle semantics are confirmed."
-    ]
+    []
   }
 
-  private func mergeClaudeHooks(action: AgentIntegrationAction) throws -> AgentIntegrationsReport {
+  private func mergeAgentHooks(action: AgentIntegrationAction) throws -> AgentIntegrationsReport {
+    try mergeClaudeHooks(action: action)
+    try mergeCodexHooks(action: action)
+    let report = status()
+    try writeState(report: report, action: action)
+    return report
+  }
+
+  private func mergeClaudeHooks(action: AgentIntegrationAction) throws {
     switch readClaudeSettings() {
     case .unsafe, .disabled:
-      let report = status()
-      try writeState(report: report, action: action)
-      return report
+      return
     case .missing:
-      guard action != .uninstall else {
-        let report = status()
-        try writeState(report: report, action: action)
-        return report
-      }
+      guard action != .uninstall else { return }
       var root: [String: Any] = [:]
       try applyClaudeAction(&root, action: action)
       try writeClaudeSettings(root)
@@ -451,10 +513,21 @@ public final class AgentIntegrationManager {
       try applyClaudeAction(&root, action: action)
       try writeClaudeSettings(root)
     }
+  }
 
-    let report = status()
-    try writeState(report: report, action: action)
-    return report
+  private func mergeCodexHooks(action: AgentIntegrationAction) throws {
+    if action == .uninstall, !fileManager.fileExists(atPath: codexConfigPath.path) {
+      return
+    }
+    let text = (try? String(contentsOf: codexConfigPath, encoding: .utf8)) ?? ""
+    let updated = codexConfigText(from: text, action: action)
+    guard updated != text || !fileManager.fileExists(atPath: codexConfigPath.path) else { return }
+    try fileManager.createDirectory(
+      at: codexConfigPath.deletingLastPathComponent(),
+      withIntermediateDirectories: true
+    )
+    try Data(updated.utf8).write(to: codexConfigPath, options: .atomic)
+    chmod(codexConfigPath.path, RuntimePermissions.privateFileMode)
   }
 
   private func applyClaudeAction(_ root: inout [String: Any], action: AgentIntegrationAction) throws {
@@ -547,6 +620,7 @@ public final class AgentIntegrationManager {
     return command == "\(AgentHookPolicy.managedStatusLinePrefix) \(shellQuote(executablePath)) agent statusline --provider claude"
       || (command.hasPrefix("\(AgentHookPolicy.managedStatusLinePrefix) ") && command.hasSuffix(" agent statusline --provider claude"))
       || isLegacyOneContextCommand(command, suffix: " agent statusline --provider claude")
+      || LegacyPrivateAgentHookMigration.isStatusLineCommand(command)
   }
 
   private func matcherGroup(event: AgentHookEvent) -> [String: Any] {
@@ -608,6 +682,7 @@ public final class AgentIntegrationManager {
       || (command.hasPrefix("\(AgentHookPolicy.managedHookPrefix) ")
         && command.hasSuffix(" agent hook --provider claude --event \(event.rawValue)"))
       || isLegacyOneContextCommand(command, suffix: " agent hook --provider claude --event \(event.rawValue)")
+      || LegacyPrivateAgentHookMigration.isStartupHookCommand(command)
   }
 
   private func isLegacyOneContextCommand(_ command: String, suffix: String) -> Bool {
@@ -616,6 +691,221 @@ public final class AgentIntegrationManager {
       .trimmingCharacters(in: .whitespacesAndNewlines)
     let unquoted = unquoteShellToken(executable)
     return unquoted == "1context" || unquoted.hasSuffix("/1context") || unquoted.hasSuffix("/1context-cli")
+  }
+
+  private func hasManagedCodexHook(in text: String, event: AgentHookEvent) -> Bool {
+    text.contains(codexCommand(for: event))
+      || text.contains(" agent hook --provider codex --event \(event.rawValue)")
+  }
+
+  private func codexCommand(for event: AgentHookEvent) -> String {
+    "\(AgentHookPolicy.managedHookPrefix) \(shellQuote(executablePath)) agent hook --provider codex --event \(event.rawValue)"
+  }
+
+  private func codexConfigText(from original: String, action: AgentIntegrationAction) -> String {
+    var text = original
+    if text.isEmpty {
+      text = "[features]\ncodex_hooks = true\n\n[hooks]\n"
+    } else {
+      text = ensureCodexHooksFeature(in: text)
+      text = ensureHooksSection(in: text)
+    }
+
+    for event in AgentHookPolicy.uninstallCodexEvents {
+      text = removeCodexEventBlock(from: text, event: event)
+    }
+
+    if action == .install || action == .repair {
+      text = insertCodexEventBlock(codexSessionStartBlock(), in: text)
+    }
+
+    return text.hasSuffix("\n") ? text : text + "\n"
+  }
+
+  private func ensureCodexHooksFeature(in text: String) -> String {
+    guard !text.contains("codex_hooks") else { return text }
+    if let features = text.range(of: #"(?m)^\[features\]\s*$"#, options: .regularExpression) {
+      return text.replacingCharacters(in: features.upperBound..<features.upperBound, with: "\ncodex_hooks = true")
+    }
+    let block = "[features]\ncodex_hooks = true\n\n"
+    guard let firstSection = text.range(of: #"(?m)^\[[^\]]+\]\s*$"#, options: .regularExpression) else {
+      return block + text
+    }
+    return text.replacingCharacters(in: firstSection.lowerBound..<firstSection.lowerBound, with: block)
+  }
+
+  private func ensureHooksSection(in text: String) -> String {
+    if text.range(of: #"(?m)^\[hooks\]\s*$"#, options: .regularExpression) != nil {
+      return text
+    }
+    return (text.hasSuffix("\n") ? text : text + "\n") + "\n[hooks]\n"
+  }
+
+  private func insertCodexEventBlock(_ block: String, in text: String) -> String {
+    guard let hooksRange = hooksSectionRange(in: text) else {
+      return (text.hasSuffix("\n") ? text : text + "\n") + "\n[hooks]\n\(block)"
+    }
+    let section = String(text[hooksRange])
+    let insertionIndex = hooksRange.upperBound
+    let prefix = text[..<insertionIndex]
+    let suffix = text[insertionIndex...]
+    let separator = section.hasSuffix("\n") ? "" : "\n"
+    return String(prefix) + separator + block + String(suffix)
+  }
+
+  private func removeCodexEventBlock(from text: String, event: AgentHookEvent) -> String {
+    guard let range = codexEventBlockRange(in: text, event: event) else { return text }
+    let block = String(text[range])
+    let keptGroups = codexSessionGroups(in: block)
+      .filter { !isManagedOrLegacyCodexGroup($0, event: event) }
+    var replacement = ""
+    if !keptGroups.isEmpty {
+      replacement = renderCodexEventBlock(event: event, groups: keptGroups)
+    }
+    return text.replacingCharacters(in: range, with: replacement)
+  }
+
+  private func codexSessionStartBlock() -> String {
+    let groups = AgentHookPolicy.codexSessionStartMatchers.map { matcher in
+      """
+      { matcher = "\(matcher)", hooks = [
+        { type = "command", command = "\(tomlEscape(codexCommand(for: .sessionStart)))", timeout = 5 },
+      ] }
+      """
+    }
+    return renderCodexEventBlock(event: .sessionStart, groups: groups)
+  }
+
+  private func renderCodexEventBlock(event: AgentHookEvent, groups: [String]) -> String {
+    var lines = ["\(event.rawValue) = ["]
+    for group in groups {
+      lines.append(indentCodexGroup(group) + ",")
+    }
+    lines.append("]\n")
+    return lines.joined(separator: "\n")
+  }
+
+  private func indentCodexGroup(_ group: String) -> String {
+    group
+      .trimmingCharacters(in: .whitespacesAndNewlines)
+      .split(separator: "\n", omittingEmptySubsequences: false)
+      .map { "  \($0)" }
+      .joined(separator: "\n")
+  }
+
+  private func isManagedOrLegacyCodexGroup(_ group: String, event: AgentHookEvent) -> Bool {
+    group.contains(codexCommand(for: event))
+      || group.contains(" agent hook --provider codex --event \(event.rawValue)")
+      || LegacyPrivateAgentHookMigration.isHookCommand(group)
+  }
+
+  private func codexEventBlockRange(in text: String, event: AgentHookEvent) -> Range<String.Index>? {
+    guard let hooksRange = hooksSectionRange(in: text) else { return nil }
+    let section = text[hooksRange]
+    let pattern = ##"(?m)^\s*\#?"## + NSRegularExpression.escapedPattern(for: event.rawValue) + ##"\s*=\s*\["##
+    guard let start = section.range(of: pattern, options: .regularExpression) else { return nil }
+    let absoluteStart = start.lowerBound
+    let scanStart = start.upperBound
+    var depth = 1
+    var index = scanStart
+    var inString = false
+    var escaped = false
+    while index < hooksRange.upperBound {
+      let char = text[index]
+      if inString {
+        if escaped {
+          escaped = false
+        } else if char == "\\" {
+          escaped = true
+        } else if char == "\"" {
+          inString = false
+        }
+      } else if char == "\"" {
+        inString = true
+      } else if char == "[" {
+        depth += 1
+      } else if char == "]" {
+        depth -= 1
+        if depth == 0 {
+          let afterBracket = text.index(after: index)
+          let end = consumeTrailingLineBreak(in: text, from: afterBracket)
+          return absoluteStart..<end
+        }
+      }
+      index = text.index(after: index)
+    }
+    return nil
+  }
+
+  private func hooksSectionRange(in text: String) -> Range<String.Index>? {
+    guard let startHeader = text.range(of: #"(?m)^\[hooks\]\s*$"#, options: .regularExpression) else {
+      return nil
+    }
+    let start = startHeader.upperBound
+    if let nextSection = text[start...].range(of: #"(?m)^\[[^\]]+\]\s*$"#, options: .regularExpression) {
+      return start..<nextSection.lowerBound
+    }
+    return start..<text.endIndex
+  }
+
+  private func codexSessionGroups(in block: String) -> [String] {
+    guard let open = block.firstIndex(of: "[") else { return [] }
+    var groups: [String] = []
+    var index = block.index(after: open)
+    var groupStart: String.Index?
+    var curlyDepth = 0
+    var bracketDepth = 1
+    var inString = false
+    var escaped = false
+    while index < block.endIndex {
+      let char = block[index]
+      if inString {
+        if escaped {
+          escaped = false
+        } else if char == "\\" {
+          escaped = true
+        } else if char == "\"" {
+          inString = false
+        }
+      } else if char == "\"" {
+        inString = true
+      } else if char == "[" {
+        bracketDepth += 1
+      } else if char == "]" {
+        bracketDepth -= 1
+        if bracketDepth == 0 { break }
+      } else if char == "{" {
+        if curlyDepth == 0 && bracketDepth == 1 {
+          groupStart = index
+        }
+        curlyDepth += 1
+      } else if char == "}" {
+        curlyDepth -= 1
+        if curlyDepth == 0, let start = groupStart {
+          groups.append(String(block[start...index]))
+          groupStart = nil
+        }
+      }
+      index = block.index(after: index)
+    }
+    return groups
+  }
+
+  private func consumeTrailingLineBreak(in text: String, from start: String.Index) -> String.Index {
+    var index = start
+    if index < text.endIndex, text[index] == "\r" {
+      index = text.index(after: index)
+    }
+    if index < text.endIndex, text[index] == "\n" {
+      index = text.index(after: index)
+    }
+    return index
+  }
+
+  private func tomlEscape(_ value: String) -> String {
+    value
+      .replacingOccurrences(of: "\\", with: "\\\\")
+      .replacingOccurrences(of: "\"", with: "\\\"")
   }
 
   private func unquoteShellToken(_ value: String) -> String {
@@ -746,7 +1036,7 @@ public enum AgentIntegrationError: Error, LocalizedError {
 }
 
 public struct AgentHookExecutor {
-  public static let defaultWikiURL = "http://127.0.0.1:17319/for-you"
+  public static let defaultWikiURL = "http://wiki.1context.localhost:17319/your-context"
   private static let legacyDefaultWikiURLs: Set<String> = [
     "http://localhost:3210",
     "http://localhost:3210/",

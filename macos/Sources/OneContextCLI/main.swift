@@ -1,6 +1,7 @@
 import Darwin
 import Foundation
 import OneContextAgent
+import OneContextLocalWeb
 import OneContextMemoryCore
 import OneContextRuntimeSupport
 
@@ -89,7 +90,7 @@ struct OneContextCLI {
       1context agent statusline --provider <claude|codex>
       1context agent integrations <status|install|repair|uninstall>
       1context memory-core <status|doctor|configure|run>
-      1context wiki <open|local-url|start|status|stop>
+      1context wiki <local-url|refresh>
     """)
   }
 
@@ -130,6 +131,7 @@ struct OneContextCLI {
       Log: \(paths.logPath)
       Cache: \(paths.cacheDirectory.path)
     """)
+    printLocalWebDiagnostics(redact: false)
   }
 
   static func start() async throws {
@@ -138,6 +140,7 @@ struct OneContextCLI {
     let controller = RuntimeController()
     do {
       let result = try await controller.start()
+      recordCurrentWikiURL()
       print(result.alreadyRunning ? "1Context is already running." : "1Context is running.")
       if debug { await printLifecycleDebug(controller: controller, startedAt: startedAt, error: nil) }
     } catch {
@@ -166,6 +169,7 @@ struct OneContextCLI {
     let controller = RuntimeController()
     do {
       _ = try await controller.quit()
+      CaddyManager().stop()
       print("1Context quit.")
       if debug { await printLifecycleDebug(controller: controller, startedAt: startedAt, error: CLIError.runtimeStopped) }
     } catch {
@@ -180,6 +184,7 @@ struct OneContextCLI {
     let controller = RuntimeController()
     do {
       _ = try await controller.restart()
+      recordCurrentWikiURL()
       print("1Context is running.")
       if debug { await printLifecycleDebug(controller: controller, startedAt: startedAt, error: nil) }
     } catch {
@@ -233,6 +238,7 @@ struct OneContextCLI {
       Health: OK
       Menu Bar: \(menuStatus.userFacingStatus)
       """)
+      recordCurrentWikiURL()
       if !menuStatus.running {
         print("""
 
@@ -283,6 +289,8 @@ struct OneContextCLI {
     print("  App Support: \(displayPath(paths.appSupportDirectory.path, redact: redact))")
     print("  Socket: \(displayPath(paths.socketPath, redact: redact))")
 
+    printLocalWebDiagnostics(redact: redact)
+
     print("\nLaunchAgents:")
     printLaunchAgent(label: LaunchAgentManager.runtimeLabel, redact: redact)
     printLaunchAgent(label: LaunchAgentManager.menuLabel, redact: redact)
@@ -299,6 +307,50 @@ struct OneContextCLI {
     print("\nLogs:")
     printLogTail(title: "Runtime", path: paths.logPath, redact: redact)
     printLogTail(title: "Menu", path: paths.logDirectory.appendingPathComponent("menu.log").path, redact: redact)
+  }
+
+  static func printLocalWebDiagnostics(redact: Bool) {
+    let diagnostics = CaddyManager().diagnostics()
+    let snapshot = diagnostics.snapshot
+    recordWikiURL(snapshot.url)
+
+    print("\nLocal Web:")
+    print("  Health: \(snapshot.running ? "OK" : snapshot.health)")
+    print("  URL: \(snapshot.url)")
+    print("  API Health: \(diagnostics.apiHealth)")
+    print("  API URL: \(diagnostics.apiURL)")
+    print("  API Port: \(diagnostics.apiPort)")
+    print("  API State: \(displayPath(diagnostics.apiStatePath, redact: redact))")
+    if let pid = snapshot.pid {
+      print("  PID: \(pid)")
+    }
+    print("  Caddy: \(diagnostics.caddyExecutableIsExecutable ? "executable" : diagnostics.caddyExecutableExists ? "not executable" : "missing")")
+    print("  Caddy Path: \(displayPath(diagnostics.caddyExecutable, redact: redact))")
+    print("  Bundled Caddy: \(diagnostics.caddyExecutableIsBundled ? "yes" : "no")")
+    print("  Bundled Caddy Path: \(displayPath(diagnostics.bundledCaddyPath, redact: redact))")
+    print("  Bundled Caddy Version: \(diagnostics.bundledCaddyVersion)")
+    print("  Caddyfile: \(displayPath(diagnostics.caddyfilePath, redact: redact))")
+    print("  State: \(displayPath(diagnostics.statePath, redact: redact))")
+    print("  PID File: \(displayPath(diagnostics.pidPath, redact: redact))")
+    print("  Log: \(displayPath(diagnostics.logPath, redact: redact))")
+    print("  Current Site: \(displayPath(diagnostics.currentSitePath, redact: redact))")
+    print("  Previous Site: \(displayPath(diagnostics.previousSitePath, redact: redact))")
+    print("  Next Site: \(displayPath(diagnostics.nextSitePath, redact: redact))")
+    print("  Current Has Index: \(yesNo(diagnostics.currentSiteHasIndex))")
+    print("  Current Has Theme: \(yesNo(diagnostics.currentSiteHasTheme))")
+    print("  Current Has Enhance JS: \(yesNo(diagnostics.currentSiteHasEnhanceJS))")
+    print("  Current Has Health: \(yesNo(diagnostics.currentSiteHasHealth))")
+  }
+
+  @discardableResult
+  static func recordCurrentWikiURL() -> String {
+    let url = CaddyManager().status().url
+    recordWikiURL(url)
+    return url
+  }
+
+  static func recordWikiURL(_ url: String) {
+    try? AgentConfigStore.writeWikiURL(url)
   }
 
   static func logs() throws {
@@ -521,48 +573,35 @@ struct OneContextCLI {
     }
 
     switch args[1] {
-    case "open":
-      try rejectUnknownWikiArguments(allowed: [])
-      let snapshot = try await ensureWikiStarted()
-      try runProcess("/usr/bin/open", [snapshot.url])
-      print("Opened 1Context wiki: \(snapshot.url)")
     case "local-url":
       try rejectUnknownWikiArguments(allowed: [])
-      let snapshot = try await ensureWikiStarted()
+      _ = try await RuntimeController().start()
+      let snapshot = try ensureLocalWebEdgeForCLIWiki()
       print(snapshot.url)
-    case "start":
+    case "refresh":
       try rejectUnknownWikiArguments(allowed: [])
-      let snapshot = try await ensureWikiStarted()
-      print("1Context wiki is running.")
+      _ = try await RuntimeController().start()
+      _ = try ensureLocalWebEdgeForCLIWiki()
+      _ = try await wikiRPC("wiki.refresh", timeout: 5)
+      let snapshot = try await waitForWikiRunning(timeout: 240)
+      print("Refreshed 1Context wiki.")
       print("URL: \(snapshot.url)")
-    case "status":
-      try rejectUnknownWikiArguments(allowed: [])
-      let snapshot = try await wikiRPC("wiki.status")
-      printWikiSnapshot(snapshot)
-      if !snapshot.running {
-        Foundation.exit(1)
-      }
-    case "stop":
-      try rejectUnknownWikiArguments(allowed: [])
-      let snapshot = try await wikiRPC("wiki.stop")
-      print(snapshot.running ? "1Context wiki needs attention." : "1Context wiki is stopped.")
     default:
       throw CLIError.commandFailed("Unknown wiki subcommand: \(args[1])")
     }
   }
 
-  static func ensureWikiStarted() async throws -> WikiServerSnapshot {
-    _ = try await RuntimeController().start()
-    if let snapshot = try? await wikiRPC("wiki.status", timeout: 5), snapshot.running {
-      return snapshot
-    }
-    _ = try await wikiRPC("wiki.start", timeout: 5)
-    return try await waitForWikiRunning(timeout: 240)
+  static func ensureLocalWebEdgeForCLIWiki() throws -> LocalWebSnapshot {
+    let manager = CaddyManager()
+    let current = manager.status()
+    let snapshot = current.running ? current : try manager.start()
+    try? AgentConfigStore.writeWikiURL(snapshot.url)
+    return snapshot
   }
 
-  static func waitForWikiRunning(timeout: TimeInterval) async throws -> WikiServerSnapshot {
+  static func waitForWikiRunning(timeout: TimeInterval) async throws -> LocalWebSnapshot {
     let deadline = Date().addingTimeInterval(timeout)
-    var last = WikiServerSnapshot(running: false, health: "starting")
+    var last = LocalWebSnapshot(running: false, health: "starting")
     repeat {
       last = try await wikiRPC("wiki.status", timeout: 5)
       if last.running { return last }
@@ -571,7 +610,7 @@ struct OneContextCLI {
     throw CLIError.commandFailed("Timed out preparing local wiki. Last state: \(last.health)")
   }
 
-  static func wikiRPC(_ method: String, timeout: TimeInterval = 60) async throws -> WikiServerSnapshot {
+  static func wikiRPC(_ method: String, timeout: TimeInterval = 60) async throws -> LocalWebSnapshot {
     let deadline = Date().addingTimeInterval(timeout)
     var lastError: Error?
     let clientTimeout = Int32(max(2_000, min(120_000, Int(timeout * 1_000))))
@@ -587,28 +626,15 @@ struct OneContextCLI {
     throw lastError ?? CLIError.commandFailed(method)
   }
 
-  static func wikiSnapshot(from payload: [String: Any]) -> WikiServerSnapshot {
-    WikiServerSnapshot(
+  static func wikiSnapshot(from payload: [String: Any]) -> LocalWebSnapshot {
+    LocalWebSnapshot(
       running: payload["running"] as? Bool ?? false,
-      url: payload["url"] as? String ?? WikiServerManager.defaultURL,
+      url: payload["url"] as? String ?? LocalWebDefaults.defaultWikiURL,
       pid: (payload["pid"] as? NSNumber)?.int32Value,
-      route: payload["route"] as? String ?? "/for-you",
+      route: payload["route"] as? String ?? LocalWebDefaults.wikiRoute,
       health: payload["health"] as? String ?? "unknown",
       lastError: payload["lastError"] as? String
     )
-  }
-
-  static func printWikiSnapshot(_ snapshot: WikiServerSnapshot) {
-    print(snapshot.running ? "1Context wiki is running." : "1Context wiki is not running.")
-    print("")
-    print("URL: \(snapshot.url)")
-    print("Health: \(snapshot.health)")
-    if let pid = snapshot.pid {
-      print("PID: \(pid)")
-    }
-    if let lastError = snapshot.lastError {
-      print("Last Error: \(lastError)")
-    }
   }
 
   static func rejectUnknownWikiArguments(allowed: Set<String>) throws {
@@ -690,8 +716,17 @@ struct OneContextCLI {
     if let pid = fields["pid"], !pid.isEmpty {
       return (true, true, "running")
     }
+    if let program = fields["program"], processIsRunning(executablePath: program) {
+      return (true, true, "running")
+    }
     let state = fields["state"] ?? "loaded"
     return (true, false, "\(state), no process")
+  }
+
+  static func processIsRunning(executablePath: String) -> Bool {
+    guard !executablePath.isEmpty, executablePath != "missing" else { return false }
+    let pattern = "^\(NSRegularExpression.escapedPattern(for: executablePath))($| )"
+    return runCapture("/usr/bin/pgrep", ["-f", pattern]).status == 0
   }
 
   static func launchctlPrint(label: String) -> String? {
@@ -751,6 +786,10 @@ struct OneContextCLI {
     guard redact else { return value }
     let home = FileManager.default.homeDirectoryForCurrentUser.path
     return value.replacingOccurrences(of: home, with: "~")
+  }
+
+  static func yesNo(_ value: Bool) -> String {
+    value ? "yes" : "no"
   }
 
   static func readTrimmed(_ path: String) -> String? {

@@ -12,6 +12,7 @@ IDENTITY="${CODESIGN_IDENTITY:-}"
 VERSION="${ONECONTEXT_VERSION:-$(tr -d '[:space:]' < "$ROOT/VERSION")}"
 ARCH="${ONECONTEXT_ARCH:-arm64}"
 MENU_ICON_SOURCE="$MACOS_DIR/Sources/OneContextMenuBar/Resources/MenuBarIcon.png"
+CADDY_SOURCE="${ONECONTEXT_CADDY_PATH:-$(command -v caddy 2>/dev/null || true)}"
 
 swift build --package-path "$MACOS_DIR" -c release --arch "$ARCH"
 BIN_DIR="$(swift build --package-path "$MACOS_DIR" -c release --arch "$ARCH" --show-bin-path)"
@@ -23,6 +24,33 @@ cp "$BIN_DIR/OneContextMenuBar" "$MACOS_APP_DIR/1Context"
 cp "$BIN_DIR/1context" "$MACOS_APP_DIR/1context-cli"
 cp "$BIN_DIR/1contextd" "$MACOS_APP_DIR/1contextd"
 cp "$MENU_ICON_SOURCE" "$RESOURCES_DIR/MenuBarIcon.png"
+CADDY_BUNDLE_DIR="$RESOURCES_DIR/local-web/caddy"
+if [[ -z "$CADDY_SOURCE" || ! -x "$CADDY_SOURCE" ]]; then
+  echo "Release app build requires a Caddy binary. Install caddy or set ONECONTEXT_CADDY_PATH." >&2
+  exit 1
+fi
+mkdir -p "$CADDY_BUNDLE_DIR"
+cp "$CADDY_SOURCE" "$CADDY_BUNDLE_DIR/caddy"
+chmod 755 "$CADDY_BUNDLE_DIR/caddy"
+"$CADDY_BUNDLE_DIR/caddy" version > "$CADDY_BUNDLE_DIR/caddy.version"
+cat > "$CADDY_BUNDLE_DIR/THIRD_PARTY_NOTICES.txt" <<'EOF'
+Caddy
+Homepage: https://caddyserver.com/
+Source: https://github.com/caddyserver/caddy
+License: Apache-2.0
+Bundled by 1Context as the local web edge server so users do not need to
+install or manage a separate Caddy dependency.
+EOF
+if command -v brew >/dev/null 2>&1; then
+  CADDY_PREFIX="$(brew --prefix caddy 2>/dev/null || true)"
+  if [[ -n "$CADDY_PREFIX" ]]; then
+    for notice in LICENSE AUTHORS README.md sbom.spdx.json; do
+      if [[ -f "$CADDY_PREFIX/$notice" ]]; then
+        cp "$CADDY_PREFIX/$notice" "$CADDY_BUNDLE_DIR/$notice"
+      fi
+    done
+  fi
+fi
 if [[ -d "$ROOT/memory-core" ]]; then
   COPYFILE_DISABLE=1 ditto \
     --norsrc \
@@ -34,6 +62,12 @@ if [[ -d "$ROOT/memory-core" ]]; then
   rm -rf \
     "$RESOURCES_DIR/memory-core/.venv" \
     "$RESOURCES_DIR/memory-core/.pytest_cache" \
+    "$RESOURCES_DIR/memory-core/memory/runtime" \
+    "$RESOURCES_DIR/memory-core/storage/lakestore/artifacts.lance" \
+    "$RESOURCES_DIR/memory-core/storage/lakestore/documents.lance" \
+    "$RESOURCES_DIR/memory-core/storage/lakestore/events.lance" \
+    "$RESOURCES_DIR/memory-core/storage/lakestore/evidence.lance" \
+    "$RESOURCES_DIR/memory-core/storage/lakestore/sessions.lance" \
     "$RESOURCES_DIR/memory-core/wiki-engine/node_modules"
   find "$RESOURCES_DIR/memory-core" -type d -name __pycache__ -prune -exec rm -rf {} +
   chmod +x "$RESOURCES_DIR/memory-core/bin/1context-memory-core"
@@ -99,6 +133,12 @@ if [[ "$SIGNING_MODE" == "developer-id" ]]; then
     --force \
     --options runtime \
     --timestamp \
+    --sign "$IDENTITY" \
+    "$CADDY_BUNDLE_DIR/caddy" >/dev/null
+  codesign \
+    --force \
+    --options runtime \
+    --timestamp \
     --entitlements "$MACOS_DIR/entitlements.plist" \
     --sign "$IDENTITY" \
     "$MACOS_APP_DIR/1context-cli" >/dev/null
@@ -124,6 +164,7 @@ if [[ "$SIGNING_MODE" == "developer-id" ]]; then
     --sign "$IDENTITY" \
     "$APP_DIR" >/dev/null
 elif command -v codesign >/dev/null 2>&1; then
+  codesign --force --sign - "$CADDY_BUNDLE_DIR/caddy" >/dev/null
   codesign --force --sign - "$APP_DIR" >/dev/null
 fi
 

@@ -95,8 +95,8 @@ Open going into Tuesday: decide where [[1Context]] redaction tiers live.
     assert result.backlink_edge_count >= 2
 
     staged_article = (staging / "2026-04-20.md").read_text(encoding="utf-8")
-    assert "[onecontext](/demo/concept/1context)" in staged_article
-    assert "[guardian-app](/demo/concept/guardian)" in staged_article
+    assert "[onecontext](/demo/1context)" in staged_article
+    assert "[guardian-app](/demo/guardian)" in staged_article
     assert "[Postgres](https://www.postgresql.org/)" in staged_article
 
     backlinks = json.loads((staging / "_backlinks.json").read_text(encoding="utf-8"))

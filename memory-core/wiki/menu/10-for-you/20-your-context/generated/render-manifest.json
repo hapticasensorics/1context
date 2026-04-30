@@ -1,0 +1,230 @@
+{
+  "checks": [
+    {
+      "id": "wiki.render.succeeded",
+      "status": "passed",
+      "text": "Rendered wiki family your-context."
+    },
+    {
+      "id": "wiki.generated.available",
+      "status": "passed",
+      "text": "4 generated file(s), 2 HTML file(s)."
+    },
+    {
+      "id": "wiki.manifest.written",
+      "status": "passed",
+      "text": "render-manifest.json written beside generated outputs."
+    }
+  ],
+  "engine": {
+    "manifest_schema": "wiki.render-manifest.v1",
+    "name": "@1context/wiki-engine",
+    "path": "wiki-engine",
+    "version": "local"
+  },
+  "family": {
+    "curator_prompt": "wiki/menu/10-for-you/20-your-context/talk/your-context.talk/_curator.md",
+    "generated_dir": "wiki/menu/10-for-you/20-your-context/generated",
+    "id": "your-context",
+    "jobs": {
+      "curator": "memory.wiki.context_curator"
+    },
+    "kind": "operator_context",
+    "label": "Your Context",
+    "manifest_path": "wiki/menu/10-for-you/20-your-context/family.toml",
+    "menu_group": "for-you",
+    "menu_group_label": "For You",
+    "menu_group_order": 10,
+    "menu_order": 20,
+    "path": "wiki/menu/10-for-you/20-your-context",
+    "policies": {
+      "agent_editable": true,
+      "generated_editable": false,
+      "operator_editable": true
+    },
+    "route": "/your-context",
+    "source_dir": "wiki/menu/10-for-you/20-your-context/source",
+    "source_primary": "wiki/menu/10-for-you/20-your-context/source/your-context.md",
+    "talk_conventions": "wiki/menu/10-for-you/20-your-context/talk/your-context.talk/_conventions.md",
+    "talk_dir": "wiki/menu/10-for-you/20-your-context/talk",
+    "talk_primary": "wiki/menu/10-for-you/20-your-context/talk/your-context.talk",
+    "template_version": "local-private-shell@0.1.0"
+  },
+  "include_talk": true,
+  "inputs": [
+    {
+      "bytes": 541,
+      "content_type": "application/toml",
+      "path": "wiki/menu/10-for-you/20-your-context/family.toml",
+      "role": "family_manifest",
+      "sha256": "435e1837337941badef5681ef1db4f0e2297675ad88231f84cad7281f40f78aa"
+    },
+    {
+      "bytes": 49,
+      "content_type": "application/toml",
+      "path": "wiki/menu/10-for-you/group.toml",
+      "role": "menu_group_manifest",
+      "sha256": "99a78f031009550d06d5aaf9562fd9ee60bb700c4a519efeb65e65e6f112ff7a"
+    },
+    {
+      "bytes": 128,
+      "content_type": "application/toml",
+      "path": "wiki/wiki.toml",
+      "role": "wiki_manifest",
+      "sha256": "0baf8d0f116d5715790f5631b585bdf91aef60aa2c5abd9c2d008388c7e438cb"
+    },
+    {
+      "bytes": 265,
+      "content_type": "application/json",
+      "path": "wiki-engine/package.json",
+      "role": "engine_package",
+      "sha256": "3eddedc2e582c7a2131d0f95bcf2a74b24aaca0112fe97e626337548f26c84c8"
+    },
+    {
+      "bytes": 4592,
+      "content_type": "application/json",
+      "path": "wiki-engine/package-lock.json",
+      "role": "engine_lock",
+      "sha256": "a75fe0cb5e3d19978ecd8dfabef35a3aac58fe1e457bdb38ac244e2f733c2684"
+    },
+    {
+      "bytes": 3014,
+      "content_type": "text/markdown",
+      "path": "wiki/menu/10-for-you/20-your-context/source/your-context.md",
+      "role": "source_canonical_private",
+      "sha256": "06da2f7c5d8499467a1cd51d515d3ae782304200ed916ea6e166d425567d999e"
+    },
+    {
+      "bytes": 382,
+      "content_type": "text/markdown",
+      "path": "wiki/menu/10-for-you/20-your-context/talk/your-context.talk/2026-04-29T00-00Z.synthesis.how-to-grow-your-context.md",
+      "role": "talk_entry",
+      "sha256": "5a952cdbb12e822652bc2b33b23f1b881be3a4462bf6a1d9b1765a9225457173"
+    },
+    {
+      "bytes": 1014,
+      "content_type": "text/markdown",
+      "path": "wiki/menu/10-for-you/20-your-context/talk/your-context.talk/_conventions.md",
+      "role": "talk_conventions",
+      "sha256": "d5da938d5bc4ec8c4e1efa8420bbbeb1c045d2fdadb4424d6720462fa9389359"
+    },
+    {
+      "bytes": 457,
+      "content_type": "text/markdown",
+      "path": "wiki/menu/10-for-you/20-your-context/talk/your-context.talk/_curator.md",
+      "role": "curator_prompt",
+      "sha256": "f8b73b5f61b1e6c1f8dfd80298bf9068877b4b4ae61bfe9f1e5f090197ac7bad"
+    },
+    {
+      "bytes": 454,
+      "content_type": "application/yaml",
+      "path": "wiki/menu/10-for-you/20-your-context/talk/your-context.talk/_meta.yaml",
+      "role": "talk_meta",
+      "sha256": "481aac6dd6a35e88119ffc8207ac13ed6649468a5c806e2f50fa3484c0810ac6"
+    },
+    {
+      "bytes": 0,
+      "content_type": "application/octet-stream",
+      "path": "wiki/menu/10-for-you/20-your-context/talk/your-context.talk/archive/.gitkeep",
+      "role": "talk_entry",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  ],
+  "invocations": [
+    {
+      "input_path": "wiki/menu/10-for-you/20-your-context/source/your-context.md",
+      "stderr": "",
+      "stdout": "\u2713 your-context: 41506 bytes \u2192 /Users/paulhan/dev/1context-public-launch/memory-core/wiki/menu/10-for-you/20-your-context/generated/your-context.html"
+    },
+    {
+      "input_path": "wiki/menu/10-for-you/20-your-context/talk/your-context.talk",
+      "stderr": "",
+      "stdout": "\u2713 your-context.talk: 40823 bytes \u2192 /Users/paulhan/dev/1context-public-launch/memory-core/wiki/menu/10-for-you/20-your-context/generated/your-context.talk.html"
+    }
+  ],
+  "output_dir": "wiki/menu/10-for-you/20-your-context/generated",
+  "outputs": [
+    {
+      "audience_tier": "public",
+      "bytes": 41526,
+      "content_type": "text/html",
+      "path": "wiki/menu/10-for-you/20-your-context/generated/your-context.html",
+      "role": "generated_output",
+      "sha256": "46d03f91ed2aafeccfc09757c1ff2ca1789dbd1637f9a70de767afad7a3e89a7"
+    },
+    {
+      "audience_tier": "public",
+      "bytes": 3014,
+      "content_type": "text/markdown",
+      "path": "wiki/menu/10-for-you/20-your-context/generated/your-context.md",
+      "role": "generated_output",
+      "sha256": "06da2f7c5d8499467a1cd51d515d3ae782304200ed916ea6e166d425567d999e"
+    },
+    {
+      "audience_tier": "public",
+      "bytes": 40850,
+      "content_type": "text/html",
+      "path": "wiki/menu/10-for-you/20-your-context/generated/your-context.talk.html",
+      "role": "generated_output",
+      "sha256": "192ca296e275db46e70fe45c983ec846682f226349cf5f1e81f3f4592553f38b"
+    },
+    {
+      "audience_tier": "public",
+      "bytes": 1101,
+      "content_type": "text/markdown",
+      "path": "wiki/menu/10-for-you/20-your-context/generated/your-context.talk.md",
+      "role": "generated_output",
+      "sha256": "0fd038240e65f2881fb36fa6a51d8f41293d580c51bc1f681396638e799a67b6"
+    }
+  ],
+  "rendered_at": "2026-04-30T11:31:21Z",
+  "routes": [
+    {
+      "kind": "latest_family_html",
+      "output_path": "wiki/menu/10-for-you/20-your-context/generated/your-context.html",
+      "route": "/your-context",
+      "source": "latest_for_family.json"
+    },
+    {
+      "kind": "html",
+      "output_path": "wiki/menu/10-for-you/20-your-context/generated/your-context.html",
+      "route": "/your-context",
+      "source": "generated_output"
+    },
+    {
+      "kind": "html",
+      "output_path": "wiki/menu/10-for-you/20-your-context/generated/your-context.talk.html",
+      "route": "/your-context.talk",
+      "source": "generated_output"
+    }
+  ],
+  "schema_version": "wiki.render-manifest.v1",
+  "tier_sources": [
+    {
+      "base": "your-context",
+      "canonical_private_source": "wiki/menu/10-for-you/20-your-context/source/your-context.md",
+      "model": "canonical-private-with-explicit-tier-siblings",
+      "public_reads_private": false,
+      "tiers": {
+        "internal": {
+          "exists": false,
+          "path": "wiki/menu/10-for-you/20-your-context/source/your-context.internal.md",
+          "selected_for_render": false,
+          "sha256": ""
+        },
+        "private": {
+          "exists": true,
+          "path": "wiki/menu/10-for-you/20-your-context/source/your-context.md",
+          "selected_for_render": true,
+          "sha256": "06da2f7c5d8499467a1cd51d515d3ae782304200ed916ea6e166d425567d999e"
+        },
+        "public": {
+          "exists": false,
+          "path": "wiki/menu/10-for-you/20-your-context/source/your-context.public.md",
+          "selected_for_render": false,
+          "sha256": ""
+        }
+      }
+    }
+  ]
+}

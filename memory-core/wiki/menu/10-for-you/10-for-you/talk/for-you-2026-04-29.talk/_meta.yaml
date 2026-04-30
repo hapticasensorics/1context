@@ -1,0 +1,11 @@
+title: For You - Talk
+slug: for-you-2026-04-29.talk
+talk_for: for-you-2026-04-29
+talk_audience: private
+talk_conventions: for-you
+talk_conventions_path: ./_conventions.md
+archive_after_days: 90
+lede: This is the private discussion layer for For You. The article is the readable current state; this page shows how observations, open loops, and proposed memory updates move toward that state.
+see_also:
+  - text: Source page
+    url: /for-you

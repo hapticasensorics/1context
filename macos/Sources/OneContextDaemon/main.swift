@@ -1,5 +1,7 @@
 import Foundation
 import Darwin
+import OneContextAgent
+import OneContextLocalWeb
 import OneContextMemoryCore
 import OneContextRuntimeSupport
 
@@ -67,7 +69,18 @@ final class OneContextDaemon: @unchecked Sendable {
   private let activeClients = DispatchSemaphore(value: maxActiveClients)
   private var listenFD: Int32 = -1
   private lazy var logger = Logger(path: paths.logPath)
-  private lazy var wikiServer = WikiServerManager(runtimePaths: paths)
+  private lazy var localWeb = CaddyManager(runtimePaths: paths)
+  private lazy var wikiPublisher = WikiSitePublisher()
+  private lazy var wikiAPI = WikiLocalAPIServer(
+    config: WikiLocalAPIConfig(environment: ProcessInfo.processInfo.environment),
+    handler: WikiLocalAPIHandler(paths: LocalWebPaths(runtimePaths: paths), renderState: { [weak self] in
+      self?.wikiRenderState ?? "idle"
+    })
+  )
+  private let wikiQueue = DispatchQueue(label: "com.haptica.1context.wiki.publish")
+  private let wikiStateLock = NSLock()
+  private var wikiPreparing = false
+  private var wikiRefreshing = false
 
   func run() throws {
     umask(0o077)
@@ -77,6 +90,8 @@ final class OneContextDaemon: @unchecked Sendable {
     try writePIDFile()
     installSignalHandlers()
     logger.write("1Context runtime started pid=\(getpid()) socket=\(paths.socketPath)")
+    startWikiAPI()
+    publishWikiInBackground(refresh: false)
     acceptLoop()
     cleanup()
   }
@@ -260,32 +275,40 @@ final class OneContextDaemon: @unchecked Sendable {
     case "version":
       return encode(result: ["version": oneContextVersion], id: id)
     case "wiki.status":
-      return encode(result: wikiPayload(wikiServer.status()), id: id)
+      let snapshot = wikiStatus()
+      recordAgentWikiURL(snapshot)
+      return encode(result: wikiPayload(snapshot), id: id)
     case "wiki.start":
       logger.write("wiki.start requested")
-      let current = wikiServer.status()
+      let current = wikiStatus()
       if current.running {
         logger.write("wiki.start already running")
+        recordAgentWikiURL(current)
         return encode(result: wikiPayload(current), id: id)
       }
-      wikiServer.startInBackground()
+      publishWikiInBackground(refresh: false)
       logger.write("wiki.start accepted")
-      return encode(result: wikiPayload(WikiServerSnapshot(running: false, url: WikiServerManager.defaultURL, health: "starting")), id: id)
+      return encode(result: wikiPayload(pendingWikiSnapshot(health: "starting")), id: id)
+    case "wiki.refresh":
+      logger.write("wiki.refresh requested")
+      publishWikiInBackground(refresh: true)
+      logger.write("wiki.refresh accepted")
+      return encode(result: wikiPayload(pendingWikiSnapshot(health: "refreshing")), id: id)
     case "wiki.stop":
       logger.write("wiki.stop requested")
-      wikiServer.stop()
-      return encode(result: wikiPayload(wikiServer.status()), id: id)
+      return encode(result: wikiPayload(wikiStatus()), id: id)
     default:
       return encode(error: "Unknown method: \(method)", id: id)
     }
   }
 
-  private func wikiPayload(_ snapshot: WikiServerSnapshot) -> [String: Any] {
+  private func wikiPayload(_ snapshot: LocalWebSnapshot) -> [String: Any] {
     var payload: [String: Any] = [
       "running": snapshot.running,
       "url": snapshot.url,
       "route": snapshot.route,
-      "health": snapshot.health
+      "health": snapshot.health,
+      "api": wikiAPIPayload()
     ]
     if let pid = snapshot.pid {
       payload["pid"] = Int(pid)
@@ -304,6 +327,113 @@ final class OneContextDaemon: @unchecked Sendable {
       "uptimeSeconds": max(0, Int(Date().timeIntervalSince(startedAt))),
       "pid": Int(getpid())
     ]
+  }
+
+  private func startWikiAPI() {
+    do {
+      let snapshot = try wikiAPI.start()
+      logger.write("wiki API started url=\(snapshot.url)")
+    } catch {
+      logger.write("wiki API failed: \(error.localizedDescription)")
+    }
+  }
+
+  private func wikiStatus() -> LocalWebSnapshot {
+    if isWikiRefreshing {
+      return pendingWikiSnapshot(health: "refreshing")
+    }
+    if isWikiPreparing {
+      return pendingWikiSnapshot(health: "starting")
+    }
+    return localWeb.status()
+  }
+
+  private func pendingWikiSnapshot(health: String) -> LocalWebSnapshot {
+    let current = localWeb.status()
+    return LocalWebSnapshot(running: false, url: current.url, pid: current.pid, route: current.route, health: health)
+  }
+
+  private func publishWikiInBackground(refresh: Bool) {
+    wikiStateLock.lock()
+    if wikiPreparing || wikiRefreshing {
+      wikiStateLock.unlock()
+      return
+    }
+    if refresh {
+      wikiRefreshing = true
+    } else {
+      wikiPreparing = true
+    }
+    wikiStateLock.unlock()
+
+    wikiQueue.async { [self] in
+      defer {
+        wikiStateLock.lock()
+        wikiPreparing = false
+        wikiRefreshing = false
+        wikiStateLock.unlock()
+      }
+      do {
+        let webPaths = LocalWebPaths(runtimePaths: paths)
+        _ = try wikiPublisher.publish(
+          paths: WikiSitePublishPaths(
+            current: webPaths.wikiCurrent,
+            next: webPaths.wikiNext,
+            previous: webPaths.wikiPrevious
+          ),
+          refresh: refresh
+        )
+        let snapshot = localWeb.status()
+        recordAgentWikiURL(snapshot)
+        logger.write("wiki published refresh=\(refresh) url=\(snapshot.url)")
+      } catch {
+        logger.write("wiki publish failed refresh=\(refresh): \(error.localizedDescription)")
+      }
+    }
+  }
+
+  private var isWikiPreparing: Bool {
+    wikiStateLock.lock()
+    defer { wikiStateLock.unlock() }
+    return wikiPreparing
+  }
+
+  private var isWikiRefreshing: Bool {
+    wikiStateLock.lock()
+    defer { wikiStateLock.unlock() }
+    return wikiRefreshing
+  }
+
+  private var wikiRenderState: String {
+    if isWikiRefreshing { return "refreshing" }
+    if isWikiPreparing { return "starting" }
+    return "idle"
+  }
+
+  private func wikiAPIPayload() -> [String: Any] {
+    let snapshot = wikiAPI.snapshot
+    var payload: [String: Any] = [
+      "running": snapshot.running,
+      "url": snapshot.url,
+      "health": snapshot.health,
+      "port": snapshot.port
+    ]
+    if let lastError = snapshot.lastError {
+      payload["lastError"] = lastError
+    }
+    return payload
+  }
+
+  private func writeAgentWikiURL(_ url: String) throws {
+    try AgentConfigStore.writeWikiURL(url, paths: AgentPaths.current())
+  }
+
+  private func recordAgentWikiURL(_ snapshot: LocalWebSnapshot) {
+    do {
+      try writeAgentWikiURL(snapshot.url)
+    } catch {
+      logger.write("agent wiki URL update failed: \(error.localizedDescription)")
+    }
   }
 
   private func encode(result: [String: Any], id: Any) -> Data {
@@ -378,7 +508,7 @@ final class OneContextDaemon: @unchecked Sendable {
   }
 
   private func cleanup() {
-    wikiServer.cleanupForDaemonExit()
+    wikiAPI.stop()
     if listenFD >= 0 {
       close(listenFD)
     }

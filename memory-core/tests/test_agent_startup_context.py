@@ -7,12 +7,13 @@ from onectx.agent.startup_context import build_startup_context
 
 def test_startup_context_renders_default_hook_payload(tmp_path, monkeypatch):
     monkeypatch.setenv("ONECTX_STARTUP_CONTEXT_CONFIG", str(tmp_path / "missing-global.json"))
+    monkeypatch.setenv("ONECONTEXT_AGENT_DIR", str(tmp_path / "missing-agent"))
     (tmp_path / "1context.toml").write_text('active_plugin = "base-memory-v1"\n', encoding="utf-8")
 
     context = build_startup_context(provider="claude", cwd=tmp_path)
 
     assert context.repo_root == tmp_path
-    assert "Local wiki: http://127.0.0.1:17319/for-you" in context.message
+    assert "Local wiki: http://wiki.1context.localhost:17319/your-context" in context.message
     assert "1Context Librarian" in context.message
     assert context.hook_payload() == {
         "hookSpecificOutput": {
@@ -24,6 +25,7 @@ def test_startup_context_renders_default_hook_payload(tmp_path, monkeypatch):
 
 def test_startup_context_uses_runtime_template_config(tmp_path, monkeypatch):
     monkeypatch.setenv("ONECTX_STARTUP_CONTEXT_CONFIG", str(tmp_path / "missing-global.json"))
+    monkeypatch.setenv("ONECONTEXT_AGENT_DIR", str(tmp_path / "missing-agent"))
     (tmp_path / "AGENTS.md").write_text("# notes\n", encoding="utf-8")
     config_path = tmp_path / "memory" / "runtime" / "agent" / "startup-context.json"
     config_path.parent.mkdir(parents=True)
@@ -46,8 +48,38 @@ def test_startup_context_uses_runtime_template_config(tmp_path, monkeypatch):
     )
 
 
+def test_startup_context_uses_live_agent_config_for_wiki_url(tmp_path, monkeypatch):
+    monkeypatch.setenv("ONECTX_STARTUP_CONTEXT_CONFIG", str(tmp_path / "missing-global.json"))
+    agent_dir = tmp_path / "agent"
+    monkeypatch.setenv("ONECONTEXT_AGENT_DIR", str(agent_dir))
+    (tmp_path / "AGENTS.md").write_text("# notes\n", encoding="utf-8")
+    startup_config = tmp_path / "memory" / "runtime" / "agent" / "startup-context.json"
+    startup_config.parent.mkdir(parents=True)
+    startup_config.write_text(
+        json.dumps(
+            {
+                "wiki_url": "http://wiki.1context.localhost:17319/your-context",
+                "message_template": "{wiki_url}",
+            }
+        ),
+        encoding="utf-8",
+    )
+    agent_dir.mkdir()
+    agent_config = agent_dir / "config.json"
+    agent_config.write_text(
+        json.dumps({"wiki_url": "http://wiki.1context.localhost:17419/your-context"}),
+        encoding="utf-8",
+    )
+
+    context = build_startup_context(provider="claude", cwd=tmp_path)
+
+    assert context.message == "http://wiki.1context.localhost:17419/your-context"
+    assert context.config_paths == (startup_config, agent_config)
+
+
 def test_disabled_startup_context_returns_empty_hook_payload(tmp_path, monkeypatch):
     monkeypatch.setenv("ONECTX_STARTUP_CONTEXT_CONFIG", str(tmp_path / "missing-global.json"))
+    monkeypatch.setenv("ONECONTEXT_AGENT_DIR", str(tmp_path / "missing-agent"))
     (tmp_path / "1context.toml").write_text('active_plugin = "base-memory-v1"\n', encoding="utf-8")
     config_path = tmp_path / "memory" / "runtime" / "agent" / "startup-context.json"
     config_path.parent.mkdir(parents=True)

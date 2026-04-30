@@ -268,7 +268,7 @@ def build_librarian_prompt(
 
     route = str(payload.get("route") or "")
     title = str((payload.get("page") or {}).get("title") or "")
-    origin = str(payload.get("origin") or "http://127.0.0.1:17319").rstrip("/")
+    origin = str(payload.get("origin") or "http://wiki.1context.localhost:17319").rstrip("/")
     state = state or {}
     turn = turn or build_turn_record(state, payload, message)
     metadata = {
@@ -437,7 +437,7 @@ def provider_failure_message(provider: str, stdout: str, stderr: str) -> str:
         result = str(data.get("result") or data.get("message") or "").strip()
         if "not logged in" in result.lower():
             if provider == "claude":
-                return "Claude Code is not logged in for the local wiki server. Run `claude /login` in Terminal, or choose Codex as the Librarian provider."
+                return "Claude Code is not logged in for the local wiki. Run `claude /login` in Terminal, or choose Codex as the Librarian provider."
             return f"{provider} is not logged in."
         if result:
             return result

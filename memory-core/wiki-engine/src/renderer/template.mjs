@@ -1120,6 +1120,11 @@ export function renderShell({
       </div>`
     : `<div class="opctx-article-body">${conventionsBanner}${bodyHtml}</div>`;
   const shareModalHtml = audienceStreams ? renderShareModal({ title, activeAudienceStream }) : '';
+  const headingExtras = [
+    summary ? `<p class="opctx-subtitle">${escape(summary)}</p>` : '',
+    statusBanner,
+  ].filter(Boolean).join('');
+  const headingExtrasHtml = headingExtras ? `\n        ${headingExtras}` : '';
 
   return `<!doctype html>
 <html lang="${escape(language)}" ${dataAttrs}>
@@ -1179,8 +1184,7 @@ export function renderShell({
 
     <main class="opctx-main">
       <article class="opctx-article">
-        <h1>${escape(title)}</h1>
-        ${summary ? `<p class="opctx-subtitle">${escape(summary)}</p>` : ''}${statusBanner}
+        <h1>${escape(title)}</h1>${headingExtrasHtml}
 
         ${articleBody}
       </article>

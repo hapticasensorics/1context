@@ -10,7 +10,7 @@ from typing import Any
 from urllib.parse import quote
 
 
-DEFAULT_WIKI_URL = "http://127.0.0.1:17319/for-you"
+DEFAULT_WIKI_URL = "http://wiki.1context.localhost:17319/your-context"
 DEFAULT_TEMPLATE = """1Context is available for this session.
 
 Local wiki: {wiki_url}
@@ -62,10 +62,13 @@ def build_startup_context(
     resolved_cwd = resolve_cwd(cwd, hook_input)
     repo_root = find_repo_root(resolved_cwd)
     config, config_paths = load_startup_config(repo_root)
+    live_agent_config, live_agent_config_path = load_live_agent_config()
     resolved_provider = normalize_provider(provider or text(hook_input.get("provider")) or "generic")
     resolved_wiki_url = (
         text(wiki_url)
         or text(os.environ.get("ONECTX_WIKI_URL"))
+        or text(os.environ.get("ONECONTEXT_WIKI_URL"))
+        or text(live_agent_config.get("wiki_url"))
         or text(config.get("wiki_url"))
         or DEFAULT_WIKI_URL
     )
@@ -87,7 +90,7 @@ def build_startup_context(
         wiki_url=resolved_wiki_url,
         message=message,
         enabled=enabled,
-        config_paths=config_paths,
+        config_paths=config_paths + ((live_agent_config_path,) if live_agent_config_path else ()),
     )
 
 
@@ -124,6 +127,28 @@ def load_startup_config(repo_root: Path | None) -> tuple[dict[str, Any], tuple[P
     return config, tuple(loaded)
 
 
+def load_live_agent_config() -> tuple[dict[str, Any], Path | None]:
+    payload = read_json_object(live_agent_config_path())
+    if payload is None:
+        return {}, None
+    return payload, live_agent_config_path()
+
+
+def live_agent_config_path() -> Path:
+    agent_dir = text(os.environ.get("ONECONTEXT_AGENT_DIR"))
+    if agent_dir:
+        return Path(agent_dir).expanduser() / "config.json"
+
+    app_support_dir = text(os.environ.get("ONECONTEXT_APP_SUPPORT_DIR"))
+    if app_support_dir:
+        return Path(app_support_dir).expanduser() / "agent" / "config.json"
+
+    if sys.platform == "darwin":
+        return Path.home() / "Library" / "Application Support" / "1Context" / "agent" / "config.json"
+
+    return Path.home() / ".1context" / "agent" / "config.json"
+
+
 def read_json_object(path: Path) -> dict[str, Any] | None:
     if not path.exists():
         return None
@@ -135,7 +160,7 @@ def read_json_object(path: Path) -> dict[str, Any] | None:
 
 
 def template_values(*, provider: str, cwd: Path, repo_root: Path | None, wiki_url: str) -> dict[str, str]:
-    base_url = wiki_url.removesuffix("/for-you")
+    base_url = wiki_url.removesuffix("/your-context").removesuffix("/for-you")
     return {
         "provider": provider,
         "cwd": str(cwd),
@@ -179,4 +204,3 @@ def text(value: Any) -> str:
 class DefaultingDict(dict[str, str]):
     def __missing__(self, key: str) -> str:
         return "{" + key + "}"
-

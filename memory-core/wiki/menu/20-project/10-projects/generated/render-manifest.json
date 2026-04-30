@@ -1,0 +1,230 @@
+{
+  "checks": [
+    {
+      "id": "wiki.render.succeeded",
+      "status": "passed",
+      "text": "Rendered wiki family projects."
+    },
+    {
+      "id": "wiki.generated.available",
+      "status": "passed",
+      "text": "4 generated file(s), 2 HTML file(s)."
+    },
+    {
+      "id": "wiki.manifest.written",
+      "status": "passed",
+      "text": "render-manifest.json written beside generated outputs."
+    }
+  ],
+  "engine": {
+    "manifest_schema": "wiki.render-manifest.v1",
+    "name": "@1context/wiki-engine",
+    "path": "wiki-engine",
+    "version": "local"
+  },
+  "family": {
+    "curator_prompt": "wiki/menu/20-project/10-projects/talk/projects.talk/_curator.md",
+    "generated_dir": "wiki/menu/20-project/10-projects/generated",
+    "id": "projects",
+    "jobs": {
+      "curator": "memory.wiki.project_curator"
+    },
+    "kind": "project_index",
+    "label": "Projects",
+    "manifest_path": "wiki/menu/20-project/10-projects/family.toml",
+    "menu_group": "project",
+    "menu_group_label": "Project",
+    "menu_group_order": 20,
+    "menu_order": 10,
+    "path": "wiki/menu/20-project/10-projects",
+    "policies": {
+      "agent_editable": true,
+      "generated_editable": false,
+      "operator_editable": true
+    },
+    "route": "/projects",
+    "source_dir": "wiki/menu/20-project/10-projects/source",
+    "source_primary": "wiki/menu/20-project/10-projects/source/projects.md",
+    "talk_conventions": "wiki/menu/20-project/10-projects/talk/projects.talk/_conventions.md",
+    "talk_dir": "wiki/menu/20-project/10-projects/talk",
+    "talk_primary": "wiki/menu/20-project/10-projects/talk/projects.talk",
+    "template_version": "local-private-shell@0.1.0"
+  },
+  "include_talk": true,
+  "inputs": [
+    {
+      "bytes": 510,
+      "content_type": "application/toml",
+      "path": "wiki/menu/20-project/10-projects/family.toml",
+      "role": "family_manifest",
+      "sha256": "c4edfa8c68af5d82c7da193b796e2470bc229e24c0cd17b0a50c9168d7c91816"
+    },
+    {
+      "bytes": 49,
+      "content_type": "application/toml",
+      "path": "wiki/menu/20-project/group.toml",
+      "role": "menu_group_manifest",
+      "sha256": "17111887523d12513ac6a75098a722c2b2f3d7157610e38fedd2fe2538ada138"
+    },
+    {
+      "bytes": 128,
+      "content_type": "application/toml",
+      "path": "wiki/wiki.toml",
+      "role": "wiki_manifest",
+      "sha256": "0baf8d0f116d5715790f5631b585bdf91aef60aa2c5abd9c2d008388c7e438cb"
+    },
+    {
+      "bytes": 265,
+      "content_type": "application/json",
+      "path": "wiki-engine/package.json",
+      "role": "engine_package",
+      "sha256": "3eddedc2e582c7a2131d0f95bcf2a74b24aaca0112fe97e626337548f26c84c8"
+    },
+    {
+      "bytes": 4592,
+      "content_type": "application/json",
+      "path": "wiki-engine/package-lock.json",
+      "role": "engine_lock",
+      "sha256": "a75fe0cb5e3d19978ecd8dfabef35a3aac58fe1e457bdb38ac244e2f733c2684"
+    },
+    {
+      "bytes": 1707,
+      "content_type": "text/markdown",
+      "path": "wiki/menu/20-project/10-projects/source/projects.md",
+      "role": "source_canonical_private",
+      "sha256": "f20f5048b7a42c5ee612686d57dad617af7aac44efe89ae9002e8ccff00d7f83"
+    },
+    {
+      "bytes": 365,
+      "content_type": "text/markdown",
+      "path": "wiki/menu/20-project/10-projects/talk/projects.talk/2026-04-29T00-00Z.synthesis.project-index-rules.md",
+      "role": "talk_entry",
+      "sha256": "7126c111e148cd7994cd89c5fd273dbe66d7bd59166057ab4dcecab1e9c0d5a4"
+    },
+    {
+      "bytes": 1007,
+      "content_type": "text/markdown",
+      "path": "wiki/menu/20-project/10-projects/talk/projects.talk/_conventions.md",
+      "role": "talk_conventions",
+      "sha256": "c0bc9dd4d4c4c20cdb698dba8b7c1e03feb49e39a22b1df7e09f5a390185794e"
+    },
+    {
+      "bytes": 444,
+      "content_type": "text/markdown",
+      "path": "wiki/menu/20-project/10-projects/talk/projects.talk/_curator.md",
+      "role": "curator_prompt",
+      "sha256": "72941861b94c404c06b1873a54ec5833fb13bc2e24280ee7fd9a4e31d55d2149"
+    },
+    {
+      "bytes": 418,
+      "content_type": "application/yaml",
+      "path": "wiki/menu/20-project/10-projects/talk/projects.talk/_meta.yaml",
+      "role": "talk_meta",
+      "sha256": "446d1f46bcf06ce6f85cd7455cabf90740e20a52842e154aaca1c449e2922139"
+    },
+    {
+      "bytes": 0,
+      "content_type": "application/octet-stream",
+      "path": "wiki/menu/20-project/10-projects/talk/projects.talk/archive/.gitkeep",
+      "role": "talk_entry",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  ],
+  "invocations": [
+    {
+      "input_path": "wiki/menu/20-project/10-projects/source/projects.md",
+      "stderr": "",
+      "stdout": "\u2713 projects: 39471 bytes \u2192 /Users/paulhan/dev/1context-public-launch/memory-core/wiki/menu/20-project/10-projects/generated/projects.html"
+    },
+    {
+      "input_path": "wiki/menu/20-project/10-projects/talk/projects.talk",
+      "stderr": "",
+      "stdout": "\u2713 projects.talk: 40719 bytes \u2192 /Users/paulhan/dev/1context-public-launch/memory-core/wiki/menu/20-project/10-projects/generated/projects.talk.html"
+    }
+  ],
+  "output_dir": "wiki/menu/20-project/10-projects/generated",
+  "outputs": [
+    {
+      "audience_tier": "public",
+      "bytes": 39491,
+      "content_type": "text/html",
+      "path": "wiki/menu/20-project/10-projects/generated/projects.html",
+      "role": "generated_output",
+      "sha256": "11a7dec81a2924353356431461cb681a24831bccf2b2fda337becefeae878856"
+    },
+    {
+      "audience_tier": "public",
+      "bytes": 1707,
+      "content_type": "text/markdown",
+      "path": "wiki/menu/20-project/10-projects/generated/projects.md",
+      "role": "generated_output",
+      "sha256": "f20f5048b7a42c5ee612686d57dad617af7aac44efe89ae9002e8ccff00d7f83"
+    },
+    {
+      "audience_tier": "public",
+      "bytes": 40746,
+      "content_type": "text/html",
+      "path": "wiki/menu/20-project/10-projects/generated/projects.talk.html",
+      "role": "generated_output",
+      "sha256": "f827a387ad5c65274a98f84672e87fa1970b13fb9b2c00639596e0b4370822c2"
+    },
+    {
+      "audience_tier": "public",
+      "bytes": 1027,
+      "content_type": "text/markdown",
+      "path": "wiki/menu/20-project/10-projects/generated/projects.talk.md",
+      "role": "generated_output",
+      "sha256": "741032b130cab69731317b28d1c56c1930967755951381459b507e83f4fb45ab"
+    }
+  ],
+  "rendered_at": "2026-04-30T11:31:21Z",
+  "routes": [
+    {
+      "kind": "latest_family_html",
+      "output_path": "wiki/menu/20-project/10-projects/generated/projects.html",
+      "route": "/projects",
+      "source": "latest_for_family.json"
+    },
+    {
+      "kind": "html",
+      "output_path": "wiki/menu/20-project/10-projects/generated/projects.html",
+      "route": "/projects",
+      "source": "generated_output"
+    },
+    {
+      "kind": "html",
+      "output_path": "wiki/menu/20-project/10-projects/generated/projects.talk.html",
+      "route": "/projects.talk",
+      "source": "generated_output"
+    }
+  ],
+  "schema_version": "wiki.render-manifest.v1",
+  "tier_sources": [
+    {
+      "base": "projects",
+      "canonical_private_source": "wiki/menu/20-project/10-projects/source/projects.md",
+      "model": "canonical-private-with-explicit-tier-siblings",
+      "public_reads_private": false,
+      "tiers": {
+        "internal": {
+          "exists": false,
+          "path": "wiki/menu/20-project/10-projects/source/projects.internal.md",
+          "selected_for_render": false,
+          "sha256": ""
+        },
+        "private": {
+          "exists": true,
+          "path": "wiki/menu/20-project/10-projects/source/projects.md",
+          "selected_for_render": true,
+          "sha256": "f20f5048b7a42c5ee612686d57dad617af7aac44efe89ae9002e8ccff00d7f83"
+        },
+        "public": {
+          "exists": false,
+          "path": "wiki/menu/20-project/10-projects/source/projects.public.md",
+          "selected_for_render": false,
+          "sha256": ""
+        }
+      }
+    }
+  ]
+}

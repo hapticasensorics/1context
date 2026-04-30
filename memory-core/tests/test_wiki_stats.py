@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 
 from onectx.wiki.cli import render_stats_dashboard
+from onectx.wiki.routes import load_route_table
 from onectx.wiki.site import WIKI_STATS_FILENAME, build_wiki_stats, load_wiki_stats, write_site_files
 
 
@@ -51,6 +52,32 @@ def test_wiki_stats_count_sources_talk_and_links(tmp_path: Path) -> None:
     assert stats["links"]["external"] == 1
     assert stats["links"]["broken_internal"] == 1
     assert stats["families"][0]["id"] == "example"
+
+
+def test_route_table_includes_rendered_talk_pages(tmp_path: Path) -> None:
+    make_family(tmp_path)
+    generated = tmp_path / "wiki" / "menu" / "10-group" / "10-example" / "generated"
+    (generated / "example.html").write_text("<h1>Example</h1>", encoding="utf-8")
+    (generated / "example.talk.html").write_text("<h1>Example Talk</h1>", encoding="utf-8")
+    (generated / "render-manifest.json").write_text(
+        json.dumps(
+            {
+                "family": {"id": "example"},
+                "routes": [
+                    {"route": "/example", "output_path": "example.html", "kind": "html"},
+                    {"route": "/example.talk", "output_path": "example.talk.html", "kind": "html"},
+                ],
+                "outputs": [{"path": "example.html"}, {"path": "example.talk.html"}],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    routes = load_route_table(tmp_path).routes
+
+    assert "/example" in routes
+    assert "/example.talk" in routes
+    assert "/example.talk.html" in routes
 
 
 def test_write_site_files_writes_stats_file(tmp_path: Path) -> None:

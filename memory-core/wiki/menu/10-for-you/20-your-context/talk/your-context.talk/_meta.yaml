@@ -1,0 +1,11 @@
+title: Your Context - Talk
+slug: your-context.talk
+talk_for: your-context
+talk_audience: private
+talk_conventions: your-context
+talk_conventions_path: ./_conventions.md
+archive_after_days: 90
+lede: This is the private discussion layer for Your Context. Use it to propose stable observations about working style, preferences, habits, tools, and standing requests before they become durable guidance.
+see_also:
+  - text: Source page
+    url: /your-context

@@ -287,23 +287,32 @@ footer_enabled: true
 
 # {title}
 
-<!-- section: {{ slug: "biography", talk: false }} -->
-## Biography
+This rolling memory surface is ready for recent work, open loops, and proposed
+memory updates. It should be readable by humans and specific enough for agents
+to know what belongs here.
 
-<!-- empty: weekly-rewrite slot -->
-
-<!-- section: {{ slug: "{today}", talk: true, date: "{today}" }} -->
+<!-- section: {{ slug: "today", talk: true, date: "{today}" }} -->
 ## Today - {today}
 
-<!-- empty: current-day slot -->
+No observations have been promoted yet.
+
+Agents should add concise, evidence-backed notes when recent work would help a
+future session resume.
+
+## Memory Queue
+
+Use this section for observations that look important but are not yet stable
+enough for a durable page.
 
 ## Open Questions
 
-<!-- empty: agent-populated -->
+No open questions have been promoted yet.
 
 ## See Also
 
-<!-- empty: agent-populated -->
+- [Your Context](/your-context)
+- [Projects](/projects)
+- [Topics](/topics)
 """
     return """---
 title: {title}
@@ -323,15 +332,20 @@ footer_enabled: true
 
 # {title}
 
-<!-- empty: template-created page; fill with durable context before treating as authoritative. -->
+This page is ready for durable private context. The article is the readable
+state; the talk page is where agents and humans can propose changes before
+editing it.
 
 ## Overview
 
-<!-- empty: agent-populated -->
+No durable content has been promoted yet.
+
+Agents should add evidence-backed summaries that future sessions would benefit
+from reading.
 
 ## Links
 
-<!-- empty: agent-populated -->
+No links have been promoted yet.
 """
 
 
@@ -343,7 +357,7 @@ talk_audience: private
 talk_conventions: {family_id}
 talk_conventions_path: ./_conventions.md
 archive_after_days: {archive_after_days}
-lede: Talk folder for {title}.
+lede: This is the private discussion layer for {title}. Use it for proposals, questions, decisions, corrections, and memory notes before editing the article.
 see_also:
   - text: Source page
     url: {route}
@@ -354,8 +368,10 @@ def default_curator_template(_family: WikiFamily) -> str:
     return """# Curator Prompt - {title}
 
 Maintain `{route}` as a private, operator-readable wiki page. Prefer small,
-evidence-backed edits. Use this talk folder for proposals, decisions,
-contradictions, redactions, and questions before changing durable article text.
+evidence-backed edits that help a future human or agent resume work.
+
+Use this talk folder for proposals, decisions, contradictions, redactions, and
+questions before changing durable article text.
 
 When applying a decision, leave an explicit `decided` entry in talk. Do not
 silently erase uncertainty from the discussion history.
@@ -365,11 +381,12 @@ silently erase uncertainty from the discussion history.
 def default_conventions_template(_family: WikiFamily) -> str:
     return """# Talk Conventions - {title}
 
-Use one timestamped markdown file per contribution.
+Talk pages are visible working memory. They are useful to humans and agents:
+the article shows the clean current state, while talk preserves the reasoning
+that got it there.
 
-Each top-level thread is one topic. Replies use `parent:` frontmatter pointing
-to the parent filename or stem. Treat this folder as append-only active working
-memory for `{route}`; the curated article is the readable state.
+Use one timestamped markdown file per contribution. Each top-level thread is one
+topic. Replies use `parent:` frontmatter pointing to the parent filename or stem.
 
 Agents should usually propose in talk first, then a curator/editor applies
 accepted changes to the source page.

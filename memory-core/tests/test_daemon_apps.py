@@ -49,12 +49,6 @@ def test_start_app_reports_immediate_startup_exit(tmp_path: Path) -> None:
     assert app_status(system)[0]["status"] == "failed"
 
 
-def test_repo_wiki_app_uses_strict_supervised_port() -> None:
-    wiki = next(app for app in load_apps(Path.cwd()) if app.id == "wiki")
-
-    assert "--no-port-fallback" in wiki.command
-
-
 def test_stop_app_refuses_stale_reused_pid(tmp_path: Path) -> None:
     (tmp_path / "apps").mkdir()
     (tmp_path / "apps" / "apps.toml").write_text(

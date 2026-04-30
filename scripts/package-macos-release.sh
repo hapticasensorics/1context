@@ -48,5 +48,8 @@ COPYFILE_DISABLE=1 tar \
   -czf "$ARCHIVE" \
   "$(basename "$PACKAGE_DIR")"
 "$ROOT/scripts/validate-release-artifact.sh" "$ARCHIVE"
+if [[ "${RUN_RELEASE_APP_SMOKE:-1}" == "1" ]]; then
+  "$ROOT/scripts/test-release-app-local.sh" "$ARCHIVE"
+fi
 shasum -a 256 "$ARCHIVE"
 echo "$ARCHIVE"

@@ -433,6 +433,7 @@ function main() {
     const folder = renderTalkFolder(inputPath);
     const fm = folder.frontmatter;
     if (!fm.slug) fm.slug = slug;
+    if (!fm.access && fm.talk_audience) fm.access = fm.talk_audience;
 
     const talkConventions = loadTalkConventions(fm, inputPath);
     let tocHtml = buildToc(folder.bodyHtml);

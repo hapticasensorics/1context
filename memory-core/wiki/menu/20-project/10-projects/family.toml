@@ -1,0 +1,26 @@
+id = "projects"
+label = "Projects"
+kind = "project_index"
+route = "/projects"
+menu_group = "project"
+menu_order = 10
+template_version = "local-private-shell@0.1.0"
+
+[source]
+primary = "source/projects.md"
+
+[talk]
+primary = "talk/projects.talk"
+conventions = "talk/projects.talk/_conventions.md"
+curator_prompt = "talk/projects.talk/_curator.md"
+
+[generated]
+dir = "generated"
+
+[jobs]
+curator = "memory.wiki.project_curator"
+
+[policies]
+operator_editable = true
+agent_editable = true
+generated_editable = false

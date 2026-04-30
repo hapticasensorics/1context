@@ -271,7 +271,7 @@ function composeBody(entries, replyMap, marked, lede, seeAlso, curatorMd) {
   }
 
   if (topLevel.length === 0) {
-    parts.push(`<p class="opctx-talk-empty"><em>(stub — no posts yet)</em></p>`);
+    parts.push(`<p class="opctx-talk-empty"><em>No discussion yet. Add a timestamped entry here when there is a proposal, question, decision, or memory note worth preserving.</em></p>`);
   }
 
   if (seeAlso && seeAlso.length > 0) {
@@ -348,7 +348,9 @@ export function renderTalkFolder(folderPath) {
       mdLines.push('');
     }
   }
-  if (entries.length === 0) mdLines.push('*(stub — no posts yet)*\n');
+  if (entries.length === 0) {
+    mdLines.push('*No discussion yet. Add a timestamped entry here when there is a proposal, question, decision, or memory note worth preserving.*\n');
+  }
   if (seeAlso && seeAlso.length) {
     mdLines.push('## See also\n');
     for (const item of seeAlso) mdLines.push(`- [${item.text}](${item.url})`);

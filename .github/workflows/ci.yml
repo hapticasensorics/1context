@@ -23,6 +23,10 @@ jobs:
           swift --version
           xcodebuild -version
           brew --version
+      - name: Install bundled web edge dependency
+        run: |
+          brew install caddy
+          caddy version
       - run: ./scripts/check-version-consistency.sh
       - run: swift test --package-path macos
       - run: ./scripts/test.sh

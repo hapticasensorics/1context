@@ -69,14 +69,11 @@ from .memory.wiki import (
 from .wiki.cli import (
     cmd_wiki_ensure as cmd_wiki_engine_ensure,
     cmd_wiki_list as cmd_wiki_engine_list,
-    cmd_wiki_open as cmd_wiki_engine_open,
     cmd_wiki_render as cmd_wiki_engine_render,
     cmd_wiki_routes as cmd_wiki_engine_routes,
-    cmd_wiki_serve as cmd_wiki_engine_serve,
     cmd_wiki_stats as cmd_wiki_engine_stats,
 )
 from .wiki.families import WikiError as WikiEngineError
-from .wiki.server import DEFAULT_WIKI_HOST, DEFAULT_WIKI_PORT
 from .memory.experience import (
     ExperienceError,
     configured_native_memory_formats,
@@ -813,33 +810,6 @@ def build_parser() -> argparse.ArgumentParser:
     add_context_options(p_wiki_stats, suppress_defaults=True)
     p_wiki_stats.add_argument("--json", action="store_true", help="print machine-readable JSON")
     p_wiki_stats.set_defaults(func=cmd_wiki_engine_stats)
-
-    p_wiki_serve = wiki_sub.add_parser("serve", help="serve rendered wiki pages over localhost")
-    add_context_options(p_wiki_serve, suppress_defaults=True)
-    p_wiki_serve.add_argument("--host", default=DEFAULT_WIKI_HOST)
-    p_wiki_serve.add_argument("--port", type=int, default=DEFAULT_WIKI_PORT)
-    p_wiki_serve.add_argument("--render", action="store_true", help="Render families before serving")
-    p_wiki_serve.add_argument("--family-id", help="When --render is set, render only this family")
-    p_wiki_serve.add_argument("--skip-talk", action="store_true", help="When --render is set, render source pages only")
-    p_wiki_serve.add_argument("--no-evidence", action="store_true", help="When --render is set, skip evidence rows")
-    p_wiki_serve.add_argument(
-        "--no-port-fallback",
-        action="store_true",
-        help="Fail instead of trying the next port when the requested port is busy",
-    )
-    p_wiki_serve.set_defaults(func=cmd_wiki_engine_serve)
-
-    p_wiki_open = wiki_sub.add_parser("open", help="open a rendered wiki route in the browser")
-    add_context_options(p_wiki_open, suppress_defaults=True)
-    p_wiki_open.add_argument("path", nargs="?", default="/for-you")
-    p_wiki_open.add_argument("--host", default=DEFAULT_WIKI_HOST)
-    p_wiki_open.add_argument("--port", type=int, default=DEFAULT_WIKI_PORT)
-    p_wiki_open.add_argument("--print", action="store_true", help="Print the URL instead of opening it")
-    p_wiki_open.add_argument("--render", action="store_true", help="Render a family before opening")
-    p_wiki_open.add_argument("--family-id", help="Family id to render when --render is set")
-    p_wiki_open.add_argument("--skip-talk", action="store_true", help="When --render is set, render source pages only")
-    p_wiki_open.add_argument("--no-evidence", action="store_true", help="When --render is set, skip evidence rows")
-    p_wiki_open.set_defaults(func=cmd_wiki_engine_open)
 
     p_wiki_build = wiki_sub.add_parser(
         "build-inputs",

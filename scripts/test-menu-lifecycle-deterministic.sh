@@ -117,11 +117,17 @@ assert_contains "cli restart" "$WORK_DIR/default-running/events.log"
 
 MENU_SOURCE="$ROOT/macos/Sources/OneContextMenuBar/main.swift"
 UPDATER_BODY="$WORK_DIR/updater-body.swift"
+MENU_OPEN_BODY="$WORK_DIR/menu-open-body.swift"
 awk '
   /private func runUpdateCommandInTerminal\(\)/ { in_body = 1 }
   /private func runTerminalScript\(_ scriptPath: String\)/ { in_body = 0 }
   in_body { print }
 ' "$MENU_SOURCE" > "$UPDATER_BODY"
+awk '
+  /func menuWillOpen\(_ menu: NSMenu\)/ { in_body = 1 }
+  /func menuDidClose\(_ menu: NSMenu\)/ { in_body = 0 }
+  in_body { print }
+' "$MENU_SOURCE" > "$MENU_OPEN_BODY"
 
 assert_contains "appendingPathComponent(\"1context-cli\")" "$UPDATER_BODY"
 assert_contains "if \\(shellQuote(cliExecutable)) update; then" "$UPDATER_BODY"
@@ -131,7 +137,11 @@ assert_contains 'do script \"/bin/zsh \" & quoted form of scriptPath' "$MENU_SOU
 assert_not_contains "/bin/zsh -lc" "$MENU_SOURCE"
 assert_not_contains "NSWorkspace.shared.open" "$UPDATER_BODY"
 
-assert_contains "desiredState == \"stopped\"" "$MENU_SOURCE"
-assert_contains "runtimeState = .stopped" "$MENU_SOURCE"
+assert_contains "startDesiredStateMonitor()" "$MENU_SOURCE"
+assert_contains "readDesiredRuntimeIntentFromDisk()" "$MENU_SOURCE"
+assert_contains "return state == \"stopped\" ? .stopped : .running" "$MENU_SOURCE"
+assert_contains "startStopItem" "$MENU_SOURCE"
+assert_not_contains "refreshRuntimeIntentForMenuOpen" "$MENU_SOURCE"
+assert_not_contains "contentsOfFile" "$MENU_OPEN_BODY"
 
 echo "1Context deterministic menu lifecycle checks passed."

@@ -195,7 +195,6 @@ def is_public_html_output(path: Path) -> bool:
         path.suffix.lower() == ".html"
         and ".private." not in name
         and ".internal." not in name
-        and ".talk." not in name
     )
 
 

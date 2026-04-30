@@ -1,0 +1,230 @@
+{
+  "checks": [
+    {
+      "id": "wiki.render.succeeded",
+      "status": "passed",
+      "text": "Rendered wiki family topics."
+    },
+    {
+      "id": "wiki.generated.available",
+      "status": "passed",
+      "text": "4 generated file(s), 2 HTML file(s)."
+    },
+    {
+      "id": "wiki.manifest.written",
+      "status": "passed",
+      "text": "render-manifest.json written beside generated outputs."
+    }
+  ],
+  "engine": {
+    "manifest_schema": "wiki.render-manifest.v1",
+    "name": "@1context/wiki-engine",
+    "path": "wiki-engine",
+    "version": "local"
+  },
+  "family": {
+    "curator_prompt": "",
+    "generated_dir": "wiki/menu/30-topics/10-topics/generated",
+    "id": "topics",
+    "jobs": {
+      "curator": "memory.wiki.topic_curator"
+    },
+    "kind": "concept_index",
+    "label": "Topics",
+    "manifest_path": "wiki/menu/30-topics/10-topics/family.toml",
+    "menu_group": "topics",
+    "menu_group_label": "Topics",
+    "menu_group_order": 30,
+    "menu_order": 10,
+    "path": "wiki/menu/30-topics/10-topics",
+    "policies": {
+      "agent_editable": true,
+      "generated_editable": false,
+      "operator_editable": true
+    },
+    "route": "/topics",
+    "source_dir": "wiki/menu/30-topics/10-topics/source",
+    "source_primary": "",
+    "talk_conventions": "",
+    "talk_dir": "wiki/menu/30-topics/10-topics/talk",
+    "talk_primary": "",
+    "template_version": "local-private-shell@0.1.0"
+  },
+  "include_talk": true,
+  "inputs": [
+    {
+      "bytes": 366,
+      "content_type": "application/toml",
+      "path": "wiki/menu/30-topics/10-topics/family.toml",
+      "role": "family_manifest",
+      "sha256": "ba104ef100d326886c01f3ff262574554d7d1b16226bf9b50138fbcb7b29f301"
+    },
+    {
+      "bytes": 47,
+      "content_type": "application/toml",
+      "path": "wiki/menu/30-topics/group.toml",
+      "role": "menu_group_manifest",
+      "sha256": "c3668a51c63c8ea6f3d2a4d7e62331d1673df3fca994b1f6dcb7cd6383ab5cc7"
+    },
+    {
+      "bytes": 128,
+      "content_type": "application/toml",
+      "path": "wiki/wiki.toml",
+      "role": "wiki_manifest",
+      "sha256": "0baf8d0f116d5715790f5631b585bdf91aef60aa2c5abd9c2d008388c7e438cb"
+    },
+    {
+      "bytes": 265,
+      "content_type": "application/json",
+      "path": "wiki-engine/package.json",
+      "role": "engine_package",
+      "sha256": "3eddedc2e582c7a2131d0f95bcf2a74b24aaca0112fe97e626337548f26c84c8"
+    },
+    {
+      "bytes": 4592,
+      "content_type": "application/json",
+      "path": "wiki-engine/package-lock.json",
+      "role": "engine_lock",
+      "sha256": "a75fe0cb5e3d19978ecd8dfabef35a3aac58fe1e457bdb38ac244e2f733c2684"
+    },
+    {
+      "bytes": 1919,
+      "content_type": "text/markdown",
+      "path": "wiki/menu/30-topics/10-topics/source/topics.md",
+      "role": "source_canonical_private",
+      "sha256": "25edba3880187f60e7cd0e3b39cb908d3ade47c06009f60214d24b1f1d0f41a9"
+    },
+    {
+      "bytes": 386,
+      "content_type": "text/markdown",
+      "path": "wiki/menu/30-topics/10-topics/talk/topics.talk/2026-04-29T00-00Z.synthesis.topic-promotion-rules.md",
+      "role": "talk_entry",
+      "sha256": "c270d20780e24ba21c71315a7f34727a5df83937c369f277d686c60c4b1e576c"
+    },
+    {
+      "bytes": 1040,
+      "content_type": "text/markdown",
+      "path": "wiki/menu/30-topics/10-topics/talk/topics.talk/_conventions.md",
+      "role": "talk_conventions",
+      "sha256": "db6eb87c633cc49b3c3f788c0acda3501c0771af1ccd66f1d535d07054af9bfc"
+    },
+    {
+      "bytes": 442,
+      "content_type": "text/markdown",
+      "path": "wiki/menu/30-topics/10-topics/talk/topics.talk/_curator.md",
+      "role": "curator_prompt",
+      "sha256": "88e667c00560df6a51cff1113c078e6cdf5f073fce610e9f69af635b6628942e"
+    },
+    {
+      "bytes": 379,
+      "content_type": "application/yaml",
+      "path": "wiki/menu/30-topics/10-topics/talk/topics.talk/_meta.yaml",
+      "role": "talk_meta",
+      "sha256": "21f79d3ca161cdf63bb37c028c9870de7a655edd3aaf199479cf999796a368c7"
+    },
+    {
+      "bytes": 0,
+      "content_type": "application/octet-stream",
+      "path": "wiki/menu/30-topics/10-topics/talk/topics.talk/archive/.gitkeep",
+      "role": "talk_entry",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  ],
+  "invocations": [
+    {
+      "input_path": "wiki/menu/30-topics/10-topics/source/topics.md",
+      "stderr": "",
+      "stdout": "\u2713 topics: 39788 bytes \u2192 /Users/paulhan/dev/1context-public-launch/memory-core/wiki/menu/30-topics/10-topics/generated/topics.html"
+    },
+    {
+      "input_path": "wiki/menu/30-topics/10-topics/talk/topics.talk",
+      "stderr": "",
+      "stdout": "\u2713 topics.talk: 40743 bytes \u2192 /Users/paulhan/dev/1context-public-launch/memory-core/wiki/menu/30-topics/10-topics/generated/topics.talk.html"
+    }
+  ],
+  "output_dir": "wiki/menu/30-topics/10-topics/generated",
+  "outputs": [
+    {
+      "audience_tier": "public",
+      "bytes": 39808,
+      "content_type": "text/html",
+      "path": "wiki/menu/30-topics/10-topics/generated/topics.html",
+      "role": "generated_output",
+      "sha256": "9d5fbdbb883c686e48560ce5ecf0e65eeffffb8649d1055a5ae24e7bcdee4197"
+    },
+    {
+      "audience_tier": "public",
+      "bytes": 1919,
+      "content_type": "text/markdown",
+      "path": "wiki/menu/30-topics/10-topics/generated/topics.md",
+      "role": "generated_output",
+      "sha256": "25edba3880187f60e7cd0e3b39cb908d3ade47c06009f60214d24b1f1d0f41a9"
+    },
+    {
+      "audience_tier": "public",
+      "bytes": 40770,
+      "content_type": "text/html",
+      "path": "wiki/menu/30-topics/10-topics/generated/topics.talk.html",
+      "role": "generated_output",
+      "sha256": "aed9efaf59d58148aa60160410e713110c594471e9edb1ddf56756b53fb66335"
+    },
+    {
+      "audience_tier": "public",
+      "bytes": 982,
+      "content_type": "text/markdown",
+      "path": "wiki/menu/30-topics/10-topics/generated/topics.talk.md",
+      "role": "generated_output",
+      "sha256": "87c6411d6f41e97efa068710c630a341fdd3bf05ef8440cbf3e5e42d6a9c3dc6"
+    }
+  ],
+  "rendered_at": "2026-04-30T11:31:21Z",
+  "routes": [
+    {
+      "kind": "latest_family_html",
+      "output_path": "wiki/menu/30-topics/10-topics/generated/topics.html",
+      "route": "/topics",
+      "source": "latest_for_family.json"
+    },
+    {
+      "kind": "html",
+      "output_path": "wiki/menu/30-topics/10-topics/generated/topics.html",
+      "route": "/topics",
+      "source": "generated_output"
+    },
+    {
+      "kind": "html",
+      "output_path": "wiki/menu/30-topics/10-topics/generated/topics.talk.html",
+      "route": "/topics.talk",
+      "source": "generated_output"
+    }
+  ],
+  "schema_version": "wiki.render-manifest.v1",
+  "tier_sources": [
+    {
+      "base": "topics",
+      "canonical_private_source": "wiki/menu/30-topics/10-topics/source/topics.md",
+      "model": "canonical-private-with-explicit-tier-siblings",
+      "public_reads_private": false,
+      "tiers": {
+        "internal": {
+          "exists": false,
+          "path": "wiki/menu/30-topics/10-topics/source/topics.internal.md",
+          "selected_for_render": false,
+          "sha256": ""
+        },
+        "private": {
+          "exists": true,
+          "path": "wiki/menu/30-topics/10-topics/source/topics.md",
+          "selected_for_render": true,
+          "sha256": "25edba3880187f60e7cd0e3b39cb908d3ade47c06009f60214d24b1f1d0f41a9"
+        },
+        "public": {
+          "exists": false,
+          "path": "wiki/menu/30-topics/10-topics/source/topics.public.md",
+          "selected_for_render": false,
+          "sha256": ""
+        }
+      }
+    }
+  ]
+}

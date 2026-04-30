@@ -1,6 +1,8 @@
 import AppKit
 import Darwin
 import Foundation
+import OneContextAgent
+import OneContextLocalWeb
 import OneContextRuntimeSupport
 
 private enum Constants {
@@ -49,14 +51,50 @@ private func loadFishAlertIcon() -> NSImage? {
   if let cached = AppDelegate.cachedFishAlertIcon {
     return cached.copy() as? NSImage
   }
-  let mainURL = Bundle.main.url(forResource: "MenuBarIcon", withExtension: "png")
-  guard let image = mainURL.flatMap(NSImage.init(contentsOf:)) else {
+  guard let image = menuBarIconURL().flatMap(NSImage.init(contentsOf:)) else {
     return nil
   }
   image.isTemplate = false
   image.size = NSSize(width: 64, height: 64)
   AppDelegate.cachedFishAlertIcon = image
   return image.copy() as? NSImage
+}
+
+private func menuBarIconURL() -> URL? {
+  if let bundleURL = Bundle.main.url(forResource: "MenuBarIcon", withExtension: "png") {
+    return bundleURL
+  }
+
+  for executable in executableURLCandidates() {
+    let resources = executable
+      .deletingLastPathComponent()
+      .deletingLastPathComponent()
+      .appendingPathComponent("Resources/MenuBarIcon.png")
+    if FileManager.default.fileExists(atPath: resources.path) {
+      return resources
+    }
+  }
+  return nil
+}
+
+private func executableURLCandidates() -> [URL] {
+  var candidates: [URL] = []
+  if let current = currentExecutableURL() {
+    candidates.append(current)
+  }
+  if let firstArgument = CommandLine.arguments.first, !firstArgument.isEmpty {
+    candidates.append(URL(fileURLWithPath: firstArgument).resolvingSymlinksInPath())
+  }
+  return candidates
+}
+
+private func currentExecutableURL() -> URL? {
+  var size = UInt32(0)
+  _NSGetExecutablePath(nil, &size)
+  var buffer = [CChar](repeating: 0, count: Int(size))
+  guard _NSGetExecutablePath(&buffer, &size) == 0 else { return nil }
+  let pathBytes = buffer.prefix { $0 != 0 }.map { UInt8(bitPattern: $0) }
+  return URL(fileURLWithPath: String(decoding: pathBytes, as: UTF8.self)).resolvingSymlinksInPath()
 }
 
 @MainActor
@@ -73,14 +111,22 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
   private var renderedUpdateAction: Selector?
   private var isCheckingForUpdates = false
   private var isRepairingRuntime = false
+  private var isRuntimeActionInFlight = false
+  private var isWikiRefreshInFlight = false
   private var isMenuOpen = false
-  private var pendingRuntimeState: RuntimeState?
   private var pendingUpdateState: UpdateState?
+  private var activeAlertMessage: String?
+  private var lastAlertShownAt: [String: Date] = [:]
   private var renderGeneration = 0
   private var lastRuntimeRefreshStartedAt: Date?
+  private var desiredStateSource: DispatchSourceFileSystemObject?
+  private var desiredStateDescriptor: Int32 = -1
+  private var desiredRuntimeIntent: RuntimeIntent = .running
   private let menu = NSMenu()
   private let stateItem = NSMenuItem(title: RuntimeState.checking.title, action: nil, keyEquivalent: "")
+  private let startStopItem = NSMenuItem(title: "Stop", action: #selector(toggleRuntime), keyEquivalent: "")
   private let openWikiItem = NSMenuItem(title: "Open Wiki", action: #selector(openWiki), keyEquivalent: "")
+  private let refreshWikiItem = NSMenuItem(title: "Refresh Wiki", action: #selector(refreshWiki), keyEquivalent: "")
   private let settingsItem = NSMenuItem(title: "Settings", action: nil, keyEquivalent: "")
   private let settingsMenu = NSMenu()
   private let versionItem = NSMenuItem(title: "", action: nil, keyEquivalent: "")
@@ -90,6 +136,8 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
   private let appVersion = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String
     ?? oneContextVersion
   private let perfLoggingEnabled = ProcessInfo.processInfo.environment["ONECONTEXT_MENU_PERF_LOG"] == "1"
+  private let localWeb = CaddyManager()
+  private let localWebQueue = DispatchQueue(label: "com.haptica.1context.menu.local-web")
 
   private var currentVersion: String {
     appVersion
@@ -102,6 +150,8 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
     configureStatusIcon()
     configureMenu()
     refreshMenuItems()
+    startDesiredStateMonitor()
+    startLocalWebEdge()
     runLaunchChores()
     ensureRuntimeRunning(userInitiated: false, force: true)
 
@@ -126,15 +176,16 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
   }
 
   private func loadMenuIcon() -> NSImage? {
-    let mainURL = Bundle.main.url(forResource: "MenuBarIcon", withExtension: "png")
-    return mainURL.flatMap(NSImage.init(contentsOf:))
+    menuBarIconURL().flatMap(NSImage.init(contentsOf:))
   }
 
   private func configureMenu() {
     menu.autoenablesItems = false
     stateItem.isEnabled = false
     menu.addItem(stateItem)
+    menu.addItem(startStopItem)
     menu.addItem(openWikiItem)
+    menu.addItem(refreshWikiItem)
 
     versionItem.isEnabled = false
     settingsMenu.addItem(versionItem)
@@ -145,7 +196,7 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
     menu.addItem(quitItem)
     menu.delegate = self
 
-    for item in [stateItem, openWikiItem, settingsItem, versionItem, aboutItem, updateItem, quitItem] {
+    for item in [stateItem, startStopItem, openWikiItem, refreshWikiItem, settingsItem, versionItem, aboutItem, updateItem, quitItem] {
       item.target = self
       item.isEnabled = true
     }
@@ -161,6 +212,10 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
       stateItem.title = stateTitle
       renderedStateTitle = stateTitle
     }
+    startStopItem.title = runtimeState == .stopped ? "Start" : "Stop"
+    startStopItem.isEnabled = !isRuntimeActionInFlight
+    refreshWikiItem.title = isWikiRefreshInFlight ? "Refreshing Wiki..." : "Refresh Wiki"
+    refreshWikiItem.isEnabled = !isWikiRefreshInFlight
 
     let versionTitle = "Version \(appVersion)"
     if renderedVersionTitle != versionTitle {
@@ -190,10 +245,11 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
     perfLog("menu.render", start: start)
   }
 
-  private func setRuntimeState(_ newValue: RuntimeState) {
-    guard runtimeState != newValue else { return }
-    if isMenuOpen {
-      pendingRuntimeState = newValue
+  private func setRuntimeState(_ newValue: RuntimeState, forceRender: Bool = false) {
+    guard runtimeState != newValue else {
+      if forceRender {
+        refreshMenuItems()
+      }
       return
     }
     runtimeState = newValue
@@ -210,35 +266,29 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
     refreshMenuItems()
   }
 
+  private func presentMenuAlert(_ message: String) {
+    let now = Date()
+    if activeAlertMessage != nil { return }
+    if let last = lastAlertShownAt[message], now.timeIntervalSince(last) < 30 {
+      return
+    }
+    activeAlertMessage = message
+    lastAlertShownAt[message] = now
+    showFishAlert(message)
+    activeAlertMessage = nil
+  }
+
   func menuWillOpen(_ menu: NSMenu) {
     let start = perfStart()
     isMenuOpen = true
     renderGeneration += 1
-    refreshRuntimeIntentForMenuOpen()
     perfLog("menu.willOpen", start: start)
-  }
-
-  private func refreshRuntimeIntentForMenuOpen() {
-    let desiredState = (try? String(contentsOfFile: RuntimePaths.current().desiredStatePath, encoding: .utf8))?
-      .trimmingCharacters(in: .whitespacesAndNewlines)
-    if desiredState == "stopped" {
-      pendingRuntimeState = nil
-      if runtimeState != .stopped {
-        runtimeState = .stopped
-        refreshMenuItems()
-      }
-      return
-    }
-    if runtimeState == .stopped {
-      runtimeState = .checking
-      refreshMenuItems()
-    }
   }
 
   func menuDidClose(_ menu: NSMenu) {
     let start = perfStart()
     isMenuOpen = false
-    guard pendingRuntimeState != nil || pendingUpdateState != nil else {
+    guard pendingUpdateState != nil else {
       perfLog("menu.didClose.noop", start: start)
       return
     }
@@ -247,10 +297,6 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
     DispatchQueue.main.async { [weak self] in
       guard let self else { return }
       guard !isMenuOpen, generation == renderGeneration else { return }
-      if let pendingRuntimeState {
-        runtimeState = pendingRuntimeState
-        self.pendingRuntimeState = nil
-      }
       if let pendingUpdateState {
         updateState = pendingUpdateState
         self.pendingUpdateState = nil
@@ -262,6 +308,10 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
 
   private func ensureRuntimeRunning(userInitiated: Bool, force: Bool = false) {
     guard !isRepairingRuntime else { return }
+    guard userInitiated || desiredRuntimeIntent == .running else {
+      setRuntimeState(.stopped)
+      return
+    }
     if !userInitiated && !force && !shouldRefreshRuntimeState() {
       perfLog("runtime.refresh.skipped")
       return
@@ -281,6 +331,16 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
       do {
         let health = try autoreleasepool {
           try UnixJSONRPCClient().health()
+        }
+        let shouldShowRunning = await MainActor.run {
+          self.desiredRuntimeIntent == .running
+        }
+        guard shouldShowRunning else {
+          await MainActor.run {
+            self.setRuntimeState(.stopped)
+            self.perfLog("runtime.health.ignoredStoppedIntent", start: healthStart)
+          }
+          return
         }
         guard health.version == oneContextVersion else {
           _ = try await controller.restart(startMenu: false)
@@ -331,6 +391,58 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
 
   private func markRuntimeNeedsAttention() {
     setRuntimeState(.needsAttention)
+  }
+
+  private func startDesiredStateMonitor() {
+    Task.detached(priority: .utility) {
+      let intent = Self.readDesiredRuntimeIntentFromDisk()
+      await MainActor.run {
+        self.applyDesiredRuntimeIntent(intent)
+      }
+    }
+
+    let paths = RuntimePaths.current()
+    try? RuntimePermissions.ensurePrivateDirectory(paths.appSupportDirectory)
+    let descriptor = open(paths.appSupportDirectory.path, O_EVTONLY)
+    guard descriptor >= 0 else { return }
+
+    desiredStateDescriptor = descriptor
+    let source = DispatchSource.makeFileSystemObjectSource(
+      fileDescriptor: descriptor,
+      eventMask: [.write, .delete, .rename, .attrib, .extend],
+      queue: DispatchQueue.main
+    )
+    source.setEventHandler { [weak self] in
+      let intent = Self.readDesiredRuntimeIntentFromDisk()
+      self?.applyDesiredRuntimeIntent(intent)
+    }
+    source.setCancelHandler { [descriptor] in
+      close(descriptor)
+    }
+    desiredStateSource = source
+    source.resume()
+  }
+
+  private func applyDesiredRuntimeIntent(_ intent: RuntimeIntent) {
+    guard desiredRuntimeIntent != intent else { return }
+    desiredRuntimeIntent = intent
+    switch intent {
+    case .running:
+      if runtimeState == .stopped {
+        setRuntimeState(.checking)
+      } else {
+        refreshMenuItems()
+      }
+      ensureRuntimeRunning(userInitiated: false)
+    case .stopped:
+      setRuntimeState(.stopped)
+    }
+  }
+
+  nonisolated private static func readDesiredRuntimeIntentFromDisk() -> RuntimeIntent {
+    let state = (try? String(contentsOfFile: RuntimePaths.current().desiredStatePath, encoding: .utf8))?
+      .trimmingCharacters(in: .whitespacesAndNewlines)
+    return state == "stopped" ? .stopped : .running
   }
 
   private func loadCachedUpdateState() {
@@ -430,12 +542,49 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
     }
   }
 
+  @objc private func toggleRuntime() {
+    guard !isRuntimeActionInFlight else { return }
+    let targetIntent: RuntimeIntent = runtimeState == .stopped ? .running : .stopped
+    desiredRuntimeIntent = targetIntent
+    isRuntimeActionInFlight = true
+    setRuntimeState(targetIntent == .running ? .checking : .stopped, forceRender: true)
+
+    Task.detached(priority: .userInitiated) {
+      let start = await self.perfStart()
+      do {
+        let controller = RuntimeController()
+        if targetIntent == .running {
+          _ = try await controller.start(startMenu: false)
+          await MainActor.run {
+            self.perfLog("runtime.userStart.ok", start: start)
+            self.isRuntimeActionInFlight = false
+            self.setRuntimeState(.running, forceRender: true)
+          }
+        } else {
+          _ = try await controller.stop()
+          await MainActor.run {
+            self.perfLog("runtime.userStop.ok", start: start)
+            self.isRuntimeActionInFlight = false
+            self.setRuntimeState(.stopped, forceRender: true)
+          }
+        }
+      } catch {
+        await MainActor.run {
+          self.perfLog("runtime.userToggle.failed", start: start)
+          self.isRuntimeActionInFlight = false
+          self.setRuntimeState(.needsAttention, forceRender: true)
+          self.presentMenuAlert("Could not \(targetIntent == .running ? "start" : "stop") 1Context.")
+        }
+      }
+    }
+  }
+
   private func showUpToDateMessage() {
-    showFishAlert("1Context up to date.")
+    presentMenuAlert("1Context up to date.")
   }
 
   private func showUpdateCheckFailedMessage() {
-    showFishAlert("Could not check for updates.")
+    presentMenuAlert("Could not check for updates.")
   }
 
   private func confirmUpdate() -> Bool {
@@ -454,18 +603,63 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
   }
 
   @objc private func openWiki() {
+    openWikiItem.isEnabled = false
     Task {
       do {
-        let snapshot = try await ensureWikiOpen()
-        guard let url = URL(string: snapshot.url) else {
-          throw MenuError.invalidWikiURL(snapshot.url)
+        let snapshot = try await ensureLocalWebEdgeForOpen()
+        let urlString = snapshot.url.isEmpty ? LocalWebDefaults.defaultWikiURL : snapshot.url
+        guard let url = URL(string: urlString) else {
+          throw MenuError.openWikiFailed(urlString)
         }
+        try Self.openURLInDefaultBrowser(url)
+        recordWikiURL(url.absoluteString)
+        openWikiItem.isEnabled = true
+
+        Task {
+          do {
+            let snapshot = try await ensureWikiOpen()
+            recordWikiURL(snapshot.url)
+          } catch {
+            // Opening the last-good site is the user-visible action. Runtime
+            // warm-up failures are reflected in status/diagnose.
+          }
+        }
+      } catch {
+        openWikiItem.isEnabled = true
+        presentMenuAlert("Could not open 1Context wiki.")
+      }
+    }
+  }
+
+  private nonisolated static func openURLInDefaultBrowser(_ url: URL) throws {
+    let process = Process()
+    process.executableURL = URL(fileURLWithPath: "/usr/bin/open")
+    process.arguments = [url.absoluteString]
+    try process.run()
+    process.waitUntilExit()
+    if process.terminationStatus != 0 {
+      throw MenuError.openWikiFailed(url.absoluteString)
+    }
+  }
+
+  @objc private func refreshWiki() {
+    guard !isWikiRefreshInFlight else { return }
+    isWikiRefreshInFlight = true
+    refreshMenuItems()
+    Task {
+      do {
+        _ = try await RuntimeController().start(startMenu: false)
+        _ = try await wikiRPC("wiki.refresh", timeout: 5)
+        _ = try await waitForWikiRunning(timeout: 240)
         await MainActor.run {
-          _ = NSWorkspace.shared.open(url)
+          self.isWikiRefreshInFlight = false
+          self.refreshMenuItems()
         }
       } catch {
         await MainActor.run {
-          showFishAlert("Could not open 1Context wiki.")
+          self.isWikiRefreshInFlight = false
+          self.refreshMenuItems()
+          self.presentMenuAlert("Could not publish 1Context wiki.")
         }
       }
     }
@@ -474,35 +668,65 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
   @objc private func quit() {
     timer?.invalidate()
     timer = nil
+    let localWeb = self.localWeb
     if let statusItem {
       NSStatusBar.system.removeStatusItem(statusItem)
     }
     Task.detached {
       _ = try? await RuntimeController().quit(stopMenu: false)
+      localWeb.stop()
       await MainActor.run {
         NSApp.terminate(nil)
       }
     }
   }
 
+  func applicationWillTerminate(_ notification: Notification) {
+    localWeb.stop()
+  }
+
+  private func startLocalWebEdge() {
+    localWebQueue.async { [localWeb] in
+      guard let snapshot = try? localWeb.start() else { return }
+      try? AgentConfigStore.writeWikiURL(snapshot.url)
+    }
+  }
+
+  private func ensureLocalWebEdgeForOpen() async throws -> LocalWebSnapshot {
+    try await Task.detached { [localWeb] in
+      let current = localWeb.status()
+      if current.running {
+        return current
+      }
+      return try localWeb.start()
+    }.value
+  }
+
   private func ensureWikiOpen() async throws -> WikiMenuSnapshot {
     _ = try await RuntimeController().start(startMenu: false)
     if let snapshot = try? await wikiRPC("wiki.status", timeout: 5), snapshot.running {
+      recordWikiURL(snapshot.url)
       return snapshot
     }
     _ = try await wikiRPC("wiki.start", timeout: 5)
-    return try await waitForWikiRunning(timeout: 240)
+    let snapshot = try await waitForWikiRunning(timeout: 240)
+    recordWikiURL(snapshot.url)
+    return snapshot
   }
 
   private func waitForWikiRunning(timeout: TimeInterval) async throws -> WikiMenuSnapshot {
     let deadline = Date().addingTimeInterval(timeout)
-    var last = WikiMenuSnapshot(running: false, url: "http://127.0.0.1:17319/for-you", health: "starting")
+    var last = WikiMenuSnapshot(running: false, url: LocalWebDefaults.defaultWikiURL, health: "starting")
     repeat {
       last = try await wikiRPC("wiki.status", timeout: 5)
       if last.running { return last }
       try await Task.sleep(nanoseconds: 500_000_000)
     } while Date() < deadline
     throw MenuError.wikiTimedOut(last.health)
+  }
+
+  private func recordWikiURL(_ url: String) {
+    try? AgentConfigStore.writeWikiURL(url)
   }
 
   private func wikiRPC(_ method: String, timeout: TimeInterval) async throws -> WikiMenuSnapshot {
@@ -530,7 +754,7 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
       .appendingPathComponent("1context-cli")
       .path
     guard FileManager.default.isExecutableFile(atPath: cliExecutable) else {
-      showFishAlert("Could not find 1Context updater.")
+      presentMenuAlert("Could not find 1Context updater.")
       return
     }
 
@@ -554,13 +778,13 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
     fi
     """
     guard let scriptURL = writeUpdaterScript(script) else {
-      showFishAlert("Could not prepare updater.")
+      presentMenuAlert("Could not prepare updater.")
       return
     }
 
     guard runTerminalScript(scriptURL.path) else {
       try? FileManager.default.removeItem(at: scriptURL)
-      showFishAlert("Could not open updater.")
+      presentMenuAlert("Could not open updater.")
       return
     }
   }
@@ -700,7 +924,7 @@ private enum RuntimeState {
     case .checking:
       return "1Context"
     case .running:
-      return "1Context Running"
+      return "1Context Remembering"
     case .stopped:
       return "1Context Stopped"
     case .needsAttention:
@@ -712,6 +936,11 @@ private enum RuntimeState {
 private enum UpdateState {
   case upToDate
   case available
+}
+
+private enum RuntimeIntent {
+  case running
+  case stopped
 }
 
 private struct WikiMenuSnapshot {
@@ -727,7 +956,7 @@ private struct WikiMenuSnapshot {
 
   init(payload: [String: Any]) {
     self.running = payload["running"] as? Bool ?? false
-    self.url = payload["url"] as? String ?? "http://127.0.0.1:17319/for-you"
+    self.url = payload["url"] as? String ?? "http://wiki.1context.localhost:17319/your-context"
     self.health = payload["health"] as? String ?? "unknown"
   }
 }
@@ -735,6 +964,7 @@ private struct WikiMenuSnapshot {
 private enum MenuError: Error, LocalizedError {
   case invalidWikiURL(String)
   case wikiTimedOut(String)
+  case openWikiFailed(String)
 
   var errorDescription: String? {
     switch self {
@@ -742,6 +972,8 @@ private enum MenuError: Error, LocalizedError {
       return "Invalid wiki URL: \(url)"
     case .wikiTimedOut(let health):
       return "Timed out preparing local wiki: \(health)"
+    case .openWikiFailed(let url):
+      return "Could not open wiki URL: \(url)"
     }
   }
 }

@@ -327,8 +327,8 @@ export function stringifyFrontmatter(fm) {
 }
 
 /**
- * Build a stub talk-page markdown for a section. Just enough so the
- * agent endpoint exists and downstream tools can find it.
+ * Build an initial talk-page markdown surface for a section. Just
+ * enough so the agent endpoint exists and downstream tools can find it.
  */
 export function buildTalkStub(parentFm, section, parentSlug) {
   const talkFm = {
@@ -352,7 +352,7 @@ export function buildTalkStub(parentFm, section, parentSlug) {
     `> section. Hourly conversations and revision proposals will`,
     `> arrive here once the daemon publishes them.`,
     '',
-    '*(stub — no posts yet)*',
+    '*No discussion yet. Add a timestamped entry when this section has a proposal, question, decision, or memory note worth preserving.*',
     '',
   ];
   return fmYaml + bodyLines.join('\n');

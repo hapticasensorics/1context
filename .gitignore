@@ -2,8 +2,11 @@
 *.log
 tmp/
 dist/
+.vscode/
 macos/.build/
 memory-core/.venv/
 memory-core/.pytest_cache/
 memory-core/**/__pycache__/
+memory-core/memory/runtime/
+memory-core/storage/lakestore/*.lance/
 memory-core/wiki-engine/node_modules/

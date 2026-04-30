@@ -15,6 +15,25 @@ final class AgentIntegrationTests: XCTestCase {
     XCTAssertEqual(paths.hookLogFile.path, "/tmp/1ctx-agent-test/support/agent/hook.log")
   }
 
+  func testAgentConfigStoreWritesLiveWikiURLAndPreservesUnknownKeys() throws {
+    let root = try temporaryRoot()
+    defer { try? FileManager.default.removeItem(at: root) }
+    let paths = AgentPaths(directory: root.appendingPathComponent("agent", isDirectory: true))
+    try FileManager.default.createDirectory(at: paths.directory, withIntermediateDirectories: true)
+    try writeObject([
+      "custom_key": "keep",
+      "status_line_label": "1Context private"
+    ], to: paths.configFile)
+
+    try AgentConfigStore.writeWikiURL("http://wiki.1context.localhost:17419/your-context", paths: paths)
+
+    let object = try readObject(paths.configFile)
+    XCTAssertEqual(object["wiki_url"] as? String, "http://wiki.1context.localhost:17419/your-context")
+    XCTAssertEqual(object["custom_key"] as? String, "keep")
+    XCTAssertEqual(object["status_line_label"] as? String, "1Context private")
+    XCTAssertEqual(AgentHookExecutor.configuredWikiURL(paths: paths), "http://wiki.1context.localhost:17419/your-context")
+  }
+
   func testInstallMergesOnlySessionStartHookIdempotently() throws {
     let root = try temporaryRoot()
     defer { try? FileManager.default.removeItem(at: root) }
@@ -39,6 +58,7 @@ final class AgentIntegrationTests: XCTestCase {
     let manager = AgentIntegrationManager(
       paths: state,
       claudeSettingsPath: settings,
+      codexConfigPath: root.appendingPathComponent(".codex/config.toml"),
       executablePath: "/opt/homebrew/bin/1context"
     )
 
@@ -89,6 +109,7 @@ final class AgentIntegrationTests: XCTestCase {
     let manager = AgentIntegrationManager(
       paths: AgentPaths(directory: root.appendingPathComponent("agent", isDirectory: true)),
       claudeSettingsPath: settings,
+      codexConfigPath: root.appendingPathComponent(".codex/config.toml"),
       executablePath: "/opt/homebrew/bin/1context"
     )
 
@@ -109,6 +130,7 @@ final class AgentIntegrationTests: XCTestCase {
     let manager = AgentIntegrationManager(
       paths: AgentPaths(directory: root.appendingPathComponent("agent", isDirectory: true)),
       claudeSettingsPath: settings,
+      codexConfigPath: root.appendingPathComponent(".codex/config.toml"),
       executablePath: "/opt/homebrew/bin/1context"
     )
 
@@ -125,6 +147,7 @@ final class AgentIntegrationTests: XCTestCase {
     let manager = AgentIntegrationManager(
       paths: AgentPaths(directory: root.appendingPathComponent("agent", isDirectory: true)),
       claudeSettingsPath: settings,
+      codexConfigPath: root.appendingPathComponent(".codex/config.toml"),
       executablePath: "/opt/homebrew/bin/1context"
     )
 
@@ -203,6 +226,7 @@ final class AgentIntegrationTests: XCTestCase {
     let manager = AgentIntegrationManager(
       paths: AgentPaths(directory: root.appendingPathComponent("agent", isDirectory: true)),
       claudeSettingsPath: settings,
+      codexConfigPath: root.appendingPathComponent(".codex/config.toml"),
       executablePath: "/opt/homebrew/bin/1context"
     )
 
@@ -210,13 +234,103 @@ final class AgentIntegrationTests: XCTestCase {
 
     let object = try readObject(settings)
     let hooks = try XCTUnwrap(object["hooks"] as? [String: Any])
-    let sessionGroups = try XCTUnwrap(hooks["SessionStart"] as? [[String: Any]])
-    let commands = sessionGroups.flatMap { ($0["hooks"] as? [[String: Any]]) ?? [] }
-      .compactMap { $0["command"] as? String }
-    XCTAssertEqual(commands, ["python3 /Users/example/dev/1Context-private-4/tools/wiki-startup-context.py"])
+    XCTAssertNil(hooks["SessionStart"])
     XCTAssertNil(hooks["UserPromptSubmit"])
-    let statusLine = try XCTUnwrap(object["statusLine"] as? [String: Any])
-    XCTAssertEqual(statusLine["command"] as? String, "python3 /Users/example/dev/1Context-private-4/tools/wiki-statusline.py")
+    XCTAssertNil(object["statusLine"])
+  }
+
+  func testRepairRemovesLegacyPrivateHooksAndInstallsFirstPartyHooks() throws {
+    let root = try temporaryRoot()
+    defer { try? FileManager.default.removeItem(at: root) }
+    let settings = root.appendingPathComponent("settings.json")
+    let codex = root.appendingPathComponent(".codex/config.toml")
+    try writeObject([
+      "hooks": [
+        "SessionStart": [
+          [
+            "matcher": "startup",
+            "hooks": [
+              [
+                "type": "command",
+                "command": "python3 /Users/example/dev/1Context-private-4/tools/wiki-startup-context.py"
+              ]
+            ]
+          ]
+        ]
+      ],
+      "statusLine": [
+        "type": "command",
+        "command": "python3 /Users/example/dev/1Context-private-4/tools/wiki-statusline.py"
+      ]
+    ], to: settings)
+    try FileManager.default.createDirectory(at: codex.deletingLastPathComponent(), withIntermediateDirectories: true)
+    try Data("""
+    [features]
+    codex_hooks = true
+
+    [hooks]
+    SessionStart = [
+      { matcher = "startup", hooks = [
+        { type = "command", command = "python3 /Users/example/dev/1Context-private-4/tools/wiki-startup-context.py" },
+      ] },
+    ]
+    """.utf8).write(to: codex)
+
+    let manager = AgentIntegrationManager(
+      paths: AgentPaths(directory: root.appendingPathComponent("agent", isDirectory: true)),
+      claudeSettingsPath: settings,
+      codexConfigPath: codex,
+      executablePath: "/opt/homebrew/bin/1context"
+    )
+
+    let report = try manager.repair()
+
+    XCTAssertEqual(report.claudeStatus.state, .installed)
+    XCTAssertEqual(report.codexStatus.state, .installed)
+    let claude = try readObject(settings)
+    let statusLine = try XCTUnwrap(claude["statusLine"] as? [String: Any])
+    XCTAssertEqual(statusLine["command"] as? String, "\(AgentHookPolicy.managedStatusLinePrefix) '/opt/homebrew/bin/1context' agent statusline --provider claude")
+    let claudeText = try String(contentsOf: settings)
+    XCTAssertFalse(claudeText.contains("1Context-private-4"))
+
+    let codexText = try String(contentsOf: codex)
+    XCTAssertFalse(codexText.contains("1Context-private-4"))
+    XCTAssertTrue(codexText.contains("agent hook --provider codex --event SessionStart"))
+    XCTAssertTrue(codexText.contains(#"matcher = "startup""#))
+    XCTAssertTrue(codexText.contains(#"matcher = "resume""#))
+    XCTAssertTrue(codexText.contains(#"matcher = "clear""#))
+    XCTAssertTrue(codexText.contains(#"matcher = "compact""#))
+  }
+
+  func testCodexInstallPreservesOtherConfigAndIsIdempotent() throws {
+    let root = try temporaryRoot()
+    defer { try? FileManager.default.removeItem(at: root) }
+    let settings = root.appendingPathComponent("settings.json")
+    let codex = root.appendingPathComponent(".codex/config.toml")
+    try FileManager.default.createDirectory(at: codex.deletingLastPathComponent(), withIntermediateDirectories: true)
+    try Data("""
+    model = "gpt-5.5"
+
+    [tools]
+    web_search = true
+    """.utf8).write(to: codex)
+
+    let manager = AgentIntegrationManager(
+      paths: AgentPaths(directory: root.appendingPathComponent("agent", isDirectory: true)),
+      claudeSettingsPath: settings,
+      codexConfigPath: codex,
+      executablePath: "/opt/homebrew/bin/1context"
+    )
+
+    _ = try manager.install()
+    _ = try manager.install()
+
+    let text = try String(contentsOf: codex)
+    XCTAssertTrue(text.contains(#"model = "gpt-5.5""#))
+    XCTAssertTrue(text.contains("[tools]"))
+    XCTAssertTrue(text.contains("codex_hooks = true"))
+    XCTAssertEqual(text.components(separatedBy: "agent hook --provider codex --event SessionStart").count - 1, 4)
+    XCTAssertEqual(manager.status().codexStatus.state, .installed)
   }
 
   func testDisableAllHooksReportsManualReviewAndDoesNotModifySettings() throws {
@@ -231,6 +345,7 @@ final class AgentIntegrationTests: XCTestCase {
     let manager = AgentIntegrationManager(
       paths: AgentPaths(directory: root.appendingPathComponent("agent", isDirectory: true)),
       claudeSettingsPath: settings,
+      codexConfigPath: root.appendingPathComponent(".codex/config.toml"),
       executablePath: "/opt/homebrew/bin/1context"
     )
 
@@ -314,7 +429,7 @@ final class AgentIntegrationTests: XCTestCase {
     )
       .execute(provider: .claude, event: .sessionStart, inputData: Data("{}".utf8))
 
-    XCTAssertEqual(output.systemMessage, "View 1Context wiki: http://127.0.0.1:17319/for-you")
+    XCTAssertEqual(output.systemMessage, "View 1Context wiki: http://wiki.1context.localhost:17319/your-context")
   }
 
   func testInstallMigratesLegacyAgentWikiURL() throws {
@@ -328,6 +443,7 @@ final class AgentIntegrationTests: XCTestCase {
     let manager = AgentIntegrationManager(
       paths: paths,
       claudeSettingsPath: settings,
+      codexConfigPath: root.appendingPathComponent(".codex/config.toml"),
       executablePath: "/opt/homebrew/bin/1context"
     )
 
@@ -335,7 +451,7 @@ final class AgentIntegrationTests: XCTestCase {
 
     let data = try Data(contentsOf: paths.configFile)
     let config = try JSONDecoder().decode(AgentConfig.self, from: data)
-    XCTAssertEqual(config.wikiURL, "http://127.0.0.1:17319/for-you")
+    XCTAssertEqual(config.wikiURL, "http://wiki.1context.localhost:17319/your-context")
   }
 
   func testStatusLineRendererReadsLiveConfig() throws {

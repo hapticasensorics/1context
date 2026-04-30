@@ -185,12 +185,12 @@ uv run 1context wiki list
 uv run 1context wiki ensure
 uv run 1context wiki render for-you
 uv run 1context wiki routes
-uv run 1context wiki serve --render
 ```
 
 `src/onectx/memory/wiki.py` owns deterministic planner inputs and role routing.
 `src/onectx/wiki/` owns page-family discovery, scaffolding, rendering, render
-manifests, route tables, local serving, and render evidence. A successful render
+manifests, route tables, and render evidence. The Swift local web layer publishes
+the generated files behind the packaged Caddy server. A successful render
 records `wiki.render.succeeded`, `wiki.manifest.recorded`,
 `wiki.generated.available`, and `wiki.render.completed` in the lakestore, which
 is the evidence the state machines should wait on.

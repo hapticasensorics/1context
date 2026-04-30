@@ -21,6 +21,10 @@ jobs:
           swift --version
           xcodebuild -version
           brew --version
+      - name: Install bundled web edge dependency
+        run: |
+          brew install caddy
+          caddy version
       - name: Check release version
         run: |
           version="$(tr -d '[:space:]' < VERSION)"

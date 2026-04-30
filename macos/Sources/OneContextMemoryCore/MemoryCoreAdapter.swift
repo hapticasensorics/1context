@@ -411,6 +411,7 @@ public final class MemoryCoreAdapter {
       ["wiki", "list", "--json"],
       ["wiki", "ensure", "--json"],
       ["wiki", "render", "--json"],
+      ["wiki", "render", "--no-evidence", "--json"],
       ["wiki", "render", "for-you", "--no-evidence", "--json"],
       ["wiki", "routes", "--json"],
       ["memory", "tick", "--wiki-only", "--json"],

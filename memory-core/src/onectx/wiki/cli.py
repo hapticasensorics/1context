@@ -10,7 +10,6 @@ from .ensure import ensure_wiki
 from .families import discover_families
 from .render import render_family
 from .routes import load_route_table
-from .server import DEFAULT_WIKI_HOST, DEFAULT_WIKI_PORT, open_wiki_url, serve_wiki, wiki_url
 from .site import build_wiki_stats, load_wiki_stats, write_site_files
 
 
@@ -142,40 +141,6 @@ def cmd_wiki_stats(args: argparse.Namespace) -> int:
         print(json.dumps(stats, indent=2))
         return 0
     print(render_stats_dashboard(stats))
-    return 0
-
-
-def cmd_wiki_serve(args: argparse.Namespace) -> int:
-    system = load_system(args.root, args.plugin)
-    if args.render:
-        family_ids = [args.family_id] if args.family_id else [family.id for family in discover_families(system.root)]
-        for family_id in family_ids:
-            result = render_family(system.root, family_id, include_talk=not args.skip_talk)
-            if not args.no_evidence:
-                record_render_evidence(system, result)
-        write_site_files(system.root)
-    serve_wiki(
-        system,
-        host=args.host,
-        port=args.port,
-        allow_port_fallback=not getattr(args, "no_port_fallback", False),
-    )
-    return 0
-
-
-def cmd_wiki_open(args: argparse.Namespace) -> int:
-    system = load_system(args.root, args.plugin)
-    if args.render:
-        family_id = args.family_id or "for-you"
-        result = render_family(system.root, family_id, include_talk=not args.skip_talk)
-        if not args.no_evidence:
-            record_render_evidence(system, result)
-    url = wiki_url(args.path, host=args.host, port=args.port)
-    if args.print:
-        print(url)
-        return 0
-    opened = open_wiki_url(args.path, host=args.host, port=args.port)
-    print(f"opened: {opened}")
     return 0
 
 

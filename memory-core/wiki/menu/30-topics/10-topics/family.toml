@@ -1,0 +1,24 @@
+id = "topics"
+label = "Topics"
+kind = "concept_index"
+route = "/topics"
+menu_group = "topics"
+menu_order = 10
+template_version = "local-private-shell@0.1.0"
+
+[source]
+dir = "source"
+
+[talk]
+dir = "talk"
+
+[generated]
+dir = "generated"
+
+[jobs]
+curator = "memory.wiki.topic_curator"
+
+[policies]
+operator_editable = true
+agent_editable = true
+generated_editable = false

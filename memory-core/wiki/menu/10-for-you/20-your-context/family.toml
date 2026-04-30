@@ -1,0 +1,26 @@
+id = "your-context"
+label = "Your Context"
+kind = "operator_context"
+route = "/your-context"
+menu_group = "for-you"
+menu_order = 20
+template_version = "local-private-shell@0.1.0"
+
+[source]
+primary = "source/your-context.md"
+
+[talk]
+primary = "talk/your-context.talk"
+conventions = "talk/your-context.talk/_conventions.md"
+curator_prompt = "talk/your-context.talk/_curator.md"
+
+[generated]
+dir = "generated"
+
+[jobs]
+curator = "memory.wiki.context_curator"
+
+[policies]
+operator_editable = true
+agent_editable = true
+generated_editable = false

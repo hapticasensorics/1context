@@ -112,7 +112,7 @@ def build() -> Machine:
         path="{wiki}/generated/site-manifest.json",
         schema="wiki_site_manifest.v1",
         policies=["deterministic", "generated", "browser_surface"],
-        description="The localhost route table and content index used by `1context wiki serve`.",
+        description="The generated route table and content index published by the Swift local web layer.",
     )
 
     machine.evidence(
