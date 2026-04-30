@@ -1,16 +1,70 @@
 # 1Context
 
-Own your context. 1Context is a memory engine for agentic work.
+Own your context.
 
-This public preview installs the macOS menu bar app, local runtime, and
-Homebrew Cask plumbing for 1Context. The full project wiki and agent memory
-surfaces are in active development.
+1Context is a local memory layer for people who work with AI agents. It turns
+desktop files and work activity into a private personal wiki, then gives agents
+like Claude Code and Codex a stable place to read what matters about you, your
+projects, and how you like to work.
 
-The Cask installs user LaunchAgents for the menu bar app and local runtime so
-1Context can stay available after install and login. The runtime stores state
-locally and does not upload project data in this preview.
+[See the live demo](https://haptica.ai/p/demo)
 
-[haptica.ai](https://haptica.ai)
+![A populated 1Context wiki page from the public demo](docs/assets/readme/demo-site.png)
+
+## Why It Exists
+
+AI assistants are powerful, but they forget the shape of your work. You repeat
+preferences, project history, decisions, caveats, and "please do it this way"
+instructions over and over.
+
+1Context is meant to become the long-term memory that sits beside those agents.
+Instead of hiding memory in one chat product, it keeps memory in a wiki you can
+open, inspect, edit, and share later when you choose.
+
+The product direction is simple:
+
+- Your computer keeps a private record of useful context.
+- A small group of Open Claw-style agents work together like careful Wikipedia
+  editors.
+- They propose and organize memories before changing the readable pages.
+- Claude, Codex, and future agents can read the same wiki instead of each
+  keeping their own scattered memory.
+
+## What You Get Today
+
+This public preview is early, but the app shell is real and polished:
+
+- a signed macOS menu bar app
+- a private local wiki served in your browser
+- polished default pages, even before you have much content
+- Claude Code and Codex hooks that point agents at the live wiki
+- local files under `~/1Context/` that you can read and keep
+- no product telemetry and no upload of project data in this preview
+
+Memory collection and memory writing are still manual in this release. The
+automatic screen activity pipeline, passive remembering, and multi-agent wiki
+editing system are in active development. Today, 1Context is best understood as
+the polished public shell plus the first local wiki and agent integration path.
+
+![The local 1Context wiki template](docs/assets/readme/local-your-context.png)
+
+## How It Works
+
+1Context uses the wiki as the meeting place between you and your agents.
+
+The readable article pages are calm and current. Talk pages keep the reasoning:
+questions, proposed updates, evidence, curator notes, and agent instructions.
+That gives the system a place to think before it rewrites what future agents
+will read.
+
+![A 1Context talk page template](docs/assets/readme/local-talk-template.png)
+
+Under the hood, the public app keeps the sturdy macOS parts separate from the
+experimental memory engine. The menu bar owns the user experience, the local web
+server, updates, and diagnostics. The memory core can improve quickly behind a
+narrow contract without risking the whole app.
+
+![The 1Context menu bar app](docs/assets/readme/menu-bar.png)
 
 ## Install
 
@@ -20,19 +74,19 @@ brew install --cask hapticasensorics/tap/1context
 
 Requires Apple Silicon and macOS 13 Ventura or newer.
 
-Verify:
+Open the app from `/Applications`, then use the menu bar item to open or refresh
+your wiki.
+
+Helpful commands:
 
 ```bash
 1context status
-```
-
-Support report:
-
-```bash
 1context diagnose
+1context wiki local-url
+1context agent integrations install
 ```
 
-Uninstall:
+Uninstall the app:
 
 ```bash
 brew uninstall --cask hapticasensorics/tap/1context
@@ -44,7 +98,7 @@ Remove user content and local preview data too:
 brew uninstall --cask --zap hapticasensorics/tap/1context
 ```
 
-## Local Files
+## Files And Privacy
 
 1Context keeps user-owned content and app machinery separate:
 
@@ -53,7 +107,7 @@ brew uninstall --cask --zap hapticasensorics/tap/1context
   human-readable wiki files and user-owned content
 
 ~/Library/Application Support/1Context/
-  app/runtime state, config, indexes, sockets, queues, and update metadata
+  app/runtime state, config, indexes, local web state, and update metadata
 
 ~/Library/Logs/1Context/
   logs and debug/support information
@@ -62,121 +116,33 @@ brew uninstall --cask --zap hapticasensorics/tap/1context
   disposable cache, safe to delete
 ```
 
-See [PERMISSIONS.md](PERMISSIONS.md) for the ownership, consent, and privacy contract used by the runtime and installer.
-
-## Privacy
-
 The public preview makes no product telemetry calls and does not upload project
 data. It checks GitHub Releases at most once per day to show whether an update
-is available. The update check uses a non-cookie, nonpersistent network session.
-Disable update checks for a command invocation with:
+is available.
 
-```bash
-ONECONTEXT_NO_UPDATE_CHECK=1 1context
-```
+See [PERMISSIONS.md](PERMISSIONS.md) for the ownership, consent, and privacy
+contract.
 
-## Agent Integrations
+## Current Limits
 
-1Context includes a first-party Claude Code hook bridge. It installs only
-managed command hooks and can remove them again without touching your other
-Claude settings:
+This is a founder preview, not a finished memory product:
 
-```bash
-1context agent integrations status
-1context agent integrations install
-1context agent integrations repair
-1context agent integrations uninstall
-```
+- Claude Code and Codex are the first supported agent surfaces.
+- Memory collection and page creation are currently manual.
+- Local chat/librarian execution is only an API shell.
+- Cloud wiki sharing is not enabled yet.
+- The local wiki is private.
 
-The current hook behavior is intentionally small: install adds only a Claude
-`SessionStart` hook plus the status line. Claude receives a local wiki pointer
-and repo-aware pointer when available. Prompt, tool, compact, and session-end
-hooks are implemented as safe no-ops but are not installed by default. Codex
-integration is status-only until its hook configuration is verified.
-
-## Memory Core Adapter
-
-The public macOS app can be configured to call an external memory-core
-executable through a narrow JSON subprocess boundary. This is the future bridge
-for the private memory engine; the public app does not bundle or copy that
-business logic.
-
-```bash
-1context memory-core status
-1context memory-core doctor
-1context memory-core configure --executable /path/to/memory-core
-1context memory-core run -- status --json
-1context memory-core configure --clear
-```
-
-The adapter is explicit and bounded: lifecycle commands do not depend on memory
-core, hooks do not run heavy memory work, and `run` only accepts documented JSON
-command shapes such as `status --json`, `wiki list --json`, and
-`memory tick --wiki-only --json`.
-
-See [docs/memory-core-contract.md](docs/memory-core-contract.md) for the
-subprocess contract and compatibility fixture.
+The design intentionally keeps the browser contract cloud-compatible: local
+today, cloud later, same wiki pages and `/api/wiki/*` shape.
 
 ## Development
 
-This repository includes the public macOS runtime and menu bar app:
+Maintainer and contract details live in:
 
-```bash
-swift test --package-path macos
-./scripts/test.sh
-```
-
-Runtime commands use product language:
-
-```bash
-1context start
-1context status
-1context diagnose
-1context restart
-1context stop
-```
-
-The menu bar app can be packaged locally with:
-
-```bash
-ALLOW_UNNOTARIZED=1 NOTARIZE=0 ./scripts/package-macos-release.sh
-```
-
-That produces an ad-hoc signed local build under `dist/` and does not require a
-Developer ID certificate.
-
-Maintainer release packaging uses Developer ID signing and notarization:
-
-```bash
-ONECONTEXT_SIGNING_MODE=developer-id NOTARIZE=1 ./scripts/package-macos-release.sh
-```
-
-Release packaging validates that archives do not contain local owner/group
-metadata, AppleDouble files, local build paths, or SwiftPM resource-bundle
-fallback paths. To clear local release outputs before packaging:
-
-```bash
-./scripts/clean-release-artifacts.sh
-```
-
-For RPC lifecycle stress, run:
-
-```bash
-ONECONTEXT_STRESS_COUNT=1000 ./scripts/stress-runtime-rpc.sh
-```
-
-For menu responsiveness work, launch the app with perf timing enabled and inspect
-`~/Library/Logs/1Context/menu.log`:
-
-```bash
-ONECONTEXT_MENU_PERF_LOG=1 open /Applications/1Context.app
-```
-
-To notarize the built app, first configure a `notarytool` keychain profile, then run:
-
-```bash
-NOTARYTOOL_PROFILE=1context-notary ./scripts/notarize-macos-app.sh
-```
+- [Local web contract](docs/local-web-contract.md)
+- [Memory core contract](docs/memory-core-contract.md)
+- [Development and release notes](docs/development.md)
 
 ## Thanks
 
