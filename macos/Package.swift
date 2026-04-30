@@ -62,7 +62,12 @@ let package = Package(
     ),
     .executableTarget(
       name: "OneContextMenuBar",
-      dependencies: ["OneContextRuntimeSupport", "OneContextAgent", "OneContextLocalWeb"],
+      dependencies: [
+        "OneContextRuntimeSupport",
+        "OneContextAgent",
+        "OneContextLocalWeb",
+        "OneContextUpdate"
+      ],
       exclude: ["Resources"]
     ),
     .testTarget(

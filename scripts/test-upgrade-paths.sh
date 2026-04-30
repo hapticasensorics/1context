@@ -305,6 +305,7 @@ run_cli_noop_case() {
 
 run_gui_upgrade_bridge_checks() {
   local source="$ROOT/macos/Sources/OneContextMenuBar/main.swift"
+  local updater_script_source="$ROOT/macos/Sources/OneContextUpdate/UpdaterScript.swift"
   local gui_body="$WORK_DIR/gui-upgrade-body.swift"
   awk '
     /private func runUpdateCommandInTerminal\(\)/ { in_body = 1 }
@@ -312,6 +313,7 @@ run_gui_upgrade_bridge_checks() {
     in_body { print }
   ' "$source" > "$gui_body"
 
+  # Menu surface and entry-point invariants (unchanged).
   assert_contains 'updateTitle = "Please Update"' "$source"
   assert_contains 'updateAction = #selector(openUpgradeCommand)' "$source"
   assert_contains '@objc private func openUpgradeCommand()' "$source"
@@ -320,13 +322,27 @@ run_gui_upgrade_bridge_checks() {
   assert_contains 'if result.updateAvailable {' "$source"
   assert_contains 'if self.confirmUpdate() {' "$source"
   assert_contains 'self.runUpdateCommandInTerminal()' "$source"
+
+  # The menu must locate the bundled `1context-cli`, render the hand-off
+  # script via the shared OneContextUpdate.UpdaterScript renderer, and open
+  # it in Terminal. It must NOT call Homebrew directly (that lives in the
+  # CLI's `update` subcommand, where verification happens).
   assert_contains 'appendingPathComponent("1context-cli")' "$gui_body"
-  assert_contains 'if \(shellQuote(cliExecutable)) update; then' "$gui_body"
-  assert_contains '--update-success-alert' "$gui_body"
-  assert_contains 'display dialog "Could not update 1Context."' "$gui_body"
+  assert_contains 'UpdaterScript.render(' "$gui_body"
   assert_contains 'do script \"/bin/zsh \" & quoted form of scriptPath' "$source"
   assert_not_contains '/opt/homebrew/bin/1context update' "$gui_body"
   assert_not_contains 'brew upgrade --cask' "$gui_body"
+
+  # Invariants on the rendered shell script: it must hand off to the CLI's
+  # `update` subcommand, fall back to the success-alert binary, and surface
+  # failure clearly to the user. Output must be tee'd to a log file so the
+  # outcome survives Terminal's "close window on shell exit" preference.
+  assert_contains '\(cli) update' "$updater_script_source"
+  assert_contains '--update-success-alert' "$updater_script_source"
+  assert_contains '1Context update failed' "$updater_script_source"
+  assert_contains 'tee -a "$LOG_FILE"' "$updater_script_source"
+  assert_contains 'Press Return to close' "$updater_script_source"
+  assert_not_contains 'brew upgrade --cask' "$updater_script_source"
 }
 
 CLI="$(find_cli)"

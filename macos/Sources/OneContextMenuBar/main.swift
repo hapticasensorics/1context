@@ -4,6 +4,7 @@ import Foundation
 import OneContextAgent
 import OneContextLocalWeb
 import OneContextRuntimeSupport
+import OneContextUpdate
 
 private enum Constants {
   static let appName = "1Context"
@@ -800,24 +801,16 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
     }
 
     let alertExecutable = menuExecutable.path
-    let script = """
-    #!/bin/zsh
-    set -euo pipefail
-    trap 'rm -f "$0"' EXIT
+    let logDirectory = RuntimePaths.current().logDirectory
+    // Best-effort: ensure the log directory exists with the right permissions
+    // so the updater script can tee its output even on a fresh install.
+    try? RuntimePermissions.ensurePrivateDirectory(logDirectory)
 
-    printf '%s\\n' 'Updating 1Context...'
-    printf '%s\\n\\n' 'If prompted, enter your Mac password. Terminal will hide password characters.'
-    if \(shellQuote(cliExecutable)) update; then
-      \(shellQuote(alertExecutable)) --update-success-alert >/dev/null 2>&1 || osascript -e 'display dialog "1Context updated." buttons {"OK"} default button "OK"'
-      printf '\\n%s\\n' 'Done.'
-      exit 0
-    else
-      status=$?
-      osascript -e 'display dialog "Could not update 1Context." buttons {"OK"} default button "OK" with icon caution'
-      printf '\\n%s\\n' 'Update failed. You can close this window.'
-      exit $status
-    fi
-    """
+    let script = UpdaterScript.render(
+      cliExecutable: cliExecutable,
+      alertExecutable: alertExecutable,
+      logDirectory: logDirectory.path
+    )
     guard let scriptURL = writeUpdaterScript(script) else {
       presentMenuAlert("Could not prepare updater.")
       return
@@ -863,10 +856,6 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
     } catch {
       return false
     }
-  }
-
-  private func shellQuote(_ value: String) -> String {
-    "'\(value.replacingOccurrences(of: "'", with: "'\\''"))'"
   }
 
   private func cleanupStaleUpdaterFiles() {
