@@ -156,6 +156,7 @@ if launchctl print "gui/$(id -u)/$MENU_LABEL" >/dev/null 2>&1; then
 fi
 
 printf 'stopped\n' > "$CANONICAL_DESIRED_STATE"
+printf 'stopped\n' > "$ONECONTEXT_APP_SUPPORT_DIR/desired-state"
 "$PACKAGE_DIR/scripts/install-macos-launch-agents.sh" "$APP_PATH" "$CLI_PATH"
 
 grep -q "agent hook --provider claude --event SessionStart" "$ONECONTEXT_CLAUDE_SETTINGS_PATH"

@@ -30,6 +30,7 @@ jobs:
       - run: ./scripts/check-version-consistency.sh
       - run: swift test --package-path macos
       - run: ./scripts/test.sh
+      - run: ./scripts/test-upgrade-paths.sh
       - run: ALLOW_UNNOTARIZED=1 NOTARIZE=0 ./scripts/package-macos-release.sh
       - name: Packaged LaunchAgent smoke
         run: ONECONTEXT_ALLOW_LAUNCH_AGENT_SMOKE=1 ./scripts/test-launch-agent-package.sh

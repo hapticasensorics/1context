@@ -99,6 +99,7 @@ contract.
 ```bash
 swift test --package-path macos
 ./scripts/test.sh
+./scripts/test-upgrade-paths.sh
 ```
 
 For memory-core tests:
@@ -120,6 +121,12 @@ inspect `~/Library/Logs/1Context/menu.log`:
 ```bash
 ONECONTEXT_MENU_PERF_LOG=1 open /Applications/1Context.app
 ```
+
+For updater work, `./scripts/test-upgrade-paths.sh` is the standing contract
+test. It exercises CLI update against deterministic fake release metadata for
+previous-to-current and current-to-next version movement, then checks that the
+menu bar update path still routes through the bundled `1context-cli update`
+Terminal script rather than duplicating Homebrew logic in Swift.
 
 ## Release Packaging
 

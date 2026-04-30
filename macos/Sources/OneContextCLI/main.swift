@@ -200,7 +200,8 @@ struct OneContextCLI {
   }
 
   static func update() async throws {
-    let result = try await UpdateChecker().check(force: true, currentVersion: oneContextVersion)
+    let currentVersion = effectiveCurrentVersion()
+    let result = try await UpdateChecker().check(force: true, currentVersion: currentVersion)
     guard result.updateAvailable else {
       print("1Context up to date.")
       return
@@ -209,7 +210,7 @@ struct OneContextCLI {
     guard let latest = result.latest else {
       throw CLIError.commandFailed("Could not determine latest 1Context version")
     }
-    print("1Context \(latest.version) is available. You have \(oneContextVersion).")
+    print("1Context \(latest.version) is available. You have \(currentVersion).")
     print("Updating 1Context...")
     try updateWithHomebrew(expectedVersion: latest.version)
   }
@@ -369,7 +370,7 @@ struct OneContextCLI {
   }
 
   static func updateWithHomebrew(expectedVersion: String) throws {
-    guard let brew = firstExecutable(["/opt/homebrew/bin/brew", "/usr/local/bin/brew"]) else {
+    guard let brew = brewExecutable() else {
       throw CLIError.commandFailed("Homebrew is required to update 1Context")
     }
 
@@ -387,11 +388,12 @@ struct OneContextCLI {
     }
 
     print("Refreshing 1Context cask metadata...")
-    try runProcess("/usr/bin/git", [
+    let git = gitExecutable()
+    try runProcess(git, [
       "-C", tap,
       "fetch", "--quiet", "--no-tags", "origin", "main:refs/remotes/origin/main"
     ])
-    try runProcess("/usr/bin/git", [
+    try runProcess(git, [
       "-C", tap,
       "merge", "--quiet", "--ff-only", "refs/remotes/origin/main"
     ])
@@ -407,7 +409,7 @@ struct OneContextCLI {
     )
 
     if RuntimeController().shouldAutoStartRuntime(),
-      let cli = firstExecutable(["/opt/homebrew/bin/1context", "/usr/local/bin/1context"])
+      let cli = installedCLIExecutable()
     {
       _ = runCapture(cli, ["restart"])
     }
@@ -416,7 +418,7 @@ struct OneContextCLI {
   }
 
   static func verifyInstalledVersion(_ expectedVersion: String) throws {
-    guard let cli = firstExecutable(["/opt/homebrew/bin/1context", "/usr/local/bin/1context"]) else {
+    guard let cli = installedCLIExecutable() else {
       throw CLIError.commandFailed("Could not find installed 1context after update")
     }
 
@@ -803,7 +805,43 @@ struct OneContextCLI {
   }
 
   static func appVersion() -> String? {
-    NSDictionary(contentsOfFile: "/Applications/1Context.app/Contents/Info.plist")?["CFBundleShortVersionString"] as? String
+    let environment = ProcessInfo.processInfo.environment
+    let appPath = environment["ONECONTEXT_TEST_APP_BUNDLE_PATH"] ?? "/Applications/1Context.app"
+    let infoPlist = URL(fileURLWithPath: appPath)
+      .appendingPathComponent("Contents/Info.plist")
+      .path
+    return NSDictionary(contentsOfFile: infoPlist)?["CFBundleShortVersionString"] as? String
+  }
+
+  static func effectiveCurrentVersion() -> String {
+    ProcessInfo.processInfo.environment["ONECONTEXT_TEST_CURRENT_VERSION"] ?? oneContextVersion
+  }
+
+  static func brewExecutable() -> String? {
+    if let override = ProcessInfo.processInfo.environment["ONECONTEXT_TEST_BREW_EXECUTABLE"],
+      FileManager.default.isExecutableFile(atPath: override)
+    {
+      return override
+    }
+    return firstExecutable(["/opt/homebrew/bin/brew", "/usr/local/bin/brew"])
+  }
+
+  static func gitExecutable() -> String {
+    if let override = ProcessInfo.processInfo.environment["ONECONTEXT_TEST_GIT_EXECUTABLE"],
+      FileManager.default.isExecutableFile(atPath: override)
+    {
+      return override
+    }
+    return "/usr/bin/git"
+  }
+
+  static func installedCLIExecutable() -> String? {
+    if let override = ProcessInfo.processInfo.environment["ONECONTEXT_TEST_INSTALLED_CLI"],
+      FileManager.default.isExecutableFile(atPath: override)
+    {
+      return override
+    }
+    return firstExecutable(["/opt/homebrew/bin/1context", "/usr/local/bin/1context"])
   }
 
   static func currentExecutablePath() -> String? {
