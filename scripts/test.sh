@@ -48,8 +48,16 @@ assert_url_contains() {
   local url="$1"
   local expected="$2"
   local output
-  output="$(curl --fail --silent "$url")"
-  grep -q "$expected" <<<"$output"
+  for _ in {1..40}; do
+    if output="$(curl --fail --silent --max-time 3 "$url" 2>/dev/null)" && grep -q "$expected" <<<"$output"; then
+      return 0
+    fi
+    sleep 0.25
+  done
+
+  echo "Expected URL to contain '$expected': $url" >&2
+  curl --include --silent --show-error --max-time 5 "$url" >&2 || true
+  return 1
 }
 
 swift build --package-path "$MACOS_DIR"
@@ -157,7 +165,7 @@ if curl --fail --silent "http://wiki.1context.localhost:17419/for-you" | grep -E
   exit 1
 fi
 assert_url_contains "http://127.0.0.1:17420/api/wiki/health" "1context-wiki-api"
-state_response="$(curl --fail --silent --request PATCH \
+state_response="$(curl --fail --silent --request POST \
   --header "Content-Type: application/json" \
   --data '{"settings":{"theme":"dark"},"bookmarks":[{"title":"For You","url":"/for-you"}]}' \
   "http://127.0.0.1:17420/api/wiki/state")"
