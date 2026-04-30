@@ -1,0 +1,275 @@
+{
+  "checks": [
+    {
+      "id": "wiki.render.succeeded",
+      "status": "passed",
+      "text": "Rendered wiki family for-you."
+    },
+    {
+      "id": "wiki.generated.available",
+      "status": "passed",
+      "text": "9 generated file(s), 3 HTML file(s)."
+    },
+    {
+      "id": "wiki.manifest.written",
+      "status": "passed",
+      "text": "render-manifest.json written beside generated outputs."
+    }
+  ],
+  "engine": {
+    "manifest_schema": "wiki.render-manifest.v1",
+    "name": "@1context/wiki-engine",
+    "path": "wiki-engine",
+    "version": "local"
+  },
+  "family": {
+    "curator_prompt": "",
+    "generated_dir": "wiki/menu/10-for-you/10-for-you/generated",
+    "id": "for-you",
+    "jobs": {
+      "curator": "memory.wiki.for_you_curator",
+      "historian": "memory.wiki.historian"
+    },
+    "kind": "rolling_memory_surface",
+    "label": "For You",
+    "manifest_path": "wiki/menu/10-for-you/10-for-you/family.toml",
+    "menu_group": "for-you",
+    "menu_group_label": "For You",
+    "menu_group_order": 10,
+    "menu_order": 10,
+    "path": "wiki/menu/10-for-you/10-for-you",
+    "policies": {
+      "agent_editable": true,
+      "generated_editable": false,
+      "operator_editable": true
+    },
+    "route": "/for-you",
+    "source_dir": "wiki/menu/10-for-you/10-for-you/source",
+    "source_primary": "wiki/menu/10-for-you/10-for-you/source/for-you.md",
+    "talk_conventions": "",
+    "talk_dir": "wiki/menu/10-for-you/10-for-you/talk",
+    "talk_primary": "",
+    "template_version": "seed@0.1.0"
+  },
+  "include_talk": true,
+  "inputs": [
+    {
+      "bytes": 432,
+      "content_type": "application/toml",
+      "path": "wiki/menu/10-for-you/10-for-you/family.toml",
+      "role": "family_manifest",
+      "sha256": "3ae700863e6b89ed3c0023d0122326213bd993e9d887d27fb8f214a18e664350"
+    },
+    {
+      "bytes": 49,
+      "content_type": "application/toml",
+      "path": "wiki/menu/10-for-you/group.toml",
+      "role": "menu_group_manifest",
+      "sha256": "99a78f031009550d06d5aaf9562fd9ee60bb700c4a519efeb65e65e6f112ff7a"
+    },
+    {
+      "bytes": 128,
+      "content_type": "application/toml",
+      "path": "wiki/wiki.toml",
+      "role": "wiki_manifest",
+      "sha256": "0baf8d0f116d5715790f5631b585bdf91aef60aa2c5abd9c2d008388c7e438cb"
+    },
+    {
+      "bytes": 265,
+      "content_type": "application/json",
+      "path": "wiki-engine/package.json",
+      "role": "engine_package",
+      "sha256": "3eddedc2e582c7a2131d0f95bcf2a74b24aaca0112fe97e626337548f26c84c8"
+    },
+    {
+      "bytes": 4592,
+      "content_type": "application/json",
+      "path": "wiki-engine/package-lock.json",
+      "role": "engine_lock",
+      "sha256": "a75fe0cb5e3d19978ecd8dfabef35a3aac58fe1e457bdb38ac244e2f733c2684"
+    },
+    {
+      "bytes": 2308,
+      "content_type": "text/markdown",
+      "path": "wiki/menu/10-for-you/10-for-you/source/for-you.md",
+      "role": "source_canonical_private",
+      "sha256": "bc66154093be47058cf4ed8e00d5d7168fef01bd2cb4a95bb74234f23c89fd6b"
+    },
+    {
+      "bytes": 481,
+      "content_type": "text/markdown",
+      "path": "wiki/menu/10-for-you/10-for-you/talk/for-you-2026-04-29.talk/2026-04-29T00-00Z.synthesis.how-to-use-this-talk-page.md",
+      "role": "talk_entry",
+      "sha256": "692297f4bafaa51b04db8a1ee875266d9dae0144eb9d1eeea3b78bfdc64bf0e9"
+    },
+    {
+      "bytes": 1152,
+      "content_type": "text/markdown",
+      "path": "wiki/menu/10-for-you/10-for-you/talk/for-you-2026-04-29.talk/_conventions.md",
+      "role": "talk_conventions",
+      "sha256": "6978af9a54cfd5a37a745a31eb980978d7a200def96fbc3e486fe5092d6d7870"
+    },
+    {
+      "bytes": 506,
+      "content_type": "text/markdown",
+      "path": "wiki/menu/10-for-you/10-for-you/talk/for-you-2026-04-29.talk/_curator.md",
+      "role": "curator_prompt",
+      "sha256": "dce77191c27ee6aef43c2f2543a47fc793f2de066a5a943093f30cd0a57d3c68"
+    },
+    {
+      "bytes": 441,
+      "content_type": "application/yaml",
+      "path": "wiki/menu/10-for-you/10-for-you/talk/for-you-2026-04-29.talk/_meta.yaml",
+      "role": "talk_meta",
+      "sha256": "b4f14a9a293bb581666347e9e8a38f74b79fd209e129f1b0cb43b51ea41bb5ce"
+    },
+    {
+      "bytes": 0,
+      "content_type": "application/octet-stream",
+      "path": "wiki/menu/10-for-you/10-for-you/talk/for-you-2026-04-29.talk/archive/.gitkeep",
+      "role": "talk_entry",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  ],
+  "invocations": [
+    {
+      "input_path": "wiki/menu/10-for-you/10-for-you/source/for-you.md",
+      "stderr": "",
+      "stdout": "\u2713 for-you: 64279 bytes \u2192 /Users/paulhan/dev/1context-public-launch/memory-core/wiki/menu/10-for-you/10-for-you/generated/for-you-2026-04-29.html\n  + 1 section sub-page(s) \u2192 /Users/paulhan/dev/1context-public-launch/memory-core/wiki/menu/10-for-you/10-for-you/generated/for-you-2026-04-29/\n  family/latest: for-you \u2192 for-you-2026-04-29 (2026-04-29)\n  family/index:  for-you-index.json (member registered)"
+    },
+    {
+      "input_path": "wiki/menu/10-for-you/10-for-you/talk/for-you-2026-04-29.talk",
+      "stderr": "",
+      "stdout": "\u2713 for-you-2026-04-29.talk: 41128 bytes \u2192 /Users/paulhan/dev/1context-public-launch/memory-core/wiki/menu/10-for-you/10-for-you/generated/for-you-2026-04-29.talk.html"
+    }
+  ],
+  "output_dir": "wiki/menu/10-for-you/10-for-you/generated",
+  "outputs": [
+    {
+      "audience_tier": "public",
+      "bytes": 37717,
+      "content_type": "text/html",
+      "path": "wiki/menu/10-for-you/10-for-you/generated/for-you-2026-04-29/today.html",
+      "role": "generated_output",
+      "sha256": "c4e28f65bdad80b8c009b38c3b387087dce90d031d1445e9da07c5f080dddbbb"
+    },
+    {
+      "audience_tier": "public",
+      "bytes": 760,
+      "content_type": "text/markdown",
+      "path": "wiki/menu/10-for-you/10-for-you/generated/for-you-2026-04-29/today.md",
+      "role": "generated_output",
+      "sha256": "b34a311346dfdda2a13cc5d1d5e9c949fba59745a7d5881399595eac1802fc45"
+    },
+    {
+      "audience_tier": "public",
+      "bytes": 522,
+      "content_type": "text/markdown",
+      "path": "wiki/menu/10-for-you/10-for-you/generated/for-you-2026-04-29/today.talk.md",
+      "role": "generated_output",
+      "sha256": "726eaf8a66f3f0e253ee453ffbb24845124c60862dc4780258946a9320aca30e"
+    },
+    {
+      "audience_tier": "public",
+      "bytes": 64317,
+      "content_type": "text/html",
+      "path": "wiki/menu/10-for-you/10-for-you/generated/for-you-2026-04-29.html",
+      "role": "generated_output",
+      "sha256": "79fd42f77165728091763905d5dba8f3ed7167ecc971166605a4fe2071adfe24"
+    },
+    {
+      "audience_tier": "public",
+      "bytes": 2308,
+      "content_type": "text/markdown",
+      "path": "wiki/menu/10-for-you/10-for-you/generated/for-you-2026-04-29.md",
+      "role": "generated_output",
+      "sha256": "bc66154093be47058cf4ed8e00d5d7168fef01bd2cb4a95bb74234f23c89fd6b"
+    },
+    {
+      "audience_tier": "public",
+      "bytes": 41155,
+      "content_type": "text/html",
+      "path": "wiki/menu/10-for-you/10-for-you/generated/for-you-2026-04-29.talk.html",
+      "role": "generated_output",
+      "sha256": "928c12b90273c5752e7dc0e7024dd978aae95d052b3036559104a0220cc068dc"
+    },
+    {
+      "audience_tier": "public",
+      "bytes": 1178,
+      "content_type": "text/markdown",
+      "path": "wiki/menu/10-for-you/10-for-you/generated/for-you-2026-04-29.talk.md",
+      "role": "generated_output",
+      "sha256": "bde4009078be26591d33d937e975b6e3116a0e0c0c1c8317156637eb4cee582c"
+    },
+    {
+      "bytes": 187,
+      "content_type": "application/json",
+      "path": "wiki/menu/10-for-you/10-for-you/generated/for-you-index.json",
+      "role": "generated_output",
+      "sha256": "d3562081049dbd0c5b3b6c766e09d783ff6d332e321f3b9b61023f81a7d9c820"
+    },
+    {
+      "bytes": 82,
+      "content_type": "application/json",
+      "path": "wiki/menu/10-for-you/10-for-you/generated/latest_for_family.json",
+      "role": "generated_output",
+      "sha256": "3bcf30d831eeb4ddb3636db66d3b2df096528d550df6cc1078e455e63ecba7ba"
+    }
+  ],
+  "rendered_at": "2026-04-30T11:39:59Z",
+  "routes": [
+    {
+      "kind": "latest_family_html",
+      "output_path": "wiki/menu/10-for-you/10-for-you/generated/for-you-2026-04-29.html",
+      "route": "/for-you",
+      "source": "latest_for_family.json"
+    },
+    {
+      "kind": "html",
+      "output_path": "wiki/menu/10-for-you/10-for-you/generated/for-you-2026-04-29/today.html",
+      "route": "/for-you-2026-04-29/today",
+      "source": "generated_output"
+    },
+    {
+      "kind": "html",
+      "output_path": "wiki/menu/10-for-you/10-for-you/generated/for-you-2026-04-29.html",
+      "route": "/for-you-2026-04-29",
+      "source": "generated_output"
+    },
+    {
+      "kind": "html",
+      "output_path": "wiki/menu/10-for-you/10-for-you/generated/for-you-2026-04-29.talk.html",
+      "route": "/for-you-2026-04-29.talk",
+      "source": "generated_output"
+    }
+  ],
+  "schema_version": "wiki.render-manifest.v1",
+  "tier_sources": [
+    {
+      "base": "for-you",
+      "canonical_private_source": "wiki/menu/10-for-you/10-for-you/source/for-you.md",
+      "model": "canonical-private-with-explicit-tier-siblings",
+      "public_reads_private": false,
+      "tiers": {
+        "internal": {
+          "exists": false,
+          "path": "wiki/menu/10-for-you/10-for-you/source/for-you.internal.md",
+          "selected_for_render": false,
+          "sha256": ""
+        },
+        "private": {
+          "exists": true,
+          "path": "wiki/menu/10-for-you/10-for-you/source/for-you.md",
+          "selected_for_render": true,
+          "sha256": "bc66154093be47058cf4ed8e00d5d7168fef01bd2cb4a95bb74234f23c89fd6b"
+        },
+        "public": {
+          "exists": false,
+          "path": "wiki/menu/10-for-you/10-for-you/source/for-you.public.md",
+          "selected_for_render": false,
+          "sha256": ""
+        }
+      }
+    }
+  ]
+}

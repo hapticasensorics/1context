@@ -1,0 +1,871 @@
+<!doctype html>
+<html lang="en" data-theme="auto" data-article-width="s" data-font-size="m" data-border-radius="rounded" data-links-style="color" data-cover-image="show" data-article-style="full">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>For You - Talk — 1Context</title>
+
+  <link rel="alternate" type="text/markdown" href="/for-you-2026-04-29.talk.md">
+  <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/assets/favicon-16.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="/assets/apple-touch-icon.png">
+
+  <meta name="generator" content="1Context wiki-engine">
+
+  <meta property="og:title" content="For You - Talk">
+  <meta property="og:type"  content="article">
+  <meta property="og:description" content="">
+  <meta name="description" content="">
+
+  <script>
+    /* No-flash theme bootstrap. enhance.js reads opctx-theme from
+     * localStorage and applies it as data-theme on <html>, but that
+     * runs after CSS paints. If the user picked "light" but their
+     * system is dark, the page would paint dark for ~50ms before JS
+     * flipped it. Reading localStorage here (synchronous, blocking,
+     * pre-paint) avoids the flash. The HTML-emitted data-theme is the
+     * page-recommended default; localStorage wins if set. */
+    (function() {
+      try {
+        var t = localStorage.getItem('opctx-theme');
+        if (t === 'light' || t === 'dark') {
+          document.documentElement.dataset.theme = t;
+        }
+      } catch (e) { /* localStorage blocked — keep page-default */ }
+    })();
+  </script>
+  <link rel="stylesheet" href="/assets/theme.css">
+  <script type="module" src="/assets/enhance.js" defer></script>
+</head>
+<body>
+  <div class="opctx-visibility-bar" data-tier="private" aria-label="Private — only you"></div>
+  <div class="opctx-progress-bar" aria-hidden="true"></div>
+
+  <header class="opctx-header">
+    <div class="opctx-header-brand">
+      <button type="button"
+              class="opctx-brand-menu-toggle"
+              aria-haspopup="menu"
+              aria-expanded="false"
+              aria-controls="opctx-brand-menu"
+              aria-label="Open 1Context navigation menu"
+              data-home-href="/">
+        <span class="opctx-header-logo">1Context</span>
+      </button>
+      <div id="opctx-brand-menu" class="opctx-brand-menu" role="menu" hidden>
+        <div class="opctx-brand-menu-group" role="group" aria-label="For You">
+          <div class="opctx-brand-menu-heading">For You</div>
+          <ul class="opctx-brand-menu-list">
+            <li><a href="/for-you" role="menuitem"><span class="opctx-brand-menu-label">For You</span><span class="opctx-brand-menu-sub">Rolling 14-day feed + Monday biography rewrite</span></a></li>
+            <li><a href="/your-context" role="menuitem"><span class="opctx-brand-menu-label">Your Context</span><span class="opctx-brand-menu-sub">Working style, preferences, taste, life story</span></a></li>
+          </ul>
+        </div>
+        <div class="opctx-brand-menu-group" role="group" aria-label="Project">
+          <div class="opctx-brand-menu-heading">Project</div>
+          <ul class="opctx-brand-menu-list">
+            <li><a href="/projects" role="menuitem"><span class="opctx-brand-menu-label">Projects</span><span class="opctx-brand-menu-sub">Active, paused, completed, archived</span></a></li>
+          </ul>
+        </div>
+        <div class="opctx-brand-menu-group" role="group" aria-label="Topics">
+          <div class="opctx-brand-menu-heading">Topics</div>
+          <ul class="opctx-brand-menu-list">
+            <li><a href="/topics" role="menuitem"><span class="opctx-brand-menu-label">Topics</span><span class="opctx-brand-menu-sub">Named subjects, categorized</span></a></li>
+          </ul>
+        </div>
+      </div>
+    </div>
+    <div class="opctx-header-search">
+      <input type="search" placeholder="Search pages, books, tags…" aria-label="Search">
+    </div>
+    <div class="opctx-header-actions">
+      <span class="opctx-tier-badge" data-tier="private" title="Only you">Private</span>
+    </div>
+  </header>
+
+  <div class="opctx-layout">
+    <nav class="opctx-toc" aria-label="Table of contents">
+      <span class="opctx-toc-label">Contents</span>
+      <ol>
+        <li><a href="#synthesis">Synthesis questions</a></li>
+        <li><a href="#2026-04-29t00-00z-synthesis-how-to-use-this-talk-page">[SYNTHESIS] How to use this talk page</a></li>
+        <li><a href="#see-also">See also</a></li>
+      </ol>
+    </nav>
+
+    <main class="opctx-main">
+      <article class="opctx-article">
+        <h1>For You - Talk</h1>
+
+        <div class="opctx-article-body"><details class="opctx-talk-conventions" data-collapsed-by-default="true">
+        <summary><strong>Talk-page conventions</strong> — For You private talk page · Wikipedia + LKML conventions, append-only <span class="opctx-talk-conventions-hint">click to expand</span></summary>
+        <div class="opctx-talk-conventions-body"><h1>Talk Conventions - For You</h1>
+<p>The For You talk page is the memory system&#39;s near-present workbench. It is
+allowed to be rougher than the article, but it should still be useful to read.</p>
+<p>Use one timestamped markdown file per contribution. Each top-level file is one
+thread. Replies use <code>parent:</code> frontmatter pointing to the parent filename or
+stem.</p>
+<h2>What Belongs Here</h2>
+<ul>
+<li>Conversation summaries that may explain what happened today.</li>
+<li>Open questions that affect what 1Context should remember next.</li>
+<li>Proposals to promote an observation into For You, Your Context, Projects, or
+Topics.</li>
+<li>Decisions that explain why the article changed.</li>
+<li>Corrections and redactions when captured memory is wrong, too broad, or too
+sensitive.</li>
+</ul>
+<h2>Article Vs Talk</h2>
+<p>The article is the clean reader-facing state. Talk is the append-only reasoning
+trail. Agents should usually propose in talk first, then a curator/editor
+applies accepted changes to the source page.</p>
+<h2>Archive Policy</h2>
+<p>Keep active talk entries in this folder for 90 days. After that, move settled
+conversation files into <code>archive/</code> while preserving filenames, frontmatter, and
+parent/thread references.</p>
+</div>
+      </details><blockquote class="opctx-talk-lede"><p>This is the private discussion layer for For You. The article is the readable current state; this page shows how observations, open loops, and proposed memory updates move toward that state.</p>
+</blockquote>
+<details class="opctx-talk-curator-prompt"><summary><strong>Curator prompt for this page</strong> <span class="opctx-talk-curator-hint">click to expand · edit <code>_curator.md</code> in this talk folder to change how the curator agent for this page behaves</span></summary><div class="opctx-talk-curator-prompt-body"><h1>Curator Prompt - For You</h1>
+<p>Maintain <code>/for-you</code> as the private current-memory surface. Prefer short,
+evidence-backed entries that help the operator or a future agent resume work.</p>
+<p>Use this talk folder before changing durable article text. Good proposals name:</p>
+<ul>
+<li>the observation</li>
+<li>the evidence or source</li>
+<li>why it matters now</li>
+<li>where it should graduate if it becomes stable</li>
+</ul>
+<p>When applying a decision, leave an explicit <code>decided</code> entry in talk. Do not
+silently erase uncertainty from the discussion history.</p>
+</div></details>
+<section class="opctx-talk-section" data-kind="synthesis"><h2 id="synthesis">Synthesis questions</h2>
+<article class="opctx-talk-entry" data-kind="synthesis"><h2 id="2026-04-29t00-00z-synthesis-how-to-use-this-talk-page">[SYNTHESIS] How to use this talk page</h2>
+<p>This talk page starts as a guide for the memory system. As 1Context observes
+work, agents can add timestamped entries here before changing the article.</p>
+<p>Use this page to ask: what happened recently, what should be remembered, what is
+still uncertain, and which durable page should receive the final edited memory?</p>
+<p>The article should stay calm and readable. Talk can preserve the reasoning that
+got it there.</p>
+
+<p class="opctx-talk-entry-sig"><em>— 1context-seed · 2026-04-29T00:00:00.000Z</em></p></article>
+</section>
+<section class="opctx-talk-section opctx-talk-see-also"><h2 id="see-also">See also</h2><ul>
+<li><a href="/for-you">Source page</a></li>
+</ul></section></div>
+      </article>
+    </main>
+  </div>
+  <footer class="opctx-site-footer">
+    <img src="/assets/onecontext-icon-64.png" alt="" width="22" height="22" class="opctx-site-footer-logo">
+    <span class="opctx-site-footer-text"><strong>1Context</strong> by <a href="https://haptica.ai" class="opctx-site-footer-haptica">Haptica</a></span>
+  </footer>
+  <script>
+    /* Reusable menu wiring. Brand, version, audience, and the share
+     * modal's internal pickers all use the same disclosure pattern:
+     * button toggle, list of buttons/links, keyboard navigation,
+     * Escape/outside-click dismiss. This stays local to the shell so
+     * section sub-pages inherit it without a separate runtime module. */
+    (function() {
+      function closeOtherMenus(currentToggle) {
+        var openToggles = document.querySelectorAll('[aria-expanded="true"][aria-haspopup="menu"]');
+        for (var i = 0; i < openToggles.length; i++) {
+          if (openToggles[i] === currentToggle) continue;
+          openToggles[i].setAttribute('aria-expanded', 'false');
+          var otherId = openToggles[i].getAttribute('aria-controls');
+          if (!otherId) continue;
+          var otherMenu = document.getElementById(otherId);
+          if (otherMenu) otherMenu.setAttribute('hidden', '');
+        }
+      }
+
+      function wireMenu(root, toggleSelector, menuSelector, opts) {
+        if (!root) return null;
+        opts = opts || {};
+        var toggle = typeof toggleSelector === 'string'
+          ? root.querySelector(toggleSelector)
+          : toggleSelector;
+        var menu = typeof menuSelector === 'string'
+          ? root.querySelector(menuSelector)
+          : menuSelector;
+        if (!toggle || !menu) return null;
+
+        function items() {
+          return Array.prototype.slice.call(
+            menu.querySelectorAll(
+              'a[role="menuitem"], button[role="menuitem"], button[role="menuitemradio"], button[role="menuitemcheckbox"]'
+            )
+          );
+        }
+        function checkedItem() {
+          return menu.querySelector('[aria-checked="true"]');
+        }
+        function setOpen(open, state) {
+          toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+          if (open) {
+            closeOtherMenus(toggle);
+            menu.removeAttribute('hidden');
+            if (state && state.focusItems) {
+              var list = items();
+              var focusTarget = state.focusLast
+                ? list[list.length - 1]
+                : (checkedItem() || list[0]);
+              if (focusTarget) focusTarget.focus();
+            }
+          } else {
+            menu.setAttribute('hidden', '');
+          }
+        }
+        function focusItem(delta) {
+          var list = items();
+          if (list.length === 0) return;
+          var idx = list.indexOf(document.activeElement);
+          if (idx === -1) idx = delta > 0 ? -1 : list.length;
+          var next = (idx + delta + list.length) % list.length;
+          list[next].focus();
+        }
+        toggle.addEventListener('click', function(e) {
+          e.preventDefault();
+          var open = toggle.getAttribute('aria-expanded') === 'true';
+          setOpen(!open);
+        });
+        toggle.addEventListener('keydown', function(e) {
+          if (e.key === 'ArrowDown' || e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            setOpen(true, { focusItems: true });
+          } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            setOpen(true, { focusItems: true, focusLast: true });
+          }
+        });
+        document.addEventListener('click', function(e) {
+          if (!root.contains(e.target)) setOpen(false);
+        });
+        document.addEventListener('keydown', function(e) {
+          if (toggle.getAttribute('aria-expanded') !== 'true') return;
+          if (e.key === 'Escape') {
+            setOpen(false);
+            toggle.focus();
+            return;
+          }
+          if (!menu.contains(document.activeElement)) return;
+          if (e.key === 'ArrowDown') { e.preventDefault(); focusItem(1); }
+          else if (e.key === 'ArrowUp') { e.preventDefault(); focusItem(-1); }
+          else if (e.key === 'Home') {
+            e.preventDefault();
+            var list = items(); if (list[0]) list[0].focus();
+          } else if (e.key === 'End') {
+            e.preventDefault();
+            var list = items(); if (list.length) list[list.length - 1].focus();
+          } else if ((e.key === 'Enter' || e.key === ' ') && menu.contains(document.activeElement)) {
+            e.preventDefault();
+            if (typeof document.activeElement.click === 'function') {
+              document.activeElement.click();
+            }
+          }
+        });
+        menu.addEventListener('focusout', function(e) {
+          setTimeout(function() {
+            if (!root.contains(document.activeElement)) setOpen(false);
+          }, 0);
+        });
+        menu.addEventListener('click', function(e) {
+          var item = e.target.closest(
+            'a[role="menuitem"], button[role="menuitem"], button[role="menuitemradio"], button[role="menuitemcheckbox"]'
+          );
+          if (!item) return;
+          if (typeof opts.onSelect === 'function') opts.onSelect(item, e);
+          if (opts.closeOnSelect !== false) setOpen(false);
+        });
+        return { setOpen: setOpen, toggle: toggle, menu: menu };
+      }
+
+      // Wire the brand menu. Always present on every page.
+      wireMenu(
+        document.querySelector('.opctx-header-brand'),
+        '.opctx-brand-menu-toggle',
+        '.opctx-brand-menu'
+      );
+
+      // Wire the version picker. Only present on family pages.
+      var versionRoot = document.querySelector('.opctx-header-version');
+      var versionMenu = versionRoot
+        ? wireMenu(versionRoot, '.opctx-version-toggle', '.opctx-version-menu', {
+            onSelect: function(item) {
+              var url = item.getAttribute('data-version-url');
+              if (url) location.href = url;
+            },
+          })
+        : null;
+
+      function setVersionSelection(slug) {
+        if (!versionRoot) return;
+        var items = versionRoot.querySelectorAll('[data-version-slug]');
+        var label = versionRoot.querySelector('.opctx-version-toggle-label');
+        for (var i = 0; i < items.length; i++) {
+          var match = items[i].getAttribute('data-version-slug') === slug;
+          items[i].setAttribute('aria-checked', match ? 'true' : 'false');
+          if (match && label) {
+            label.textContent = items[i].getAttribute('data-version-date') || items[i].textContent.trim();
+          }
+        }
+      }
+
+      // Hydrate the version picker from <family>-index.json. The
+      // server emits a one-option skeleton containing just the
+      // current snapshot; here we fetch the full index and replace
+      // the options list. If the
+      // fetch fails, we leave the skeleton alone — graceful
+      // degradation: at minimum the user sees what page they're on.
+      var familyData = null;
+      var dataEl = document.getElementById('opctx-family-data');
+      if (dataEl) {
+        try { familyData = JSON.parse(dataEl.textContent); } catch (e) { familyData = null; }
+      }
+      if (versionRoot && familyData && familyData.indexUrl) {
+        // Resolve relative to the directory of the current page so
+        // both /paul-demo2/for-you-... and any other owner work
+        // without a hard-coded prefix.
+        var indexUrl = new URL(familyData.indexUrl, location.href).toString();
+        fetch(indexUrl, { credentials: 'same-origin' })
+          .then(function(r) { return r.ok ? r.json() : null; })
+          .then(function(data) {
+            if (!data || !Array.isArray(data.members)) return;
+            // Build a row per member, most-recent first. The data
+            // file is already sorted, but resort defensively.
+            var members = data.members.slice().sort(function(a, b) {
+              return (b.date || '').localeCompare(a.date || '');
+            });
+            // Each For You page is a Monday-anchored week (era). The
+            // dropdown shows just the short M/D/YY for each era — no
+            // "Week of" prefix and no "(this week)" suffix. The user
+            // already knows they're picking a week (the date is the
+            // anchor), and the topmost option is the latest by sort
+            // order, which is sufficient. The overlap between adjacent
+            // eras is intentional: the same days get re-narrated from
+            // a later vantage, giving the system a chance to correct
+            // history with hindsight.
+            function formatWeekShort(isoDate) {
+              // 2026-04-20 → 4/20/26 (American MM/DD/YY).
+              var parts = isoDate.split('-');
+              if (parts.length !== 3) return isoDate;
+              var year2 = parts[0].slice(2);
+              var month = parseInt(parts[1], 10);
+              var day = parseInt(parts[2], 10);
+              return month + '/' + day + '/' + year2;
+            }
+            // Update the closed-pill label too — server rendered the
+            // raw ISO date as a fallback before this hydration ran.
+            var pillLabel = versionRoot.querySelector('.opctx-version-toggle-label');
+            if (pillLabel && familyData.date) pillLabel.textContent = formatWeekShort(familyData.date);
+            // Patch setVersionSelection so it rewrites the pill in
+            // the same short week-shape when the active era changes
+            // via dropdown click or scroll-into-era.
+            var origSetSel = setVersionSelection;
+            setVersionSelection = function(slug) {
+              origSetSel(slug);
+              var match = members.find(function(m) { return m.slug === slug; });
+              if (match && pillLabel) pillLabel.textContent = formatWeekShort(match.date);
+            };
+            var currentSlug = familyData.slug;
+            versionMenu.menu.innerHTML = members.map(function(m) {
+              var label = formatWeekShort(m.date);
+              return '<button type="button" class="opctx-pill-menu-item opctx-version-menu-item" ' +
+                     'role="menuitemradio" aria-checked="' + (m.slug === currentSlug ? 'true' : 'false') + '" ' +
+                     'data-version-url="' + escapeAttr(m.url) + '" ' +
+                     'data-version-slug="' + escapeAttr(m.slug) + '" ' +
+                     'data-version-date="' + escapeAttr(m.date) + '">' +
+                     escapeText(label) + '</button>';
+            }).join('');
+            setVersionSelection(currentSlug);
+            window.__opctxVersionMenu = {
+              root: versionRoot,
+              toggle: versionMenu ? versionMenu.toggle : null,
+              menu: versionMenu ? versionMenu.menu : null,
+              members: members,
+              currentSlug: currentSlug,
+              setActive: function(slug) {
+                this.currentSlug = slug;
+                for (var i = 0; i < members.length; i++) {
+                  if (members[i].slug === slug) {
+                    setVersionSelection(slug);
+                    break;
+                  }
+                }
+              },
+            };
+            // Dispatch an event so any other chrome (infinite-scroll)
+            // can wait for hydration to complete.
+            document.dispatchEvent(new CustomEvent('opctx:version-menu-hydrated', {
+              detail: { members: members, currentSlug: currentSlug },
+            }));
+          })
+          .catch(function() { /* keep skeleton — graceful */ });
+      }
+
+      var audienceData = null;
+      var audienceDataEl = document.getElementById('opctx-audience-data');
+      if (audienceDataEl) {
+        try { audienceData = JSON.parse(audienceDataEl.textContent); } catch (e) { audienceData = null; }
+      }
+
+      var audienceRoot = document.querySelector('.opctx-audience-switcher');
+      var audienceStage = document.querySelector('.opctx-audience-stage');
+      var audienceHeading = document.querySelector('.opctx-article > h1');
+      var audienceSubtitle = document.querySelector('.opctx-article > .opctx-subtitle');
+      var audienceTocCurrent = document.querySelector('.opctx-toc-current');
+      if (audienceRoot && audienceStage && audienceData && audienceData.streams) {
+        var activeAudience = audienceData.active || 'public';
+        var audienceCache = Object.create(null);
+        var audienceBusy = false;
+        var reduceMotion = false;
+        var audienceMenu = null;
+        var shareModal = document.querySelector('.opctx-share-modal-scrim');
+        var shareDialog = shareModal ? shareModal.querySelector('.opctx-share-modal') : null;
+        var shareInviteInput = shareModal ? shareModal.querySelector('#opctx-share-invite-input') : null;
+        var shareCloseButton = shareModal ? shareModal.querySelector('.opctx-share-modal-close') : null;
+        var shareDoneButton = shareModal ? shareModal.querySelector('.opctx-share-done') : null;
+        var shareCopyButton = shareModal ? shareModal.querySelector('.opctx-share-copy-link') : null;
+        var shareGeneralLabel = shareModal ? shareModal.querySelector('[data-share-general-label]') : null;
+        var shareGeneralDescription = shareModal ? shareModal.querySelector('[data-share-general-description]') : null;
+        var shareAccessCurrent = shareModal ? shareModal.querySelector('[data-share-access-current]') : null;
+        var shareRoleCurrent = shareModal ? shareModal.querySelector('[data-share-role-current]') : null;
+        var shareCopyDefaultLabel = shareCopyButton ? shareCopyButton.textContent : 'Copy link';
+        var shareCopyTimer = 0;
+        var shareReturnFocus = null;
+        var sharePreviousBodyOverflow = '';
+        var shareAccessState = 'restricted';
+        var shareRoleState = 'viewer';
+        var shareAccessMenu = shareModal
+          ? wireMenu(shareModal.querySelector('.opctx-share-control--access'),
+              '.opctx-share-access-toggle',
+              '.opctx-share-access-menu',
+              {
+                onSelect: function(item) {
+                  setShareAccess(item.getAttribute('data-share-access'));
+                  setTimeout(function() {
+                    if (shareAccessMenu && shareAccessMenu.toggle) shareAccessMenu.toggle.focus();
+                  }, 0);
+                },
+              })
+          : null;
+        var shareRoleMenu = shareModal
+          ? wireMenu(shareModal.querySelector('.opctx-share-control--role'),
+              '.opctx-share-role-toggle',
+              '.opctx-share-role-menu',
+              {
+                onSelect: function(item) {
+                  setShareRole(item.getAttribute('data-share-role'));
+                  setTimeout(function() {
+                    if (shareRoleMenu && shareRoleMenu.toggle) shareRoleMenu.toggle.focus();
+                  }, 0);
+                },
+              })
+          : null;
+        try {
+          reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        } catch (e) { reduceMotion = false; }
+
+        function audienceIndex(key) {
+          var order = Array.isArray(audienceData.order) ? audienceData.order : [];
+          var idx = order.indexOf(key);
+          return idx === -1 ? 0 : idx;
+        }
+
+        function readPreferredAudience() {
+          try { return sessionStorage.getItem('opctx-audience-stream'); } catch (e) { return null; }
+        }
+
+        function persistAudience(key) {
+          try { sessionStorage.setItem('opctx-audience-stream', key); } catch (e) { /* storage blocked */ }
+        }
+
+        function titleCase(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
+
+        function setAudienceSelection(key) {
+          audienceRoot.dataset.activeAudience = key;
+          var current = audienceRoot.querySelector('.opctx-audience-switcher-current');
+          if (current) current.textContent = titleCase(key);
+          var items = audienceRoot.querySelectorAll('[data-audience-target]');
+          for (var i = 0; i < items.length; i++) {
+            var match = items[i].getAttribute('data-audience-target') === key;
+            items[i].setAttribute('aria-checked', match ? 'true' : 'false');
+          }
+          // Disable Share when the active audience is Private.
+          var shareItem = audienceRoot.querySelector('[data-audience-action="share"]');
+          if (shareItem) {
+            if (key === 'private') {
+              shareItem.setAttribute('disabled', '');
+              shareItem.setAttribute('aria-disabled', 'true');
+            } else {
+              shareItem.removeAttribute('disabled');
+              shareItem.setAttribute('aria-disabled', 'false');
+            }
+          }
+          // Update the share modal's audience badge in place so a
+          // user who opens Share later sees the right version label.
+          var streamBadge = shareModal ? shareModal.querySelector('[data-share-stream-badge]') : null;
+          if (streamBadge) {
+            streamBadge.textContent = titleCase(key);
+            streamBadge.setAttribute('data-stream', key);
+          }
+        }
+
+        function getFocusable(rootEl) {
+          return Array.prototype.slice.call(
+            rootEl.querySelectorAll('input, button, a[href], [tabindex]:not([tabindex="-1"])')
+          );
+        }
+
+        function trapFocus(rootEl, e) {
+          if (e.key !== 'Tab') return;
+          var focusable = getFocusable(rootEl);
+          if (!focusable.length) return;
+          var first = focusable[0];
+          var last = focusable[focusable.length - 1];
+          if (e.shiftKey && document.activeElement === first) {
+            e.preventDefault();
+            last.focus();
+          } else if (!e.shiftKey && document.activeElement === last) {
+            e.preventDefault();
+            first.focus();
+          }
+        }
+
+        function buildShareLink() {
+          // Copy-link URL is audience-specific. Sharing the Internal
+          // version produces a link to the .internal sibling so the
+          // recipient lands on the same audience the user was on.
+          // Falls back to the bare current URL if audience data is
+          // unavailable (defensive — shouldn't happen on family pages).
+          if (audienceData && audienceData.streams && audienceData.streams[activeAudience]) {
+            var streamUrl = audienceData.streams[activeAudience].url;
+            if (streamUrl) {
+              return new URL(streamUrl, location.href).toString();
+            }
+          }
+          var url = new URL(location.href);
+          url.hash = '';
+          return url.toString();
+        }
+
+        function fallbackCopyText(text) {
+          var field = document.createElement('textarea');
+          field.value = text;
+          field.setAttribute('readonly', '');
+          field.style.position = 'fixed';
+          field.style.opacity = '0';
+          document.body.appendChild(field);
+          field.select();
+          try { document.execCommand('copy'); } catch (e) { /* no-op */ }
+          document.body.removeChild(field);
+        }
+
+        function setShareAccess(key) {
+          if (!shareModal) return;
+          shareAccessState = key === 'anyone' ? 'anyone' : 'restricted';
+          var items = shareModal.querySelectorAll('[data-share-access]');
+          for (var i = 0; i < items.length; i++) {
+            var match = items[i].getAttribute('data-share-access') === shareAccessState;
+            items[i].setAttribute('aria-checked', match ? 'true' : 'false');
+            if (match) {
+              var label = items[i].getAttribute('data-share-access-label') || items[i].textContent.trim();
+              var description = items[i].getAttribute('data-share-access-description') || '';
+              if (shareAccessCurrent) shareAccessCurrent.textContent = label;
+              if (shareGeneralLabel) shareGeneralLabel.textContent = label;
+              if (shareGeneralDescription) shareGeneralDescription.textContent = description;
+            }
+          }
+        }
+
+        function setShareRole(key) {
+          if (!shareModal) return;
+          shareRoleState = key || 'viewer';
+          var items = shareModal.querySelectorAll('[data-share-role]');
+          for (var i = 0; i < items.length; i++) {
+            var match = items[i].getAttribute('data-share-role') === shareRoleState;
+            items[i].setAttribute('aria-checked', match ? 'true' : 'false');
+            if (match && shareRoleCurrent) {
+              shareRoleCurrent.textContent = items[i].textContent.trim();
+            }
+          }
+        }
+
+        function openShareModal(returnFocusEl) {
+          if (!shareModal || !shareDialog) return;
+          if (shareAccessMenu) shareAccessMenu.setOpen(false);
+          if (shareRoleMenu) shareRoleMenu.setOpen(false);
+          shareReturnFocus = returnFocusEl || (audienceMenu ? audienceMenu.toggle : document.activeElement);
+          sharePreviousBodyOverflow = document.body.style.overflow;
+          document.body.style.overflow = 'hidden';
+          shareModal.classList.add('is-open');
+          shareModal.setAttribute('aria-hidden', 'false');
+          if (shareInviteInput) shareInviteInput.value = '';
+          window.clearTimeout(shareCopyTimer);
+          if (shareCopyButton) shareCopyButton.textContent = shareCopyDefaultLabel;
+          window.setTimeout(function() {
+            if (shareInviteInput) shareInviteInput.focus();
+            else shareDialog.focus();
+          }, reduceMotion ? 0 : 24);
+        }
+
+        function closeShareModal() {
+          if (!shareModal || !shareModal.classList.contains('is-open')) return;
+          if (shareAccessMenu) shareAccessMenu.setOpen(false);
+          if (shareRoleMenu) shareRoleMenu.setOpen(false);
+          shareModal.classList.remove('is-open');
+          shareModal.setAttribute('aria-hidden', 'true');
+          document.body.style.overflow = sharePreviousBodyOverflow;
+          if (shareReturnFocus && typeof shareReturnFocus.focus === 'function') {
+            shareReturnFocus.focus();
+          }
+          shareReturnFocus = null;
+        }
+
+        function copyShareLink() {
+          var text = buildShareLink();
+          var didCopy = function() {
+            if (!shareCopyButton) return;
+            shareCopyButton.textContent = 'Copied';
+            window.clearTimeout(shareCopyTimer);
+            shareCopyTimer = window.setTimeout(function() {
+              shareCopyButton.textContent = shareCopyDefaultLabel;
+            }, 1400);
+          };
+          if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+            navigator.clipboard.writeText(text).then(didCopy).catch(function() {
+              fallbackCopyText(text);
+              didCopy();
+            });
+          } else {
+            fallbackCopyText(text);
+            didCopy();
+          }
+        }
+
+        if (shareModal && shareDialog) {
+          setShareAccess(shareAccessState);
+          setShareRole(shareRoleState);
+          if (shareCloseButton) shareCloseButton.addEventListener('click', closeShareModal);
+          if (shareDoneButton) shareDoneButton.addEventListener('click', closeShareModal);
+          if (shareCopyButton) shareCopyButton.addEventListener('click', copyShareLink);
+          shareModal.addEventListener('click', function(e) {
+            if (e.target === shareModal) closeShareModal();
+          });
+          shareModal.addEventListener('keydown', function(e) {
+            var accessOpen = shareAccessMenu && shareAccessMenu.toggle.getAttribute('aria-expanded') === 'true';
+            var roleOpen = shareRoleMenu && shareRoleMenu.toggle.getAttribute('aria-expanded') === 'true';
+            if (e.key === 'Escape') {
+              if (accessOpen || roleOpen) return;
+              e.preventDefault();
+              closeShareModal();
+              return;
+            }
+            trapFocus(shareDialog, e);
+          });
+        }
+
+        function cacheCurrentAudience() {
+          var current = audienceStage.querySelector('.opctx-audience-stream-panel.is-current');
+          if (!current) return;
+          audienceCache[activeAudience] = {
+            bodyHtml: current.innerHTML,
+            titleHtml: audienceHeading ? audienceHeading.innerHTML : '',
+            titleText: audienceHeading ? audienceHeading.textContent.trim() : '',
+            subtitleHtml: audienceSubtitle ? audienceSubtitle.outerHTML : '',
+            documentTitle: document.title,
+          };
+        }
+
+        function applyAudienceMeta(snapshot) {
+          if (audienceHeading && snapshot.titleHtml) {
+            audienceHeading.innerHTML = snapshot.titleHtml;
+          }
+          if (audienceTocCurrent && audienceHeading) {
+            audienceTocCurrent.textContent = audienceHeading.textContent.trim();
+          }
+          if (snapshot.documentTitle) {
+            document.title = snapshot.documentTitle;
+          }
+          var existingSubtitle = document.querySelector('.opctx-article > .opctx-subtitle');
+          if (snapshot.subtitleHtml) {
+            if (existingSubtitle) existingSubtitle.outerHTML = snapshot.subtitleHtml;
+            else if (audienceHeading) audienceHeading.insertAdjacentHTML('afterend', snapshot.subtitleHtml);
+          } else if (existingSubtitle) {
+            existingSubtitle.parentNode.removeChild(existingSubtitle);
+          }
+          audienceSubtitle = document.querySelector('.opctx-article > .opctx-subtitle');
+        }
+
+        function extractAudienceSnapshot(html) {
+          var doc = new DOMParser().parseFromString(html, 'text/html');
+          var article = doc.querySelector('article.opctx-article');
+          if (!article) return null;
+          var body = article.querySelector('.opctx-article-body');
+          if (!body) return null;
+          var heading = article.querySelector('h1');
+          var subtitle = article.querySelector('.opctx-subtitle');
+          return {
+            bodyHtml: body.innerHTML,
+            titleHtml: heading ? heading.innerHTML : '',
+            titleText: heading ? heading.textContent.trim() : '',
+            subtitleHtml: subtitle ? subtitle.outerHTML : '',
+            documentTitle: doc.title || '',
+          };
+        }
+
+        function loadAudience(key) {
+          if (!audienceData.streams[key]) {
+            return Promise.reject(new Error('unknown audience ' + key));
+          }
+          if (audienceCache[key]) {
+            return Promise.resolve(audienceCache[key]);
+          }
+          return fetch(audienceData.streams[key].url, { credentials: 'same-origin' })
+            .then(function(r) {
+              if (!r.ok) throw new Error('HTTP ' + r.status);
+              return r.text();
+            })
+            .then(function(html) {
+              var snapshot = extractAudienceSnapshot(html);
+              if (!snapshot) throw new Error('missing audience article body');
+              audienceCache[key] = snapshot;
+              return snapshot;
+            });
+        }
+
+        function finishAudienceSwap(next, key) {
+          var panels = audienceStage.querySelectorAll('.opctx-audience-stream-panel');
+          for (var i = 0; i < panels.length; i++) {
+            if (panels[i] !== next && panels[i].parentNode === audienceStage) {
+              audienceStage.removeChild(panels[i]);
+            }
+          }
+          next.classList.add('is-current');
+          next.style.position = 'relative';
+          next.style.inset = 'auto';
+          next.style.pointerEvents = 'auto';
+          next.style.zIndex = '1';
+          audienceStage.style.minHeight = '';
+          audienceStage.removeAttribute('data-transitioning');
+          activeAudience = key;
+          audienceBusy = false;
+          window.__opctxAudienceStream.active = key;
+        }
+
+        function swapAudience(key, opts) {
+          opts = opts || {};
+          if (!audienceData.streams[key]) return;
+          if (audienceBusy || key === activeAudience) {
+            setAudienceSelection(activeAudience);
+            return;
+          }
+
+          cacheCurrentAudience();
+          audienceBusy = true;
+          setAudienceSelection(key);
+          persistAudience(key);
+
+          var direction = audienceIndex(key) > audienceIndex(activeAudience) ? 1 : -1;
+          loadAudience(key)
+            .then(function(snapshot) {
+              applyAudienceMeta(snapshot);
+              var current = audienceStage.querySelector('.opctx-audience-stream-panel.is-current');
+              if (!current || reduceMotion || opts.immediate || typeof current.animate !== 'function') {
+                if (current) {
+                  current.innerHTML = snapshot.bodyHtml;
+                  current.setAttribute('data-audience-stream', key);
+                }
+                activeAudience = key;
+                audienceBusy = false;
+                audienceStage.dataset.activeAudience = key;
+                window.__opctxAudienceStream.active = key;
+                return;
+              }
+
+              audienceStage.dataset.activeAudience = key;
+              audienceStage.setAttribute('data-transitioning', 'true');
+              var next = document.createElement('div');
+              next.className = 'opctx-article-body opctx-audience-stream-panel';
+              next.setAttribute('data-audience-stream', key);
+              next.innerHTML = snapshot.bodyHtml;
+              next.style.position = 'absolute';
+              next.style.inset = '0';
+              next.style.pointerEvents = 'none';
+              next.style.zIndex = '2';
+              audienceStage.appendChild(next);
+              audienceStage.style.minHeight =
+                Math.max(current.offsetHeight, next.offsetHeight) + 'px';
+
+              var enterFrom = direction > 0 ? 32 : -32;
+              var exitTo = direction > 0 ? -32 : 32;
+              var enterAnim = next.animate([
+                { transform: 'translateX(' + enterFrom + 'px)', opacity: 0.2 },
+                { transform: 'translateX(0)', opacity: 1 },
+              ], {
+                duration: 280,
+                easing: 'cubic-bezier(0.22, 1, 0.36, 1)',
+                fill: 'forwards',
+              });
+              var exitAnim = current.animate([
+                { transform: 'translateX(0)', opacity: 1 },
+                { transform: 'translateX(' + exitTo + 'px)', opacity: 0.18 },
+              ], {
+                duration: 280,
+                easing: 'cubic-bezier(0.22, 1, 0.36, 1)',
+                fill: 'forwards',
+              });
+
+              var settled = false;
+              function settle() {
+                if (settled) return;
+                settled = true;
+                finishAudienceSwap(next, key);
+              }
+              Promise.allSettled([enterAnim.finished, exitAnim.finished]).then(settle);
+              setTimeout(settle, 320);
+            })
+            .catch(function() {
+              audienceBusy = false;
+              setAudienceSelection(activeAudience);
+            });
+        }
+
+        audienceMenu = wireMenu(audienceRoot, '.opctx-audience-switcher-toggle', '.opctx-audience-menu', {
+          onSelect: function(item) {
+            var targetAudience = item.getAttribute('data-audience-target');
+            if (targetAudience) {
+              swapAudience(targetAudience);
+              window.setTimeout(function() {
+                if (audienceMenu && audienceMenu.toggle) audienceMenu.toggle.focus();
+              }, 0);
+              return;
+            }
+            if (item.getAttribute('data-audience-action') === 'share') {
+              openShareModal(audienceMenu ? audienceMenu.toggle : null);
+            }
+          },
+        });
+
+        window.__opctxAudienceStream = { active: activeAudience };
+        cacheCurrentAudience();
+        setAudienceSelection(activeAudience);
+        var preferredAudience = readPreferredAudience();
+        if (preferredAudience && preferredAudience !== activeAudience && audienceData.streams[preferredAudience]) {
+          swapAudience(preferredAudience, { immediate: true });
+        }
+      }
+
+      function escapeAttr(s) {
+        return String(s == null ? '' : s)
+          .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+          .replace(/'/g, '&#39;');
+      }
+      function escapeText(s) {
+        return String(s == null ? '' : s)
+          .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      }
+    })();
+  </script>
+</body>
+</html>

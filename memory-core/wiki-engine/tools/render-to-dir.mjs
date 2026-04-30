@@ -407,6 +407,10 @@ function buildAudienceSource(baseFrontmatter, rawSource) {
   return stringifyFrontmatter(merged) + '\n' + content;
 }
 
+function cleanGeneratedText(value) {
+  return String(value).replace(/[ \t]+$/gm, '');
+}
+
 function main() {
   const [,, inputPath, outDir] = process.argv;
   if (!inputPath || !outDir) {
@@ -521,8 +525,8 @@ function main() {
   const parentSlug = result.frontmatter.slug;
   const htmlPath = resolve(outDir, `${parentSlug}.html`);
   const mdPath = resolve(outDir, `${parentSlug}.md`);
-  writeFileSync(htmlPath, result.html);
-  writeFileSync(mdPath, result.md);
+  writeFileSync(htmlPath, cleanGeneratedText(result.html));
+  writeFileSync(mdPath, cleanGeneratedText(result.md));
 
   let summary = `✓ ${slug}: ${result.html.length} bytes → ${htmlPath}`;
 
@@ -534,11 +538,11 @@ function main() {
     for (const sec of result.sections) {
       const subHtml = resolve(subDir, `${sec.slug}.html`);
       const subMd = resolve(subDir, `${sec.slug}.md`);
-      writeFileSync(subHtml, sec.html);
-      writeFileSync(subMd, sec.md);
+      writeFileSync(subHtml, cleanGeneratedText(sec.html));
+      writeFileSync(subMd, cleanGeneratedText(sec.md));
       if (sec.talkMd) {
         const talkMd = resolve(subDir, `${sec.slug}.talk.md`);
-        writeFileSync(talkMd, sec.talkMd);
+        writeFileSync(talkMd, cleanGeneratedText(sec.talkMd));
       }
     }
     summary += `\n  + ${result.sections.length} section sub-page(s) → ${subDir}/`;
@@ -549,8 +553,8 @@ function main() {
       if (key === 'public') continue;
       const stream = renderedStreams[key];
       if (!stream) continue;
-      writeFileSync(resolve(outDir, `${parentSlug}.${key}.html`), stream.html);
-      writeFileSync(resolve(outDir, `${parentSlug}.${key}.md`), stream.md);
+      writeFileSync(resolve(outDir, `${parentSlug}.${key}.html`), cleanGeneratedText(stream.html));
+      writeFileSync(resolve(outDir, `${parentSlug}.${key}.md`), cleanGeneratedText(stream.md));
     }
     summary += `\n  + ${Object.keys(renderedStreams).length} audience stream render(s)`;
   }

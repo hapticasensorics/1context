@@ -1,0 +1,483 @@
+{
+  "content_policy": {
+    "excluded": [
+      "canonical source markdown",
+      "private/internal outputs",
+      "talk folders",
+      "raw markdown payloads",
+      "render manifests"
+    ],
+    "included": [
+      "public generated page metadata and excerpts"
+    ]
+  },
+  "generated_at": "2026-04-30T11:40:00Z",
+  "pages": [
+    {
+      "excerpt": "# For You This is the working surface 1Context keeps close to the present. It should feel useful even before memory has accumulated: a quiet place to see what the system is ready to preserve, where agents should propose additions, and which durable pages those additions may eventually update. ## How This Page Works For You is a rolling private page. As 1Context observes repeated work, decisions, corrections, and open loops, memory agents should promote concise summaries here ...",
+      "family_id": "for-you",
+      "family_label": "For You",
+      "frontmatter": {
+        "access": "private",
+        "agent_view_enabled": true,
+        "copy_buttons_enabled": true,
+        "family": "for-you",
+        "family_date": "2026-04-29",
+        "footer_enabled": true,
+        "section": "product",
+        "slug": "for-you-2026-04-29",
+        "status": "published",
+        "summary": "Your current 1Context front page: a private rolling surface for recent work, open loops, and the next memory that should be promoted.",
+        "talk_enabled": true,
+        "title": "For You",
+        "toc_enabled": true
+      },
+      "id": "page_8296b17f0330cb93b0c8",
+      "links": [
+        {
+          "href": "/your-context",
+          "label": "Your Context"
+        },
+        {
+          "href": "/projects",
+          "label": "Projects"
+        },
+        {
+          "href": "/topics",
+          "label": "Topics"
+        },
+        {
+          "href": "/your-context",
+          "label": "Your Context"
+        },
+        {
+          "href": "/projects",
+          "label": "Projects"
+        },
+        {
+          "href": "/topics",
+          "label": "Topics"
+        },
+        {
+          "href": "/your-context",
+          "label": "Your Context"
+        },
+        {
+          "href": "/projects",
+          "label": "Projects"
+        },
+        {
+          "href": "/topics",
+          "label": "Topics"
+        }
+      ],
+      "path": "wiki/menu/10-for-you/10-for-you/generated/for-you-2026-04-29.md",
+      "route": "/for-you-2026-04-29",
+      "sha256": "bc66154093be47058cf4ed8e00d5d7168fef01bd2cb4a95bb74234f23c89fd6b",
+      "slug": "for-you-2026-04-29",
+      "source": "generated_markdown",
+      "summary": "Your current 1Context front page: a private rolling surface for recent work, open loops, and the next memory that should be promoted.",
+      "title": "For You"
+    },
+    {
+      "excerpt": "No observations have been promoted yet. When memory starts flowing, this section should collect the current working day: active projects, fresh decisions, unresolved questions, and handoff notes that would help a future human or agent resume without rereading the whole transcript.",
+      "family_id": "for-you",
+      "family_label": "For You",
+      "frontmatter": {
+        "access": "private",
+        "agent_view_enabled": true,
+        "copy_buttons_enabled": true,
+        "family": "for-you",
+        "family_date": "2026-04-29",
+        "footer_enabled": true,
+        "md_url": "./today.md",
+        "parent_anchor": "Today",
+        "parent_slug": "for-you-2026-04-29",
+        "section": "product",
+        "slug": "today",
+        "status": "published",
+        "summary": "Your current 1Context front page: a private rolling surface for recent work, open loops, and the next memory that should be promoted.",
+        "talk_enabled": true,
+        "talk_url": "./today.talk.md",
+        "title": "Today",
+        "toc_enabled": true
+      },
+      "id": "page_d11cfcd5a4d0696ba0a2",
+      "links": [],
+      "path": "wiki/menu/10-for-you/10-for-you/generated/for-you-2026-04-29/today.md",
+      "route": "/for-you-2026-04-29/today",
+      "sha256": "b34a311346dfdda2a13cc5d1d5e9c949fba59745a7d5881399595eac1802fc45",
+      "slug": "today",
+      "source": "generated_markdown",
+      "summary": "Your current 1Context front page: a private rolling surface for recent work, open loops, and the next memory that should be promoted.",
+      "title": "Today"
+    },
+    {
+      "excerpt": "# Projects Projects is the memory system's map of active work. It should help a future session answer: what exists, what state it is in, what changed recently, and where the next useful action probably lives. ## Active No active projects have been promoted yet. For agents: add a project when it has a stable name, a working directory or artifact trail, and enough recent evidence that future sessions would benefit from a durable pointer. ## Paused Or Blocked No paused or blocke...",
+      "family_id": "projects",
+      "family_label": "Projects",
+      "frontmatter": {
+        "access": "private",
+        "agent_view_enabled": true,
+        "copy_buttons_enabled": true,
+        "footer_enabled": true,
+        "section": "project",
+        "slug": "projects",
+        "status": "published",
+        "summary": "The private index of work 1Context can recognize, resume, and connect across sessions.",
+        "talk_enabled": true,
+        "title": "Projects",
+        "toc_enabled": true
+      },
+      "id": "page_cdff48dc62c7b11280b3",
+      "links": [
+        {
+          "href": "/your-context",
+          "label": "Your Context"
+        },
+        {
+          "href": "/topics",
+          "label": "Topics"
+        },
+        {
+          "href": "/for-you",
+          "label": "For You"
+        },
+        {
+          "href": "/your-context",
+          "label": "Your Context"
+        },
+        {
+          "href": "/topics",
+          "label": "Topics"
+        }
+      ],
+      "path": "wiki/menu/20-project/10-projects/generated/projects.md",
+      "route": "/projects",
+      "sha256": "f20f5048b7a42c5ee612686d57dad617af7aac44efe89ae9002e8ccff00d7f83",
+      "slug": "projects",
+      "source": "generated_markdown",
+      "summary": "The private index of work 1Context can recognize, resume, and connect across sessions.",
+      "title": "Projects"
+    },
+    {
+      "excerpt": "# Topics Topics is the concept index. It should turn repeated language into durable navigation: ideas, tools, frameworks, people, organizations, and product concepts that matter across more than one conversation. ## Engineering No engineering topics have been promoted yet. Record technical concepts when they recur across decisions, architecture notes, reviews, or implementation plans. ## Infrastructure No infrastructure topics have been promoted yet. Record services, machines...",
+      "family_id": "topics",
+      "family_label": "Topics",
+      "frontmatter": {
+        "access": "private",
+        "agent_view_enabled": true,
+        "copy_buttons_enabled": true,
+        "footer_enabled": true,
+        "section": "reference",
+        "slug": "topics",
+        "status": "published",
+        "summary": "The private index of named subjects, concepts, tools, people, and organizations 1Context notices over time.",
+        "talk_enabled": true,
+        "title": "Topics",
+        "toc_enabled": true
+      },
+      "id": "page_ca701edcc8e8c66dc897",
+      "links": [
+        {
+          "href": "/for-you",
+          "label": "For You"
+        },
+        {
+          "href": "/your-context",
+          "label": "Your Context"
+        },
+        {
+          "href": "/projects",
+          "label": "Projects"
+        }
+      ],
+      "path": "wiki/menu/30-topics/10-topics/generated/topics.md",
+      "route": "/topics",
+      "sha256": "25edba3880187f60e7cd0e3b39cb908d3ade47c06009f60214d24b1f1d0f41a9",
+      "slug": "topics",
+      "source": "generated_markdown",
+      "summary": "The private index of named subjects, concepts, tools, people, and organizations 1Context notices over time.",
+      "title": "Topics"
+    },
+    {
+      "excerpt": "# Your Context Your Context is the page a human teammate or AI agent should read before doing serious work with you. It should become more specific over time, but it starts with the shape of the record: what to notice, where to place it, and when a pattern is stable enough to preserve. ## Working Style Record how you move through work: how you scope, correct, decide, interrupt, resume, parallelize, or ask collaborators to think with you. Promote only patterns with repeated ev...",
+      "family_id": "your-context",
+      "family_label": "Your Context",
+      "frontmatter": {
+        "access": "private",
+        "agent_view_enabled": true,
+        "copy_buttons_enabled": true,
+        "footer_enabled": true,
+        "section": "product",
+        "slug": "your-context",
+        "status": "published",
+        "summary": "The durable private orientation page for how you work, what you prefer, and what collaborators should remember across sessions.",
+        "talk_enabled": true,
+        "title": "Your Context",
+        "toc_enabled": true
+      },
+      "id": "page_5e6a1cc88dbd90e78623",
+      "links": [
+        {
+          "href": "/for-you",
+          "label": "For You"
+        },
+        {
+          "href": "/projects",
+          "label": "Projects"
+        },
+        {
+          "href": "/topics",
+          "label": "Topics"
+        }
+      ],
+      "path": "wiki/menu/10-for-you/20-your-context/generated/your-context.md",
+      "route": "/your-context",
+      "sha256": "06da2f7c5d8499467a1cd51d515d3ae782304200ed916ea6e166d425567d999e",
+      "slug": "your-context",
+      "source": "generated_markdown",
+      "summary": "The durable private orientation page for how you work, what you prefer, and what collaborators should remember across sessions.",
+      "title": "Your Context"
+    }
+  ],
+  "schema_version": "wiki.content-index.v1",
+  "stats": {
+    "by_source": {
+      "generated_markdown": 5
+    },
+    "families": [
+      {
+        "archived_talk_entries": 0,
+        "bytes": 160542,
+        "generated_files": 11,
+        "generated_files_by_extension": {
+          "(none)": 1,
+          ".html": 3,
+          ".json": 3,
+          ".md": 4
+        },
+        "generated_markdown_pages": 2,
+        "id": "for-you",
+        "label": "For You",
+        "links": 9,
+        "menu_group": "for-you",
+        "path": "wiki/menu/10-for-you/10-for-you",
+        "route": "/for-you",
+        "routes": 7,
+        "source_pages": 1,
+        "talk_entries": 1,
+        "talk_folders": 1,
+        "words": 0
+      },
+      {
+        "archived_talk_entries": 0,
+        "bytes": 97818,
+        "generated_files": 5,
+        "generated_files_by_extension": {
+          ".html": 2,
+          ".json": 1,
+          ".md": 2
+        },
+        "generated_markdown_pages": 1,
+        "id": "your-context",
+        "label": "Your Context",
+        "links": 3,
+        "menu_group": "for-you",
+        "path": "wiki/menu/10-for-you/20-your-context",
+        "route": "/your-context",
+        "routes": 4,
+        "source_pages": 1,
+        "talk_entries": 1,
+        "talk_folders": 1,
+        "words": 0
+      },
+      {
+        "archived_talk_entries": 0,
+        "bytes": 92715,
+        "generated_files": 5,
+        "generated_files_by_extension": {
+          ".html": 2,
+          ".json": 1,
+          ".md": 2
+        },
+        "generated_markdown_pages": 1,
+        "id": "projects",
+        "label": "Projects",
+        "links": 5,
+        "menu_group": "project",
+        "path": "wiki/menu/20-project/10-projects",
+        "route": "/projects",
+        "routes": 4,
+        "source_pages": 1,
+        "talk_entries": 1,
+        "talk_folders": 1,
+        "words": 0
+      },
+      {
+        "archived_talk_entries": 0,
+        "bytes": 93053,
+        "generated_files": 5,
+        "generated_files_by_extension": {
+          ".html": 2,
+          ".json": 1,
+          ".md": 2
+        },
+        "generated_markdown_pages": 1,
+        "id": "topics",
+        "label": "Topics",
+        "links": 3,
+        "menu_group": "topics",
+        "path": "wiki/menu/30-topics/10-topics",
+        "route": "/topics",
+        "routes": 4,
+        "source_pages": 1,
+        "talk_entries": 1,
+        "talk_folders": 1,
+        "words": 0
+      }
+    ],
+    "generated_at": "2026-04-30T11:40:00Z",
+    "generated_files_by_extension": {
+      "(none)": 1,
+      ".html": 9,
+      ".json": 6,
+      ".md": 10
+    },
+    "links": {
+      "anchors": 0,
+      "broken_internal": 0,
+      "broken_internal_routes": [],
+      "external": 0,
+      "internal": 20,
+      "top_destinations": [
+        {
+          "count": 6,
+          "route": "/topics",
+          "title": "Topics"
+        },
+        {
+          "count": 6,
+          "route": "/your-context",
+          "title": "Your Context"
+        },
+        {
+          "count": 5,
+          "route": "/projects",
+          "title": "Projects"
+        },
+        {
+          "count": 3,
+          "route": "/for-you",
+          "title": "for-you"
+        }
+      ]
+    },
+    "routes_by_kind": {
+      "generated_output": 9,
+      "html": 6,
+      "latest_family_html": 4
+    },
+    "schema_version": "wiki.stats.v1",
+    "source_corpus": {
+      "events": 124,
+      "sessions": 0
+    },
+    "story": {
+      "behind_the_scenes": {
+        "agent_debate_words": 217,
+        "captured_days": 0
+      },
+      "compression": {
+        "events_per_reader_page": 25,
+        "events_per_reader_word": 0
+      },
+      "connections": {
+        "external_links": 0,
+        "internal_links": 20,
+        "links": 20,
+        "top_destinations": [
+          {
+            "count": 6,
+            "route": "/topics",
+            "title": "Topics"
+          },
+          {
+            "count": 6,
+            "route": "/your-context",
+            "title": "Your Context"
+          },
+          {
+            "count": 5,
+            "route": "/projects",
+            "title": "Projects"
+          },
+          {
+            "count": 3,
+            "route": "/for-you",
+            "title": "for-you"
+          }
+        ]
+      },
+      "coverage": {
+        "days": 0,
+        "events": 124,
+        "sessions": 0
+      },
+      "families": [
+        {
+          "id": "for-you",
+          "label": "For You",
+          "links": 9,
+          "words": 0
+        },
+        {
+          "id": "projects",
+          "label": "Projects",
+          "links": 5,
+          "words": 0
+        },
+        {
+          "id": "topics",
+          "label": "Topics",
+          "links": 3,
+          "words": 0
+        },
+        {
+          "id": "your-context",
+          "label": "Your Context",
+          "links": 3,
+          "words": 0
+        }
+      ],
+      "headline": "124 events condensed into 5 pages.",
+      "reading": {
+        "estimated_reading_minutes": 0,
+        "reader_pages": 5,
+        "reader_words": 0,
+        "reading_surfaces": 5,
+        "total_indexed_words": 0
+      }
+    },
+    "totals": {
+      "archived_talk_entries": 0,
+      "broken_internal_links": 0,
+      "bytes": 444128,
+      "content_pages": 5,
+      "external_links": 0,
+      "families": 4,
+      "generated_files": 26,
+      "generated_markdown_pages": 5,
+      "internal_links": 20,
+      "links": 20,
+      "render_manifests": 4,
+      "routes": 19,
+      "source_markdown_files": 4,
+      "source_pages": 4,
+      "talk_entries": 4,
+      "talk_folders": 4,
+      "talk_words": 217,
+      "words": 1092
+    }
+  }
+}
