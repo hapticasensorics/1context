@@ -116,6 +116,7 @@ run_install_case "default-running" ""
 assert_contains "cli restart" "$WORK_DIR/default-running/events.log"
 
 MENU_SOURCE="$ROOT/macos/Sources/OneContextMenuBar/main.swift"
+UPDATER_SCRIPT_SOURCE="$ROOT/macos/Sources/OneContextUpdate/UpdaterScript.swift"
 UPDATER_BODY="$WORK_DIR/updater-body.swift"
 MENU_OPEN_BODY="$WORK_DIR/menu-open-body.swift"
 awk '
@@ -130,12 +131,15 @@ awk '
 ' "$MENU_SOURCE" > "$MENU_OPEN_BODY"
 
 assert_contains "appendingPathComponent(\"1context-cli\")" "$UPDATER_BODY"
-assert_contains "if \\(shellQuote(cliExecutable)) update; then" "$UPDATER_BODY"
+assert_contains "UpdaterScript.render(" "$UPDATER_BODY"
 assert_contains "writeUpdaterScript(script)" "$UPDATER_BODY"
-assert_contains 'trap '\''rm -f "$0"'\'' EXIT' "$UPDATER_BODY"
 assert_contains 'do script \"/bin/zsh \" & quoted form of scriptPath' "$MENU_SOURCE"
 assert_not_contains "/bin/zsh -lc" "$MENU_SOURCE"
 assert_not_contains "NSWorkspace.shared.open" "$UPDATER_BODY"
+assert_contains '\(cli) update' "$UPDATER_SCRIPT_SOURCE"
+assert_contains 'trap '\''rm -f "$0"'\'' EXIT' "$UPDATER_SCRIPT_SOURCE"
+assert_contains 'tee -a "$LOG_FILE"' "$UPDATER_SCRIPT_SOURCE"
+assert_contains "Press Return to close" "$UPDATER_SCRIPT_SOURCE"
 
 assert_contains "startDesiredStateMonitor()" "$MENU_SOURCE"
 assert_contains "startLocalWebEdge()" "$MENU_SOURCE"
