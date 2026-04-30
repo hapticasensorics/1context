@@ -1,2 +1,10 @@
 *
 !.gitignore
+!for-you-*.html
+!for-you-*.md
+!for-you-*/
+!for-you-*/*.html
+!for-you-*/*.md
+!for-you-index.json
+!latest_for_family.json
+!render-manifest.json

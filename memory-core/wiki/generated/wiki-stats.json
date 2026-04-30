@@ -93,7 +93,7 @@
       "words": 0
     }
   ],
-  "generated_at": "2026-04-30T11:40:00Z",
+  "generated_at": "2026-04-30T11:40:17Z",
   "generated_files_by_extension": {
     "(none)": 1,
     ".html": 9,
@@ -136,7 +136,7 @@
   },
   "schema_version": "wiki.stats.v1",
   "source_corpus": {
-    "events": 124,
+    "events": 130,
     "sessions": 0
   },
   "story": {
@@ -145,7 +145,7 @@
       "captured_days": 0
     },
     "compression": {
-      "events_per_reader_page": 25,
+      "events_per_reader_page": 26,
       "events_per_reader_word": 0
     },
     "connections": {
@@ -177,7 +177,7 @@
     },
     "coverage": {
       "days": 0,
-      "events": 124,
+      "events": 130,
       "sessions": 0
     },
     "families": [
@@ -206,7 +206,7 @@
         "words": 0
       }
     ],
-    "headline": "124 events condensed into 5 pages.",
+    "headline": "130 events condensed into 5 pages.",
     "reading": {
       "estimated_reading_minutes": 0,
       "reader_pages": 5,
