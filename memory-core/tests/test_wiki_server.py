@@ -43,6 +43,14 @@ def test_wiki_server_health_responds_over_http() -> None:
         assert payload["status"] == "ok"
         assert "routes" in payload
         assert "manifests" in payload
+        assert payload["routes"] is None
+        assert payload["manifests"] is None
+
+        with urlopen(f"http://{host}:{port}/__health?details=1", timeout=5) as response:
+            detailed = json.loads(response.read().decode("utf-8"))
+        assert detailed["status"] == "ok"
+        assert isinstance(detailed["routes"], int)
+        assert isinstance(detailed["manifests"], int)
     finally:
         server.shutdown()
         thread.join(timeout=5)
@@ -71,6 +79,29 @@ def test_wiki_server_health_reports_launch_token(monkeypatch) -> None:
             payload = json.loads(response.read().decode("utf-8"))
         assert payload["status"] == "ok"
         assert payload["server_token_proof"]
+    finally:
+        server.shutdown()
+        thread.join(timeout=5)
+        server.server_close()
+
+
+def test_wiki_server_health_does_not_load_route_table(monkeypatch) -> None:
+    def fail_route_load(root: Path):
+        raise AssertionError(f"health should not load routes for {root}")
+
+    monkeypatch.setattr("onectx.wiki.server.load_route_table", fail_route_load)
+    system = load_system(Path.cwd())
+    server = create_wiki_server(system, host="127.0.0.1", port=0)
+    host, port = server.server_address[:2]
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+
+    try:
+        with urlopen(f"http://{host}:{port}/__health", timeout=5) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+        assert payload["status"] == "ok"
+        assert payload["routes"] is None
+        assert payload["manifests"] is None
     finally:
         server.shutdown()
         thread.join(timeout=5)

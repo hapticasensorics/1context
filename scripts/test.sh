@@ -40,9 +40,9 @@ test "$("$BIN_DIR/1context" --version)" = "$VERSION"
 "$BIN_DIR/1context" --help | grep -q "1context logs"
 "$BIN_DIR/1context" --help | grep -q "1context debug"
 "$BIN_DIR/1context" --help | grep -q "1context agent integrations"
-"$BIN_DIR/1context" --help | grep -q "1context agent statusline"
+"$BIN_DIR/1context" --help | grep -q "1context agent statusline --provider <claude|codex>"
 "$BIN_DIR/1context" --help | grep -q "1context memory-core"
-"$BIN_DIR/1context" --help | grep -q "1context wiki"
+"$BIN_DIR/1context" --help | grep -q "1context wiki <open|local-url|start|status|stop>"
 if "$BIN_DIR/1context" status --wat >"$STATE_DIR/unknown-arg.out" 2>&1; then
   echo "unknown arguments should fail" >&2
   exit 1
@@ -108,20 +108,35 @@ printf '{"cwd":"%s"}\n' "$ROOT" \
   | grep -q '"systemMessage"'
 printf '{"cwd":"%s"}\n' "$ROOT" \
   | "$BIN_DIR/1context" agent hook --provider claude --event SessionStart \
-  | grep -q "localhost:3210"
+  | grep -q "127.0.0.1:17319"
+printf '{"cwd":"%s"}\n' "$ROOT" \
+  | "$BIN_DIR/1context" agent hook --provider codex --event SessionStart \
+  | grep -q "127.0.0.1:17319"
 printf '{}\n' \
   | "$BIN_DIR/1context" agent hook --provider claude --event PostToolUse \
   | grep -q '"hookEventName":"PostToolUse"'
 printf '{}\n' \
   | "$BIN_DIR/1context" agent statusline --provider claude \
-  | grep -q "1Context wiki: http://localhost:3210"
-perl -0pi -e 's|localhost:3210|localhost:4101|' "$ONECONTEXT_APP_SUPPORT_DIR/agent/config.json"
+  | grep -q "View 1Context wiki: http://127.0.0.1:17319/for-you"
+printf '{}\n' \
+  | "$BIN_DIR/1context" agent statusline --provider codex \
+  | grep -q "View 1Context wiki: http://127.0.0.1:17319/for-you"
+python3 - "$ONECONTEXT_APP_SUPPORT_DIR/agent/config.json" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+path = Path(sys.argv[1])
+payload = json.loads(path.read_text(encoding="utf-8"))
+payload["wiki_url"] = "http://localhost:4101"
+path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+PY
 printf '{}\n' \
   | "$BIN_DIR/1context" agent hook --provider claude --event SessionStart \
   | grep -q "localhost:4101"
 printf '{}\n' \
   | "$BIN_DIR/1context" agent statusline --provider claude \
-  | grep -q "1Context wiki: http://localhost:4101"
+  | grep -q "View 1Context wiki: http://localhost:4101"
 "$BIN_DIR/1context" agent integrations repair | grep -q "Claude: installed"
 "$BIN_DIR/1context" agent integrations uninstall | grep -q "Claude: not installed"
 if grep -q "agent hook --provider claude" "$ONECONTEXT_CLAUDE_SETTINGS_PATH"; then

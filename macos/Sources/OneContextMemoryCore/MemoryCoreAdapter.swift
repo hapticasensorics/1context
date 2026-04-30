@@ -350,7 +350,9 @@ public final class MemoryCoreAdapter {
     )
     guard result.exitCode == 0 else {
       try? appendLog("run command=\(command) exit=\(result.exitCode)")
-      throw MemoryCoreError.processFailed(Self.redactDiagnostic(result.stderr.trimmingCharacters(in: .whitespacesAndNewlines)))
+      let detail = Self.contractErrorMessage(result.stdout)
+        ?? result.stderr.trimmingCharacters(in: .whitespacesAndNewlines)
+      throw MemoryCoreError.processFailed(Self.redactDiagnostic(detail))
     }
     guard Self.isJSON(result.stdout) else {
       try? appendLog("run command=\(command) invalid_json")
@@ -412,15 +414,69 @@ public final class MemoryCoreAdapter {
       ["wiki", "render", "for-you", "--no-evidence", "--json"],
       ["wiki", "routes", "--json"],
       ["memory", "tick", "--wiki-only", "--json"],
-      ["memory", "replay-dry-run", "--json"],
-      ["memory", "cycles", "list", "--json"],
-      ["memory", "cycles", "show", "--json"],
-      ["memory", "cycles", "validate", "--json"]
+      ["memory", "cycles", "list", "--json"]
     ]
 
-    guard allowedShapes.contains(arguments) else {
+    guard allowedShapes.contains(arguments) || isAllowedParameterizedShape(arguments) else {
       throw MemoryCoreError.commandNotAllowed(arguments.joined(separator: " "))
     }
+  }
+
+  private static func isAllowedParameterizedShape(_ arguments: [String]) -> Bool {
+    if isCycleShape(arguments, verb: "show") || isCycleShape(arguments, verb: "validate") {
+      return true
+    }
+
+    guard arguments.count >= 6,
+      arguments.prefix(2).elementsEqual(["memory", "replay-dry-run"]),
+      arguments.last == "--json"
+    else {
+      return false
+    }
+
+    var index = 2
+    var sawStart = false
+    var sawEnd = false
+    while index < arguments.count - 1 {
+      guard index + 1 < arguments.count - 1 else { return false }
+      let option = arguments[index]
+      let value = arguments[index + 1]
+      switch option {
+      case "--start":
+        guard safeScalar(value) else { return false }
+        sawStart = true
+      case "--end":
+        guard safeScalar(value) else { return false }
+        sawEnd = true
+      case "--sources":
+        guard value.split(separator: ",").allSatisfy({ safeIdentifier(String($0)) }) else { return false }
+      case "--replay-run-id":
+        guard safeIdentifier(value) else { return false }
+      default:
+        return false
+      }
+      index += 2
+    }
+    return sawStart && sawEnd
+  }
+
+  private static func isCycleShape(_ arguments: [String], verb: String) -> Bool {
+    arguments.count == 5
+      && arguments.prefix(3).elementsEqual(["memory", "cycles", verb])
+      && safeIdentifier(arguments[3])
+      && arguments[4] == "--json"
+  }
+
+  private static func safeScalar(_ value: String) -> Bool {
+    !value.isEmpty && value.count <= 128 && !value.contains("/") && !value.contains("\0") && !value.hasPrefix("-")
+  }
+
+  private static func safeIdentifier(_ value: String) -> Bool {
+    let allowed = CharacterSet(charactersIn: "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._:-,")
+    return safeScalar(value)
+      && value != "."
+      && value != ".."
+      && value.unicodeScalars.allSatisfy { allowed.contains($0) }
   }
 
   public static func validateContractJSON(_ text: String) throws {
@@ -456,6 +512,24 @@ public final class MemoryCoreAdapter {
     return redacted
   }
 
+  public static func contractErrorMessage(_ text: String) -> String? {
+    guard let data = text.data(using: .utf8),
+      let payload = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+      payload["status"] as? String == "error"
+    else {
+      return nil
+    }
+    if let error = payload["error"] as? [String: Any] {
+      let code = (error["code"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+      let message = (error["message"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+      if !code.isEmpty && !message.isEmpty {
+        return "\(code): \(message)"
+      }
+      return code.isEmpty ? (message.isEmpty ? nil : message) : code
+    }
+    return nil
+  }
+
   private func probe(executable: String, timeout: Double) throws -> MemoryCoreRunResult {
     let status = try processRunner.run(
       executable: executable,
@@ -464,7 +538,9 @@ public final class MemoryCoreAdapter {
       timeout: timeout
     )
     guard status.exitCode == 0 else {
-      throw MemoryCoreError.processFailed(Self.redactDiagnostic(status.stderr.trimmingCharacters(in: .whitespacesAndNewlines)))
+      let detail = Self.contractErrorMessage(status.stdout)
+        ?? status.stderr.trimmingCharacters(in: .whitespacesAndNewlines)
+      throw MemoryCoreError.processFailed(Self.redactDiagnostic(detail))
     }
     try Self.validateContractJSON(status.stdout)
     return status
@@ -548,15 +624,24 @@ public struct MemoryCoreProcessRunner: MemoryCoreProcessRunning {
     let stdinPipe = Pipe()
     let captureDirectory = URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
       .appendingPathComponent("1context-memory-core-\(UUID().uuidString)", isDirectory: true)
-    try FileManager.default.createDirectory(at: captureDirectory, withIntermediateDirectories: true)
-    chmod(captureDirectory.path, RuntimePermissions.privateDirectoryMode)
+    try FileManager.default.createDirectory(
+      at: captureDirectory,
+      withIntermediateDirectories: true,
+      attributes: [.posixPermissions: RuntimePermissions.privateDirectoryMode]
+    )
     defer { try? FileManager.default.removeItem(at: captureDirectory) }
     let stdoutURL = captureDirectory.appendingPathComponent("stdout")
     let stderrURL = captureDirectory.appendingPathComponent("stderr")
-    FileManager.default.createFile(atPath: stdoutURL.path, contents: nil)
-    FileManager.default.createFile(atPath: stderrURL.path, contents: nil)
-    chmod(stdoutURL.path, RuntimePermissions.privateFileMode)
-    chmod(stderrURL.path, RuntimePermissions.privateFileMode)
+    FileManager.default.createFile(
+      atPath: stdoutURL.path,
+      contents: nil,
+      attributes: [.posixPermissions: RuntimePermissions.privateFileMode]
+    )
+    FileManager.default.createFile(
+      atPath: stderrURL.path,
+      contents: nil,
+      attributes: [.posixPermissions: RuntimePermissions.privateFileMode]
+    )
     let stdoutHandle = try FileHandle(forWritingTo: stdoutURL)
     let stderrHandle = try FileHandle(forWritingTo: stderrURL)
     defer {
@@ -573,22 +658,28 @@ public struct MemoryCoreProcessRunner: MemoryCoreProcessRunning {
 
     do {
       try process.run()
+      let processGroupID = setpgid(process.processIdentifier, process.processIdentifier) == 0
+        ? process.processIdentifier
+        : 0
       if !stdinData.isEmpty {
         try stdinPipe.fileHandleForWriting.write(contentsOf: stdinData)
       }
       try? stdinPipe.fileHandleForWriting.close()
-    } catch {
-      return MemoryCoreRunResult(stdout: "", stderr: error.localizedDescription, exitCode: 1)
-    }
 
-    let deadline = DispatchTime.now() + timeout
-    if group.wait(timeout: deadline) == .timedOut {
-      process.terminate()
-      if group.wait(timeout: .now() + 1) == .timedOut {
-        killProcessTree(rootPID: process.processIdentifier, signal: SIGKILL)
-        _ = group.wait(timeout: .now() + 1)
+      let deadline = DispatchTime.now() + timeout
+      if group.wait(timeout: deadline) == .timedOut {
+        terminateTimedOutProcess(process, processGroupID: processGroupID, group: group)
+        throw MemoryCoreError.timeout(timeout)
       }
-      throw MemoryCoreError.timeout(timeout)
+    } catch {
+      try? stdinPipe.fileHandleForWriting.close()
+      if process.isRunning {
+        terminateTimedOutProcess(process, processGroupID: 0, group: group)
+      }
+      if let memoryCoreError = error as? MemoryCoreError {
+        throw memoryCoreError
+      }
+      return MemoryCoreRunResult(stdout: "", stderr: error.localizedDescription, exitCode: 1)
     }
 
     try? stdoutHandle.synchronize()
@@ -597,6 +688,23 @@ public struct MemoryCoreProcessRunner: MemoryCoreProcessRunning {
     let stderr = (try? String(contentsOf: stderrURL, encoding: .utf8)) ?? ""
 
     return MemoryCoreRunResult(stdout: stdout, stderr: stderr, exitCode: process.terminationStatus)
+  }
+
+  private func terminateTimedOutProcess(_ process: Process, processGroupID: Int32, group: DispatchGroup) {
+    let timedOutPIDs = processTreePIDs(rootPID: process.processIdentifier)
+    if processGroupID > 0 {
+      killProcessGroup(processGroupID, signal: SIGTERM)
+    }
+    killPIDs(timedOutPIDs.filter { $0 != process.processIdentifier }, signal: SIGTERM)
+    process.terminate()
+    if group.wait(timeout: .now() + 1) == .timedOut {
+      if processGroupID > 0 {
+        killProcessGroup(processGroupID, signal: SIGKILL)
+      }
+      killProcessTree(rootPID: process.processIdentifier, signal: SIGKILL)
+      killPIDs(timedOutPIDs.filter { isProcessAlive($0) }, signal: SIGKILL)
+      _ = group.wait(timeout: .now() + 1)
+    }
   }
 
   private func sanitizedEnvironment() -> [String: String] {
@@ -638,6 +746,29 @@ public struct MemoryCoreProcessRunner: MemoryCoreProcessRunning {
       killProcessTree(rootPID: child, signal: signal)
     }
     kill(rootPID, signal)
+  }
+
+  private func processTreePIDs(rootPID: Int32) -> [Int32] {
+    var result: [Int32] = [rootPID]
+    for child in childPIDs(of: rootPID) {
+      result.append(contentsOf: processTreePIDs(rootPID: child))
+    }
+    return Array(Set(result))
+  }
+
+  private func killPIDs(_ pids: [Int32], signal: Int32) {
+    for pid in pids where pid > 0 {
+      kill(pid, signal)
+    }
+  }
+
+  private func killProcessGroup(_ processGroupID: Int32, signal: Int32) {
+    guard processGroupID > 0 else { return }
+    kill(-processGroupID, signal)
+  }
+
+  private func isProcessAlive(_ pid: Int32) -> Bool {
+    pid > 0 && kill(pid, 0) == 0
   }
 
   private func childPIDs(of pid: Int32) -> [Int32] {

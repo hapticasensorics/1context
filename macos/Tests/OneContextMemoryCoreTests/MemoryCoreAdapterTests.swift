@@ -141,6 +141,49 @@ final class MemoryCoreAdapterTests: XCTestCase {
     XCTAssertThrowsError(try adapter.run(arguments: ["memory", "migrations", "run", "--json"])) { error in
       XCTAssertEqual(error as? MemoryCoreError, .commandNotAllowed("memory migrations run --json"))
     }
+    XCTAssertThrowsError(try adapter.run(arguments: ["memory", "cycles", "show", "../secret", "--json"])) { error in
+      XCTAssertEqual(error as? MemoryCoreError, .commandNotAllowed("memory cycles show ../secret --json"))
+    }
+    XCTAssertThrowsError(try adapter.run(arguments: ["memory", "cycles", "show", ".", "--json"])) { error in
+      XCTAssertEqual(error as? MemoryCoreError, .commandNotAllowed("memory cycles show . --json"))
+    }
+    XCTAssertThrowsError(try adapter.run(arguments: ["memory", "replay-dry-run", "--json"])) { error in
+      XCTAssertEqual(error as? MemoryCoreError, .commandNotAllowed("memory replay-dry-run --json"))
+    }
+    XCTAssertThrowsError(try adapter.run(arguments: [
+      "memory", "replay-dry-run",
+      "--start", "2026-04-27T00:00:00Z",
+      "--end", "2026-04-27T01:00:00Z",
+      "--replay-run-id", ".",
+      "--json"
+    ])) { error in
+      XCTAssertEqual(
+        error as? MemoryCoreError,
+        .commandNotAllowed("memory replay-dry-run --start 2026-04-27T00:00:00Z --end 2026-04-27T01:00:00Z --replay-run-id . --json")
+      )
+    }
+  }
+
+  func testRunAllowsBoundedParameterizedCommands() throws {
+    let root = try temporaryRoot()
+    defer { try? FileManager.default.removeItem(at: root) }
+    let executable = try writeScript(root: root, name: "memory-core", body: """
+    if [ "$1" = "status" ]; then printf '{"status":"ok","schema_version":1}\\n'; exit 0; fi
+    printf '{"status":"ok","schema_version":1,"args":["%s","%s","%s","%s"]}\\n' "$1" "$2" "$3" "$4"
+    """)
+    let adapter = adapter(root: root)
+    _ = try adapter.configure(executable: executable.path)
+
+    XCTAssertNoThrow(try adapter.run(arguments: [
+      "memory", "replay-dry-run",
+      "--start", "2026-04-27T00:00:00Z",
+      "--end", "2026-04-27T01:00:00Z",
+      "--sources", "codex,claude-code",
+      "--replay-run-id", "replay-test-1",
+      "--json"
+    ]))
+    XCTAssertNoThrow(try adapter.run(arguments: ["memory", "cycles", "show", "cycle:test-1", "--json"]))
+    XCTAssertNoThrow(try adapter.run(arguments: ["memory", "cycles", "validate", "cycle:test-1", "--json"]))
   }
 
   func testDoctorRequiresStatusJSONContract() throws {
@@ -186,6 +229,26 @@ final class MemoryCoreAdapterTests: XCTestCase {
         return XCTFail("expected process failure, got \(error)")
       }
       XCTAssertFalse(message.contains(root.path))
+    }
+  }
+
+  func testRunPreservesNonzeroContractErrorFromStdout() throws {
+    let root = try temporaryRoot()
+    defer { try? FileManager.default.removeItem(at: root) }
+    let executable = try writeScript(root: root, name: "memory-core", body: """
+    if [ "$1" = "status" ]; then printf '{"status":"ok","schema_version":1}\\n'; exit 0; fi
+    printf '{"status":"error","schema_version":1,"error":{"code":"not_ready","message":"initialize storage first"}}\\n'
+    exit 2
+    """)
+    let adapter = adapter(root: root)
+    _ = try adapter.configure(executable: executable.path)
+
+    XCTAssertThrowsError(try adapter.run(arguments: ["wiki", "list", "--json"])) { error in
+      guard case MemoryCoreError.processFailed(let message) = error else {
+        return XCTFail("expected process failure, got \(error)")
+      }
+      XCTAssertTrue(message.contains("not_ready"))
+      XCTAssertTrue(message.contains("initialize storage first"))
     }
   }
 

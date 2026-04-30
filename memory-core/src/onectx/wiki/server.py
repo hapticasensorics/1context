@@ -132,20 +132,26 @@ class WikiRequestHandler(BaseHTTPRequestHandler):
             self.send_json({"error": "forbidden", "message": "Request host is not allowed."}, status=HTTPStatus.FORBIDDEN, send_body=send_body)
             return
         route = normalize_route(self.path)
-        table = load_route_table(self.system.root)
 
         if route == "/__health":
+            query = parse_qs(urlsplit(self.path).query)
             payload: dict[str, Any] = {
                 "status": "ok",
-                "routes": len(table.routes),
-                "manifests": len(table.manifests),
-                "chat": chat_config(self.system),
+                "routes": None,
+                "manifests": None,
             }
+            if truthy_query_value(query.get("details")):
+                table = load_route_table(self.system.root)
+                payload["routes"] = len(table.routes)
+                payload["manifests"] = len(table.manifests)
+                payload["chat"] = chat_config(self.system)
             challenge = self.headers.get("X-1Context-Wiki-Challenge") or ""
             if self.server.server_token and challenge:  # type: ignore[attr-defined]
                 payload["server_token_proof"] = token_proof(self.server.server_token, challenge)  # type: ignore[attr-defined]
             self.send_json(payload, send_body=send_body)
             return
+
+        table = load_route_table(self.system.root)
 
         if route == "/_routes":
             self.send_json(table.to_payload(), send_body=send_body)
@@ -363,6 +369,10 @@ def host_name(value: str) -> str:
 
 def token_proof(token: str, challenge: str) -> str:
     return hashlib.sha256(f"{token}:{challenge}".encode("utf-8")).hexdigest()
+
+
+def truthy_query_value(values: list[str] | None) -> bool:
+    return any(value.lower() in {"1", "true", "yes", "on"} for value in values or [])
 
 
 def index_html(table: RouteTable) -> bytes:

@@ -84,10 +84,10 @@ wiki ensure --json
 wiki render --json
 wiki routes --json
 memory tick --wiki-only --json
-memory replay-dry-run --json
+memory replay-dry-run --start <iso8601> --end <iso8601> [--sources <ids>] [--replay-run-id <id>] --json
 memory cycles list --json
-memory cycles show --json
-memory cycles validate --json
+memory cycles show <cycle-id> --json
+memory cycles validate <cycle-id> --json
 ```
 
 Hired-agent live execution, transcript import, broad filesystem scanning, and
@@ -105,8 +105,8 @@ wiki ensure
 wiki render
 wiki routes
 memory tick --wiki-only
-memory replay-dry-run
-memory cycles list/show/validate
+memory replay-dry-run with bounded time range
+memory cycles list/show/validate with explicit cycle ids
 ```
 
 Private-4 also has broader commands for apps, ports, daemon loops, hired-agent

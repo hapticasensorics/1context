@@ -273,11 +273,12 @@ final class AgentIntegrationTests: XCTestCase {
 
     let start = executor.execute(provider: .claude, event: .sessionStart, inputData: input)
     XCTAssertEqual(start.hookSpecificOutput?.hookEventName, "SessionStart")
-    XCTAssertEqual(start.systemMessage, "View your 1Context wiki at http://localhost:3210")
-    XCTAssertTrue(start.hookSpecificOutput?.additionalContext?.contains("View your 1Context wiki at http://localhost:3210") == true)
-    XCTAssertTrue(start.hookSpecificOutput?.additionalContext?.contains("1Context local wiki") == true)
-    XCTAssertTrue(start.hookSpecificOutput?.additionalContext?.contains("Current repo: repo") == true)
-    XCTAssertTrue(start.hookSpecificOutput?.additionalContext?.contains("1Context runtime time: 2026-04-29T11:30:00Z") == true)
+    XCTAssertEqual(start.systemMessage, "View 1Context wiki: http://localhost:3210")
+    XCTAssertEqual(start.hookSpecificOutput?.additionalContext, "View 1Context wiki: http://localhost:3210")
+
+    let codexStart = executor.execute(provider: .codex, event: .sessionStart, inputData: input)
+    XCTAssertEqual(codexStart.systemMessage, "View 1Context wiki: http://localhost:3210")
+    XCTAssertEqual(codexStart.hookSpecificOutput?.additionalContext, "View 1Context wiki: http://localhost:3210")
 
     let postTool = executor.execute(provider: .claude, event: .postToolUse, inputData: Data("{}".utf8))
     XCTAssertNil(postTool.systemMessage)
@@ -294,15 +295,47 @@ final class AgentIntegrationTests: XCTestCase {
 
     let first = AgentHookExecutor(paths: paths, environment: [:])
       .execute(provider: .claude, event: .sessionStart, inputData: Data("{}".utf8))
-    XCTAssertEqual(first.systemMessage, "View your 1Context wiki at http://localhost:4100")
+    XCTAssertEqual(first.systemMessage, "View 1Context wiki: http://localhost:4100")
     XCTAssertTrue(first.hookSpecificOutput?.additionalContext?.contains("http://localhost:4100") == true)
 
     try writeAgentConfig(AgentConfig(wikiURL: "http://localhost:4101"), to: paths.configFile)
 
     let second = AgentHookExecutor(paths: paths, environment: [:])
       .execute(provider: .claude, event: .sessionStart, inputData: Data("{}".utf8))
-    XCTAssertEqual(second.systemMessage, "View your 1Context wiki at http://localhost:4101")
+    XCTAssertEqual(second.systemMessage, "View 1Context wiki: http://localhost:4101")
     XCTAssertTrue(second.hookSpecificOutput?.additionalContext?.contains("http://localhost:4101") == true)
+  }
+
+  func testHookExecutorDefaultsToBundledWikiURL() {
+    let output = AgentHookExecutor(
+      paths: AgentPaths(directory: URL(fileURLWithPath: "/tmp/missing-agent-\(UUID().uuidString)")),
+      environment: [:],
+      runtimeHealth: { throw NSError(domain: "test", code: 1) }
+    )
+      .execute(provider: .claude, event: .sessionStart, inputData: Data("{}".utf8))
+
+    XCTAssertEqual(output.systemMessage, "View 1Context wiki: http://127.0.0.1:17319/for-you")
+  }
+
+  func testInstallMigratesLegacyAgentWikiURL() throws {
+    let root = try temporaryRoot()
+    defer { try? FileManager.default.removeItem(at: root) }
+    let settings = root.appendingPathComponent("settings.json")
+    let paths = AgentPaths(directory: root.appendingPathComponent("agent", isDirectory: true))
+    try FileManager.default.createDirectory(at: paths.directory, withIntermediateDirectories: true)
+    try writeObject(["wiki_url": "http://localhost:3210", "status_line_label": "1Context wiki"], to: paths.configFile)
+
+    let manager = AgentIntegrationManager(
+      paths: paths,
+      claudeSettingsPath: settings,
+      executablePath: "/opt/homebrew/bin/1context"
+    )
+
+    _ = try manager.install()
+
+    let data = try Data(contentsOf: paths.configFile)
+    let config = try JSONDecoder().decode(AgentConfig.self, from: data)
+    XCTAssertEqual(config.wikiURL, "http://127.0.0.1:17319/for-you")
   }
 
   func testStatusLineRendererReadsLiveConfig() throws {
@@ -317,12 +350,16 @@ final class AgentIntegrationTests: XCTestCase {
 
     let first = AgentStatusLineRenderer(paths: paths, environment: [:])
       .render(provider: .claude, inputData: Data("{}".utf8))
-    XCTAssertEqual(first, "1Context wiki private: http://localhost:5200")
+    XCTAssertEqual(first, "View 1Context wiki: http://localhost:5200")
 
     try writeAgentConfig(AgentConfig(wikiURL: "http://localhost:5201"), to: paths.configFile)
     let second = AgentStatusLineRenderer(paths: paths, environment: [:])
       .render(provider: .claude, inputData: Data("{}".utf8))
-    XCTAssertEqual(second, "1Context wiki: http://localhost:5201")
+    XCTAssertEqual(second, "View 1Context wiki: http://localhost:5201")
+
+    let codex = AgentStatusLineRenderer(paths: paths, environment: [:])
+      .render(provider: .codex, inputData: Data("{}".utf8))
+    XCTAssertEqual(codex, "View 1Context wiki: http://localhost:5201")
   }
 
   func testHookEnvironmentOverridesAreIgnoredUnlessExplicitlyAllowed() throws {

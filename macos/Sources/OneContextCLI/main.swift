@@ -85,11 +85,11 @@ struct OneContextCLI {
       1context debug [--no-redact]
       1context logs [--follow]
       1context update
-      1context agent hook --provider claude --event <event>
-      1context agent statusline --provider claude
+      1context agent hook --provider <claude|codex> --event <event>
+      1context agent statusline --provider <claude|codex>
       1context agent integrations <status|install|repair|uninstall>
       1context memory-core <status|doctor|configure|run>
-      1context wiki <open|start|status|stop>
+      1context wiki <open|local-url|start|status|stop>
     """)
   }
 
@@ -526,6 +526,10 @@ struct OneContextCLI {
       let snapshot = try await ensureWikiStarted()
       try runProcess("/usr/bin/open", [snapshot.url])
       print("Opened 1Context wiki: \(snapshot.url)")
+    case "local-url":
+      try rejectUnknownWikiArguments(allowed: [])
+      let snapshot = try await ensureWikiStarted()
+      print(snapshot.url)
     case "start":
       try rejectUnknownWikiArguments(allowed: [])
       let snapshot = try await ensureWikiStarted()
@@ -549,6 +553,9 @@ struct OneContextCLI {
 
   static func ensureWikiStarted() async throws -> WikiServerSnapshot {
     _ = try await RuntimeController().start()
+    if let snapshot = try? await wikiRPC("wiki.status", timeout: 5), snapshot.running {
+      return snapshot
+    }
     _ = try await wikiRPC("wiki.start", timeout: 5)
     return try await waitForWikiRunning(timeout: 240)
   }

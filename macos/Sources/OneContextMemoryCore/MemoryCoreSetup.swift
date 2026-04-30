@@ -26,13 +26,27 @@ public struct MemoryCoreSetup {
     coreDirectory.appendingPathComponent("bin/1context-memory-core")
   }
 
-  public func ensureReady() throws -> MemoryCoreStatus {
+  public func ensureReady(validateContract: Bool = true) throws -> MemoryCoreStatus {
     try RuntimePermissions.ensurePrivateDirectory(paths.directory)
     try RuntimePermissions.ensurePrivateDirectory(paths.logFile.deletingLastPathComponent())
-    try installBundledCoreIfNeeded()
-    try installJavaScriptDependenciesIfNeeded()
-    return try MemoryCoreAdapter(paths: paths, processRunner: MemoryCoreProcessRunner(environment: setupEnvironment()))
-      .configure(executable: executable.path)
+    let installedCore = try installBundledCoreIfNeeded()
+    let installedJavaScript = try installJavaScriptDependenciesIfNeeded()
+    let adapter = MemoryCoreAdapter(paths: paths, processRunner: MemoryCoreProcessRunner(environment: setupEnvironment()))
+    let config = adapter.config()
+    let venvPython = paths.directory.appendingPathComponent("venv/bin/python3").path
+    let status: MemoryCoreStatus
+    if installedCore || config.enabled != true || config.executable != executable.path || !fileManager.isExecutableFile(atPath: venvPython) {
+      status = try adapter.configure(executable: executable.path)
+    } else {
+      status = adapter.status(forceCheck: validateContract)
+      if status.health != .ok {
+        return try adapter.configure(executable: executable.path)
+      }
+    }
+    if installedCore || installedJavaScript {
+      try prewarmPythonEnvironment()
+    }
+    return status
   }
 
   public func bundledCoreDirectory() -> URL? {
@@ -81,16 +95,20 @@ public struct MemoryCoreSetup {
     return env
   }
 
-  private func installBundledCoreIfNeeded() throws {
+  private func installBundledCoreIfNeeded() throws -> Bool {
     guard let source = bundledCoreDirectory() else {
       throw MemoryCoreSetupError.bundleMissing
     }
 
     let marker = coreDirectory.appendingPathComponent(".1context-bundle-version")
+    let serveMain = coreDirectory.appendingPathComponent("src/onectx/wiki/serve_main.py")
     let installedVersion = (try? String(contentsOf: marker, encoding: .utf8))?
       .trimmingCharacters(in: .whitespacesAndNewlines)
 
-    if installedVersion != oneContextVersion || !fileManager.fileExists(atPath: executable.path) {
+    let needsInstall = installedVersion != oneContextVersion
+      || !fileManager.fileExists(atPath: executable.path)
+      || !fileManager.fileExists(atPath: serveMain.path)
+    if needsInstall {
       try? fileManager.removeItem(at: coreDirectory)
       try RuntimePermissions.ensurePrivateDirectory(paths.directory)
       try fileManager.copyItem(at: source, to: coreDirectory)
@@ -99,6 +117,7 @@ public struct MemoryCoreSetup {
 
     chmod(executable.path, 0o755)
     try rewriteManagedConfig()
+    return needsInstall
   }
 
   private func rewriteManagedConfig() throws {
@@ -118,11 +137,11 @@ public struct MemoryCoreSetup {
     try RuntimePermissions.writePrivateString(text + "\n", toFile: config.path)
   }
 
-  private func installJavaScriptDependenciesIfNeeded() throws {
+  private func installJavaScriptDependenciesIfNeeded() throws -> Bool {
     let packageLock = coreDirectory.appendingPathComponent("wiki-engine/package-lock.json")
-    guard fileManager.fileExists(atPath: packageLock.path) else { return }
+    guard fileManager.fileExists(atPath: packageLock.path) else { return false }
     let nodeModules = coreDirectory.appendingPathComponent("wiki-engine/node_modules", isDirectory: true)
-    guard !fileManager.fileExists(atPath: nodeModules.path) else { return }
+    guard !fileManager.fileExists(atPath: nodeModules.path) else { return false }
     guard let npm = firstExecutable(["/opt/homebrew/bin/npm", "/usr/local/bin/npm", "/usr/bin/npm"]) else {
       throw MemoryCoreSetupError.toolMissing("npm")
     }
@@ -131,6 +150,26 @@ public struct MemoryCoreSetup {
       arguments: ["ci", "--silent"],
       currentDirectory: coreDirectory.appendingPathComponent("wiki-engine", isDirectory: true),
       timeout: 600
+    )
+    return true
+  }
+
+  private func prewarmPythonEnvironment() throws {
+    let python = paths.directory.appendingPathComponent("venv/bin/python3").path
+    guard fileManager.isExecutableFile(atPath: python) else {
+      throw MemoryCoreSetupError.toolMissing("python3")
+    }
+    try runProcess(
+      executable: python,
+      arguments: ["-m", "compileall", "-q", coreDirectory.appendingPathComponent("src", isDirectory: true).path],
+      currentDirectory: coreDirectory,
+      timeout: 120
+    )
+    try runProcess(
+      executable: python,
+      arguments: ["-m", "onectx.wiki.serve_main", "--help"],
+      currentDirectory: coreDirectory,
+      timeout: 30
     )
   }
 

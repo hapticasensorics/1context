@@ -107,13 +107,14 @@ public final class WikiServerManager: @unchecked Sendable {
       }
       return WikiServerSnapshot(running: false, url: wikiURL, health: "not running")
     }
+    if let payload = healthPayload(state: state, requireToken: true) {
+      let url = payload["url"] as? String ?? state.url
+      return WikiServerSnapshot(running: true, url: url, pid: state.pid, health: "OK")
+    }
     guard processIsAlive(state.pid) else {
-      if healthPayload(state: nil, requireToken: false) != nil {
-        return WikiServerSnapshot(running: true, url: state.url, health: "OK")
-      }
       return WikiServerSnapshot(running: false, url: state.url, pid: state.pid, health: "stale")
     }
-    if healthPayload(state: state, requireToken: true) != nil || healthPayload(state: nil, requireToken: false) != nil {
+    if healthPayload(state: nil, requireToken: false) != nil {
       return WikiServerSnapshot(running: true, url: state.url, pid: state.pid, health: "OK")
     }
     return WikiServerSnapshot(running: false, url: state.url, pid: state.pid, health: "no response")
@@ -125,27 +126,28 @@ public final class WikiServerManager: @unchecked Sendable {
       return current
     }
 
-    _ = try setup.ensureReady()
-    _ = try adapter.run(arguments: ["wiki", "ensure", "--json"])
+    _ = try setup.ensureReady(validateContract: false)
+    let alreadyRenderable = hasServableForYou()
+    if !alreadyRenderable {
+      _ = try adapter.run(arguments: ["wiki", "ensure", "--json"])
+      _ = try adapter.run(arguments: ["wiki", "render", "for-you", "--no-evidence", "--json"])
+    }
 
-    guard let uv = firstExecutable(["/opt/homebrew/bin/uv", "/usr/local/bin/uv", "/usr/bin/uv"]) else {
-      throw MemoryCoreSetupError.toolMissing("uv")
+    let python = memoryPaths.directory.appendingPathComponent("venv/bin/python3").path
+    guard fileManager.isExecutableFile(atPath: python) else {
+      throw MemoryCoreSetupError.toolMissing("python3")
     }
 
     try RuntimePermissions.ensurePrivateDirectory(runtimePaths.appSupportDirectory)
     try RuntimePermissions.ensurePrivateDirectory(runtimePaths.logDirectory)
     let token = UUID().uuidString
     let process = Process()
-    process.executableURL = URL(fileURLWithPath: uv)
+    process.executableURL = URL(fileURLWithPath: python)
     process.arguments = [
-      "run",
-      "--project", setup.coreDirectory.path,
-      "1context",
+      "-m", "onectx.wiki.serve_main",
       "--root", setup.coreDirectory.path,
-      "wiki", "serve",
       "--host", host,
-      "--port", "\(port)",
-      "--no-port-fallback"
+      "--port", "\(port)"
     ]
     process.currentDirectoryURL = setup.coreDirectory
     process.environment = setup.setupEnvironment(extra: ["ONECONTEXT_WIKI_SERVER_TOKEN": token])
@@ -164,7 +166,12 @@ public final class WikiServerManager: @unchecked Sendable {
     )
     try writeState(state)
     let snapshot = try waitForHealthy(state: state)
-    startBackgroundRender()
+    if snapshot.url != state.url {
+      var updated = state
+      updated.url = snapshot.url
+      try? writeState(updated)
+    }
+    try? writeAgentWikiURL(snapshot.url)
     return snapshot
   }
 
@@ -202,46 +209,84 @@ public final class WikiServerManager: @unchecked Sendable {
     stop()
   }
 
-  private func startBackgroundRender() {
-    guard let uv = firstExecutable(["/opt/homebrew/bin/uv", "/usr/local/bin/uv", "/usr/bin/uv"]) else {
-      return
-    }
-    let process = Process()
-    process.executableURL = URL(fileURLWithPath: uv)
-    process.arguments = [
-      "run",
-      "--project", setup.coreDirectory.path,
-      "1context-memory-core",
-      "wiki", "render", "for-you", "--no-evidence", "--json"
-    ]
-    process.currentDirectoryURL = setup.coreDirectory
-    process.environment = setup.setupEnvironment()
-    process.standardInput = FileHandle.nullDevice
-    if let logHandle = try? appendLogHandle() {
-      process.standardOutput = logHandle
-      process.standardError = logHandle
-    }
-    try? process.run()
-    if var state = readState() {
-      state.renderPID = process.processIdentifier
-      try? writeState(state)
-    }
-  }
-
   private func waitForHealthy(state: WikiServerState, timeout: TimeInterval = 30) throws -> WikiServerSnapshot {
     let deadline = Date().addingTimeInterval(timeout)
     repeat {
-      if processIsAlive(state.pid), healthPayload(state: state, requireToken: false) != nil {
-        return WikiServerSnapshot(running: true, url: state.url, pid: state.pid, health: "OK")
+      if processIsAlive(state.pid), let payload = healthPayload(state: state, requireToken: true) {
+        let url = payload["url"] as? String ?? state.url
+        return WikiServerSnapshot(running: true, url: url, pid: state.pid, health: "OK")
       }
       Thread.sleep(forTimeInterval: 0.25)
     } while Date() < deadline
     throw MemoryCoreSetupError.timedOut("wiki serve")
   }
 
+  private func hasServableForYou() -> Bool {
+    let generated = setup.coreDirectory.appendingPathComponent("wiki/menu/10-for-you/10-for-you/generated", isDirectory: true)
+    let manifest = generated.appendingPathComponent("render-manifest.json")
+    let latest = generated.appendingPathComponent("latest_for_family.json")
+    let index = generated.appendingPathComponent("for-you-index.json")
+    guard fileManager.fileExists(atPath: manifest.path),
+      fileManager.fileExists(atPath: latest.path),
+      fileManager.fileExists(atPath: index.path),
+      let latestData = try? Data(contentsOf: latest),
+      let latestObject = try? JSONSerialization.jsonObject(with: latestData) as? [String: Any],
+      let forYou = latestObject["for-you"] as? [String: Any],
+      let slug = forYou["slug"] as? String,
+      !slug.isEmpty,
+      fileManager.fileExists(atPath: generated.appendingPathComponent("\(slug).html").path),
+      manifestInputsMatch(manifest: manifest)
+    else {
+      return false
+    }
+    return true
+  }
+
+  private func manifestInputsMatch(manifest: URL) -> Bool {
+    guard let data = try? Data(contentsOf: manifest),
+      let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+      let inputs = object["inputs"] as? [[String: Any]]
+    else {
+      return false
+    }
+    for input in inputs {
+      guard let relativePath = input["path"] as? String,
+        let expectedHash = input["sha256"] as? String,
+        !relativePath.isEmpty,
+        !expectedHash.isEmpty
+      else {
+        return false
+      }
+      let inputURL = setup.coreDirectory.appendingPathComponent(relativePath)
+      guard let inputData = try? Data(contentsOf: inputURL),
+        sha256Hex(inputData) == expectedHash
+      else {
+        return false
+      }
+    }
+    return true
+  }
+
+  private func sha256Hex(_ data: Data) -> String {
+    SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
+  }
+
   private func healthPayload(state: WikiServerState?, requireToken: Bool) -> [String: Any]? {
     let challenge = UUID().uuidString
-    guard let url = URL(string: "http://\(host):\(port)/__health") else { return nil }
+    for healthURL in healthCandidateURLs(state: state, requireToken: requireToken) {
+      if let payload = healthPayload(url: healthURL, state: state, requireToken: requireToken, challenge: challenge) {
+        return payload
+      }
+    }
+    return nil
+  }
+
+  private func healthPayload(
+    url: URL,
+    state: WikiServerState?,
+    requireToken: Bool,
+    challenge: String
+  ) -> [String: Any]? {
     var request = URLRequest(url: url)
     request.timeoutInterval = 1
     request.setValue(challenge, forHTTPHeaderField: "X-1Context-Wiki-Challenge")
@@ -264,7 +309,11 @@ public final class WikiServerManager: @unchecked Sendable {
           return
         }
       }
-      payload = object
+      var copy = object
+      if let actualURL = Self.routeURL(fromHealthURL: url) {
+        copy["url"] = actualURL
+      }
+      payload = copy
     }
     task.resume()
     if semaphore.wait(timeout: .now() + 1.2) == .timedOut {
@@ -272,6 +321,66 @@ public final class WikiServerManager: @unchecked Sendable {
       return nil
     }
     return payload
+  }
+
+  private func healthCandidateURLs(state: WikiServerState?, requireToken: Bool) -> [URL] {
+    var urls: [URL] = []
+    if let state, let url = Self.healthURL(fromRouteURL: state.url) {
+      urls.append(url)
+    }
+    if let configured = URL(string: "http://\(host):\(port)/__health") {
+      urls.append(configured)
+    }
+    if requireToken {
+      for candidatePort in port..<(port + 25) {
+        if let url = URL(string: "http://\(host):\(candidatePort)/__health") {
+          urls.append(url)
+        }
+      }
+    }
+
+    var seen: Set<String> = []
+    return urls.filter { url in
+      let key = url.absoluteString
+      guard !seen.contains(key) else { return false }
+      seen.insert(key)
+      return true
+    }
+  }
+
+  private static func healthURL(fromRouteURL value: String) -> URL? {
+    guard var components = URLComponents(string: value) else { return nil }
+    components.path = "/__health"
+    components.query = nil
+    components.fragment = nil
+    return components.url
+  }
+
+  private static func routeURL(fromHealthURL url: URL) -> String? {
+    guard var components = URLComponents(url: url, resolvingAgainstBaseURL: false) else { return nil }
+    components.path = route
+    components.query = nil
+    components.fragment = nil
+    return components.url?.absoluteString
+  }
+
+  private func writeAgentWikiURL(_ url: String) throws {
+    let directory = runtimePaths.appSupportDirectory.appendingPathComponent("agent", isDirectory: true)
+    let configFile = directory.appendingPathComponent("config.json")
+    try RuntimePermissions.ensurePrivateDirectory(directory)
+
+    var root: [String: Any] = [:]
+    if let data = try? Data(contentsOf: configFile),
+      let existing = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+    {
+      root = existing
+    }
+    root["wiki_url"] = url
+    if root["status_line_label"] == nil {
+      root["status_line_label"] = "1Context wiki"
+    }
+    let data = try JSONSerialization.data(withJSONObject: root, options: [.prettyPrinted, .sortedKeys])
+    try RuntimePermissions.writePrivateData(data, to: configFile)
   }
 
   private func readState() -> WikiServerState? {
@@ -319,10 +428,6 @@ public final class WikiServerManager: @unchecked Sendable {
 
   private func processIsAlive(_ pid: Int32) -> Bool {
     pid > 0 && kill(pid, 0) == 0
-  }
-
-  private func firstExecutable(_ candidates: [String]) -> String? {
-    candidates.first { fileManager.isExecutableFile(atPath: $0) }
   }
 
   private static func tokenProof(token: String, challenge: String) -> String {

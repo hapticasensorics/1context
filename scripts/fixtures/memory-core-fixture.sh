@@ -54,7 +54,16 @@ case "${1:-}" in
         fi
         ;;
       replay-dry-run)
-        json_ok '{"status":"ok","schema_version":1,"dry_run":true,"changes":[]}'
+        if [ "${3:-}" = "--start" ] && [ -n "${4:-}" ] \
+          && [ "${5:-}" = "--end" ] && [ -n "${6:-}" ] \
+          && [ "${7:-}" = "--sources" ] && [ -n "${8:-}" ] \
+          && [ "${9:-}" = "--replay-run-id" ] && [ -n "${10:-}" ] \
+          && [ "${11:-}" = "--json" ]; then
+          json_ok '{"status":"ok","schema_version":1,"dry_run":true,"changes":[]}'
+        else
+          printf 'memory replay-dry-run requires bounded replay parameters\n' >&2
+          exit 64
+        fi
         ;;
       cycles)
         case "${3:-}" in
@@ -62,9 +71,17 @@ case "${1:-}" in
             json_ok '{"status":"ok","schema_version":1,"cycles":[]}'
             ;;
           show)
+            if [ -z "${4:-}" ] || [ "${5:-}" != "--json" ]; then
+              printf 'memory cycles show requires cycle id\n' >&2
+              exit 64
+            fi
             json_ok '{"status":"ok","schema_version":1,"cycle":{"id":"fixture"}}'
             ;;
           validate)
+            if [ -z "${4:-}" ] || [ "${5:-}" != "--json" ]; then
+              printf 'memory cycles validate requires cycle id\n' >&2
+              exit 64
+            fi
             json_ok '{"status":"ok","schema_version":1,"valid":true}'
             ;;
           *)

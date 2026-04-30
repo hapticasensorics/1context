@@ -65,16 +65,21 @@ grep -q '"routes"' "$json_file"
 assert_json memory tick --wiki-only --json
 grep -q '"wiki-only"' "$json_file"
 
-assert_json memory replay-dry-run --json
+assert_json memory replay-dry-run \
+  --start 2026-04-27T00:00:00Z \
+  --end 2026-04-27T01:00:00Z \
+  --sources codex,claude-code \
+  --replay-run-id replay-test-1 \
+  --json
 grep -q '"dry_run"' "$json_file"
 
 assert_json memory cycles list --json
 grep -q '"cycles"' "$json_file"
 
-assert_json memory cycles show --json
+assert_json memory cycles show cycle:test-1 --json
 grep -q '"cycle"' "$json_file"
 
-assert_json memory cycles validate --json
+assert_json memory cycles validate cycle:test-1 --json
 grep -q '"valid"' "$json_file"
 
 if "$CLI" memory-core run -- hired-agent run >"$STATE_DIR/disallowed.out" 2>&1; then

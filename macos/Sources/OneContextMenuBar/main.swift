@@ -80,6 +80,7 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
   private var lastRuntimeRefreshStartedAt: Date?
   private let menu = NSMenu()
   private let stateItem = NSMenuItem(title: RuntimeState.checking.title, action: nil, keyEquivalent: "")
+  private let openWikiItem = NSMenuItem(title: "Open Wiki", action: #selector(openWiki), keyEquivalent: "")
   private let settingsItem = NSMenuItem(title: "Settings", action: nil, keyEquivalent: "")
   private let settingsMenu = NSMenu()
   private let versionItem = NSMenuItem(title: "", action: nil, keyEquivalent: "")
@@ -133,6 +134,7 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
     menu.autoenablesItems = false
     stateItem.isEnabled = false
     menu.addItem(stateItem)
+    menu.addItem(openWikiItem)
 
     versionItem.isEnabled = false
     settingsMenu.addItem(versionItem)
@@ -143,7 +145,7 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
     menu.addItem(quitItem)
     menu.delegate = self
 
-    for item in [stateItem, settingsItem, versionItem, aboutItem, updateItem, quitItem] {
+    for item in [stateItem, openWikiItem, settingsItem, versionItem, aboutItem, updateItem, quitItem] {
       item.target = self
       item.isEnabled = true
     }
@@ -448,6 +450,24 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
     NSWorkspace.shared.open(oneContextGitHubURL)
   }
 
+  @objc private func openWiki() {
+    Task {
+      do {
+        let snapshot = try await ensureWikiOpen()
+        guard let url = URL(string: snapshot.url) else {
+          throw MenuError.invalidWikiURL(snapshot.url)
+        }
+        await MainActor.run {
+          _ = NSWorkspace.shared.open(url)
+        }
+      } catch {
+        await MainActor.run {
+          showFishAlert("Could not open 1Context wiki.")
+        }
+      }
+    }
+  }
+
   @objc private func quit() {
     timer?.invalidate()
     timer = nil
@@ -460,6 +480,42 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
         NSApp.terminate(nil)
       }
     }
+  }
+
+  private func ensureWikiOpen() async throws -> WikiMenuSnapshot {
+    _ = try await RuntimeController().start(startMenu: false)
+    if let snapshot = try? await wikiRPC("wiki.status", timeout: 5), snapshot.running {
+      return snapshot
+    }
+    _ = try await wikiRPC("wiki.start", timeout: 5)
+    return try await waitForWikiRunning(timeout: 240)
+  }
+
+  private func waitForWikiRunning(timeout: TimeInterval) async throws -> WikiMenuSnapshot {
+    let deadline = Date().addingTimeInterval(timeout)
+    var last = WikiMenuSnapshot(running: false, url: "http://127.0.0.1:17319/for-you", health: "starting")
+    repeat {
+      last = try await wikiRPC("wiki.status", timeout: 5)
+      if last.running { return last }
+      try await Task.sleep(nanoseconds: 500_000_000)
+    } while Date() < deadline
+    throw MenuError.wikiTimedOut(last.health)
+  }
+
+  private func wikiRPC(_ method: String, timeout: TimeInterval) async throws -> WikiMenuSnapshot {
+    let deadline = Date().addingTimeInterval(timeout)
+    var lastError: Error?
+    let clientTimeout = Int32(max(2_000, min(120_000, Int(timeout * 1_000))))
+    repeat {
+      do {
+        let payload = try UnixJSONRPCClient(timeoutMilliseconds: clientTimeout).call(method: method)
+        return WikiMenuSnapshot(payload: payload)
+      } catch {
+        lastError = error
+        try await Task.sleep(nanoseconds: 250_000_000)
+      }
+    } while Date() < deadline
+    throw lastError ?? MenuError.wikiTimedOut(method)
   }
 
   private func runUpdateCommandInTerminal() {
@@ -653,4 +709,36 @@ private enum RuntimeState {
 private enum UpdateState {
   case upToDate
   case available
+}
+
+private struct WikiMenuSnapshot {
+  let running: Bool
+  let url: String
+  let health: String
+
+  init(running: Bool, url: String, health: String) {
+    self.running = running
+    self.url = url
+    self.health = health
+  }
+
+  init(payload: [String: Any]) {
+    self.running = payload["running"] as? Bool ?? false
+    self.url = payload["url"] as? String ?? "http://127.0.0.1:17319/for-you"
+    self.health = payload["health"] as? String ?? "unknown"
+  }
+}
+
+private enum MenuError: Error, LocalizedError {
+  case invalidWikiURL(String)
+  case wikiTimedOut(String)
+
+  var errorDescription: String? {
+    switch self {
+    case .invalidWikiURL(let url):
+      return "Invalid wiki URL: \(url)"
+    case .wikiTimedOut(let health):
+      return "Timed out preparing local wiki: \(health)"
+    }
+  }
 }

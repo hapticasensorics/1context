@@ -263,6 +263,11 @@ final class OneContextDaemon: @unchecked Sendable {
       return encode(result: wikiPayload(wikiServer.status()), id: id)
     case "wiki.start":
       logger.write("wiki.start requested")
+      let current = wikiServer.status()
+      if current.running {
+        logger.write("wiki.start already running")
+        return encode(result: wikiPayload(current), id: id)
+      }
       wikiServer.startInBackground()
       logger.write("wiki.start accepted")
       return encode(result: wikiPayload(WikiServerSnapshot(running: false, url: WikiServerManager.defaultURL, health: "starting")), id: id)

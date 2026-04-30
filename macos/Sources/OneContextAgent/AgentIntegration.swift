@@ -124,14 +124,16 @@ public struct AgentConfig: Codable, Equatable {
     wikiURL: String = AgentHookExecutor.defaultWikiURL,
     statusLineLabel: String = "1Context wiki"
   ) {
-    self.wikiURL = wikiURL
+    self.wikiURL = AgentHookExecutor.normalizedWikiURL(wikiURL)
     self.statusLineLabel = statusLineLabel
   }
 
   public init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
-    self.wikiURL = try container.decodeIfPresent(String.self, forKey: .wikiURL)
-      ?? AgentHookExecutor.defaultWikiURL
+    self.wikiURL = AgentHookExecutor.normalizedWikiURL(
+      try container.decodeIfPresent(String.self, forKey: .wikiURL)
+        ?? AgentHookExecutor.defaultWikiURL
+    )
     self.statusLineLabel = try container.decodeIfPresent(String.self, forKey: .statusLineLabel)
       ?? "1Context wiki"
   }
@@ -706,7 +708,19 @@ public final class AgentIntegrationManager {
   }
 
   private func ensureAgentConfig() throws {
-    guard !fileManager.fileExists(atPath: paths.configFile.path) else { return }
+    if fileManager.fileExists(atPath: paths.configFile.path) {
+      let data = try Data(contentsOf: paths.configFile)
+      guard var config = try? JSONDecoder().decode(AgentConfig.self, from: data) else { return }
+      let raw = (try? JSONSerialization.jsonObject(with: data) as? [String: Any])?["wiki_url"] as? String
+      let normalized = AgentHookExecutor.normalizedWikiURL(raw ?? "")
+      guard raw != nil, normalized != raw else { return }
+      config.wikiURL = normalized
+      let encoder = JSONEncoder()
+      encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+      try RuntimePermissions.writePrivateData(try encoder.encode(config), to: paths.configFile)
+      return
+    }
+
     let encoder = JSONEncoder()
     encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
     try RuntimePermissions.writePrivateData(try encoder.encode(AgentConfig()), to: paths.configFile)
@@ -732,7 +746,13 @@ public enum AgentIntegrationError: Error, LocalizedError {
 }
 
 public struct AgentHookExecutor {
-  public static let defaultWikiURL = "http://localhost:3210"
+  public static let defaultWikiURL = "http://127.0.0.1:17319/for-you"
+  private static let legacyDefaultWikiURLs: Set<String> = [
+    "http://localhost:3210",
+    "http://localhost:3210/",
+    "http://127.0.0.1:3210",
+    "http://127.0.0.1:3210/"
+  ]
 
   private let paths: AgentPaths
   private let userContentDirectory: URL
@@ -766,11 +786,20 @@ public struct AgentHookExecutor {
     else {
       return defaultWikiURL
     }
-    return config.wikiURL
+    return normalizedWikiURL(config.wikiURL)
+  }
+
+  public static func normalizedWikiURL(_ value: String) -> String {
+    let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !trimmed.isEmpty else { return defaultWikiURL }
+    if legacyDefaultWikiURLs.contains(trimmed) {
+      return defaultWikiURL
+    }
+    return trimmed
   }
 
   public func execute(provider: AgentProvider, event: AgentHookEvent, inputData: Data) -> AgentHookOutput {
-    guard provider == .claude else {
+    guard provider == .claude || provider == .codex else {
       return AgentHookOutput(hookSpecificOutput: AgentHookSpecificOutput(hookEventName: event.rawValue))
     }
 
@@ -799,20 +828,7 @@ public struct AgentHookExecutor {
   }
 
   private func sessionStartContext(input: AgentHookInput?) -> String? {
-    var pointers: [String] = [
-      "View your 1Context wiki at \(wikiURL)"
-    ]
-    if fileManager.fileExists(atPath: userContentDirectory.path) {
-      pointers.append("1Context local wiki: \(userContentDirectory.path)")
-    }
-    if let repo = repoName(from: input?.cwd) {
-      pointers.append("Current repo: \(repo)")
-    }
-    if let runtimeLine = runtimeProofLine() {
-      pointers.append(runtimeLine)
-    }
-    guard !pointers.isEmpty else { return nil }
-    return pointers.joined(separator: "\n")
+    "View 1Context wiki: \(wikiURL)"
   }
 
   private func runtimeProofLine() -> String? {
@@ -872,12 +888,12 @@ public struct AgentStatusLineRenderer {
   }
 
   public func render(provider: AgentProvider, inputData: Data) -> String {
-    guard provider == .claude else { return "" }
+    guard provider == .claude || provider == .codex else { return "" }
     let config = readConfig()
     let url = AgentHookPolicy.allowsEnvironmentOverrides(environment)
       ? environment["ONECONTEXT_WIKI_URL"] ?? config.wikiURL
       : config.wikiURL
-    return "\(config.statusLineLabel): \(url)"
+    return "View 1Context wiki: \(url)"
   }
 
   private func readConfig() -> AgentConfig {
