@@ -1,0 +1,5 @@
+id = "base-memory-v1"
+version = "0.1.0"
+schema_version = "0.1"
+title = "Base Memory System"
+summary = "A small 1Context seed for agents, jobs, state machines, harness-native tools, custom tools, lived-experience, and runtime experience."

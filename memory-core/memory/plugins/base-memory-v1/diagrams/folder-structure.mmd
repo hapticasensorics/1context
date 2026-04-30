@@ -1,0 +1,40 @@
+%% title: Folder Structure
+%% description: The greenfield 1context repo structure: tiny Python loader/linker code, shareable plugin definitions, and local runtime state.
+%% version: 1context
+%% consumer: base-memory-v1
+%% order: 40
+flowchart TD
+  Repo[1Context repo] --> RootFiles[root config files]
+  RootFiles --> OneContextToml[1context.toml]
+  RootFiles --> AccountsToml[accounts.toml]
+  RootFiles --> HostToml[host.toml]
+
+  Repo --> Src[src/onectx]
+  Src --> Loader[config loader]
+  Src --> CLI[thin inspection CLI]
+  Src --> MemoryAPI[memory API]
+  MemoryAPI --> Linker[linker]
+  MemoryAPI --> LedgerAPI[ledger]
+  MemoryAPI --> ExperienceAPI[experience routing]
+  MemoryAPI --> BirthAPI[birth certificate renderer]
+
+  Repo --> Memory[memory]
+  Memory --> Plugins[plugins]
+  Memory --> Runtime[runtime]
+
+  Plugins --> Base[base-memory-v1]
+  Base --> Agents[agents]
+  Base --> Jobs[jobs]
+  Base --> StateMachines[state_machines]
+  Base --> Harnesses[harnesses]
+  Base --> Prompts[prompts]
+  Base --> Lived[lived-experiences]
+  Base --> CustomTools[custom-tools]
+  Base --> Deps[dependencies]
+  Base --> Diagrams[diagrams]
+  Base --> Policies[plugin linking native-memory providers]
+
+  Runtime --> RuntimeLedger[ledger/events.jsonl]
+  Runtime --> RuntimeExperiences[experiences]
+  Runtime --> Runs[runs future]
+  Runtime --> Proposals[proposals future]

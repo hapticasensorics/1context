@@ -1,0 +1,23 @@
+id = "memory.concept.scout"
+version = "0.1.0"
+label = "Concept Scout"
+agent = "concept-scout"
+tools = []
+prompt_paths = ["prompts/concept-scout-task.md"]
+inputs = ["talk_folder"]
+outputs = ["concept_candidate_proposal"]
+
+[params]
+date = "YYYY-MM-DD"
+audience = "private"
+talk_folder = "path"
+output_path = "path"
+
+[permissions]
+read = ["talk_folder"]
+write = ["talk_folder"]
+deny = ["raw_data.query"]
+
+[completion]
+done = ["concept_candidate_proposal.valid"]
+failure = ["missing_output", "invalid_frontmatter", "claude_error"]

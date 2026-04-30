@@ -1,0 +1,44 @@
+%% title: Hired Agent Birth
+%% description: Job ids, job params, agent config, harness, prompts, tools, accounts, host grants, and linking policy resolve into one hired_agent_uuid and one append-only birth certificate.
+%% version: 1context
+%% consumer: base-memory-v1
+%% order: 20
+flowchart TD
+  JobIds[job ids] --> Hire[hire_agent]
+  JobParams[job params] --> Hire
+  AgentProfile[agent profile] --> Snapshot[resolved config snapshot]
+  Harness[harness] --> Snapshot
+  Provider[provider and model] --> Snapshot
+  Prompts[prompt files] --> Snapshot
+  CustomTools[custom tools] --> Snapshot
+  Lived[lived-experiences] --> Snapshot
+  Accounts[account choices] --> Snapshot
+  Host[host grants] --> Snapshot
+  LinkPolicy[linking policy] --> Snapshot
+
+  Snapshot --> Hire
+  LinkPolicy --> Linker[default linker]
+  JobIds --> Linker
+  JobParams --> Linker
+  Hire --> Linker
+
+  Linker --> Mode{attach mode}
+  Mode -->|yes new| New[new experience]
+  Mode -->|yes last| Last[last for job]
+  Mode -->|yes manual| Manual[manual experience]
+  Mode -->|no| None[no experience]
+
+  New --> RuntimeExperience[runtime experience]
+  Last --> RuntimeExperience
+  Manual --> RuntimeExperience
+
+  RuntimeExperience --> NativeHomes[native-homes.toml]
+  RuntimeExperience --> HarnessMemory[harness-native memory]
+  RuntimeExperience --> Seed[seeded lived-experience]
+
+  Linker --> Birth[hired_agent.created birth certificate]
+  None --> Birth
+  RuntimeExperience --> Birth
+  Birth --> UUID[hired_agent_uuid]
+  Birth --> Ledger[append-only ledger]
+  Birth --> Fingerprints[config and policy hashes]

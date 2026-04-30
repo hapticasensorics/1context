@@ -1,0 +1,29 @@
+%% title: CLI and API Surface
+%% description: The CLI is an inspection door. The product API is hire_agent, and the future daemon/menu bar should call the same code directly.
+%% version: 1context
+%% consumer: base-memory-v1
+%% order: 50
+flowchart LR
+  User[developer or future UI] --> ProductAPI[onectx.memory.hire_agent]
+  Daemon[future daemon or menu bar] --> ProductAPI
+  CLI[1context CLI] --> Loader[load_system]
+  CLI --> ProductAPI
+
+  Loader --> Show[show]
+  Loader --> Map[map]
+  Loader --> Harnesses[harnesses]
+  Loader --> Accounts[accounts link]
+  Loader --> Memory[memory]
+  Loader --> NativeRoute[native-route]
+
+  ProductAPI --> Linker[linker]
+  Linker --> Birth[hired_agent.created]
+  Linker --> RuntimeExperience[runtime experience]
+  Linker --> Ledger[ledger]
+
+  Birth --> BirthCommand[birth]
+  Ledger --> LedgerCommand[ledger]
+
+  RuntimeExperience --> HarnessLaunch[future harness launch]
+  HarnessLaunch --> Codex[Codex harness]
+  HarnessLaunch --> Claude[Claude Code harness]

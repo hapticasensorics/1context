@@ -1,0 +1,33 @@
+id = "memory.hourly.shard_scribe"
+version = "0.1.0"
+label = "Hourly Shard Scribe"
+agent = "hourly-shard-scribe"
+tools = []
+prompt_paths = ["prompts/hourly-shard-scribe-task.md"]
+inputs = ["runtime.experience_packet"]
+outputs = ["hourly_shard_note"]
+
+[params]
+date = "YYYY-MM-DD"
+hour = "00-23"
+audience = "private"
+talk_folder = "path"
+output_path = "path"
+shard_id = "stable shard id"
+shard_label = "stream or sub-hour label"
+experience_id = "runtime experience packet id"
+experience_mode = "braided_lived_messages"
+
+[experience]
+builder = "render_hour_experience"
+mode = "braided_lived_messages"
+window = "hour_shard"
+
+[permissions]
+read = ["runtime.experience_packet", "workspace"]
+write = ["talk_folder"]
+deny = []
+
+[completion]
+done = ["hourly_shard_note.valid"]
+failure = ["missing_output", "invalid_frontmatter", "claude_error"]

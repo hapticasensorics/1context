@@ -1,0 +1,27 @@
+id = "memory.wiki.librarian"
+version = "0.1.0"
+label = "Concept Librarian"
+agent = "librarian"
+tools = []
+prompt_paths = ["prompts/librarian.md", "prompts/operator-touched-convention.md"]
+inputs = ["concept_proposals", "for_you_article", "your_context_article", "concept_dir"]
+outputs = ["concept_pages", "decided_entries", "deferred_entries"]
+
+[params]
+era = "YYYY-MM-DD"
+audience = "private"
+article_path = "path"
+your_context_path = "path"
+talk_folder = "path"
+concept_dir = "path"
+
+[permissions]
+read = ["for_you_article", "your_context_article", "talk_folder", "concept_dir"]
+write = ["concept_dir", "talk_folder"]
+deny = ["duplicate_concept_pages", "operator_touched_sections"]
+
+[completion]
+done = ["concept_page.created_expanded_or_deferred", "decision_entries.valid"]
+skip = ["no_pending_concept_proposals"]
+no_change = ["all_proposals_already_decided"]
+failure = ["missing_concept_dir", "invalid_concept_page", "invalid_decision_entry", "claude_error"]

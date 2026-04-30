@@ -1,0 +1,34 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "raw_data.query input",
+  "type": "object",
+  "required": ["sql"],
+  "additionalProperties": false,
+  "properties": {
+    "sql": {
+      "type": "string",
+      "description": "A read-only SQLite SELECT, WITH, or PRAGMA statement."
+    },
+    "params": {
+      "description": "Optional SQLite bound parameters.",
+      "oneOf": [
+        {
+          "type": "array",
+          "items": {}
+        },
+        {
+          "type": "object",
+          "additionalProperties": {}
+        }
+      ],
+      "default": []
+    },
+    "limit": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 1000,
+      "default": 100,
+      "description": "Maximum rows returned by the wrapper."
+    }
+  }
+}

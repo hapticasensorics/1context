@@ -1,0 +1,64 @@
+[[providers]]
+id = "codex"
+label = "Codex Local"
+aliases = []
+model_patterns = ["codex*"]
+read_memory_format = "codex-home"
+write_memory_formats = [
+  "codex-home",
+]
+
+[[providers]]
+id = "openai"
+label = "OpenAI API"
+account = "openai"
+aliases = []
+model_patterns = ["gpt-*", "o*"]
+read_memory_format = "openai-chat-messages"
+write_memory_formats = [
+  "openai-chat-messages",
+]
+
+[[providers]]
+id = "claude"
+label = "Claude"
+account = "anthropic"
+aliases = ["anthropic"]
+model_patterns = ["claude-*"]
+read_memory_format = "claude-project-jsonl"
+write_memory_formats = [
+  "claude-project-jsonl",
+]
+
+[[providers]]
+id = "deepseek"
+label = "DeepSeek API"
+account = "deepseek"
+aliases = []
+model_patterns = ["deepseek-*"]
+read_memory_format = "openai-chat-messages"
+write_memory_formats = [
+  "openai-chat-messages",
+]
+
+[[providers]]
+id = "kimi"
+label = "Kimi API"
+account = "kimi"
+aliases = ["moonshot"]
+model_patterns = ["kimi-*", "moonshot-*"]
+read_memory_format = "openai-chat-messages"
+write_memory_formats = [
+  "openai-chat-messages",
+]
+
+[[providers]]
+id = "gemini"
+label = "Gemini"
+account = "gemini"
+aliases = ["google"]
+model_patterns = ["gemini-*"]
+read_memory_format = "openai-chat-messages"
+write_memory_formats = [
+  "openai-chat-messages",
+]

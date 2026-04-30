@@ -54,7 +54,7 @@ let package = Package(
     ),
     .executableTarget(
       name: "OneContextDaemon",
-      dependencies: ["OneContextRuntimeSupport"]
+      dependencies: ["OneContextRuntimeSupport", "OneContextMemoryCore"]
     ),
     .executableTarget(
       name: "OneContextMenuBar",

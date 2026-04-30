@@ -1,0 +1,9 @@
+id = "claude_sessions"
+label = "Claude Code Sessions"
+kind = "session_log"
+adapter = "claude_code_jsonl"
+enabled = true
+directions = ["input"]
+paths = ["~/.claude/projects/**/*.jsonl"]
+stores = ["storage.events", "storage.sessions", "storage.artifacts"]
+purpose = "Classical importer for Claude Code project JSONL. Enable when the daemon should continuously ingest local Claude sessions."

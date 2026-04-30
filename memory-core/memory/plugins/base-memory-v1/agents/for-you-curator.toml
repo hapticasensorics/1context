@@ -1,0 +1,17 @@
+id = "for-you-curator"
+version = "0.1.0"
+harness = "claude-code"
+provider = "claude"
+model = "opus"
+tools = []
+prompt_paths = ["prompts/agent-profile.md"]
+reference_paths = [
+  "prompts/for-you-curator.md",
+  "prompts/for-you-talk-conventions.md",
+  "prompts/operator-touched-convention.md",
+]
+experience = []
+
+[memory]
+mode = "runtime_lived_experience"
+attach = "new"

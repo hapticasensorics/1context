@@ -1,0 +1,26 @@
+id = "memory.wiki.for_you_curator"
+version = "0.1.0"
+label = "For You Curator"
+agent = "for-you-curator"
+tools = []
+prompt_paths = ["prompts/for-you-curator.md", "prompts/operator-touched-convention.md"]
+inputs = ["for_you_article", "for_you_talk_folder", "editor_proposals"]
+outputs = ["article_section_updates", "decided_entries", "concern_entries"]
+
+[params]
+era = "YYYY-MM-DD"
+audience = "private"
+article_path = "path"
+talk_folder = "path"
+adjacent_talk_folders = "paths"
+
+[permissions]
+read = ["for_you_article", "talk_folder", "cited_scribe_entries", "adjacent_talk_folders_when_routed"]
+write = ["for_you_article", "talk_folder"]
+deny = ["operator_touched_sections"]
+
+[completion]
+done = ["article_section.updated_or_skipped", "decided_entries.valid"]
+skip = ["no_pending_proposals", "all_targets_operator_touched"]
+needs_approval = ["operator_touched_conflict", "claim_conflict"]
+failure = ["missing_article", "missing_talk_folder", "invalid_decision_entry", "claude_error"]

@@ -1,0 +1,25 @@
+id = "memory.wiki.contradiction_flagger"
+version = "0.1.0"
+label = "Contradiction Flagger"
+agent = "contradiction-flagger"
+tools = []
+prompt_paths = ["prompts/contradiction-flagger.md"]
+inputs = ["recent_articles", "recent_concepts", "reference_window", "talk_folders"]
+outputs = ["contradiction_entries"]
+
+[params]
+era = "YYYY-MM-DD"
+audience = "private"
+workspace = "path"
+concept_dir = "path"
+window_days = "7"
+
+[permissions]
+read = ["recent_articles", "concept_dir", "your_context_article", "reference_window", "talk_folders"]
+write = ["talk_folders"]
+deny = ["auto_resolve_contradictions", "article_mutation"]
+
+[completion]
+done = ["contradiction_entries.valid"]
+skip = ["no_recent_additions", "no_contradictions_found"]
+failure = ["missing_reference_set", "invalid_contradiction_entry", "claude_error"]

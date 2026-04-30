@@ -1,0 +1,73 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://1context.local/schemas/wiki-engine/render-manifest.schema.json",
+  "title": "1Context Wiki Render Manifest",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "rendered_at",
+    "family",
+    "engine",
+    "inputs",
+    "outputs",
+    "routes",
+    "checks"
+  ],
+  "properties": {
+    "schema_version": { "const": "wiki.render-manifest.v1" },
+    "rendered_at": { "type": "string" },
+    "family": { "type": "object" },
+    "engine": { "type": "object" },
+    "inputs": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/file_record" }
+    },
+    "outputs": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/file_record" }
+    },
+    "routes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["route", "output_path"],
+        "properties": {
+          "route": { "type": "string" },
+          "output_path": { "type": "string" },
+          "kind": { "type": "string" },
+          "source": { "type": "string" }
+        },
+        "additionalProperties": true
+      }
+    },
+    "checks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "status"],
+        "properties": {
+          "id": { "type": "string" },
+          "status": { "enum": ["passed", "failed", "skipped"] },
+          "text": { "type": "string" }
+        },
+        "additionalProperties": true
+      }
+    }
+  },
+  "$defs": {
+    "file_record": {
+      "type": "object",
+      "required": ["role", "path", "sha256", "bytes"],
+      "properties": {
+        "role": { "type": "string" },
+        "path": { "type": "string" },
+        "sha256": { "type": "string" },
+        "bytes": { "type": "integer", "minimum": 0 },
+        "content_type": { "type": "string" },
+        "route": { "type": "string" }
+      },
+      "additionalProperties": true
+    }
+  },
+  "additionalProperties": true
+}

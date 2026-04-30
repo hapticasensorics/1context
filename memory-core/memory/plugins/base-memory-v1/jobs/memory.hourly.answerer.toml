@@ -1,0 +1,27 @@
+id = "memory.hourly.answerer"
+version = "0.1.0"
+label = "Hourly Answerer"
+agent = "hourly-answerer"
+tools = []
+prompt_paths = ["prompts/hourly-answerer.md"]
+inputs = ["hourly_talk_entry", "historian_question", "hour_experience_packet"]
+outputs = ["hourly_answer_reply"]
+
+[params]
+date = "YYYY-MM-DD"
+hour = "HH"
+audience = "private"
+talk_folder = "path"
+parent_entry = "filename-stem"
+question_path = "path"
+output_path = "path"
+
+[permissions]
+read = ["parent_hourly_entry", "historian_question", "runtime_experience"]
+write = ["talk_folder"]
+deny = ["sibling_hours_by_default"]
+
+[completion]
+done = ["hourly_answer_reply.valid"]
+skip = ["question_already_answered", "insufficient_evidence"]
+failure = ["missing_parent", "missing_question", "invalid_reply", "claude_error"]

@@ -1,0 +1,31 @@
+id = "memory.hourly.block_scribe"
+version = "0.1.0"
+label = "Hourly Block Scribe"
+agent = "hourly-block-scribe"
+tools = []
+prompt_paths = ["prompts/hourly-block-scribe-task.md"]
+inputs = ["block_experience_packet"]
+outputs = ["hourly_block_result", "hourly_talk_entries"]
+
+[params]
+date = "YYYY-MM-DD"
+block_start = "00|04|08|12|16|20"
+hours = "comma-separated active hours inside the block"
+audience = "private"
+talk_folder = "path"
+manifest_path = "path"
+experience_mode = "braided_lived_messages"
+
+[experience]
+builder = "render_hour_experience"
+mode = "braided_lived_messages"
+window = "fixed_4_hour_block"
+
+[permissions]
+read = ["runtime_experience"]
+write = ["talk_folder"]
+deny = ["raw_data.query_by_default"]
+
+[completion]
+done = ["hourly_block_result.valid"]
+failure = ["missing_output", "invalid_frontmatter", "invalid_block_manifest", "claude_error"]

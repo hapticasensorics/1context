@@ -409,6 +409,7 @@ public final class MemoryCoreAdapter {
       ["wiki", "list", "--json"],
       ["wiki", "ensure", "--json"],
       ["wiki", "render", "--json"],
+      ["wiki", "render", "for-you", "--no-evidence", "--json"],
       ["wiki", "routes", "--json"],
       ["memory", "tick", "--wiki-only", "--json"],
       ["memory", "replay-dry-run", "--json"],
@@ -623,9 +624,12 @@ public struct MemoryCoreProcessRunner: MemoryCoreProcessRunning {
         result[key] = value
       }
     }
-    if result["PATH"] == nil {
-      result["PATH"] = "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
+    let extras = ["/opt/homebrew/bin", "/usr/local/bin", "/usr/bin", "/bin", "/usr/sbin", "/sbin"]
+    var pathParts = (result["PATH"] ?? "").split(separator: ":").map(String.init)
+    for extra in extras where !pathParts.contains(extra) {
+      pathParts.append(extra)
     }
+    result["PATH"] = pathParts.joined(separator: ":")
     return result
   }
 

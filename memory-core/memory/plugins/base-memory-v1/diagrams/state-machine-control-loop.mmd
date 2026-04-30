@@ -1,0 +1,39 @@
+%% title: State Machine Control Loop
+%% description: State machines normalize ticks into scoped transitions, commands, evidence checks, and ledger events.
+%% version: 1context
+%% consumer: base-memory-v1
+%% order: 60
+flowchart LR
+  Sources[source logs<br/>screens<br/>manual notes] --> Tick[tick / event<br/>time, human, job, artifact, activity]
+  Artifacts[artifact store] --> Tick
+  Tick --> Guard[guard evaluates<br/>pure ledger/state query]
+  Guard --> Transition[scoped state transition]
+  Guard --> Command[command<br/>step, spawn, wait, emit]
+  Command --> Params[job ids<br/>flat job params]
+  Params --> Hire[hire or resume agent]
+  Hire --> Birth[hired_agent.created]
+  Hire --> Harness[Codex or Claude harness]
+  Harness --> ToolUse[tools and host grants]
+  ToolUse --> Output[artifact produced]
+  Output --> Evidence[evidence check]
+  Evidence --> Outcome{job outcome}
+
+  Outcome -->|done| Continue[next tick]
+  Outcome -->|skip| Continue
+  Outcome -->|no_change| Stop[stop or wait]
+  Outcome -->|needs_approval| Wait[wait for human]
+  Outcome -->|failure| Fail[record failure]
+
+  Continue --> Artifacts
+  Wait --> Tick
+  Transition --> Ledger[ledger]
+  Birth --> Ledger[ledger]
+  Outcome --> Ledger
+
+  classDef control fill:#f5f7f3,stroke:#52615a,color:#1d2421;
+  classDef artifact fill:#fff3cf,stroke:#947335,color:#2b220c;
+  classDef runtime fill:#eaf6ee,stroke:#407d5b,color:#102416;
+
+  class Tick,Guard,Transition,Command,Params,Evidence,Outcome,Continue,Stop,Wait,Fail control;
+  class Sources,Artifacts,Output artifact;
+  class Hire,Birth,Harness,ToolUse,Ledger runtime;

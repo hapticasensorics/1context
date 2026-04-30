@@ -3,3 +3,7 @@
 tmp/
 dist/
 macos/.build/
+memory-core/.venv/
+memory-core/.pytest_cache/
+memory-core/**/__pycache__/
+memory-core/wiki-engine/node_modules/

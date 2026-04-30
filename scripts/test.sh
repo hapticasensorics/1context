@@ -42,6 +42,7 @@ test "$("$BIN_DIR/1context" --version)" = "$VERSION"
 "$BIN_DIR/1context" --help | grep -q "1context agent integrations"
 "$BIN_DIR/1context" --help | grep -q "1context agent statusline"
 "$BIN_DIR/1context" --help | grep -q "1context memory-core"
+"$BIN_DIR/1context" --help | grep -q "1context wiki"
 if "$BIN_DIR/1context" status --wat >"$STATE_DIR/unknown-arg.out" 2>&1; then
   echo "unknown arguments should fail" >&2
   exit 1

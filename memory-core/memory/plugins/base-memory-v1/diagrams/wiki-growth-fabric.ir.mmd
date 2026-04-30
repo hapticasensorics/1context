@@ -1,0 +1,43 @@
+%% title: Wiki Growth Fabric / corpus IR
+%% description: Generated from compiled 1Context state-machine IR; edit the DSL source, not this diagram.
+%% order: 40
+flowchart LR
+  corpus_idle(["idle<br/><br/>initial"])
+  corpus_scanning["scanning"]
+  corpus_routing["routing"]
+  corpus_running_agents["running_agents"]
+  corpus_building_reader_surface["building_reader_surface"]
+  corpus_review_ready["review_ready"]
+  corpus_blocked["blocked"]
+  corpus_idle -->|"wiki.fabric.tick<br/><br/>step: scan_wiki_inventory&lt;br/&gt;expect: wiki_inventory.ready&lt;br/&gt;emit: wiki.inventory.ready"| corpus_scanning
+  corpus_scanning -->|"wiki.inventory.ready<br/><br/>step: derive_role_route_plan&lt;br/&gt;expect: role_route_plan.ready&lt;br/&gt;emit: wiki.route_plan.ready"| corpus_routing
+  corpus_routing -->|"wiki.route_plan.ready<br/><br/>parallel: max runtime_policy.max_concurrent_agents&lt;br/&gt;spawn: memory.wiki.historian x role_route_plan.historian_jobs&lt;br/&gt;spawn: memory.daily.editor x role_route_plan.editor_jobs&lt;br/&gt;spawn: memory.hourly.answerer x role_route_plan.hourly_answerer_jobs&lt;br/&gt;spawn: memory.wiki.for_you_curator x role_route_plan.for_you_curator_jobs&lt;br/&gt;spawn: memory.wiki.context_curator x role_route_plan.context_curator_jobs&lt;br/&gt;spawn: memory.wiki.librarian x role_route_plan.librarian_jobs&lt;br/&gt;spawn: memory.wiki.librarian_sweep x role_route_plan.librarian_sweep_jobs&lt;br/&gt;spawn: memory.wiki.biographer x role_route_plan.biographer_jobs&lt;br/&gt;spawn: memory.wiki.contradiction_flagger x role_route_plan.contradiction_jobs&lt;br/&gt;spawn: memory.wiki.redactor x role_route_plan.redaction_jobs&lt;br/&gt;expect: agent_layer.closed"| corpus_running_agents
+  corpus_running_agents -->|"wiki.agent_layer.closed<br/><br/>step: run_memory_wiki_build_inputs&lt;br/&gt;step: run_wiki_engine_render&lt;br/&gt;expect: reader_surface.ready&lt;br/&gt;emit: wiki.reader_surface.ready"| corpus_building_reader_surface
+  corpus_building_reader_surface -->|"wiki.reader_surface.ready"| corpus_review_ready
+  corpus_review_ready -.->|"corpus.changed<br/><br/>emit: wiki.fabric.tick"| corpus_review_ready
+  corpus_review_ready -.->|"roles.need_reconfiguration<br/><br/>emit: wiki.fabric.tick"| corpus_review_ready
+
+  subgraph emitted_events["Emitted events"]
+    emit_1_0["wiki.inventory.ready"]
+    emit_2_1["wiki.route_plan.ready"]
+    emit_3_2["wiki.agent_layer.closed"]
+    emit_4_3["wiki.reader_surface.ready"]
+    emit_6_4["wiki.fabric.tick"]
+    emit_7_5["wiki.fabric.tick"]
+  end
+
+  subgraph signals["Signals"]
+    signal_corpus_changed["corpus.changed<br/><br/>filesystem.changed(workspace) or ledger.has(event in ['talk.entry.created', 'concept.page.updated', 'article.page.upd..."]
+    signal_roles_need_reconfiguration["roles.need_reconfiguration<br/><br/>wiki_inventory.ready and (corpus.changed or timer.tick or human.requested_review)"]
+    signal_operator_touch_blocks_mutation["operator_touch_blocks_mutation<br/><br/>page.has_operator_touched_marker and proposed_job.mutates_same_section"]
+  end
+
+  classDef state fill:#eef6ff,stroke:#2f6fa3,stroke-width:1px,color:#102033;
+  classDef initial fill:#eaf8ef,stroke:#2d7d46,stroke-width:2px,color:#102033;
+  class corpus_idle initial;
+  class corpus_scanning state;
+  class corpus_routing state;
+  class corpus_running_agents state;
+  class corpus_building_reader_surface state;
+  class corpus_review_ready state;
+  class corpus_blocked state;

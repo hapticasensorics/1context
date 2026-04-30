@@ -1,0 +1,50 @@
+%% title: Memory System Fabric
+%% description: Top-level state-machine view of the 1Context memory system.
+%% order: 34
+flowchart TD
+  Clock["Clock and change sources<br/><br/>daemon tick, new Codex/Claude activity, filesystem changes, ledger events, and direct human requests can all make memory work available.<br/><br/>This is the outer control loop, not a single batch script."]
+
+  Ingest["Ingest and normalize runtime events<br/><br/>Import session activity into lakestore/runtime events.<br/>Keep source harness, session id, cwd, role/kind, timestamp order, and stable row ids.<br/><br/>Default retention favors user and assistant messages; tool traces are retained/loaded only when policy says they help."]
+
+  Plan["Cheap route planner<br/><br/>Decide what work should exist before hiring agents:<br/>active hours, fixed 4-hour blocks, oversized hour shards, aggregate jobs, daily editor jobs, concept scout jobs, and wiki route ticks.<br/><br/>Planning is meant to save time, not become a metrology project."]
+
+  Experience["Render lived-experience packets<br/><br/>For each planned hire, render/reuse a packet from ordered source events.<br/>Braided packets preserve stream identity, global weave, source window, source sessions, row count, renderer version, and hashes.<br/><br/>If a packet exceeds token budget, split by stream/time and route through shard plus aggregate jobs."]
+
+  Birth["Hired agent birth<br/><br/>Create a first-class birth certificate:<br/>job id, provider/model, account mode, prompt stack, output contract, grants/denies, concurrency slot, and experience_packet path/mode/hash/source window.<br/><br/>Critical rule: agent-context.md is loaded directly as inherited lived experience, not treated as a reference file the agent may or may not read."]
+
+  Harness["Claude account_clean harness<br/><br/>Use the local Claude subscription login.<br/>Not bare. Use no session persistence, temporary cwd, no CLAUDE.md, explicit tools, and disabled slash/plugins/MCP as much as practical.<br/><br/>The job prompt remains separate from lived experience so packets can be reused."]
+
+  AgentLayer["Parallel hired-agent layer<br/><br/>Run under runtime_policy.max_concurrent_agents.<br/>Current fast path favors fixed 4-hour Opus block scribes, with one-hour fallback and stream-first shard handling for oversized hours.<br/><br/>Every agent must end as done, skipped, no_change, needs_retry, needs_approval, or failed."]
+
+  Validate["Validate and settle outputs<br/><br/>Mechanical checks first: file exists, frontmatter parses, kind matches contract, timestamp is in window, body is non-empty, block manifests close each hour.<br/><br/>Skip, forget, defer, and no-talk are valid memory decisions, not missing work."]
+
+  WikiFabric["Wiki growth fabric submachine<br/><br/>Scan pages, concepts, talk folders, operator-touched markers, open questions, concerns, contradictions, and stale tier outputs.<br/><br/>Derive role-route-plan.json, then activate only needed historian, editor, answerer, curator, librarian, biographer, contradiction, sweep, and redactor circuits."]
+
+  ReaderLoop["Wiki reader loop submachine<br/><br/>Build deterministic reader inputs from accepted source state:<br/>topics, projects, open questions, bracket staging, backlinks, concept staging with What links here, landing page, and this-week digest.<br/><br/>Source markdown is not clobbered by staging."]
+
+  Replay["Historic event replay<br/><br/>Before trusting live real-time cadence, replay actual past Codex/Claude events with an event-stream clock.<br/>Derive hourly/daily/weekly fires, dry-run or live-fire the same runners, capture snapshots, inject failures, and record latency/cost/quality evidence.<br/><br/>Replay tunes daemon cadence; it does not replace the live system."]
+
+  Ledger["Append-only ledger feedback<br/><br/>Record event import, route plan, experience render, hired-agent birth, harness launch, output validation, wiki routing, reader build, retries, approvals, and cycle summary.<br/><br/>The next daemon tick reads this as state."]
+
+  DSL["DSL representation<br/><br/>memory_system_fabric is the top-level machine.<br/>for_you_day handles day/hour/block memory jobs.<br/>wiki_growth_fabric handles dynamic wiki role routing.<br/>wiki_reader_loop handles deterministic reader surfaces.<br/><br/>The compiled IR diagrams are the honest executable-contract view."]
+
+  Clock --> Ingest --> Plan --> Experience --> Birth --> Harness --> AgentLayer --> Validate --> WikiFabric --> ReaderLoop --> Ledger --> Clock
+  Ingest -. historic stream .-> Replay
+  Replay -. cadence and failure evidence .-> Plan
+  Plan -. configures .-> DSL
+  Experience -. first-class attachment .-> Birth
+  AgentLayer -. terminal outcomes .-> Ledger
+  WikiFabric -. role jobs may hire more agents .-> AgentLayer
+  ReaderLoop -. generated surfaces .-> Ledger
+
+  classDef control fill:#eef6ff,stroke:#2f6fa3,color:#102033;
+  classDef experience fill:#eaf8ef,stroke:#2d7d46,color:#102033;
+  classDef agent fill:#fff4d7,stroke:#9a6b1f,color:#251600;
+  classDef wiki fill:#f4ecff,stroke:#7a54a3,color:#211033;
+  classDef ledger fill:#f7f3ea,stroke:#665c4a,color:#201b12;
+
+  class Clock,Ingest,Plan,DSL control;
+  class Experience,Birth experience;
+  class Harness,AgentLayer,Validate agent;
+  class WikiFabric,ReaderLoop,Replay wiki;
+  class Ledger ledger;

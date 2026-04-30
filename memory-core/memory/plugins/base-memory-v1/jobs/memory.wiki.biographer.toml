@@ -1,0 +1,26 @@
+id = "memory.wiki.biographer"
+version = "0.1.0"
+label = "For You Biographer"
+agent = "biographer"
+tools = []
+prompt_paths = ["prompts/biographer.md", "prompts/operator-touched-convention.md"]
+inputs = ["for_you_article", "your_context_article", "prior_biography_sections"]
+outputs = ["biography_section_update"]
+
+[params]
+era = "YYYY-MM-DD"
+audience = "private"
+article_path = "path"
+your_context_path = "path"
+prior_articles = "paths"
+
+[permissions]
+read = ["for_you_article", "your_context_article", "prior_for_you_articles"]
+write = ["for_you_article"]
+deny = ["non_biography_sections", "operator_touched_sections"]
+
+[completion]
+done = ["biography.updated_or_skipped"]
+skip = ["too_few_filled_day_sections", "operator_touched_biography"]
+needs_approval = ["operator_touched_conflict"]
+failure = ["missing_article", "missing_biography_marker", "invalid_update", "claude_error"]

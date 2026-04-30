@@ -1,0 +1,33 @@
+# Wiki Growth Fabric
+
+## How to read it
+
+This is the FPGA-like layer for the wiki: the corpus is scanned into facts,
+facts produce a route plan, and the route plan activates only the editor,
+curator, librarian, biographer, redactor, historian, and contradiction circuits
+needed for the next tick.
+
+```mermaid
+flowchart TD
+  A["Wiki corpus changes<br/><br/>New hourly/day talk entries arrive.<br/>A curator edits an article section.<br/>A librarian creates or expands a concept page.<br/>The operator marks a paragraph or section as operator-touched.<br/>A redactor creates tier output.<br/>A generated page becomes stale.<br/><br/>The corpus is a living circuit board, not a fixed batch DAG."]
+
+  B["Scan wiki inventory<br/><br/>Deterministic fact pass over:<br/>- article pages and section markers<br/>- concept pages, aliases, categories, project metadata<br/>- talk folders and entry kinds<br/>- open questions, concerns, contradictions<br/>- operator-touched markers<br/>- generated artifact freshness<br/><br/>Output: wiki_inventory.json"]
+
+  C["Derive role route plan<br/><br/>This is the FPGA-like reconfiguration step.<br/>The machine decides which agent circuits should exist for this tick:<br/>- historian when fresh evidence needs day/week framing<br/>- hourly answerer when historian questions target an hour<br/>- editor when talk evidence lacks accepted proposals<br/>- curator when proposals can mutate article sections<br/>- librarian when candidates cross notability or existing pages need expansion<br/>- librarian sweep when concepts fade<br/>- biographer when weekly continuity needs a rewrite<br/>- contradiction flagger when claims drift<br/>- redactor when tier output is stale<br/><br/>Output: role-route-plan.json"]
+
+  D["Hard gates and ownership<br/><br/>Before any mutating role is queued:<br/>- operator-touched sections block mutation<br/>- newest-overwrites applies only when target is not touched<br/>- expand existing concept before creating duplicate page<br/>- skip / forget / defer are valid outputs<br/>- each role owns explicit pages, sections, or talk folders<br/><br/>This prevents growth from becoming clobbering."]
+
+  E["Parallel hired-agent layer<br/><br/>The plan activates only the roles needed now.<br/>All roles write audit-visible artifacts:<br/>historian entries, hourly answers, editor proposals, curator decisions, librarian DECIDED/DEFERRED entries, concept pages, contradiction flags, redaction outputs, biography edits.<br/><br/>Concurrency follows runtime_policy.max_concurrent_agents."]
+
+  F["Settled agent layer<br/><br/>Every routed job must end as:<br/>done, skipped, deferred, no_change, needs_approval, or failure.<br/><br/>Skipping and forgetting are first-class memory decisions, not missing work."]
+
+  G["Build reader surface<br/><br/>memory.wiki.build_inputs runs deterministically:<br/>- topics/projects/open-questions<br/>- bracket aliases and external fallbacks<br/>- backlinks index<br/>- staged concept pages with What links here<br/>- landing page<br/>- this-week digest"]
+
+  H["Review-ready wiki<br/><br/>The wiki is navigable:<br/>outbound links, inbound backlinks, generated indexes, open worklist, recent-changes digest, staged concepts, and talk-folder audit trail.<br/><br/>New changes feed the next fabric tick."]
+
+  I["State-machine DSL representation<br/><br/>Scopes:<br/>corpus, page, talk, agent_role<br/><br/>Clocks:<br/>filesystem, ledger, timer, human<br/><br/>Evidence:<br/>wiki_inventory.ready, role_route_plan.ready, agent_layer.closed, reader_surface.ready<br/><br/>Transitions are signal-driven, so the system can grow new page/role circuits over time."]
+
+  A --> B --> C --> D --> E --> F --> G --> H
+  H --> A
+  C --> I
+```

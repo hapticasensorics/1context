@@ -1,0 +1,6 @@
+title = "1Context Private Wiki"
+workspace_version = "0.1.0"
+
+[engine]
+package = "@1context/wiki-engine"
+path = "../wiki-engine"

@@ -1,0 +1,12 @@
+id = "2026-04-29-hourly-block-role-backfill-v1"
+title = "Hourly block role backfill receipt"
+version = "0.1.0"
+kind = "backfill"
+description = "Records the e08 shift from isolated one-hour scribes toward fixed four-hour block agents with explicit skip/forget outcomes."
+contract = "Hourly block scribes may produce talk entries, explicit no-op/skip/forget outcomes, or bounded retry requests without silently disappearing."
+affects = ["hourly_block_scribe", "for_you_day", "wiki_growth_fabric"]
+apply_mode = "receipt_only"
+
+[verification]
+kind = "plugin_path_exists"
+path = "prompts/hourly-block-scribe.md"

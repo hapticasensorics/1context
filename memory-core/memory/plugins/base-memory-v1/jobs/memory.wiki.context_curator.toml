@@ -1,0 +1,24 @@
+id = "memory.wiki.context_curator"
+version = "0.1.0"
+label = "Your Context Curator"
+agent = "context-curator"
+tools = []
+prompt_paths = ["prompts/context-curator.md", "prompts/operator-touched-convention.md"]
+inputs = ["your_context_article", "your_context_talk_folder", "ycx_proposals"]
+outputs = ["your_context_updates", "decided_entries", "concern_entries"]
+
+[params]
+article_path = "path"
+talk_folder = "path"
+audience = "private"
+
+[permissions]
+read = ["your_context_article", "your_context_talk_folder", "cited_scribe_entries"]
+write = ["your_context_article", "your_context_talk_folder"]
+deny = ["operator_touched_sections", "raw_events"]
+
+[completion]
+done = ["your_context.updated_or_skipped", "decided_entries.valid"]
+skip = ["no_pending_ycx_proposals", "all_targets_operator_touched"]
+needs_approval = ["operator_touched_conflict", "schema_mismatch"]
+failure = ["missing_article", "missing_talk_folder", "invalid_decision_entry", "claude_error"]

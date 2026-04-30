@@ -1,0 +1,9 @@
+active_plugin = "base-memory-v1"
+plugin_dirs = ["memory/plugins", "memory/runtime/plugins"]
+runtime_dir = "memory/runtime"
+storage_dir = "storage/lakestore"
+accounts_file = "accounts.toml"
+
+[runtime_policy]
+max_concurrent_agents = 8
+default_harness_isolation = "account_clean"

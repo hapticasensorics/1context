@@ -1,0 +1,71 @@
+%% title: Memory System Fabric / cycle IR
+%% description: Generated from compiled 1Context state-machine IR; edit the DSL source, not this diagram.
+%% order: 40
+flowchart LR
+  cycle_idle(["idle<br/><br/>initial"])
+  cycle_ingesting["ingesting"]
+  cycle_planning["planning"]
+  cycle_rendering_experience["rendering_experience"]
+  cycle_birthing_agents["birthing_agents"]
+  cycle_running_agents["running_agents"]
+  cycle_validating["validating"]
+  cycle_routing_wiki["routing_wiki"]
+  cycle_building_reader_surface["building_reader_surface"]
+  cycle_complete["complete"]
+  cycle_blocked["blocked"]
+  cycle_retryable["retryable"]
+  cycle_failed["failed"]
+  cycle_idle -.->|"memory.work_available<br/><br/>step: import_session_events&lt;br/&gt;step: normalize_runtime_events&lt;br/&gt;expect: runtime_events.ready&lt;br/&gt;expect: source_import.fresh&lt;br/&gt;emit: memory.events.ready"| cycle_ingesting
+  cycle_ingesting -.->|"source_import.stale<br/><br/>step: record_source_import_staleness&lt;br/&gt;emit: memory.cycle.deferred_for_fresh_events"| cycle_blocked
+  cycle_ingesting -->|"memory.events.ready<br/><br/>step: discover_active_hours&lt;br/&gt;step: derive_fixed_4_hour_blocks&lt;br/&gt;step: derive_oversized_hour_shards&lt;br/&gt;step: derive_daily_and_wiki_work&lt;br/&gt;expect: route_plan.ready&lt;br/&gt;emit: memory.route_plan.ready"| cycle_planning
+  cycle_planning -->|"memory.route_plan.ready<br/><br/>parallel: max runtime_policy.max_concurrent_renderers&lt;br/&gt;step: render_braided_block_experience&lt;br/&gt;step: render_hour_or_shard_experience&lt;br/&gt;step: reuse_or_render_day_experience&lt;br/&gt;expect: experience_packets.ready&lt;br/&gt;emit: memory.experience_packets.ready"| cycle_rendering_experience
+  cycle_rendering_experience -->|"memory.experience_packets.ready<br/><br/>parallel: max runtime_policy.max_concurrent_agents&lt;br/&gt;spawn: memory.hourly.block_scribe x route_plan.block_scribe_jobs&lt;br/&gt;spawn: memory.hourly.shard_scribe x route_plan.shard_scribe_jobs&lt;br/&gt;spawn: memory.hourly.aggregate_scribe x route_plan.aggregate_scribe_jobs&lt;br/&gt;spawn: memory.daily.editor x route_plan.daily_editor_jobs&lt;br/&gt;spawn: memory.concept.scout x route_plan.concept_scout_jobs&lt;br/&gt;expect: hired_agents.born&lt;br/&gt;emit: memory.hired_agents.born"| cycle_birthing_agents
+  cycle_birthing_agents -->|"memory.hired_agents.born<br/><br/>step: launch_claude_account_clean_harness"| cycle_running_agents
+  cycle_running_agents -.->|"agent.layer_closed<br/><br/>step: validate_talk_entries_and_job_results&lt;br/&gt;expect: agent_outputs.closed&lt;br/&gt;emit: memory.agent_outputs.closed"| cycle_validating
+  cycle_validating -->|"memory.agent_outputs.closed<br/><br/>step: run_wiki_growth_fabric&lt;br/&gt;expect: wiki_route_plan.ready&lt;br/&gt;emit: wiki.fabric.tick"| cycle_routing_wiki
+  cycle_validating -.->|"wiki.needs_routing<br/><br/>step: run_wiki_growth_fabric&lt;br/&gt;expect: wiki_route_plan.ready&lt;br/&gt;emit: wiki.fabric.tick"| cycle_routing_wiki
+  cycle_routing_wiki -->|"wiki.agent_layer.closed<br/><br/>step: run_wiki_reader_loop&lt;br/&gt;step: render_wiki_engine_families&lt;br/&gt;expect: reader_surface.ready&lt;br/&gt;emit: memory.reader_surface.ready"| cycle_building_reader_surface
+  cycle_building_reader_surface -->|"memory.reader_surface.ready<br/><br/>step: append_cycle_summary_event&lt;br/&gt;emit: memory.cycle.complete"| cycle_complete
+  cycle_running_agents -->|"approval.needed<br/><br/>emit: memory.cycle.blocked_on_approval"| cycle_blocked
+  cycle_idle -->|"daemon<br/><br/>emit: memory.work_available"| cycle_idle
+
+  subgraph emitted_events["Emitted events"]
+    emit_1_0["memory.events.ready"]
+    emit_2_1["memory.cycle.deferred_for_fresh_events"]
+    emit_8_2["memory.route_plan.ready"]
+    emit_9_3["memory.experience_packets.ready"]
+    emit_11_4["memory.hired_agents.born"]
+    emit_13_5["memory.agent_outputs.closed"]
+    emit_14_6["wiki.fabric.tick"]
+    emit_15_7["wiki.fabric.tick"]
+    emit_16_8["memory.reader_surface.ready"]
+    emit_17_9["memory.cycle.complete"]
+    emit_19_10["memory.cycle.blocked_on_approval"]
+    emit_20_11["memory.work_available"]
+  end
+
+  subgraph signals["Signals"]
+    signal_memory_work_available["memory.work_available<br/><br/>activity.has_new_rows or filesystem.changed(wiki_workspace) or human.requested_memory_run or daemon.tick"]
+    signal_source_import_stale["source_import.stale<br/><br/>required importer cursor older than runtime_policy.max_importer_staleness"]
+    signal_replay_requested["replay.requested<br/><br/>human.requested_replay or daemon.requested_replay_experiment"]
+    signal_experience_too_large["experience.too_large<br/><br/>estimated_prompt_tokens &gt; runtime_policy.max_prompt_tokens"]
+    signal_agent_layer_closed["agent.layer_closed<br/><br/>all planned hires have terminal outcome events"]
+    signal_wiki_needs_routing["wiki.needs_routing<br/><br/>memory_artifacts.changed or wiki_source.changed or human.requested_review"]
+    signal_cycle_needs_retry["cycle.needs_retry<br/><br/>ledger.has(needs_retry) and retry_budget.remaining"]
+  end
+
+  classDef state fill:#eef6ff,stroke:#2f6fa3,stroke-width:1px,color:#102033;
+  classDef initial fill:#eaf8ef,stroke:#2d7d46,stroke-width:2px,color:#102033;
+  class cycle_idle initial;
+  class cycle_ingesting state;
+  class cycle_planning state;
+  class cycle_rendering_experience state;
+  class cycle_birthing_agents state;
+  class cycle_running_agents state;
+  class cycle_validating state;
+  class cycle_routing_wiki state;
+  class cycle_building_reader_surface state;
+  class cycle_complete state;
+  class cycle_blocked state;
+  class cycle_retryable state;
+  class cycle_failed state;

@@ -1,0 +1,18 @@
+version = "0.1.0"
+linker = "onectx.memory.default"
+linker_version = "0.1"
+ledger_schema_version = "0.1"
+
+default_attach = "last_for_job"
+create_if_missing = true
+lived_experience_start = "2026-04-24"
+
+inject_order = [
+  "lived_experience_seed",
+  "harness_native_experience",
+]
+
+[scope]
+job = true
+agent = false
+plugin = false

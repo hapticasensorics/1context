@@ -17,8 +17,9 @@ trap cleanup EXIT
 
 LISTING="$TMPDIR/listing.txt"
 tar -tvzf "$ARCHIVE" > "$LISTING"
+FULL_MANIFEST="$TMPDIR/full-manifest.txt"
 MANIFEST="$TMPDIR/manifest.txt"
-tar -tzf "$ARCHIVE" | LC_ALL=C sort > "$MANIFEST"
+tar -tzf "$ARCHIVE" | LC_ALL=C sort > "$FULL_MANIFEST"
 
 archive_name="$(basename "$ARCHIVE")"
 if [[ ! "$archive_name" =~ ^1context-([0-9]+\.[0-9]+\.[0-9]+)-macos-(arm64)\.tar\.gz$ ]]; then
@@ -55,6 +56,8 @@ $ROOT_NAME/scripts/
 $ROOT_NAME/scripts/install-macos-launch-agents.sh
 $ROOT_NAME/scripts/uninstall-macos-launch-agents.sh
 EOF
+grep -v "^$ROOT_NAME/1Context.app/Contents/Resources/memory-core\\(/\\|$\\)" "$FULL_MANIFEST" > "$MANIFEST"
+
 if grep -Fxq "$ROOT_NAME/1Context.app/Contents/CodeResources" "$MANIFEST"; then
   echo "$ROOT_NAME/1Context.app/Contents/CodeResources" >> "$EXPECTED_MANIFEST"
 fi
@@ -64,6 +67,20 @@ if ! diff -u "$EXPECTED_MANIFEST" "$MANIFEST"; then
   echo "Release archive manifest does not match expected contents." >&2
   exit 1
 fi
+
+for required in \
+  "$ROOT_NAME/1Context.app/Contents/Resources/memory-core/pyproject.toml" \
+  "$ROOT_NAME/1Context.app/Contents/Resources/memory-core/uv.lock" \
+  "$ROOT_NAME/1Context.app/Contents/Resources/memory-core/bin/1context-memory-core" \
+  "$ROOT_NAME/1Context.app/Contents/Resources/memory-core/src/onectx/memory_core_cli.py" \
+  "$ROOT_NAME/1Context.app/Contents/Resources/memory-core/src/onectx/wiki/server.py" \
+  "$ROOT_NAME/1Context.app/Contents/Resources/memory-core/wiki-engine/package-lock.json" \
+  "$ROOT_NAME/1Context.app/Contents/Resources/memory-core/wiki-engine/theme/js/enhance.js"; do
+  if ! grep -Fxq "$required" "$FULL_MANIFEST"; then
+    echo "Release archive missing bundled memory-core file: $required" >&2
+    exit 1
+  fi
+done
 
 if ! awk '{ if ($3 != "root" || $4 != "wheel") exit 1 }' "$LISTING"; then
   echo "Release archive contains unexpected owner/group metadata." >&2

@@ -1,0 +1,185 @@
+id = "codex-harness"
+version = "0.1.0"
+kind = "agent_harness"
+label = "Codex Harness"
+runner = "codex"
+command = "codex exec"
+primary_memory_format = "codex-home"
+purpose = "Use the open-source Codex CLI agent loop as a 1Context worker harness without letting Codex's default coding identity become the agent identity."
+
+endpoint_protocols = [
+  "responses",
+  "responses-compatible",
+]
+
+default_tools = [
+  "workspace.read",
+  "workspace.write",
+  "patch.apply",
+  "shell.exec",
+  "artifact.write",
+  "web.search",
+  "web.open",
+  "browser.inspect",
+  "image.input",
+  "computer.use",
+  "mcp.client",
+  "subagent.spawn",
+]
+
+optional_tools = []
+
+receives = [
+  "model_instructions_file",
+  "task_prompt",
+  "lived_experience",
+  "codex_home",
+  "workspace",
+]
+
+captures = [
+  "codex_home",
+  "stdout_jsonl",
+  "diff",
+  "commands",
+  "artifacts",
+  "summary",
+]
+
+[execution]
+mode = "non_interactive"
+command = "codex exec"
+json_events = true
+output_last_message = true
+isolated_codex_home = true
+ephemeral = false
+runtime_probe = "codex debug prompt-input"
+internal_default = true
+user_facing_cli_required = false
+required_exec_flags = [
+  "--ignore-user-config",
+  "--ignore-rules",
+  "--dangerously-bypass-approvals-and-sandbox",
+  "--json",
+]
+required_config = [
+  "project_doc_max_bytes=0",
+  "approval_policy=\"never\"",
+  "sandbox_mode=\"danger-full-access\"",
+  "model_instructions_file=\"<plugin>/prompts/codex-harness.instructions.md\"",
+]
+
+[execution.templates]
+new = "CODEX_HOME=<codex_home> codex exec --ignore-user-config --ignore-rules --dangerously-bypass-approvals-and-sandbox --json -c project_doc_max_bytes=0 -c approval_policy=\"never\" -c sandbox_mode=\"danger-full-access\" -c model_instructions_file=\"<plugin>/prompts/codex-harness.instructions.md\" <prompt>"
+resume = "CODEX_HOME=<codex_home> codex exec resume --last --ignore-user-config --ignore-rules --dangerously-bypass-approvals-and-sandbox --json -c project_doc_max_bytes=0 -c approval_policy=\"never\" -c sandbox_mode=\"danger-full-access\" -c model_instructions_file=\"<plugin>/prompts/codex-harness.instructions.md\" <prompt>"
+prompt_input = "CODEX_HOME=<codex_home> codex debug prompt-input -c project_doc_max_bytes=0 -c sandbox_mode=\"danger-full-access\" -c model_instructions_file=\"<plugin>/prompts/codex-harness.instructions.md\" <prompt>"
+
+[native_memory]
+home = "harnesses/codex/CODEX_HOME"
+subdirs = [
+  "sessions",
+]
+source_of_truth = true
+resume_command = "CODEX_HOME=<experience>/harnesses/codex/CODEX_HOME codex exec resume --last --ignore-user-config --ignore-rules --dangerously-bypass-approvals-and-sandbox --json -c project_doc_max_bytes=0"
+notes = "Do not hand-write Codex session files. Let Codex create and resume its own native state inside this CODEX_HOME."
+
+[auth]
+default_mode = "existing_codex_login"
+modes = [
+  "existing_codex_login",
+  "chatgpt",
+  "api_key",
+  "isolated_login",
+]
+existing_codex_login = "Use the user's existing Codex/ChatGPT login by symlinking only auth.json into the fresh runtime CODEX_HOME."
+chatgpt = "Use Codex CLI cached ChatGPT subscription credentials from the selected CODEX_HOME or OS keyring."
+api_key = "Use host-provided OpenAI API credentials; adapters may create an isolated CODEX_HOME with `codex login --with-api-key`."
+isolated_login = "Ask the user to log into this runtime CODEX_HOME separately when strict auth isolation is needed."
+api_key_env = "OPENAI_API_KEY"
+auth_home_env = "CODEX_HOME"
+existing_auth_source = "~/.codex/auth.json"
+link_auth_into_home = "auth.json"
+link_strategy = "symlink"
+auth_secret_recorded = false
+
+[prompt_control]
+model_instructions_file = "prompts/codex-harness.instructions.md"
+developer_instructions = true
+project_doc_max_bytes = 0
+ignore_user_config = true
+ignore_rules = true
+load_project_agents_md = false
+
+[permissions]
+sandbox = "danger-full-access"
+approval_policy = "never"
+web_search = true
+network = true
+
+[capture_paths]
+stdout_jsonl = "harnesses/codex/runs/latest/events.jsonl"
+final_message = "harnesses/codex/runs/latest/final-message.md"
+prompt_input = "harnesses/codex/runs/latest/prompt-input.json"
+
+[adapter_notes]
+approval_policy_is_config_override = true
+developer_instructions_are_visible = true
+model_instructions_file_replaces_base_prompt = true
+project_docs_disabled_by = "project_doc_max_bytes=0"
+primary_event_capture = "codex_home"
+readable_event_capture = "stdout_jsonl"
+native_rollout_schema = "codex-owned; do not forge"
+verified_so_far = "native CODEX_HOME creation, existing auth symlink, prompt boundary probe, live exec, and resume --last"
+clone_boundary_requires = [
+  "pre-created isolated CODEX_HOME",
+  "isolated auth home",
+  "project_doc_max_bytes=0",
+  "explicit developer_instructions",
+  "ignore_user_config",
+  "ignore_rules",
+  "prompt-input inspection",
+  "recorded auth source",
+]
+known_prompt_scaffolding = [
+  "Codex permissions instructions",
+  "Codex system skills list",
+]
+default_home_leaks = [
+  "user skills/plugins",
+  "project AGENTS.md",
+  "user config.toml",
+]
+raw_exec_resume_leaks = [
+  "project AGENTS.md unless --ignore-user-config and project_doc_max_bytes=0 are applied",
+  "default read-only sandbox unless the harness applies sandbox config",
+]
+known_cli_stderr = [
+  "codex exec may log 'failed to record rollout items: thread ... not found' even when the JSONL stream, final message, native session file, and resume --last all succeed",
+]
+
+[stability]
+public_surfaces = [
+  "codex exec",
+  "CODEX_HOME",
+  "config.toml",
+  "model_instructions_file",
+  "developer_instructions",
+  "sandbox_mode",
+  "approval_policy",
+  "tools.web_search",
+  "mcp_servers",
+  "AGENTS.md",
+]
+volatile_surfaces = [
+  "Codex internal session schema",
+  "feature flags",
+  "app-server",
+  "exec-server",
+  "rules",
+]
+
+[model_requirements]
+tool_use = true
+patch_reliability = true
+long_horizon = true
+responses_compatible = true

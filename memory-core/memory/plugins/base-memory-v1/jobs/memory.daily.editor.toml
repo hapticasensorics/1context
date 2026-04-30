@@ -1,0 +1,23 @@
+id = "memory.daily.editor"
+version = "0.1.0"
+label = "Daily Editor"
+agent = "daily-editor"
+tools = []
+prompt_paths = ["prompts/daily-editor-task.md"]
+inputs = ["talk_folder"]
+outputs = ["daily_section_proposal"]
+
+[params]
+date = "YYYY-MM-DD"
+audience = "private"
+talk_folder = "path"
+output_path = "path"
+
+[permissions]
+read = ["talk_folder"]
+write = ["talk_folder"]
+deny = ["raw_data.query"]
+
+[completion]
+done = ["daily_section_proposal.valid"]
+failure = ["missing_output", "invalid_frontmatter", "claude_error"]

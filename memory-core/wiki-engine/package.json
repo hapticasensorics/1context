@@ -1,0 +1,13 @@
+{
+  "name": "@1context/wiki-engine",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "test": "node --test src/**/*.test.mjs",
+    "render": "node tools/render-to-dir.mjs"
+  },
+  "dependencies": {
+    "marked": "^18.0.2",
+    "gray-matter": "^4.0.3"
+  }
+}

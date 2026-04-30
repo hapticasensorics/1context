@@ -1,0 +1,25 @@
+id = "memory.hourly.aggregate_scribe"
+version = "0.1.0"
+label = "Hourly Aggregate Scribe"
+agent = "hourly-aggregate-scribe"
+tools = []
+prompt_paths = ["prompts/hourly-aggregate-scribe-task.md"]
+inputs = ["hourly_shard_notes"]
+outputs = ["hourly_talk_entry"]
+
+[params]
+date = "YYYY-MM-DD"
+hour = "00-23"
+audience = "private"
+talk_folder = "path"
+output_path = "path"
+shard_paths = "newline-separated shard witness files"
+
+[permissions]
+read = ["talk_folder", "workspace"]
+write = ["talk_folder"]
+deny = []
+
+[completion]
+done = ["hourly_talk_entry.valid"]
+failure = ["missing_output", "invalid_frontmatter", "claude_error"]

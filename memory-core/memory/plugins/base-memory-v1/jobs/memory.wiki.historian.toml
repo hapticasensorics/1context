@@ -1,0 +1,24 @@
+id = "memory.wiki.historian"
+version = "0.1.0"
+label = "Wiki Historian"
+agent = "wiki-historian"
+tools = []
+prompt_paths = ["prompts/historian.md"]
+inputs = ["talk_folder", "hourly_talk_entries"]
+outputs = ["historian_talk_entries", "hourly_answer_questions", "concept_proposals", "ycx_proposals"]
+
+[params]
+date = "YYYY-MM-DD"
+audience = "private"
+talk_folder = "path"
+output_timestamp = "YYYY-MM-DDT23:59:00Z"
+
+[permissions]
+read = ["talk_folder"]
+write = ["talk_folder"]
+deny = ["raw_data.query_by_default"]
+
+[completion]
+done = ["historian_entries.valid"]
+skip = ["no_hourly_entries", "already_decided"]
+failure = ["missing_talk_folder", "invalid_entry", "claude_error"]

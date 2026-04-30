@@ -1,0 +1,33 @@
+%% title: Native Experience Routing
+%% description: Harness and provider choices select the native memory surface. Codex and Claude harness memory wins when those harnesses are the agent body.
+%% version: 1context
+%% consumer: base-memory-v1
+%% order: 30
+flowchart LR
+  HarnessChoice[harness choice] --> HarnessManifest[harness manifest]
+  ProviderChoice[provider and model] --> ProviderRoutes[providers.toml]
+  Formats[native-memory.toml] --> Router[native memory route]
+  HarnessManifest --> Router
+  ProviderRoutes --> Router
+
+  Router --> Rule{harness selected?}
+  Rule -->|yes| HarnessPrimary[harness primary_memory_format wins]
+  Rule -->|no| ProviderDefault[provider read and write formats]
+
+  HarnessPrimary --> CodexHome[codex-home]
+  HarnessPrimary --> ClaudeProject[claude-project-jsonl]
+  ProviderDefault --> OpenAIChat[openai-chat-messages]
+
+  CodexHome --> CodexHarness[Codex harness]
+  CodexHarness --> CODEXHOME[isolated CODEX_HOME]
+  CODEXHOME --> CodexSessions[Codex-owned sessions]
+  CODEXHOME --> AuthLink[auth.json symlink when allowed]
+
+  ClaudeProject --> ClaudeHarness[Claude Code harness]
+  ClaudeHarness --> ClaudeJsonl[Claude-native project history]
+
+  OpenAIChat --> APIModels[Gemini DeepSeek Kimi OpenAI API routes]
+
+  CODEXHOME --> RuntimeExperience[runtime experience folder]
+  ClaudeJsonl --> RuntimeExperience
+  OpenAIChat --> RuntimeExperience

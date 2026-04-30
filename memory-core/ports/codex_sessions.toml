@@ -1,0 +1,9 @@
+id = "codex_sessions"
+label = "Codex Sessions"
+kind = "session_log"
+adapter = "codex_rollout_jsonl"
+enabled = true
+directions = ["input"]
+paths = ["~/.codex/sessions/**/rollout-*.jsonl"]
+stores = ["storage.events", "storage.sessions", "storage.artifacts"]
+purpose = "Classical importer for Codex rollout JSONL. Enable when the daemon should continuously ingest local Codex sessions."

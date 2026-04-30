@@ -1,0 +1,80 @@
+%% title: Lakestore Schema And Session Imports
+%% description: The LanceDB table shape for events, sessions, artifacts, evidence, and documents, plus how Codex and Claude session logs enter through daemon ports.
+%% version: 1context
+%% consumer: base-memory-v1
+%% order: 35
+flowchart LR
+  subgraph Sources["native session sources"]
+    Codex["Codex rollout JSONL<br/>~/.codex/sessions/**/rollout-*.jsonl"]
+    Claude["Claude Code JSONL<br/>~/.claude/projects/**/*.jsonl"]
+    Smoke["daemon-smoke lived-experience<br/>source-sessions/codex<br/>source-sessions/claude"]
+  end
+
+  subgraph Daemon["daemon pulse"]
+    Clock["watch clock<br/>default 5 min"]
+    Panel["ports.toml<br/>local live switches"]
+    Ports["ports/*.toml<br/>adapter contracts"]
+    Cleanup["earlier prototype cleanup contract<br/>strip envelopes<br/>format tool calls<br/>truncate huge outputs"]
+    Importer["session import adapter<br/>honest kinds<br/>stable event hashes"]
+    Images["inline image materializer<br/>storage/artifacts/session-images"]
+    Cursors["storage/cursors/daemon.json<br/>file offset + content hash"]
+    Tick["daemon.tick event"]
+  end
+
+  subgraph Lake["storage/lakestore"]
+    Events["events<br/>event_id, hash<br/>session_id, kind, cwd, char_count<br/>ts, event, source, actor, subject<br/>state_machine, scope<br/>hired_agent_uuid, run_id<br/>artifact_id, evidence_id<br/>text, payload_json"]
+    Sessions["sessions<br/>one refreshed row per session_id<br/>source, cwd<br/>first_ts, last_ts<br/>event_count<br/>metadata_json"]
+    Artifacts["artifacts<br/>artifact_id<br/>ts, kind, uri, path<br/>content_type, content_hash, bytes<br/>source, state<br/>text, metadata_json"]
+    Evidence["evidence<br/>evidence_id<br/>artifact_id<br/>check_id, status, checker<br/>text<br/>checks_json, payload_json"]
+    Documents["documents<br/>document_id<br/>ts, kind, uri, path, title<br/>text, source<br/>metadata_json"]
+  end
+
+  subgraph Consumers["readers and future control"]
+    Swim["swim-lane context viewer"]
+    StateMachines["state_machines<br/>read events + evidence"]
+    Agents["future hired agents<br/>read selected context"]
+    Reports["exports / reports / wiki surfaces"]
+  end
+
+  Codex --> Ports
+  Claude --> Ports
+  Smoke --> Ports
+  Clock --> Panel
+  Panel --> Ports
+  Ports --> Cleanup
+  Cleanup --> Importer
+  Importer --> Events
+  Importer --> Sessions
+  Importer --> Artifacts
+  Importer --> Images
+  Images --> Artifacts
+  Importer --> Cursors
+  Importer --> Tick
+  Tick --> Events
+
+  Artifacts --> Evidence
+  Events -. references .-> Artifacts
+  Events -. references .-> Evidence
+  Events -. groups .-> Sessions
+  Documents -. can reference .-> Artifacts
+
+  Events --> Swim
+  Sessions --> Swim
+  Artifacts --> Swim
+  Evidence --> Swim
+  Documents --> Swim
+  Events --> StateMachines
+  Evidence --> StateMachines
+  Documents --> Agents
+  Artifacts --> Reports
+  Documents --> Reports
+
+  classDef source fill:#eef7f4,stroke:#5f8f82,color:#102416;
+  classDef daemon fill:#fff7e4,stroke:#947335,color:#2b220c;
+  classDef lake fill:#eff6ff,stroke:#476f94,color:#102134;
+  classDef consumer fill:#f5f1ff,stroke:#71619a,color:#201934;
+
+  class Codex,Claude,Smoke source;
+  class Clock,Panel,Ports,Cleanup,Importer,Images,Cursors,Tick daemon;
+  class Events,Sessions,Artifacts,Evidence,Documents lake;
+  class Swim,StateMachines,Agents,Reports consumer;

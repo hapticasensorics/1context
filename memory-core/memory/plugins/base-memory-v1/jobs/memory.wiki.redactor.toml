@@ -1,0 +1,26 @@
+id = "memory.wiki.redactor"
+version = "0.1.0"
+label = "Tier Redactor"
+agent = "redactor"
+tools = []
+prompt_paths = ["prompts/redactor.md"]
+inputs = ["source_article", "source_talk_folder", "target_tier"]
+outputs = ["redacted_article", "redacted_entry"]
+
+[params]
+era = "YYYY-MM-DD"
+source_tier = "private"
+target_tier = "internal|public"
+source_path = "path"
+target_path = "path"
+talk_folder = "path"
+
+[permissions]
+read = ["source_article", "source_talk_folder"]
+write = ["target_article", "source_talk_folder"]
+deny = ["source_article_mutation", "add_new_claims"]
+
+[completion]
+done = ["tier_outputs.updated_or_skipped"]
+skip = ["target_fresh", "too_few_filled_sections"]
+failure = ["missing_source", "invalid_redacted_article", "invalid_redacted_entry", "claude_error"]

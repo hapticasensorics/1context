@@ -1,0 +1,12 @@
+id = "2026-04-29-concept-frontmatter-schema-v1"
+title = "Concept frontmatter schema receipt"
+version = "0.1.0"
+kind = "schema"
+description = "Records the e08 quality-audit decision that concept pages need durable frontmatter contracts before curator and librarian writes scale out."
+contract = "Concept pages should preserve title, slug, subject-type, categories, evidence, lifecycle status, and fading/archive metadata when applicable."
+affects = ["concept_pages", "librarian", "concept_scout"]
+apply_mode = "receipt_only"
+
+[verification]
+kind = "plugin_path_exists"
+path = "prompts/librarian.md"

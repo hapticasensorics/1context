@@ -1,0 +1,14 @@
+id = "hourly-block-scribe"
+version = "0.1.0"
+label = "Hourly Block Scribe"
+provider = "claude"
+harness = "claude-code"
+model = "opus"
+effort = "standard"
+tools = []
+prompt_paths = ["prompts/hourly-block-scribe.md"]
+
+[runtime]
+isolation = "account_clean"
+subscription_compatible = true
+notes = "Uses Opus through Claude subscription login. Writes several hourly talk entries from one fixed 4-hour birth-loaded context packet."

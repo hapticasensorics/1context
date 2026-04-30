@@ -1,0 +1,33 @@
+id = "memory.hourly.scribe"
+version = "0.1.0"
+label = "Hourly Scribe"
+agent = "hourly-scribe"
+tools = []
+prompt_paths = ["prompts/hourly-scribe-task.md"]
+inputs = ["storage.lakestore.events", "runtime.experience_packet"]
+outputs = ["hourly_talk_entry"]
+
+[params]
+date = "YYYY-MM-DD"
+hour = "00-23"
+audience = "private"
+talk_folder = "path"
+output_path = "path"
+experience_id = "runtime experience packet id"
+experience_mode = "braided_lived_messages"
+experience_sha256 = "sha256"
+
+[experience]
+builder = "render_hour_experience"
+mode = "braided_lived_messages"
+window = "hour"
+
+[permissions]
+read = ["runtime.experience_packet", "workspace"]
+write = ["talk_folder"]
+deny = []
+
+[completion]
+done = ["hourly_talk_entry.valid"]
+needs_wider_window = ["needs_wider_window.requested"]
+failure = ["missing_output", "invalid_frontmatter", "claude_error"]

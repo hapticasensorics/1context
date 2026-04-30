@@ -1,0 +1,18 @@
+{
+  "bookmarks": [
+    {
+      "addedAt": "",
+      "description": "",
+      "id": "/for-you",
+      "thumbnail": "",
+      "title": "For You",
+      "url": "/for-you"
+    }
+  ],
+  "chat": {},
+  "created_at": "2026-04-30T00:54:30Z",
+  "recent_searches": [],
+  "schema_version": "wiki.user-state.v1",
+  "settings": {},
+  "updated_at": "2026-04-30T01:17:34Z"
+}

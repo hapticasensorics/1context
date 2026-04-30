@@ -1,0 +1,4501 @@
+/* 1Context theme for BookStack — WikiWand-inspired editorial layer.
+ *
+ * Design tokens re-derived from WikiWand's CSS custom property system
+ * (see wikiwand-teardown/tokens-current.md). No rulesets are copied
+ * verbatim from WikiWand's bundle.
+ *
+ * Fonts: Noto Sans + Noto Serif (Google Fonts, Apache 2.0 licensed).
+ */
+
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans:wght@400;500;600;700&family=Noto+Serif:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap');
+
+/* ============================================================
+ * Tokens — Light (default)
+ * ============================================================ */
+
+:root {
+  /* Size scale (base 16px, 4/8 rhythm) */
+  --size-base: 16px;
+  --size-2:  0.125rem;
+  --size-4:  0.25rem;
+  --size-6:  0.375rem;
+  --size-8:  0.5rem;
+  --size-12: 0.75rem;
+  --size-16: 1rem;
+  --size-20: 1.25rem;
+  --size-24: 1.5rem;
+  --size-32: 2rem;
+  --size-40: 2.5rem;
+  --size-48: 3rem;
+  --size-64: 4rem;
+  --size-80: 5rem;
+
+  /* Radius scale */
+  --radius-s:   4px;
+  --radius-m:   8px;
+  --radius-l:  12px;
+  --radius-xl: 16px;
+  --radius-2xl: 24px;
+  --radius-pill: 999px;
+
+  /* Elevation (light) */
+  --elevation-1: 0 1px 2px rgba(0, 0, 0, 0.04), 0 2px 12px rgba(0, 0, 0, 0.06);
+  --elevation-2: 0 4px 24px rgba(0, 0, 0, 0.10);
+  --elevation-3: 0 12px 48px rgba(0, 0, 0, 0.18);
+
+  /* Fonts */
+  --font-body:    "Noto Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  --font-heading: "Noto Serif", Charter, Georgia, "Times New Roman", serif;
+  --font-mono:    ui-monospace, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+
+  /* Type scale */
+  --text-h1:      2.75rem;  /* 44px */
+  --text-h2:      1.75rem;  /* 28px */
+  --text-h3:      1.375rem; /* 22px */
+  --text-h4:      1.125rem; /* 18px */
+  --text-h5:      1rem;     /* 16px */
+  --text-h6:      0.875rem; /* 14px */
+  --text-body:    1rem;
+  --text-body-lg: 1.125rem;
+  --text-body-sm: 0.875rem;
+  --text-body-xs: 0.75rem;
+
+  /* Line heights */
+  --lh-tight:   1.15;
+  --lh-snug:    1.3;
+  --lh-normal:  1.55;
+  --lh-relaxed: 1.65;
+
+  /* Layout */
+  --article-width:        920px;
+  --article-width-narrow: 680px;
+  --article-width-wide:  1200px;
+  --toc-width:            260px;
+  --layout-max-width:    1340px;   /* total layout cap; wider for less wasted whitespace */
+  --article-padding:      var(--size-32);
+  --article-radius:       var(--radius-xl);
+  --header-height:        56px;
+
+  /* Motion */
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --dur-fast: 120ms;
+  --dur-norm: 220ms;
+
+  /* Color — light */
+  --color-background:   #ffffff;
+  --color-foreground:   #1a1a1a;  /* softened from WikiWand's pure #000 for long-form reading */
+  --color-surface-alt:  #f7f7f7;
+  --color-border:       #e4e4e4;
+  --color-border-soft:  #efefef;
+  --color-very-light:   #dbdbdb;
+  --color-light:        #b3b3b3;
+  --color-mid:          #858585;
+  --color-link:         #3e69c5;
+  --color-link-hover:   #2a4e9a;
+  --color-blue:         #161FFF;
+  --color-blue-light:   #EFF0FF;
+  --color-green:        #00B377;
+  --color-green-light:  #EFFFEF;
+  --color-orange:       #FFA800;
+  --color-orange-light: #FFF9EF;
+  --color-pink:         #FF3389;
+  --color-pink-light:   #FFEFFC;
+  --color-error:        #db3434;
+  --color-backdrop:     rgba(255, 255, 255, 0.80);
+
+  --page-bg: #f5f5f5;
+}
+
+/* ============================================================
+ * Tokens — Dark (explicit + system preference)
+ * ============================================================ */
+
+[data-theme="dark"] {
+  --color-background:  #0a0a0a;
+  --color-foreground:  #f5f5f5;
+  --color-surface-alt: #1a1a1a;
+  --color-border:      #2a2a2a;
+  --color-border-soft: #202020;
+  --color-very-light:  #3a3a3a;
+  --color-light:       #555555;
+  --color-mid:         #888888;
+  --color-link:        #8498ff;
+  --color-link-hover:  #aab6ff;
+  --color-blue:        #8498ff;
+  --color-blue-light:  #1b2040;
+  --color-green:       #01c685;
+  --color-green-light: #0d2a1f;
+  --color-orange:      #ffb61a;
+  --color-orange-light:#2a1f0a;
+  --color-pink:        #ff4190;
+  --color-pink-light:  #2a0f1e;
+  --color-error:       #e06565;
+  --color-backdrop:    rgba(10, 10, 10, 0.80);
+
+  --elevation-1: 0 1px 2px rgba(0, 0, 0, 0.4), 0 2px 12px rgba(0, 0, 0, 0.3);
+  --elevation-2: 0 4px 24px rgba(0, 0, 0, 0.5);
+  --elevation-3: 0 12px 48px rgba(0, 0, 0, 0.7);
+
+  --page-bg: #050505;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --color-background:  #0a0a0a;
+    --color-foreground:  #f5f5f5;
+    --color-surface-alt: #1a1a1a;
+    --color-border:      #2a2a2a;
+    --color-border-soft: #202020;
+    --color-very-light:  #3a3a3a;
+    --color-light:       #555555;
+    --color-mid:         #888888;
+    --color-link:        #8498ff;
+    --color-link-hover:  #aab6ff;
+    --color-blue:        #8498ff;
+    --color-blue-light:  #1b2040;
+    --color-green:       #01c685;
+    --color-green-light: #0d2a1f;
+    --color-orange:      #ffb61a;
+    --color-orange-light:#2a1f0a;
+    --color-pink:        #ff4190;
+    --color-pink-light:  #2a0f1e;
+    --color-error:       #e06565;
+    --color-backdrop:    rgba(10, 10, 10, 0.80);
+
+    --elevation-1: 0 1px 2px rgba(0, 0, 0, 0.4), 0 2px 12px rgba(0, 0, 0, 0.3);
+    --elevation-2: 0 4px 24px rgba(0, 0, 0, 0.5);
+    --elevation-3: 0 12px 48px rgba(0, 0, 0, 0.7);
+
+    --page-bg: #050505;
+  }
+}
+
+/* ============================================================
+ * Data-attribute config controls
+ * Settings live on <html data-*>, applied by enhance.js from
+ * localStorage. CSS reacts via attribute selectors → token shifts.
+ * Mirrors WikiWand's <html data-toc data-article-width …> pattern.
+ * ============================================================ */
+
+/* Article width — also widens the layout-max-width so the article
+ * column can actually grow at every viewport, not just the widest. */
+:root[data-article-width="s"] {
+  --article-width:    720px;
+  --layout-max-width: 1080px;
+}
+:root[data-article-width="l"] {
+  --article-width:    1080px;
+  --layout-max-width: 1500px;
+}
+
+/* Font size — scaling root font-size scales all rem-based tokens */
+:root[data-font-size="s"] { font-size: 14px;   /* 87.5% */ }
+:root[data-font-size="l"] { font-size: 18px;   /* 112.5% */ }
+
+/* Border radius — flatten everything except pill (used for tags) */
+:root[data-border-radius="square"] {
+  --radius-s:    0;
+  --radius-m:    0;
+  --radius-l:    0;
+  --radius-xl:   0;
+  --radius-2xl:  0;
+  --article-radius: 0;
+}
+
+/* Links style — underline (default) vs color-only */
+:root[data-links-style="color"] .opctx-article a {
+  text-decoration: none;
+  color: var(--color-link);
+}
+:root[data-links-style="color"] .opctx-article a:hover {
+  text-decoration: underline;
+  color: var(--color-link-hover);
+}
+:root[data-links-style="underline"] .opctx-article a {
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.18em;
+  text-decoration-color: var(--color-very-light);
+  color: inherit;
+}
+:root[data-links-style="underline"] .opctx-article a:hover {
+  text-decoration-color: var(--color-link);
+  color: var(--color-link);
+}
+
+/* Cover image — show/hide the first figure or image in an article */
+:root[data-cover-image="hide"] .opctx-cover-image,
+:root[data-cover-image="hide"] .opctx-article > figure:first-of-type,
+:root[data-cover-image="hide"] .opctx-article > p:first-of-type img:only-child {
+  display: none;
+}
+
+/* Article style — full | pics | text */
+:root[data-article-style="text"] .opctx-article img,
+:root[data-article-style="text"] .opctx-article figure,
+:root[data-article-style="text"] .opctx-article picture,
+:root[data-article-style="text"] .opctx-article video {
+  display: none;
+}
+:root[data-article-style="pics"] .opctx-article sup,
+:root[data-article-style="pics"] .opctx-article .footnote,
+:root[data-article-style="pics"] .opctx-article .reference {
+  display: none;
+}
+
+/* ============================================================
+ * Base
+ * ============================================================ */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  font-size: var(--size-base);
+  -webkit-text-size-adjust: 100%;
+  color-scheme: light dark;
+  scroll-behavior: smooth;
+  scroll-padding-top: calc(var(--header-height) + var(--size-16));
+  /* Lock to vertical-only scrolling, mirroring mobile Wikipedia.
+   * Without this, any element that overflows past the viewport
+   * (long inline <code>, off-screen drawers, etc.) lets the body
+   * pan horizontally on touch — jarring on phones.
+   *
+   * `overflow-x: clip` (not `hidden`) is critical: `hidden` would
+   * create a new scroll container and break `position: sticky` on
+   * descendants like `.opctx-header`. `clip` enforces the same
+   * visual cropping without changing the scrolling-ancestor chain.
+   * Safari 16+ / iOS 16+ support clip natively. */
+  overflow-x: clip;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  background: var(--page-bg);
+  color: var(--color-foreground);
+  font-family: var(--font-body);
+  font-size: var(--text-body);
+  overflow-x: clip;
+  max-width: 100%;
+  line-height: var(--lh-normal);
+  font-weight: 400;
+  font-feature-settings: "kern" 1, "liga" 1, "calt" 1;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  min-height: 100vh;
+  transition: background-color var(--dur-norm) var(--ease-out), color var(--dur-norm) var(--ease-out);
+}
+
+::selection {
+  background: var(--color-blue-light);
+  color: var(--color-foreground);
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-link);
+  outline-offset: 3px;
+  border-radius: var(--radius-s);
+}
+
+/* ============================================================
+ * Visibility tier bar — 1Context-specific
+ * Thin colored bar at the very top of the page reflecting the
+ * page's effective permission tier (private / shared / public).
+ * ============================================================ */
+
+/* Visibility bar (privacy tier indicator) intentionally hidden — the
+ * orange "public" stripe was visually fighting the blue scroll-progress
+ * bar that sits immediately under it. The same tier signal is already
+ * carried in the header chrome (the "Public" badge), so the top stripe
+ * was redundant. */
+.opctx-visibility-bar { display: none; }
+
+/* Reading progress — fills the viewport width as you scroll, sits at
+ * the very top of the viewport now that the visibility bar is gone. */
+.opctx-progress-bar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: var(--color-link);
+  transform-origin: left center;
+  transform: scaleX(0);
+  z-index: 39;
+  opacity: 0.65;
+  transition: transform 100ms linear;
+}
+
+/* ============================================================
+ * Header — sticky, frosted, BookStack-chrome simulation
+ * ============================================================ */
+
+.opctx-header {
+  position: sticky;
+  top: 2px;            /* just below the scroll-progress bar */
+  z-index: 30;
+  height: var(--header-height);
+  background: var(--color-backdrop);
+  -webkit-backdrop-filter: saturate(180%) blur(12px);
+          backdrop-filter: saturate(180%) blur(12px);
+  border-bottom: 1px solid var(--color-border);
+  display: flex;
+  align-items: center;
+  gap: var(--size-20);
+  padding: 0 var(--size-24);
+  /* Auto-hide on scroll-down, reveal on scroll-up — mobile Wikipedia
+   * pattern. JS toggles `[data-header-hidden]` on <html>; this rule
+   * translates the header above the viewport. The transition gives
+   * the reveal a noticeable but not laggy slide. Pointer-events go
+   * off so the hidden header can't be tapped by accident. */
+  transition: transform var(--dur-norm) var(--ease-out);
+  will-change: transform;
+}
+:root[data-header-hidden] .opctx-header {
+  transform: translateY(calc(-100% - 4px));
+  pointer-events: none;
+}
+/* Defensive: while any overlay is open (drawer / modal / customizer /
+ * AI panel — anything that sets data-scroll-lock) the header MUST
+ * stay visible. The JS pin mechanism removes data-header-hidden, but
+ * the deeper issue is that the header is `position: sticky` and
+ * sticky degrades to relative when its scrollable ancestor (body)
+ * becomes `position: fixed` for the scroll-lock — so the header
+ * follows the body's negative top offset and ends up off-screen.
+ *
+ * Switch to `position: fixed; top: 0` for the duration of the lock
+ * so the header overlays the viewport regardless of body offset.
+ * Cancels any auto-hide transform too. */
+:root[data-scroll-lock] .opctx-header {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  transform: none !important;
+  pointer-events: auto;
+}
+
+.opctx-header-logo {
+  font-family: var(--font-heading);
+  font-size: 1.375rem;
+  font-weight: 600;
+  color: var(--color-foreground);
+  letter-spacing: -0.01em;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.opctx-header-logo::first-letter {
+  color: var(--color-link);
+}
+
+.opctx-header-search {
+  flex: 1;
+  max-width: 420px;
+  position: relative;
+}
+
+.opctx-header-search input {
+  width: 100%;
+  padding: var(--size-8) var(--size-12) var(--size-8) var(--size-32);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-m);
+  background: var(--color-surface-alt);
+  color: var(--color-foreground);
+  font-family: var(--font-body);
+  font-size: var(--text-body-sm);
+  transition: border-color var(--dur-fast) var(--ease-out), background var(--dur-fast) var(--ease-out);
+}
+
+.opctx-header-search input::placeholder {
+  color: var(--color-mid);
+}
+
+.opctx-header-search input:focus {
+  outline: none;
+  border-color: var(--color-link);
+  background: var(--color-background);
+}
+
+.opctx-header-search::before {
+  content: "";
+  position: absolute;
+  left: var(--size-12);
+  top: 50%;
+  width: 14px;
+  height: 14px;
+  transform: translateY(-50%);
+  background: currentColor;
+  color: var(--color-mid);
+  -webkit-mask: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'><circle cx='11' cy='11' r='7'/><path d='m21 21-4.3-4.3'/></svg>") center / contain no-repeat;
+          mask: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'><circle cx='11' cy='11' r='7'/><path d='m21 21-4.3-4.3'/></svg>") center / contain no-repeat;
+}
+
+.opctx-header-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--size-8);
+  margin-left: auto;
+}
+
+.opctx-audience-switcher {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.opctx-tier-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--size-6);
+  height: 32px;
+  padding: 0 var(--size-12);
+  border: 1px solid color-mix(in srgb, currentColor 22%, transparent);
+  border-radius: var(--radius-m);
+  font-size: var(--text-body-xs);
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.opctx-tier-badge[data-tier="private"] {
+  background: var(--color-green-light);
+  color: var(--color-green);
+  --badge-glyph: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><rect width='18' height='11' x='3' y='11' rx='2' ry='2'/><path d='M7 11V7a5 5 0 0 1 10 0v4'/></svg>");
+}
+.opctx-tier-badge[data-tier="shared"] {
+  background: var(--color-blue-light);
+  color: var(--color-link);
+  --badge-glyph: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2'/><circle cx='9' cy='7' r='4'/><path d='M22 21v-2a4 4 0 0 0-3-3.87'/><path d='M16 3.13a4 4 0 0 1 0 7.75'/></svg>");
+}
+.opctx-tier-badge[data-tier="public"] {
+  background: var(--color-orange-light);
+  color: var(--color-orange);
+  --badge-glyph: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><circle cx='12' cy='12' r='10'/><path d='M2 12h20'/><path d='M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z'/></svg>");
+}
+
+.opctx-tier-badge::before {
+  content: "";
+  width: 13px;
+  height: 13px;
+  background: currentColor;
+  flex: none;
+  -webkit-mask: var(--badge-glyph) center / contain no-repeat;
+          mask: var(--badge-glyph) center / contain no-repeat;
+}
+
+.opctx-theme-toggle {
+  background: transparent;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-m);
+  padding: var(--size-6) var(--size-12);
+  color: var(--color-mid);
+  font-size: var(--text-body-xs);
+  font-family: var(--font-body);
+  font-weight: 500;
+  cursor: pointer;
+  transition: color var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out);
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.opctx-theme-toggle:hover {
+  color: var(--color-foreground);
+  border-color: var(--color-foreground);
+}
+
+/* ============================================================
+ * Layout — sidebar + main
+ * ============================================================ */
+
+.opctx-layout {
+  display: grid;
+  grid-template-columns: var(--toc-width) minmax(0, 1fr);
+  gap: var(--size-48);
+  max-width: var(--layout-max-width);
+  margin: 0 auto;
+  padding: var(--size-32);
+  align-items: start;
+}
+
+.opctx-toc {
+  position: sticky;
+  top: calc(var(--header-height) + var(--size-24) + 5px);
+  align-self: start;
+  font-size: var(--text-body-sm);
+  color: var(--color-mid);
+  max-height: calc(100vh - var(--header-height) - var(--size-48));
+  overflow-y: auto;
+  padding-right: var(--size-4);
+  scrollbar-width: thin;
+}
+
+.opctx-toc::-webkit-scrollbar { width: 4px; }
+.opctx-toc::-webkit-scrollbar-thumb { background: var(--color-border); border-radius: 2px; }
+
+/* TOC head — page label + toggle button. Stays visible when
+ * data-toc="hidden" (the rest of the TOC collapses). The toggle
+ * holds two icons — a menu/hamburger icon (used on desktop where
+ * the toggle collapses the TOC to an icon column) and a close X
+ * icon (used inside the mobile drawer where the toggle's role is
+ * "close drawer"). CSS picks the right one per viewport, so the
+ * mobile drawer no longer shows a hamburger duplicating the one
+ * in the chrome header. The label sits on the left and the toggle
+ * sits flush right (justify-content: space-between) — that puts
+ * the X in the top-right corner of the drawer where iOS sheet
+ * patterns expect it. */
+.opctx-toc-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--size-8);
+  padding: 0 var(--size-8) var(--size-12);
+  margin-bottom: var(--size-4);
+}
+
+.opctx-toc-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--color-mid);
+  cursor: pointer;
+  border-radius: var(--radius-s);
+  flex-shrink: 0;
+  /* Push to the right edge regardless of whether the label is
+   * present, so the close X sits in the top-right corner of the
+   * drawer (iOS sheet pattern) when the label is visually hidden
+   * inside the mobile drawer. */
+  margin-left: auto;
+  transition: background var(--dur-fast) var(--ease-out),
+              color var(--dur-fast) var(--ease-out);
+}
+
+.opctx-toc-toggle:hover {
+  background: var(--color-surface-alt);
+  color: var(--color-foreground);
+}
+
+.opctx-toc-toggle svg {
+  width: 18px;
+  height: 18px;
+  display: block;
+}
+
+/* Two icons inside the toggle. By default show the menu/hamburger
+ * (desktop default — this toggle collapses to icon column). The
+ * mobile @media block flips visibility so the close X shows when
+ * the drawer is open (and there is no other state where the toggle
+ * is interactive on mobile). */
+.opctx-toc-toggle-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.opctx-toc-toggle-icon--menu  { display: inline-flex; }
+.opctx-toc-toggle-icon--close { display: none; }
+
+.opctx-toc-current {
+  font-size: var(--text-body-sm);
+  font-weight: 500;
+  color: var(--color-foreground);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-family: var(--font-heading);
+}
+
+.opctx-toc-label {
+  display: block;
+  text-transform: uppercase;
+  font-size: var(--text-body-xs);
+  letter-spacing: 0.08em;
+  color: var(--color-mid);
+  font-weight: 600;
+  margin: 0 0 var(--size-12);
+  padding: 0 var(--size-12);
+}
+
+.opctx-toc ol,
+.opctx-toc ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.opctx-toc li { margin: 0; }
+
+.opctx-toc a {
+  display: block;
+  padding: var(--size-6) var(--size-12);
+  color: var(--color-mid);
+  text-decoration: none;
+  border-left: 2px solid transparent;
+  transition: color var(--dur-fast) var(--ease-out),
+              border-color var(--dur-fast) var(--ease-out),
+              background var(--dur-fast) var(--ease-out);
+  line-height: var(--lh-snug);
+}
+
+.opctx-toc a:hover {
+  color: var(--color-foreground);
+}
+
+.opctx-toc a.is-active {
+  color: var(--color-foreground);
+  border-left-color: var(--color-link);
+  font-weight: 500;
+}
+
+.opctx-toc .is-sub {
+  padding-left: var(--size-24);
+  font-size: var(--text-body-xs);
+}
+
+/* Chevron — real <button> injected by enhance.js for any TOC li
+ * with a nested ul. Click to collapse/expand the subheading list,
+ * persisted per-page to localStorage. The chevron rotates to point
+ * down when the section is expanded. When the section is currently
+ * active via scroll-spy, the color shifts to the link color so the
+ * chevron also doubles as the active-section indicator (the
+ * pre-Phase-2-followup "decorative" behavior).
+ *
+ * The <li> with a chevron is the chevron's offset parent — so set
+ * position:relative on the <li>, not the <a>. Anchor padding-left
+ * keeps the visual indentation aligned with the chevron column. */
+.opctx-toc li:has(> .opctx-toc-chevron) {
+  position: relative;
+}
+.opctx-toc li:has(> ul) > a {
+  padding-left: var(--size-24);
+}
+
+.opctx-toc-chevron {
+  position: absolute;
+  left: 0;
+  top: 4px;
+  width: 22px;
+  height: 22px;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-s);
+  cursor: pointer;
+  color: var(--color-light);
+  transition: background var(--dur-fast) var(--ease-out),
+              color var(--dur-fast) var(--ease-out);
+  z-index: 1;
+}
+.opctx-toc-chevron:hover {
+  background: var(--color-surface);
+  color: var(--color-foreground);
+}
+.opctx-toc-chevron:focus-visible {
+  outline: 2px solid var(--color-link);
+  outline-offset: 1px;
+}
+.opctx-toc-chevron svg {
+  width: 12px;
+  height: 12px;
+  transition: transform var(--dur-fast) var(--ease-out);
+}
+.opctx-toc-chevron[aria-expanded="true"] svg {
+  transform: rotate(90deg);
+}
+
+/* Active-section coloring: bumps the chevron's tint to the link color
+ * when this section's heading or any of its descendants is the
+ * scroll-spy "active" entry. */
+.opctx-toc li:has(> a.is-active) > .opctx-toc-chevron,
+.opctx-toc li:has(a.is-active) > .opctx-toc-chevron {
+  color: var(--color-link);
+}
+
+/* Collapse the nested list when the user has explicitly closed it.
+ * Display: none (rather than max-height transition) so scroll-spy
+ * doesn't waste observers on hidden anchors. */
+.opctx-toc li.is-collapsed > ul,
+.opctx-toc li.is-collapsed > ol {
+  display: none;
+}
+
+/* TOC visibility — data-toc="hidden" collapses the whole list,
+ * leaving just the head (hamburger + page label) as a peek-back affordance. */
+:root[data-toc="hidden"] .opctx-toc-label,
+:root[data-toc="hidden"] .opctx-toc-version,
+:root[data-toc="hidden"] .opctx-toc > ol,
+:root[data-toc="hidden"] .opctx-toc > ul {
+  display: none;
+}
+
+:root[data-toc="hidden"] .opctx-layout {
+  grid-template-columns: 56px minmax(0, 1fr);
+}
+
+:root[data-toc="hidden"] .opctx-toc-current {
+  display: none;
+}
+
+:root[data-toc="hidden"] .opctx-toc {
+  max-height: none;
+  overflow: visible;
+}
+
+:root[data-toc="hidden"] .opctx-toc-head {
+  justify-content: center;
+  padding: 0;
+  margin: 0;
+  border-bottom: 0;
+}
+
+:root[data-toc="hidden"] .opctx-toc-toggle {
+  margin-left: 0;
+}
+
+/* In-header hamburger + scrim — both desktop-hidden by default. They
+ * opt in inside @media (max-width: 960px). The scrim is the click-
+ * target behind the off-canvas drawer; the in-header hamburger lives
+ * directly in `.opctx-header` (mobile Wikipedia pattern, replacing
+ * the previous `.opctx-mobile-bar` sub-row). */
+.opctx-header-toc-toggle { display: none; }
+.opctx-toc-scrim         { display: none; }
+
+.opctx-main {
+  min-width: 0;
+}
+
+.opctx-audience-stage {
+  position: relative;
+  overflow: hidden;
+}
+
+.opctx-audience-stream-panel {
+  will-change: transform, opacity;
+}
+
+.opctx-audience-stage[data-transitioning="true"] .opctx-audience-stream-panel {
+  pointer-events: none;
+}
+
+/* ============================================================
+ * Article card
+ * ============================================================ */
+
+.opctx-article {
+  background: var(--color-background);
+  border-radius: var(--article-radius);
+  padding: var(--size-40) var(--article-padding) var(--size-48);
+  max-width: var(--article-width);
+  box-shadow: var(--elevation-1);
+  /* Defensive overflow guard: Wikipedia content is full of fixed-width
+   * tables (infoboxes), wide unbreakable strings (URLs in references),
+   * and multi-column figures. Without this, any one of those forces
+   * the document wider than the viewport at narrow widths, producing
+   * a horizontal scrollbar and the "page thinks it's wider than it
+   * is" empty whitespace bug. min-width:0 lets flex/grid children
+   * shrink; overflow-wrap helps long URLs break. */
+  min-width: 0;
+  overflow-wrap: break-word;
+  word-wrap: break-word;
+}
+
+/* Wide content guards — apply at all widths but matter most on
+ * narrow viewports. Tables become horizontally-scrollable cards so
+ * the article column itself doesn't overflow. */
+.opctx-article table {
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+.opctx-article pre,
+.opctx-article code {
+  max-width: 100%;
+  overflow-x: auto;
+}
+.opctx-article img {
+  max-width: 100%;
+  height: auto;
+}
+
+/* Dark-mode article: drop the elevation shadow (low contrast against
+ * dark surfaces) and add a 1px border so the card edge stays defined.
+ * Two rules instead of a selector list because you can't put an
+ * @media query inside a comma-separated selector list (the build's
+ * lightningcss minifier rejects it). */
+[data-theme="dark"] .opctx-article {
+  box-shadow: none;
+  border: 1px solid var(--color-border);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .opctx-article {
+    box-shadow: none;
+    border: 1px solid var(--color-border);
+  }
+}
+
+.opctx-article h1 {
+  font-family: var(--font-heading);
+  font-size: var(--text-h1);
+  line-height: var(--lh-tight);
+  font-weight: 600;
+  color: var(--color-foreground);
+  margin: 0 0 var(--size-12);
+  letter-spacing: -0.015em;
+}
+
+.opctx-article .opctx-subtitle {
+  color: var(--color-mid);
+  font-size: var(--text-body-lg);
+  font-style: italic;
+  margin: 0 0 var(--size-24);
+  font-family: var(--font-heading);
+}
+
+/* Breadcrumbs intentionally omitted: 1Context follows Wikipedia's flat
+ * namespace where sub-article relationships are expressed via the
+ * `.opctx-main-article` hatnote and a `See also` section, not a
+ * hierarchical breadcrumb chain. */
+
+/* Wikipedia-style "Main article: …" affordance — italic gray
+ * one-liner placed immediately after an H2 to mark a summary-style
+ * section that points to a dedicated sub-article.
+ *
+ * Use:
+ *   <h2>Section</h2>
+ *   <p class="opctx-main-article">Main article: <a href="/x">X</a></p>
+ *   <p>... summary paragraphs ...</p>
+ */
+.opctx-main-article {
+  font-style: italic;
+  color: var(--color-mid);
+  font-size: var(--text-body-sm);
+  margin: 0 0 var(--size-12);
+  padding-left: var(--size-12);
+  border-left: 2px solid var(--color-border);
+}
+.opctx-main-article a {
+  color: var(--color-link);
+  text-decoration: none;
+  font-style: italic;
+  font-weight: 500;
+}
+.opctx-main-article a:hover {
+  text-decoration: underline;
+}
+
+.opctx-article h2 {
+  font-family: var(--font-heading);
+  font-size: var(--text-h2);
+  line-height: var(--lh-snug);
+  font-weight: 600;
+  color: var(--color-foreground);
+  margin: var(--size-48) 0 var(--size-16);
+  letter-spacing: -0.01em;
+  scroll-margin-top: calc(var(--header-height) + var(--size-24));
+}
+
+.opctx-article h3 {
+  font-family: var(--font-heading);
+  font-size: var(--text-h3);
+  line-height: var(--lh-snug);
+  font-weight: 600;
+  color: var(--color-foreground);
+  margin: var(--size-32) 0 var(--size-12);
+  scroll-margin-top: calc(var(--header-height) + var(--size-24));
+}
+
+.opctx-article h4,
+.opctx-article h5,
+.opctx-article h6 {
+  font-family: var(--font-body);
+  font-weight: 600;
+  line-height: var(--lh-snug);
+  color: var(--color-foreground);
+  margin: var(--size-24) 0 var(--size-8);
+  scroll-margin-top: calc(var(--header-height) + var(--size-24));
+}
+
+.opctx-article h4 { font-size: var(--text-h4); }
+.opctx-article h5 { font-size: var(--text-h5); }
+.opctx-article h6 {
+  font-size: var(--text-h6);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--color-mid);
+}
+
+.opctx-article p {
+  margin: 0 0 var(--size-16);
+  line-height: var(--lh-relaxed);
+  color: var(--color-foreground);
+}
+
+.opctx-article .lead {
+  font-size: var(--text-body-lg);
+  line-height: var(--lh-relaxed);
+  color: var(--color-foreground);
+  margin-bottom: var(--size-24);
+}
+
+.opctx-article a {
+  color: var(--color-link);
+  text-decoration: none;
+  border-bottom: 1px solid transparent;
+  transition: color var(--dur-fast) var(--ease-out),
+              border-color var(--dur-fast) var(--ease-out);
+}
+
+.opctx-article a:hover {
+  color: var(--color-link-hover);
+  border-bottom-color: currentColor;
+}
+
+.opctx-article strong { font-weight: 600; }
+.opctx-article em { font-style: italic; }
+
+.opctx-article ul,
+.opctx-article ol {
+  margin: 0 0 var(--size-16);
+  padding-left: var(--size-24);
+  line-height: var(--lh-relaxed);
+}
+
+.opctx-article li {
+  margin: var(--size-6) 0;
+}
+
+.opctx-article li::marker {
+  color: var(--color-mid);
+}
+
+.opctx-article blockquote {
+  margin: var(--size-24) 0;
+  padding: 0 0 0 var(--size-24);
+  color: var(--color-mid);
+  font-family: var(--font-heading);
+  font-style: italic;
+  font-size: var(--text-body-lg);
+  line-height: var(--lh-relaxed);
+  border-left: 2px solid var(--color-very-light);
+}
+
+.opctx-article blockquote p {
+  margin: 0;
+}
+
+.opctx-article blockquote cite {
+  display: block;
+  margin-top: var(--size-8);
+  font-style: normal;
+  font-size: var(--text-body-sm);
+  color: var(--color-mid);
+  font-family: var(--font-body);
+}
+
+.opctx-article blockquote cite::before {
+  content: "— ";
+}
+
+.opctx-article pre {
+  background: var(--color-surface-alt);
+  border: 1px solid var(--color-border-soft);
+  border-radius: var(--radius-m);
+  padding: var(--size-16) var(--size-20);
+  overflow-x: auto;
+  font-family: var(--font-mono);
+  font-size: 0.875rem;
+  line-height: var(--lh-normal);
+  margin: var(--size-24) 0;
+  color: var(--color-foreground);
+}
+
+.opctx-article code {
+  font-family: var(--font-mono);
+  font-size: 0.86em;
+  background: var(--color-surface-alt);
+  border: 1px solid var(--color-border-soft);
+  border-radius: var(--radius-s);
+  padding: 1px 5px;
+  color: var(--color-foreground);
+  /* Wrap long inline code so things like
+   * `<link rel="alternate" type="text/markdown">` don't push past
+   * the viewport on mobile. `anywhere` only kicks in when the token
+   * would otherwise overflow — short snippets (`<head>`) stay
+   * intact on a single line. Pre code overrides back to inherit. */
+  overflow-wrap: anywhere;
+  word-break: break-word;          /* legacy Safari fallback */
+}
+
+.opctx-article pre code {
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  padding: 0;
+  font-size: inherit;
+  /* Preserve <pre>'s formatting: pre has white-space:pre by default,
+   * so its <code> child should not opt back into the inline-code wrap.
+   * Horizontal overflow is handled by .opctx-article pre {overflow-x:auto}. */
+  white-space: inherit;
+  overflow-wrap: normal;
+  word-break: normal;
+}
+
+.opctx-article img {
+  max-width: 100%;
+  height: auto;
+  border-radius: var(--radius-m);
+  background: var(--color-surface-alt);
+}
+
+.opctx-article figure {
+  margin: var(--size-24) 0;
+}
+
+.opctx-article figcaption {
+  color: var(--color-mid);
+  font-size: var(--text-body-sm);
+  text-align: center;
+  margin-top: var(--size-8);
+  font-style: italic;
+}
+
+.opctx-article hr {
+  border: 0;
+  border-top: 1px solid var(--color-border);
+  margin: var(--size-40) 0;
+}
+
+.opctx-article table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: var(--size-24) 0;
+  font-size: var(--text-body-sm);
+}
+
+.opctx-article th,
+.opctx-article td {
+  padding: var(--size-12) var(--size-16);
+  border-bottom: 1px solid var(--color-border);
+  text-align: left;
+  vertical-align: top;
+}
+
+.opctx-article th {
+  font-weight: 600;
+  color: var(--color-foreground);
+  border-bottom: 2px solid var(--color-foreground);
+  font-size: var(--text-body-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.opctx-article tr:last-child td {
+  border-bottom: 0;
+}
+
+/* ============================================================
+ * Infobox — fact-list card, floats right inside article
+ * ============================================================ */
+
+.opctx-article .infobox {
+  float: right;
+  width: 280px;
+  margin: var(--size-8) 0 var(--size-20) var(--size-32);
+  padding: var(--size-20) var(--size-24);
+  background: var(--color-surface-alt);
+  border: 1px solid var(--color-border-soft);
+  border-radius: var(--radius-l);
+  font-size: var(--text-body-sm);
+}
+
+.opctx-article .infobox h2,
+.opctx-article .infobox h3,
+.opctx-article .infobox h4 {
+  font-family: var(--font-heading);
+  font-size: 1.125rem;
+  margin: 0 0 var(--size-16);
+  padding: 0;
+  font-weight: 600;
+  border: 0;
+  color: var(--color-foreground);
+  letter-spacing: -0.005em;
+}
+
+.opctx-article .infobox dl {
+  margin: 0;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: var(--size-6) var(--size-12);
+}
+
+.opctx-article .infobox dt {
+  color: var(--color-mid);
+  font-size: var(--text-body-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-weight: 600;
+  padding-top: 2px;
+}
+
+.opctx-article .infobox dd {
+  margin: 0;
+  color: var(--color-foreground);
+  line-height: var(--lh-snug);
+}
+
+.opctx-article .infobox dd + dt {
+  margin-top: var(--size-8);
+}
+
+/* ============================================================
+ * Article footer — meta
+ * ============================================================ */
+
+.opctx-article-footer {
+  margin-top: var(--size-48);
+  padding-top: var(--size-16);
+  border-top: 1px solid var(--color-border-soft);
+  color: var(--color-mid);
+  font-size: var(--text-body-sm);
+  display: flex;
+  gap: var(--size-16);
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.opctx-article-footer a {
+  color: var(--color-mid);
+  border-bottom: 1px solid transparent;
+}
+
+.opctx-article-footer a:hover {
+  color: var(--color-foreground);
+  border-bottom-color: currentColor;
+}
+
+/* ============================================================
+ * Peek popup — WikiWand-style hover preview card
+ *
+ * Layout: optional thumbnail (full-width, 140px tall) at top, then
+ * title, optional subtitle, snippet (clamped to 8 lines), and an
+ * optional footer link. Card is ~300px wide, fixed positioning
+ * relative to the hovered link with smart flip-up if no room below.
+ *
+ * State machine:
+ *   .opctx-peek-popup.is-loading  → shows skeleton
+ *   .opctx-peek-popup.is-visible  → shows resolved card
+ * ============================================================ */
+
+.opctx-peek-popup {
+  position: absolute;
+  display: none;
+  width: 320px;
+  max-width: calc(100vw - 32px);
+  background: var(--color-background);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-l);
+  box-shadow: var(--elevation-2);
+  font-family: var(--font-body);
+  font-size: var(--text-body-sm);
+  line-height: var(--lh-normal);
+  z-index: 9999;
+  pointer-events: none;
+  color: var(--color-foreground);
+  overflow: hidden;
+}
+
+.opctx-peek-popup.is-visible {
+  display: block;
+  animation: opctx-peek-in 180ms var(--ease-out);
+}
+
+.opctx-peek-thumb {
+  display: block;
+  width: 100%;
+  height: 140px;
+  object-fit: cover;
+  background: var(--color-surface);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.opctx-peek-content {
+  padding: var(--size-16) var(--size-20);
+}
+
+.opctx-peek-title {
+  font-family: var(--font-heading);
+  font-weight: 600;
+  font-size: 1rem;
+  margin: 0 0 var(--size-4);
+  color: var(--color-foreground);
+  line-height: var(--lh-tight);
+}
+
+.opctx-peek-subtitle {
+  font-size: var(--text-body-xs);
+  color: var(--color-mid);
+  margin: 0 0 var(--size-8);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.opctx-peek-body {
+  color: var(--color-mid);
+  line-height: var(--lh-normal);
+  margin: 0;
+  display: -webkit-box;
+  -webkit-line-clamp: 8;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.opctx-peek-source {
+  display: flex;
+  align-items: center;
+  gap: var(--size-6);
+  margin-top: var(--size-12);
+  padding-top: var(--size-8);
+  border-top: 1px solid var(--color-border);
+  font-size: var(--text-body-xs);
+  color: var(--color-mid);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+/* Skeleton (loading) state */
+.opctx-peek-popup.is-loading .opctx-peek-content {
+  padding: var(--size-16) var(--size-20);
+}
+.opctx-peek-skel {
+  height: 12px;
+  background: var(--color-surface);
+  border-radius: var(--radius-s);
+  margin-bottom: var(--size-8);
+  animation: opctx-peek-pulse 1.2s ease-in-out infinite;
+}
+.opctx-peek-skel.is-title { height: 18px; width: 60%; }
+.opctx-peek-skel.is-line { width: 100%; }
+.opctx-peek-skel.is-line-short { width: 70%; margin-bottom: 0; }
+
+@keyframes opctx-peek-in {
+  from { opacity: 0; transform: translateY(-6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes opctx-peek-pulse {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.5; }
+}
+
+/* ============================================================
+ * Appendix collapse — auto-wraps appendix sections (References,
+ * Notes, Further reading, External links, See also, Bibliography)
+ * in <details> with a styled <summary>. Default closed, mirrors
+ * WikiWand's data-collapsed="true" pattern.
+ * ============================================================ */
+
+.opctx-article details.opctx-appendix {
+  margin: var(--size-32) 0;
+  border-top: 1px solid var(--color-border-soft);
+  padding-top: var(--size-8);
+}
+
+.opctx-article details.opctx-appendix > summary {
+  list-style: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: var(--size-12);
+  font-family: var(--font-heading);
+  font-size: var(--text-h2);
+  line-height: var(--lh-snug);
+  font-weight: 600;
+  color: var(--color-foreground);
+  letter-spacing: -0.01em;
+  margin: var(--size-32) 0 var(--size-16);
+  padding: var(--size-8) 0;
+  scroll-margin-top: calc(var(--header-height) + var(--size-24));
+  outline-offset: 4px;
+  border-radius: var(--radius-s);
+}
+
+.opctx-article details.opctx-appendix > summary::-webkit-details-marker {
+  display: none;
+}
+
+.opctx-article details.opctx-appendix > summary::before {
+  content: "";
+  width: 16px;
+  height: 16px;
+  flex: none;
+  background: currentColor;
+  color: var(--color-mid);
+  -webkit-mask: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'><polyline points='9 18 15 12 9 6'/></svg>") center / contain no-repeat;
+          mask: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'><polyline points='9 18 15 12 9 6'/></svg>") center / contain no-repeat;
+  transition: transform var(--dur-norm) var(--ease-out),
+              color var(--dur-fast) var(--ease-out);
+}
+
+.opctx-article details.opctx-appendix[open] > summary::before {
+  transform: rotate(90deg);
+  color: var(--color-link);
+}
+
+.opctx-article details.opctx-appendix > summary:hover {
+  color: var(--color-link);
+}
+
+.opctx-article details.opctx-appendix > summary:hover::before {
+  color: var(--color-link);
+}
+
+/* Hint chip "(N items)" for appendix summaries when we know the count */
+.opctx-article details.opctx-appendix > summary .opctx-appendix-count {
+  font-family: var(--font-body);
+  font-size: var(--text-body-sm);
+  font-weight: 500;
+  color: var(--color-mid);
+  margin-left: var(--size-4);
+}
+
+/* ============================================================
+ * Right rail — fixed vertical icon stack on the right edge.
+ * 5 icons: Account · Search · Bookmark · Customize · Chat.
+ * Mirrors WikiWand's pattern; we drop their language + W +
+ * "Wikiwand AI" entries and use the slot for our own AI chat.
+ * ============================================================ */
+
+.opctx-rail {
+  position: fixed;
+  /* Bottom-right FAB stack — same anchoring as mobile so the affordance
+   * sits where users reach for it (thumb zone on mobile, line of sight
+   * on desktop). Was previously top-aligned which felt floating and
+   * disconnected from the article content. */
+  bottom: var(--size-24);
+  right: var(--size-16);
+  z-index: 35;
+  display: flex;
+  flex-direction: column;
+  gap: var(--size-4);
+  padding: var(--size-4);
+  background: var(--color-background);
+  border: 1px solid var(--color-border-soft);
+  border-radius: var(--radius-pill);
+  box-shadow: var(--elevation-2);
+}
+
+.opctx-rail-item {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--color-mid);
+  cursor: pointer;
+  text-decoration: none;
+  transition: background var(--dur-fast) var(--ease-out),
+              color var(--dur-fast) var(--ease-out);
+}
+
+.opctx-rail-item:hover,
+.opctx-rail-item:focus-visible {
+  background: var(--color-surface-alt);
+  color: var(--color-foreground);
+  outline: none;
+}
+
+.opctx-rail-item.is-active {
+  background: var(--color-blue-light);
+  color: var(--color-link);
+}
+
+.opctx-rail-item svg {
+  width: 20px;
+  height: 20px;
+  display: block;
+}
+
+/* AI chat icon styled like the rest of the rail (plain, no gradient).
+ * The fancy gradient gave it disproportionate weight relative to the
+ * other tools — chat is one affordance among several, not a hero CTA. */
+
+/* ============================================================
+ * Customizer drawer — slides in from the right.
+ * 7 segmented controls (theme, article-width, font-size,
+ * links-style, cover-image, border-radius, article-style).
+ * All unlocked, no upsell.
+ * ============================================================ */
+
+.opctx-customizer-overlay {
+  position: fixed;
+  inset: 0;
+  background: var(--color-backdrop);
+  z-index: 50;
+  opacity: 0;
+  pointer-events: none;
+  cursor: pointer;     /* iOS heuristic: tap on a non-interactive <div>
+                          synthesizes click only when this is set */
+  transition: opacity var(--dur-norm) var(--ease-out);
+}
+.opctx-customizer-overlay.is-open {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.opctx-customizer {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: min(360px, 100vw);
+  background: var(--color-background);
+  color: var(--color-foreground);
+  border-left: 1px solid var(--color-border);
+  box-shadow: var(--elevation-3);
+  z-index: 51;
+  cursor: default;     /* reset the overlay's cursor:pointer */
+  transform: translateX(100%);
+  transition: transform var(--dur-norm) var(--ease-out);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.opctx-customizer.is-open {
+  transform: translateX(0);
+}
+
+.opctx-customizer-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--size-20) var(--size-24);
+  border-bottom: 1px solid var(--color-border-soft);
+  flex: 0 0 auto;
+}
+
+.opctx-customizer-head h2 {
+  margin: 0;
+  font-family: var(--font-heading);
+  font-size: 1.5rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.opctx-customizer-close {
+  width: 36px;
+  height: 36px;
+  border: 0;
+  background: transparent;
+  border-radius: 50%;
+  color: var(--color-mid);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: background var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out);
+}
+
+.opctx-customizer-close:hover {
+  background: var(--color-surface-alt);
+  color: var(--color-foreground);
+}
+
+.opctx-customizer-close svg {
+  width: 20px;
+  height: 20px;
+}
+
+.opctx-customizer-body {
+  flex: 1;
+  overflow-y: auto;
+  /* iOS scroll inside fixed body (see .opctx-toc rationale) */
+  touch-action: pan-y;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  padding: var(--size-20) var(--size-24);
+  display: flex;
+  flex-direction: column;
+  gap: var(--size-24);
+}
+
+.opctx-setting {
+  display: flex;
+  flex-direction: column;
+  gap: var(--size-8);
+}
+
+.opctx-setting-label {
+  font-size: var(--text-body-sm);
+  font-weight: 600;
+  color: var(--color-foreground);
+  letter-spacing: -0.005em;
+  margin: 0;
+}
+
+.opctx-segmented {
+  display: flex;
+  background: var(--color-surface-alt);
+  border-radius: var(--radius-pill);
+  padding: 4px;
+  gap: 2px;
+}
+
+.opctx-segmented button {
+  flex: 1;
+  border: 1px solid transparent;
+  border-radius: var(--radius-pill);
+  padding: var(--size-8) var(--size-12);
+  background: transparent;
+  font: inherit;
+  font-size: var(--text-body-xs);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-mid);
+  cursor: pointer;
+  transition: background var(--dur-fast) var(--ease-out),
+              color var(--dur-fast) var(--ease-out),
+              border-color var(--dur-fast) var(--ease-out);
+}
+
+.opctx-segmented button:hover {
+  color: var(--color-foreground);
+}
+
+.opctx-segmented button.is-selected {
+  background: var(--color-background);
+  color: var(--color-link);
+  border-color: var(--color-link);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+
+.opctx-customizer-foot {
+  flex: 0 0 auto;
+  padding: var(--size-16) var(--size-24) var(--size-24);
+  border-top: 1px solid var(--color-border-soft);
+  text-align: center;
+}
+
+.opctx-customizer-reset {
+  background: transparent;
+  border: 0;
+  color: var(--color-mid);
+  font: inherit;
+  font-size: var(--text-body-sm);
+  text-decoration: underline;
+  text-decoration-color: var(--color-very-light);
+  text-underline-offset: 0.18em;
+  cursor: pointer;
+  padding: var(--size-8);
+  transition: color var(--dur-fast) var(--ease-out);
+}
+
+.opctx-customizer-reset:hover {
+  color: var(--color-foreground);
+}
+
+/* ============================================================
+ * Modal scrim — shared by search and bookmarks modals.
+ * Centered card with backdrop-blur scrim. z-index sits ABOVE the
+ * peek popup (9999) so a peek can't visually clip the modal.
+ * Two modals are mutually exclusive (only one open at a time).
+ * ============================================================ */
+
+.opctx-modal-scrim {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  z-index: 10000;
+  cursor: pointer;     /* iOS heuristic — see addScrimDismiss in enhance.js */
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 11vh var(--size-16) var(--size-16);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--dur-norm) var(--ease-out);
+}
+.opctx-modal-scrim.is-open {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.opctx-modal {
+  width: 100%;
+  max-width: 420px;
+  max-height: min(640px, calc(100vh - 22vh - var(--size-32)));
+  background: var(--color-background);
+  cursor: default;     /* reset the scrim's cursor:pointer so it doesn't
+                          inherit into the modal content */
+  color: var(--color-foreground);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-l);
+  box-shadow: var(--elevation-3);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  transform: translateY(-8px) scale(0.98);
+  opacity: 0;
+  transition: transform var(--dur-norm) var(--ease-out),
+              opacity var(--dur-norm) var(--ease-out);
+}
+.opctx-modal-scrim.is-open .opctx-modal {
+  transform: translateY(0) scale(1);
+  opacity: 1;
+}
+
+.opctx-modal-head {
+  flex: 0 0 auto;
+  padding: var(--size-12) var(--size-16);
+  border-bottom: 1px solid var(--color-border-soft);
+  display: flex;
+  align-items: center;
+  gap: var(--size-12);
+}
+
+.opctx-modal-search {
+  position: relative;
+  flex: 1;
+  display: flex;
+  align-items: center;
+  background: var(--color-surface);
+  border: 1px solid transparent;
+  border-radius: var(--radius-pill);
+  padding: var(--size-8) var(--size-12);
+  transition: border-color var(--dur-fast) var(--ease-out),
+              box-shadow var(--dur-fast) var(--ease-out);
+}
+.opctx-modal-search:focus-within {
+  border-color: var(--color-link);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-link) 18%, transparent);
+}
+.opctx-modal-search svg {
+  width: 16px; height: 16px;
+  color: var(--color-mid);
+  flex: 0 0 auto;
+  margin-right: var(--size-8);
+}
+.opctx-modal-search input {
+  flex: 1;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--color-foreground);
+  font: inherit;
+  font-size: var(--text-body-sm);
+  min-width: 0;
+}
+.opctx-modal-search input::placeholder { color: var(--color-mid); }
+
+.opctx-modal-shortcut {
+  font-family: var(--font-mono);
+  font-size: var(--text-body-xs);
+  color: var(--color-mid);
+  background: var(--color-surface-alt);
+  border-radius: var(--radius-s);
+  padding: 2px var(--size-6);
+  flex: 0 0 auto;
+}
+
+.opctx-modal-body {
+  flex: 1;
+  overflow-y: auto;
+  /* iOS scroll inside fixed body (see .opctx-toc rationale) */
+  touch-action: pan-y;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  padding: var(--size-8) 0;
+}
+
+/* Empty state shared between modals (search + bookmarks before-typing) */
+.opctx-modal-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: var(--size-48) var(--size-24);
+  color: var(--color-mid);
+  text-align: center;
+  gap: var(--size-12);
+  min-height: 240px;
+}
+.opctx-modal-empty svg {
+  width: 48px; height: 48px;
+  opacity: 0.35;
+}
+.opctx-modal-empty-text {
+  font-size: var(--text-body-sm);
+}
+
+/* ============================================================
+ * Search modal — list of results + a side preview pane.
+ *
+ * Preview pane mirrors WikiWand: when the user arrows down a row,
+ * a second card floats to the right of the modal showing the
+ * peek payload for the highlighted result. We reuse the Phase 3
+ * peek card markup so the visual is identical.
+ * ============================================================ */
+
+.opctx-search-results {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.opctx-search-result {
+  display: flex;
+  align-items: center;
+  gap: var(--size-12);
+  padding: var(--size-10) var(--size-16);
+  cursor: pointer;
+  border: 0;
+  background: transparent;
+  width: 100%;
+  text-align: left;
+  font: inherit;
+  color: var(--color-foreground);
+  transition: background var(--dur-fast) var(--ease-out);
+}
+.opctx-search-result:hover,
+.opctx-search-result.is-active {
+  background: var(--color-surface);
+}
+.opctx-search-result-thumb {
+  flex: 0 0 auto;
+  width: 32px; height: 32px;
+  border-radius: 50%;
+  object-fit: cover;
+  background: var(--color-surface-alt);
+}
+.opctx-search-result-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.opctx-search-result-title {
+  font-weight: 600;
+  font-size: var(--text-body-sm);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.opctx-search-result-title strong {
+  color: var(--color-link);
+  font-weight: 700;
+}
+.opctx-search-result-desc {
+  font-size: var(--text-body-xs);
+  color: var(--color-mid);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Side preview — pinned to the right edge of the centered modal at
+ * desktop widths, hidden at narrow viewports (the user can scroll
+ * the modal results to read titles instead). */
+.opctx-search-preview {
+  position: absolute;
+  width: 320px;
+  background: var(--color-background);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-l);
+  box-shadow: var(--elevation-2);
+  overflow: hidden;
+  display: none;
+}
+.opctx-search-preview.is-visible { display: block; }
+.opctx-search-preview .opctx-peek-thumb { height: 140px; }
+
+/* ============================================================
+ * Bookmarks modal — header counter + Add pill, then list
+ * ============================================================ */
+
+.opctx-bookmarks-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--size-12) var(--size-16);
+  border-bottom: 1px solid var(--color-border-soft);
+  flex: 0 0 auto;
+}
+.opctx-bookmarks-counter {
+  font-size: var(--text-body-sm);
+  color: var(--color-foreground);
+  font-weight: 600;
+}
+.opctx-bookmarks-counter b {
+  color: var(--color-foreground);
+}
+.opctx-bookmarks-add {
+  border: 0;
+  background: var(--color-foreground);
+  color: var(--color-background);
+  border-radius: var(--radius-pill);
+  padding: var(--size-6) var(--size-12);
+  font: inherit;
+  font-size: var(--text-body-xs);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--size-6);
+  transition: opacity var(--dur-fast) var(--ease-out),
+              transform var(--dur-fast) var(--ease-out);
+}
+.opctx-bookmarks-add:hover { opacity: 0.85; }
+.opctx-bookmarks-add:active { transform: scale(0.97); }
+.opctx-bookmarks-add[aria-pressed="true"] {
+  background: var(--color-surface);
+  color: var(--color-foreground);
+  border: 1px solid var(--color-border);
+  padding: calc(var(--size-6) - 1px) calc(var(--size-12) - 1px);
+}
+
+.opctx-bookmarks-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.opctx-bookmark {
+  display: flex;
+  align-items: center;
+  gap: var(--size-12);
+  padding: var(--size-10) var(--size-16);
+  border-bottom: 1px solid var(--color-border-soft);
+  cursor: pointer;
+  transition: background var(--dur-fast) var(--ease-out);
+}
+.opctx-bookmark:hover { background: var(--color-surface); }
+.opctx-bookmark:last-child { border-bottom: 0; }
+.opctx-bookmark-thumb {
+  flex: 0 0 auto;
+  width: 36px; height: 36px;
+  border-radius: var(--radius-s);
+  object-fit: cover;
+  background: var(--color-surface-alt);
+}
+.opctx-bookmark-text {
+  flex: 1;
+  min-width: 0;
+}
+.opctx-bookmark-title {
+  font-weight: 600;
+  font-size: var(--text-body-sm);
+  color: var(--color-foreground);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.opctx-bookmark-meta {
+  font-size: var(--text-body-xs);
+  color: var(--color-mid);
+}
+.opctx-bookmark-remove {
+  flex: 0 0 auto;
+  border: 0;
+  background: transparent;
+  color: var(--color-mid);
+  cursor: pointer;
+  padding: var(--size-6);
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity var(--dur-fast) var(--ease-out),
+              background var(--dur-fast) var(--ease-out),
+              color var(--dur-fast) var(--ease-out);
+}
+.opctx-bookmark:hover .opctx-bookmark-remove { opacity: 1; }
+.opctx-bookmark-remove:hover {
+  background: var(--color-surface-alt);
+  color: var(--color-foreground);
+}
+.opctx-bookmark-remove svg { width: 16px; height: 16px; }
+
+/* ============================================================
+ * Share modal — docs-style access surface for audience pages.
+ * Uses the shared modal scrim/card tokens, then adds page-sharing
+ * structure: people list, general-access controls, and footer CTA row.
+ * ============================================================ */
+
+.opctx-share-modal {
+  max-width: 640px;
+  max-height: min(720px, calc(100vh - 18vh - var(--size-32)));
+}
+
+.opctx-share-modal-head {
+  display: flex;
+  flex-direction: column;
+  gap: var(--size-8);
+  padding: var(--size-20) var(--size-24) var(--size-16);
+  border-bottom: 1px solid var(--color-border-soft);
+}
+
+.opctx-share-modal-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--size-16);
+}
+
+.opctx-share-modal-title {
+  margin: 0;
+  font-family: var(--font-heading);
+  font-size: var(--text-h4);
+  line-height: var(--lh-snug);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.opctx-share-modal-title-name {
+  font-weight: 600;
+}
+
+/* Stream-row: tells the user which audience version they're sharing.
+ * The badge inside picks up the audience-tier color so a quick glance
+ * disambiguates Internal vs Public without reading the full sentence. */
+.opctx-share-modal-stream {
+  margin: 0;
+  color: var(--color-mid);
+  font-size: var(--text-body-sm);
+  line-height: var(--lh-snug);
+}
+
+.opctx-share-stream-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px var(--size-6);
+  margin: 0 2px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface-alt);
+  color: var(--color-foreground);
+  font-size: var(--text-body-xs);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  vertical-align: baseline;
+}
+
+/* Audience-tier color coding: matches the stream's semantics so the
+ * recipient knows at a glance what they're getting. Light treatment
+ * — these are informational, not warnings. */
+.opctx-share-stream-badge[data-stream="public"] {
+  border-color: color-mix(in oklab, var(--color-link) 40%, var(--color-border));
+  background: color-mix(in oklab, var(--color-link) 8%, var(--color-surface-alt));
+  color: color-mix(in oklab, var(--color-link) 70%, var(--color-foreground));
+}
+
+.opctx-share-stream-badge[data-stream="internal"] {
+  border-color: color-mix(in oklab, #b8540a 40%, var(--color-border));
+  background: color-mix(in oklab, #b8540a 8%, var(--color-surface-alt));
+  color: color-mix(in oklab, #b8540a 70%, var(--color-foreground));
+}
+
+.opctx-share-stream-badge[data-stream="private"] {
+  border-color: color-mix(in oklab, #7a3461 40%, var(--color-border));
+  background: color-mix(in oklab, #7a3461 8%, var(--color-surface-alt));
+  color: color-mix(in oklab, #7a3461 70%, var(--color-foreground));
+}
+
+/* Disabled menu item — used by the audience menu's Share entry when
+ * the active audience is Private. Visually muted; cursor reflects
+ * the unactionable state. */
+.opctx-pill-menu-item[disabled],
+.opctx-pill-menu-item[aria-disabled="true"] {
+  opacity: 0.5;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+.opctx-share-modal-close {
+  width: 36px;
+  height: 36px;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--color-mid);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background var(--dur-fast) var(--ease-out),
+              color var(--dur-fast) var(--ease-out);
+}
+
+.opctx-share-modal-close:hover,
+.opctx-share-modal-close:focus-visible {
+  background: var(--color-surface-alt);
+  color: var(--color-foreground);
+  outline: none;
+}
+
+.opctx-share-modal-close:focus-visible {
+  box-shadow: 0 0 0 2px var(--color-link) inset;
+}
+
+.opctx-share-modal-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--size-20) var(--size-24);
+  display: grid;
+  gap: var(--size-24);
+}
+
+.opctx-share-section {
+  display: grid;
+  gap: var(--size-12);
+}
+
+.opctx-share-section-label {
+  font-size: var(--text-body-xs);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--color-mid);
+}
+
+.opctx-share-invite {
+  display: grid;
+  gap: var(--size-6);
+}
+
+.opctx-share-invite-label {
+  font-size: var(--text-body-xs);
+  font-weight: 600;
+  color: var(--color-mid);
+}
+
+.opctx-share-invite-input {
+  width: 100%;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-pill);
+  background: var(--color-surface-alt);
+  color: var(--color-foreground);
+  font: inherit;
+  font-size: var(--text-body-sm);
+  padding: var(--size-12) var(--size-16);
+  transition: border-color var(--dur-fast) var(--ease-out),
+              background var(--dur-fast) var(--ease-out);
+}
+
+.opctx-share-invite-input::placeholder {
+  color: var(--color-mid);
+}
+
+.opctx-share-invite-input:focus {
+  outline: none;
+  border-color: var(--color-link);
+  background: var(--color-background);
+}
+
+.opctx-share-access-list {
+  display: grid;
+  gap: var(--size-8);
+}
+
+.opctx-share-access-row {
+  display: flex;
+  align-items: center;
+  gap: var(--size-12);
+  padding: var(--size-12) var(--size-14, 0.875rem);
+  border: 1px solid var(--color-border-soft);
+  border-radius: var(--radius-l);
+  background: color-mix(in srgb, var(--color-surface-alt) 72%, transparent);
+}
+
+.opctx-share-access-row--hint {
+  justify-content: center;
+  color: var(--color-mid);
+  font-size: var(--text-body-sm);
+}
+
+.opctx-share-access-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--color-blue-light);
+  color: var(--color-link);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--text-body-sm);
+  font-weight: 700;
+  flex: 0 0 auto;
+}
+
+.opctx-share-access-meta {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.opctx-share-access-primary {
+  font-size: var(--text-body-sm);
+  font-weight: 600;
+  color: var(--color-foreground);
+  overflow-wrap: anywhere;
+}
+
+.opctx-share-access-secondary {
+  font-size: var(--text-body-xs);
+  color: var(--color-mid);
+}
+
+.opctx-share-access-role {
+  flex: 0 0 auto;
+  padding: 0 var(--size-10);
+  min-height: 28px;
+  border-radius: var(--radius-pill);
+  background: var(--color-background);
+  border: 1px solid var(--color-border);
+  display: inline-flex;
+  align-items: center;
+  font-size: var(--text-body-xs);
+  font-weight: 600;
+  color: var(--color-mid);
+}
+
+.opctx-share-general-access {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--size-16);
+  padding: var(--size-14, 0.875rem);
+  border: 1px solid var(--color-border-soft);
+  border-radius: var(--radius-l);
+  background: color-mix(in srgb, var(--color-surface-alt) 72%, transparent);
+}
+
+.opctx-share-general-copy {
+  display: grid;
+  gap: var(--size-4);
+}
+
+.opctx-share-general-title {
+  font-size: var(--text-body-sm);
+  font-weight: 600;
+  color: var(--color-foreground);
+}
+
+.opctx-share-general-description {
+  margin: 0;
+  font-size: var(--text-body-sm);
+  color: var(--color-mid);
+  max-width: 36ch;
+}
+
+.opctx-share-general-controls {
+  display: flex;
+  align-items: center;
+  gap: var(--size-8);
+  flex-wrap: wrap;
+}
+
+.opctx-share-control {
+  position: relative;
+}
+
+.opctx-share-control-toggle {
+  min-height: 36px;
+  padding: 0 var(--size-12);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-pill);
+  background: var(--color-surface-alt);
+  color: var(--color-foreground);
+  font: inherit;
+  font-size: var(--text-body-sm);
+  display: inline-flex;
+  align-items: center;
+  gap: var(--size-8);
+  cursor: pointer;
+  transition: border-color var(--dur-fast) var(--ease-out),
+              background var(--dur-fast) var(--ease-out);
+}
+
+.opctx-share-control-toggle:hover,
+.opctx-share-control-toggle:focus-visible,
+.opctx-share-control-toggle[aria-expanded="true"] {
+  border-color: var(--color-link);
+  background: var(--color-background);
+  outline: none;
+}
+
+.opctx-share-control-toggle:focus-visible {
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-link) 18%, transparent);
+}
+
+.opctx-share-control-chevron {
+  color: var(--color-mid);
+  flex: 0 0 auto;
+}
+
+.opctx-share-access-menu,
+.opctx-share-role-menu {
+  min-width: 100%;
+}
+
+.opctx-share-modal-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--size-12);
+  padding: var(--size-16) var(--size-24) var(--size-20);
+  border-top: 1px solid var(--color-border-soft);
+}
+
+.opctx-share-copy-link,
+.opctx-share-done {
+  min-height: 38px;
+  padding: 0 var(--size-16);
+  border-radius: var(--radius-pill);
+  font: inherit;
+  font-size: var(--text-body-sm);
+  font-weight: 600;
+  cursor: pointer;
+  transition: background var(--dur-fast) var(--ease-out),
+              color var(--dur-fast) var(--ease-out),
+              border-color var(--dur-fast) var(--ease-out);
+}
+
+.opctx-share-copy-link {
+  border: 1px solid var(--color-border);
+  background: var(--color-surface-alt);
+  color: var(--color-foreground);
+}
+
+.opctx-share-copy-link:hover,
+.opctx-share-copy-link:focus-visible {
+  background: var(--color-background);
+  border-color: var(--color-link);
+  outline: none;
+}
+
+.opctx-share-done {
+  border: 1px solid var(--color-link);
+  background: var(--color-link);
+  color: #fff;
+}
+
+.opctx-share-done:hover,
+.opctx-share-done:focus-visible {
+  background: var(--color-link-hover);
+  border-color: var(--color-link-hover);
+  outline: none;
+}
+
+/* ============================================================
+ * AI panel — bubble drawer | fixed-panel | bubble-FAB states
+ *
+ * Two state attributes on <html> drive the visual:
+ *   data-ai-display ∈ {bubble, panel}
+ *   data-ai-panel-visibility ∈ {visible, hidden}
+ *
+ * 4 combinations:
+ *   bubble + visible → drawer floats over the right side, no scrim
+ *   bubble + hidden  → invisible (rail icon is the entry point)
+ *   panel  + visible → grid reflows into a 3-column with AI as right col
+ *   panel  + hidden  → bubble FAB appears at bottom-right (re-open)
+ *
+ * Width is user-resizable via the drag-handle on the panel's left edge.
+ * Persisted to localStorage.opctx-ai-panel-width (clamped 360..720).
+ * ============================================================ */
+
+:root {
+  --ai-panel-width: 416px;
+}
+
+.opctx-ai-panel {
+  display: none;
+  position: fixed;
+  top: var(--size-16);
+  bottom: var(--size-16);
+  right: 78px;       /* 56 (rail width) + 16 (gap) + ~6 nudge */
+  width: var(--ai-panel-width);
+  background: var(--color-background);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-l);
+  box-shadow: var(--elevation-3);
+  flex-direction: column;
+  overflow: hidden;
+  z-index: 60;     /* above content, below modal scrim (10000) */
+  color: var(--color-foreground);
+}
+
+/* bubble + visible: floats over content, no layout impact */
+:root[data-ai-display="bubble"][data-ai-panel-visibility="visible"]
+  .opctx-ai-panel {
+  display: flex;
+  animation: opctx-ai-slide-in var(--dur-norm) var(--ease-out);
+}
+
+/* panel + visible: panel is pinned to the right edge full-height with no
+ * gaps; rest of the page reserves space via body padding-right (which
+ * shifts the centered .opctx-layout left). The rail also offsets so it
+ * doesn't overlap the panel. */
+:root[data-ai-display="panel"][data-ai-panel-visibility="visible"]
+  .opctx-ai-panel {
+  display: flex;
+  top: 0;
+  bottom: 0;
+  right: 0;
+  border-radius: 0;
+  border: 0;
+  border-left: 1px solid var(--color-border);
+  box-shadow: none;
+  animation: none;
+}
+:root[data-ai-display="panel"][data-ai-panel-visibility="visible"] body {
+  padding-right: var(--ai-panel-width);
+}
+:root[data-ai-display="panel"][data-ai-panel-visibility="visible"]
+  .opctx-rail {
+  right: calc(var(--ai-panel-width) + var(--size-12));
+}
+/* Hide the AI rail icon when the panel is already in fixed mode and open —
+ * redundant entry point, and the close button in the panel header takes over */
+:root[data-ai-display="panel"][data-ai-panel-visibility="visible"]
+  .opctx-rail-item--ai {
+  display: none;
+}
+
+/* panel + hidden: show the bubble FAB so user can reopen */
+.opctx-ai-fab {
+  display: none;
+  position: fixed;
+  bottom: var(--size-16);
+  right: var(--size-16);
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  border: 0;
+  cursor: pointer;
+  box-shadow: var(--elevation-2);
+  background: linear-gradient(135deg, #ff8a3d 0%, #d34cff 100%);
+  color: #fff;
+  z-index: 61;
+  align-items: center;
+  justify-content: center;
+  transition: transform var(--dur-fast) var(--ease-out);
+}
+.opctx-ai-fab:hover { transform: scale(1.05); }
+.opctx-ai-fab svg { width: 22px; height: 22px; }
+:root[data-ai-display="panel"][data-ai-panel-visibility="hidden"]
+  .opctx-ai-fab {
+  display: inline-flex;
+}
+
+@keyframes opctx-ai-slide-in {
+  from { transform: translateX(12px); opacity: 0; }
+  to   { transform: translateX(0);    opacity: 1; }
+}
+
+/* Resize handle — only meaningful in bubble drawer mode (the fixed
+ * panel uses CSS grid, which would resist drag updates of the
+ * variable). */
+.opctx-ai-resize {
+  position: absolute;
+  left: -3px;
+  top: 0;
+  bottom: 0;
+  width: 6px;
+  cursor: ew-resize;
+  background: transparent;
+  z-index: 1;
+}
+.opctx-ai-resize:hover,
+.opctx-ai-resize.is-dragging {
+  background: color-mix(in srgb, var(--color-link) 30%, transparent);
+}
+:root[data-ai-display="panel"] .opctx-ai-resize { display: none; }
+
+/* Header */
+.opctx-ai-head {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: var(--size-8);
+  padding: var(--size-12) var(--size-14);
+  border-bottom: 1px solid var(--color-border-soft);
+}
+.opctx-ai-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--size-6);
+  font-weight: 600;
+  font-family: var(--font-heading);
+}
+.opctx-ai-spark {
+  width: 22px; height: 22px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #ff8a3d 0%, #d34cff 100%);
+  color: #fff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.opctx-ai-spark svg { width: 13px; height: 13px; }
+.opctx-ai-actions {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+.opctx-ai-action {
+  width: 36px; height: 36px;
+  border: 0;
+  background: transparent;
+  border-radius: 50%;
+  color: var(--color-mid);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: background var(--dur-fast) var(--ease-out),
+              color var(--dur-fast) var(--ease-out);
+}
+.opctx-ai-action:hover {
+  background: var(--color-surface);
+  color: var(--color-foreground);
+}
+.opctx-ai-action svg { width: 16px; height: 16px; }
+.opctx-ai-action.is-on {
+  background: var(--color-surface-alt);
+  color: var(--color-link);
+}
+/* Hide the "Fixed panel" toggle on viewports too narrow to accommodate
+ * a 416px panel + a usable article column. Below ~1280px, fixed-panel
+ * mode would shrink the article to under 500px which makes long-form
+ * reading unpleasant. WikiWand does the same via its _desktopOnly_
+ * helper. */
+@media (max-width: 1280px) {
+  .opctx-ai-action--fixed { display: none; }
+  /* If a previous larger viewport persisted panel mode, force back to
+   * bubble visually so we don't reserve body padding-right that would
+   * never get used for an actual side-column. */
+  :root[data-ai-display="panel"][data-ai-panel-visibility="visible"]
+    body {
+    padding-right: 0;
+  }
+  :root[data-ai-display="panel"][data-ai-panel-visibility="visible"]
+    .opctx-ai-panel {
+    /* Snap back to floating drawer geometry */
+    top: var(--size-16);
+    bottom: var(--size-16);
+    right: 78px;
+    border-radius: var(--radius-l);
+    border: 1px solid var(--color-border);
+    box-shadow: var(--elevation-3);
+  }
+  :root[data-ai-display="panel"][data-ai-panel-visibility="visible"]
+    .opctx-rail {
+    right: var(--size-16);
+  }
+  :root[data-ai-display="panel"][data-ai-panel-visibility="visible"]
+    .opctx-rail-item--ai {
+    display: inline-flex;
+  }
+}
+
+/* Context chip + body */
+.opctx-ai-context {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: var(--size-8);
+  margin: var(--size-12) var(--size-14) 0;
+  padding: var(--size-8) var(--size-12);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border-soft);
+  border-radius: var(--radius-pill);
+  font-size: var(--text-body-xs);
+  color: var(--color-mid);
+}
+.opctx-ai-context-thumb {
+  flex: 0 0 auto;
+  width: 22px; height: 22px;
+  border-radius: 50%;
+  background: var(--color-surface-alt);
+  object-fit: cover;
+}
+.opctx-ai-context-text {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.opctx-ai-context-text b { color: var(--color-foreground); font-weight: 600; }
+
+.opctx-ai-body {
+  flex: 1;
+  overflow-y: auto;
+  /* iOS scroll inside fixed body (see .opctx-toc rationale) */
+  touch-action: pan-y;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  padding: var(--size-14);
+  display: flex;
+  flex-direction: column;
+  gap: var(--size-12);
+  scrollbar-width: thin;
+}
+
+.opctx-ai-suggestions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--size-8);
+  margin-top: auto;     /* pin to the bottom of empty body */
+  margin-bottom: var(--size-8);
+}
+.opctx-ai-suggestion {
+  border: 1px solid var(--color-border);
+  background: var(--color-background);
+  border-radius: var(--radius-pill);
+  padding: var(--size-8) var(--size-12);
+  font: inherit;
+  font-size: var(--text-body-xs);
+  color: var(--color-foreground);
+  cursor: pointer;
+  text-align: left;
+  transition: border-color var(--dur-fast) var(--ease-out),
+              background var(--dur-fast) var(--ease-out);
+}
+.opctx-ai-suggestion:hover {
+  border-color: var(--color-link);
+  background: var(--color-surface);
+}
+
+.opctx-ai-provider-choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--size-8);
+  margin-top: var(--size-10);
+}
+
+.opctx-ai-provider-choice {
+  min-height: 32px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-m);
+  padding: 0 var(--size-12);
+  background: var(--color-background);
+  color: var(--color-foreground);
+  font: inherit;
+  font-size: var(--text-body-xs);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.opctx-ai-provider-choice:hover,
+.opctx-ai-provider-choice:focus-visible {
+  border-color: var(--color-link);
+  outline: none;
+}
+
+/* Messages */
+.opctx-ai-msg {
+  max-width: 85%;
+  padding: var(--size-8) var(--size-12);
+  border-radius: var(--radius-l);
+  font-size: var(--text-body-sm);
+  line-height: var(--lh-normal);
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+.opctx-ai-msg--user {
+  align-self: flex-end;
+  background: color-mix(in srgb, var(--color-link) 14%, transparent);
+  border: 1px solid color-mix(in srgb, var(--color-link) 26%, transparent);
+  color: var(--color-foreground);
+}
+.opctx-ai-msg--bot {
+  align-self: flex-start;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border-soft);
+  color: var(--color-foreground);
+}
+.opctx-ai-msg--bot.is-thinking::after {
+  content: "";
+  display: inline-block;
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: var(--color-mid);
+  margin-left: 6px;
+  animation: opctx-ai-pulse 1.2s ease-in-out infinite;
+  vertical-align: middle;
+}
+@keyframes opctx-ai-pulse {
+  0%, 100% { opacity: 0.4; }
+  50%      { opacity: 1; }
+}
+
+/* Composer */
+.opctx-ai-foot {
+  flex: 0 0 auto;
+  padding: var(--size-10) var(--size-14) var(--size-14);
+  border-top: 1px solid var(--color-border-soft);
+}
+.opctx-ai-composer {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--size-8);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-l);
+  padding: var(--size-8);
+  transition: border-color var(--dur-fast) var(--ease-out),
+              box-shadow var(--dur-fast) var(--ease-out);
+}
+.opctx-ai-composer:focus-within {
+  border-color: var(--color-link);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-link) 18%, transparent);
+}
+.opctx-ai-input {
+  flex: 1;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  font: inherit;
+  font-size: var(--text-body-sm);
+  color: var(--color-foreground);
+  resize: none;
+  min-height: 22px;
+  max-height: 120px;
+  padding: 2px 4px;
+  font-family: var(--font-body);
+}
+.opctx-ai-input::placeholder { color: var(--color-mid); }
+
+.opctx-ai-send {
+  flex: 0 0 auto;
+  width: 32px; height: 32px;
+  border-radius: 50%;
+  border: 0;
+  background: var(--color-foreground);
+  color: var(--color-background);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: opacity var(--dur-fast) var(--ease-out),
+              transform var(--dur-fast) var(--ease-out);
+}
+.opctx-ai-send:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+.opctx-ai-send:not(:disabled):active { transform: scale(0.95); }
+.opctx-ai-send svg { width: 16px; height: 16px; }
+
+/* ============================================================
+ * Responsive
+ * ============================================================ */
+
+@media (max-width: 960px) {
+  /* Single-column layout — TOC is no longer in flow; it's an off-canvas
+   * drawer (rules below). Both the base layout and the data-toc=hidden
+   * variant collapse to one column so the desktop hidden-state CSS
+   * doesn't squish the article. */
+  .opctx-layout,
+  :root[data-toc="hidden"] .opctx-layout,
+  :root[data-toc="full"] .opctx-layout {
+    grid-template-columns: 1fr;
+    gap: var(--size-24);
+    padding: var(--size-16);
+  }
+
+  /* In-header TOC hamburger — appears as the leftmost item in the
+   * global header on mobile, mirroring the mobile Wikipedia pattern
+   * (single header bar with the menu button alongside the brand,
+   * not a separate sub-bar). Hidden on desktop where the inline
+   * TOC sidebar is already visible. */
+  .opctx-header-toc-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    padding: 0;
+    margin-right: var(--size-4);
+    /* Borderless icon button — cleaner than a chrome-bordered toggle.
+     * Hover gets a soft surface-alt fill instead of a stroke. */
+    border: 0;
+    background: transparent;
+    color: var(--color-foreground);
+    cursor: pointer;
+    border-radius: var(--radius-s);
+    flex-shrink: 0;
+    transition: background var(--dur-fast) var(--ease-out),
+                color var(--dur-fast) var(--ease-out);
+  }
+  .opctx-header-toc-toggle:hover {
+    background: var(--color-surface-alt);
+  }
+  .opctx-header-toc-toggle:focus-visible {
+    outline: 2px solid var(--color-link);
+    outline-offset: 2px;
+  }
+  .opctx-header-toc-toggle svg { width: 18px; height: 18px; display: block; }
+
+  /* Tighten header padding on mobile so the new hamburger + brand +
+   * actions all fit in 393px viewport without overflow. */
+  .opctx-header { padding: 0 var(--size-12); gap: var(--size-12); }
+  .opctx-audience-switcher-toggle {
+    font-size: var(--text-caption, 0.7rem);
+  }
+
+  /* TOC drawer — slides in from the left, sits below the parent header
+   * so the "1Context | Public | Auto" chrome stays visible while the
+   * drawer is open. Closed by default (translateX(-100%)); opens when
+   * data-toc="full" via the hamburger or the mobile bar trigger.
+   *
+   * Why off-canvas instead of inline-sticky (the previous approach):
+   *   - inline-sticky pushed the article down by the full TOC height
+   *   - sticky positioning then covered the parent header chrome on scroll
+   * Off-canvas drawer is the WikiWand mobile pattern and avoids both. */
+  .opctx-toc {
+    position: fixed;
+    top: calc(var(--header-height) + 5px);
+    left: 0;
+    /* Explicit height — `bottom: 0` alone wasn't clipping on iOS:
+     * the drawer auto-sized to its content (1369px > viewport 852)
+     * so scrollHeight == clientHeight and overflow:auto had nothing
+     * to scroll. dvh tracks the dynamic viewport (URL-bar aware on
+     * iOS 16+); vh is the static fallback. */
+    height: calc(100vh - var(--header-height) - 5px);
+    height: calc(100dvh - var(--header-height) - 5px);
+    width: min(320px, 86vw);
+    max-height: none;
+    margin: 0;
+    /* Bottom padding tracks safe-area-inset so the last TOC item
+     * sits above the iPhone home indicator. */
+    /* Round 7: top padding 0 so .opctx-toc-head sits flush with the
+     * drawer top edge — Era pill + X button are the chrome that
+     * "owns" that vertical space. The previous 16px gap created
+     * dead whitespace above the head. The head's own padding-bottom
+     * still gives the divider breathing room. */
+    padding: 0 var(--size-12) max(var(--size-16), env(safe-area-inset-bottom, 0px));
+    background: var(--color-background);
+    border-right: 1px solid var(--color-border);
+    box-shadow: 4px 0 24px rgba(0, 0, 0, 0.12);
+    overflow-y: auto;
+    /* iOS quirk: when body is position:fixed for scroll-lock, touch events
+     * inside a nested overflow:auto won't pan unless we explicitly mark
+     * the element as the touch-handler. pan-y opts in to vertical drag,
+     * overscroll-behavior contains the rubber-band so scroll doesn't
+     * bubble back out to the locked body, and -webkit-overflow-scrolling
+     * keeps momentum on older iOS WebKit. */
+    touch-action: pan-y;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+    z-index: 25;             /* under header (z:30) so chrome stays on top */
+    transform: translateX(-100%);
+    transition: transform 240ms var(--ease-out);
+    order: initial;
+  }
+  :root[data-toc="hidden"] .opctx-toc {
+    visibility: hidden;
+    pointer-events: none;
+    overflow: hidden;
+    box-shadow: none;
+  }
+  :root[data-toc="full"] .opctx-toc {
+    transform: translateX(0);
+    visibility: visible;
+    pointer-events: auto;
+    overflow-x: hidden;
+    overflow-y: auto;
+  }
+  .opctx-main { order: initial; }
+
+  /* Inside the drawer, the .opctx-toc-head's page title duplicates
+   * the mobile bar's title — hide it. The toggle stays visible
+   * inside the drawer but flips its icon from hamburger to X
+   * (close) — see .opctx-toc-toggle-icon below. The chrome header's
+   * hamburger is the way back into the drawer. */
+  .opctx-toc .opctx-toc-current { display: none; }
+
+  /* Round 3: inside the mobile drawer, swap hamburger → close (X).
+   * The chrome header's hamburger is the canonical "open drawer"
+   * affordance; duplicating it inside the drawer is redundant. The
+   * X reads unambiguously as "close this sheet" and matches the
+   * iOS modal-sheet pattern (close in the top-right). The button's
+   * click handler still fires `data-toc-toggle` which closes the
+   * drawer; only the visible glyph changes. */
+  .opctx-toc-toggle-icon--menu  { display: none; }
+  .opctx-toc-toggle-icon--close { display: inline-flex; }
+  /* Bigger tap target inside the drawer — 44x44 is the iOS HIG
+   * minimum for one-handed touch. Keep the inline 36 size on
+   * desktop where this is a precise click affordance. */
+  .opctx-toc-toggle {
+    width: 44px;
+    height: 44px;
+  }
+  .opctx-toc-toggle svg { width: 20px; height: 20px; }
+
+  /* Scrim — dims the article behind the drawer; clicking it closes
+   * the drawer. Sits under the parent header so the header stays
+   * undimmed and clickable. The scrim's left edge starts where the
+   * drawer ends so any click on it is unambiguously "click outside
+   * the drawer" — that prevents the drawer's own links from
+   * intercepting close-clicks.
+   *
+   * cursor: pointer is required for iOS Safari to synthesize click
+   * events on tap. Without it, tapping a plain <div> doesn't fire
+   * the document-level click listener (mobile-touch tests caught
+   * this on WebKit/iPhone 13 + iPad Pro 11; Chromium/Pixel 5 fired
+   * fine without it). Documented iOS quirk. */
+  .opctx-toc-scrim {
+    display: block;
+    position: fixed;
+    top: calc(var(--header-height) + 5px);
+    left: min(320px, 86vw);
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.4);
+    opacity: 0;
+    pointer-events: none;
+    cursor: pointer;
+    transition: opacity 240ms var(--ease-out);
+    z-index: 24;
+  }
+  :root[data-toc="full"] .opctx-toc-scrim {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  /* Sub-bar removed — the hamburger now lives in `.opctx-header`
+   * itself (see `.opctx-header-toc-toggle` below). The page H1
+   * sits directly under the global header, mirroring the mobile
+   * Wikipedia pattern. Old `.opctx-mobile-bar` / `.opctx-mobile-bar-*`
+   * selectors are intentionally not styled — JS no longer creates
+   * those nodes. */
+
+  /* AI panel padding-right would steal half the screen on mobile —
+   * never reserve body space for the panel below 960px (the panel
+   * is full-screen modal in that responsive range anyway). Also force
+   * back to bubble mode so the fixed-panel toggle (which would squish
+   * the article into a sliver) effectively no-ops. */
+  :root[data-ai-display="panel"][data-ai-panel-visibility="visible"]
+    body {
+    padding-right: 0;
+  }
+  :root[data-ai-display="panel"][data-ai-panel-visibility="visible"]
+    .opctx-rail {
+    right: var(--size-12);
+  }
+  :root {
+    --text-h1: 2.25rem;
+    --article-padding: var(--size-20);
+  }
+  .opctx-article .infobox {
+    float: none;
+    width: 100%;
+    margin: var(--size-16) 0;
+  }
+  .opctx-header-search { display: none; }
+
+  /* View-toggle: hide the text labels at narrow widths and keep just
+   * the icons. The full "Reader" / "Agent" labels would push
+   * .opctx-header-actions past the viewport on iPhone-class widths
+   * (caught by mobile-touch tests on iPhone 13/WebKit). Icons alone
+   * stay legible and the labels remain in the title attribute. */
+  .opctx-view-btn span { display: none; }
+  .opctx-view-btn { padding: var(--size-6) var(--size-8); }
+
+  /* Right rail collapses to a bottom-right FAB stack with subset of icons.
+   * Mirror WikiWand's mobile behavior: keep search + customize + AI chat.
+   *
+   * env(safe-area-inset-bottom) keeps the rail above the iOS home
+   * indicator on notch devices. Falls back to size-16 if the inset
+   * is 0 or unsupported. Same idea for right edge (some Android nav
+   * bars or notches in landscape). */
+  .opctx-rail {
+    top: auto;
+    right: max(var(--size-12), env(safe-area-inset-right, 0px));
+    bottom: max(var(--size-16), env(safe-area-inset-bottom, 0px));
+    border-radius: var(--radius-pill);
+    box-shadow: var(--elevation-2);
+  }
+  /* AI bubble FAB sits in same area — same safe-area treatment. */
+  .opctx-ai-fab {
+    right: max(var(--size-16), env(safe-area-inset-right, 0px));
+    bottom: max(var(--size-16), env(safe-area-inset-bottom, 0px));
+  }
+  /* All five rail icons stay on mobile — the bottom-right pill needs to
+   * carry the same affordances as desktop (account, search, bookmark,
+   * customize, chat). Pill height grows naturally with the icon stack;
+   * still well within iPhone-class screen heights. */
+
+  /* Customizer at narrow widths is a drawer (not a modal) — the user is
+   * adjusting settings, not focused on a one-shot task. Pin it below the
+   * parent header so the 1Context chrome stays visible/clickable while
+   * settings are being changed. The scrim does the same. */
+  .opctx-customizer {
+    width: 100vw;
+    top: calc(var(--header-height) + 5px);
+    bottom: 0;
+  }
+  .opctx-customizer-overlay {
+    inset: calc(var(--header-height) + 5px) 0 0 0;
+  }
+
+  /* Modals: full-bleed at narrow widths, hide the side preview pane.
+   * Modals (search, bookmarks) are focused-task UIs and intentionally
+   * cover the parent header — that's the standard modal pattern. */
+  .opctx-modal-scrim { padding: var(--size-32) var(--size-12) var(--size-12); }
+  .opctx-modal { max-width: 100%; max-height: calc(100vh - var(--size-48)); }
+  .opctx-share-modal-scrim {
+    align-items: flex-end;
+    padding: max(var(--size-32), env(safe-area-inset-top, 0px)) var(--size-8) var(--size-8);
+  }
+  .opctx-share-modal {
+    max-height: calc(100vh - var(--size-40));
+    border-radius: var(--radius-2xl) var(--radius-2xl) var(--radius-l) var(--radius-l);
+  }
+  .opctx-share-modal-head,
+  .opctx-share-modal-body,
+  .opctx-share-modal-foot {
+    padding-inline: var(--size-16);
+  }
+  .opctx-share-general-access {
+    flex-direction: column;
+  }
+  .opctx-share-general-description {
+    max-width: none;
+  }
+  .opctx-share-general-controls {
+    width: 100%;
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .opctx-share-control,
+  .opctx-share-control-toggle,
+  .opctx-share-access-menu,
+  .opctx-share-role-menu {
+    width: 100%;
+  }
+  .opctx-share-modal-foot {
+    gap: var(--size-8);
+  }
+  .opctx-search-preview { display: none !important; }
+
+  /* AI panel + bubble: at narrow widths both render full-width over the
+   * article. Pin top below the parent header so 1Context chrome stays
+   * visible, mirroring the TOC drawer + customizer treatment.
+   *
+   * Selector specificity matters here — the desktop panel-mode rule
+   * (:root[data-ai-display="panel"][data-ai-panel-visibility="visible"])
+   * is (0,3,0). A bare .opctx-ai-panel rule is (0,1,0) and would lose,
+   * so we mirror the same attribute selectors to override at narrow. */
+  :root[data-ai-display="panel"][data-ai-panel-visibility="visible"] .opctx-ai-panel,
+  :root[data-ai-display="bubble"][data-ai-panel-visibility="visible"] .opctx-ai-panel {
+    top: calc(var(--header-height) + 5px);
+    bottom: 0;
+    right: 0;
+    left: 0;
+    width: 100% !important;
+    border-radius: 0;
+    border: 0;
+  }
+  .opctx-ai-resize { display: none; }
+}
+
+/* ============================================================
+ * Body scroll lock — applied via [data-scroll-lock] on <html>
+ * by setBodyScrollLock(true) in enhance.js when any overlay is
+ * open (drawer, modal, customizer, mobile AI panel). Prevents
+ * background-scroll bleed under overlays — particularly bad on
+ * iOS Safari where rubber-band scroll under modals is jarring.
+ *
+ * iOS-correct technique: position:fixed on body to fully halt
+ * scroll. JS preserves and restores the scroll position so the
+ * page doesn't jump to the top on close. width:100% prevents
+ * horizontal collapse during the position:fixed switch.
+ * ============================================================ */
+:root[data-scroll-lock] body {
+  position: fixed;
+  top: var(--scroll-lock-y, 0);
+  left: 0;
+  right: 0;
+  width: 100%;
+  /* Body's natural overflow:auto would still allow scroll; force hidden. */
+  overflow: hidden;
+}
+
+/* ============================================================
+ * Agent UI — Reader / Agent toggle, informational note, agent
+ * view (raw markdown rendered as code).
+ *
+ * See agent-ui.md for the full design rationale.
+ * ============================================================ */
+
+/* --- Header view-toggle (segmented control) ---
+ * Use --radius-m so it follows data-border-radius (square|rounded)
+ * like the rest of the header controls (theme toggle uses the same). */
+.opctx-view-toggle {
+  display: inline-flex;
+  align-items: stretch;
+  height: 32px;                /* match the tier badge for visual rhythm */
+  /* Inset box-shadow instead of border so the 1px outline doesn't take
+   * layout space — buttons stretch the full 32px (matching the tier
+   * badge's filled visible height) instead of getting squeezed into
+   * the 30px content area inside a 2px-eating border. The mismatch
+   * was glaring on mobile where icon-only buttons made the 1px gaps
+   * top/bottom proportionally obvious next to the orange Public badge. */
+  box-shadow: inset 0 0 0 1px var(--color-border);
+  border-radius: var(--radius-m);
+  overflow: hidden;
+  background: var(--color-surface);
+}
+.opctx-view-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--size-6);
+  padding: 0 var(--size-12);
+  /* No min-height — wrapper sets the height (32px) and align-items:
+   * stretch fills the buttons. Keeps Reader/Agent/Talk visually
+   * level with the Public tier badge sibling in the header. */
+  border: 0;
+  background: transparent;
+  color: var(--color-mid);
+  font: inherit;
+  font-size: var(--text-body-xs);
+  font-weight: 500;
+  cursor: pointer;
+  transition: background var(--dur-fast) var(--ease-out),
+              color var(--dur-fast) var(--ease-out);
+}
+.opctx-view-btn + .opctx-view-btn {
+  border-left: 1px solid var(--color-border);
+}
+.opctx-view-btn:hover {
+  color: var(--color-foreground);
+  background: var(--color-surface-alt);
+}
+.opctx-view-btn[aria-pressed="true"] {
+  background: var(--color-foreground);
+  color: var(--color-background);
+}
+.opctx-view-btn svg { width: 14px; height: 14px; }
+
+/* --- Informational note (layer E) — placed after the lead
+ * paragraph in reader view. Subtle, branded, factual. --- */
+.opctx-agent-note {
+  display: flex;
+  align-items: center;
+  gap: var(--size-8);
+  padding: var(--size-10) var(--size-12);
+  margin: var(--size-20) 0;
+  background: var(--color-surface-alt);
+  border-left: 3px solid var(--color-link);
+  border-radius: var(--radius-s);
+  font-size: var(--text-body-xs);
+  color: var(--color-mid);
+  line-height: var(--lh-snug);
+}
+.opctx-agent-note-mark {
+  font-size: 1rem;
+  color: var(--color-link);
+  flex: 0 0 auto;
+}
+.opctx-agent-note-brand {
+  font-weight: 600;
+  color: var(--color-foreground);
+  font-family: var(--font-heading);
+}
+.opctx-agent-note-sep { color: var(--color-light); }
+.opctx-agent-note-body { flex: 1; }
+.opctx-agent-note-link {
+  color: var(--color-link);
+  text-decoration: none;
+  margin-left: var(--size-6);
+  font-weight: 500;
+}
+.opctx-agent-note-link:hover { text-decoration: underline; }
+
+/* --- Agent view (data-view="agent") --- */
+
+/* Hide all chrome — TOC drawer, rail, mobile bar, customizer,
+ * AI panel/fab, modals. Header stays visible (it carries the
+ * toggle). The user sees only the article body, rendered raw. */
+/* Hide chrome that doesn't fit in agent view: mobile sub-bar (paired
+ * with the original TOC; agent view rebuilds the TOC contents to
+ * point at agent sections via JS), AI panel/fab (an agent inspecting
+ * another agent's view doesn't need a chat overlay), inline agent
+ * note (the whole page IS now the agent note).
+ *
+ * Kept visible: the rail (search/bookmarks/customize/chat all still
+ * make sense — and on mobile the rail IS the navigation), the header
+ * chrome (carries the Reader/Agent/Talk toggles + tier badge), the
+ * .opctx-toc nav (JS swaps its contents to point at the agent
+ * view's section ids — see applyAgentView in enhance.js). */
+:root[data-view="agent"] .opctx-mobile-bar,
+:root[data-view="agent"] .opctx-ai-fab,
+:root[data-view="agent"] .opctx-agent-note {
+  display: none !important;
+}
+
+/* Layout intentionally NOT overridden in agent view — the regular
+ * 2-column grid (TOC | article) applies as in Reader, so the agent
+ * view's section anchors are reachable from the same nav slot. */
+
+/* Article container in agent view — a proper card that follows the
+ * theme tokens, not the previous hard-coded GitHub-dark palette.
+ * Light theme = light card; dark theme = dark card. The Reader/Agent
+ * toggle should feel like switching modes within the same site, not
+ * jumping into a separate IDE. */
+:root[data-view="agent"] .opctx-article {
+  /* Match the Reader view's article — white in light theme, dark in
+   * dark theme — so toggling Reader↔Agent feels like switching modes
+   * within the same site, not jumping into an IDE. */
+  background: var(--color-background);
+  color: var(--color-foreground);
+  border-radius: var(--radius-m);
+  padding: 0;
+  box-shadow: var(--elevation-1);
+  border: 1px solid var(--color-border);
+  overflow: hidden;
+  font-family: var(--font-body);
+  font-size: var(--text-body-sm);
+  /* Article container is normally narrow + centered; agent view goes
+   * a little wider to accommodate the surfaces table. */
+  max-width: none;
+}
+
+/* Loading / error placeholder while the .md is being fetched. */
+.opctx-agent-loading {
+  padding: var(--size-32);
+  text-align: center;
+  color: var(--color-mid);
+  font-family: var(--font-mono);
+  font-size: var(--text-body-sm);
+}
+
+/* Subtle header restyle in agent view — keep brand visible but
+ * tone down the search input (pointless without the rendered UI). */
+:root[data-view="agent"] .opctx-header-search { display: none; }
+
+/* ============================================================
+ * Agent view — structured surfaces, not a code dump.
+ *
+ * Sections (top → bottom):
+ *   .opctx-agent-header       — title, lineage stats, primary actions
+ *   .opctx-agent-section      — surfaces · this page (5 formats)
+ *   .opctx-agent-section      — frontmatter (parsed YAML)
+ *   .opctx-agent-section      — body (raw markdown in <pre>)
+ *   .opctx-agent-section      — programmatic access (curl/fetch/MCP)
+ *   .opctx-agent-section      — site-wide corpus surfaces
+ *
+ * Visual language: GitHub-dark with structural cues. Tables for the
+ * surface inventories so an agent (or human) can see at a glance
+ * "here are the five ways this content is reachable, three already
+ * live, two on the roadmap."
+ * ============================================================ */
+
+/* --- Header card (page title + lineage stats + primary actions) --- */
+.opctx-agent-header {
+  padding: var(--size-24) var(--size-24) var(--size-20);
+  background: var(--color-surface-alt);
+  border-bottom: 1px solid var(--color-border);
+}
+.opctx-agent-title {
+  margin: 0 0 var(--size-16);
+  font-family: var(--font-heading);
+  font-size: 1.75rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--color-foreground);
+}
+/* Stats grid — five compact key/value pairs (slug, format, lines, bytes, tokens). */
+.opctx-agent-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--size-4) var(--size-20);
+  margin: 0 0 var(--size-20);
+  font-family: var(--font-mono);
+  font-size: var(--text-body-xs);
+}
+.opctx-agent-stats > div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.opctx-agent-stats dt {
+  color: var(--color-mid);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  font-size: 10px;
+}
+.opctx-agent-stats dd {
+  margin: 0;
+  color: var(--color-foreground);
+}
+.opctx-agent-stats dd code {
+  background: var(--color-background);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-s);
+  padding: 1px 5px;
+  color: var(--color-link);
+}
+
+.opctx-agent-actions {
+  display: flex;
+  gap: var(--size-8);
+  flex-wrap: wrap;
+}
+.opctx-agent-action {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--size-6);
+  padding: var(--size-6) var(--size-12);
+  border: 1px solid var(--color-border);
+  background: var(--color-background);
+  color: var(--color-foreground);
+  border-radius: var(--radius-s);
+  font-family: var(--font-mono);
+  font-size: var(--text-body-xs);
+  text-decoration: none;
+  cursor: pointer;
+  transition: background var(--dur-fast) var(--ease-out),
+              border-color var(--dur-fast) var(--ease-out);
+}
+.opctx-agent-action:hover {
+  background: var(--color-surface-alt);
+  border-color: var(--color-mid);
+}
+.opctx-agent-action svg {
+  width: 14px;
+  height: 14px;
+}
+
+/* --- Sections (surfaces / frontmatter / body / programmatic / corpus) --- */
+.opctx-agent-section {
+  padding: var(--size-20) var(--size-24);
+  border-bottom: 1px solid var(--color-border-soft);
+}
+.opctx-agent-section:last-child { border-bottom: 0; }
+.opctx-agent-section--corpus {
+  background: var(--color-surface-alt);
+}
+
+.opctx-agent-section-title {
+  margin: 0 0 var(--size-6);
+  font-family: var(--font-heading);
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--color-foreground);
+  letter-spacing: -0.005em;
+}
+.opctx-agent-section-desc {
+  margin: 0 0 var(--size-12);
+  color: var(--color-mid);
+  font-size: var(--text-body-xs);
+  line-height: 1.55;
+}
+.opctx-agent-section-desc a {
+  color: var(--color-link);
+}
+.opctx-agent-section-desc code {
+  font-family: var(--font-mono);
+  background: var(--color-surface-alt);
+  border-radius: var(--radius-s);
+  padding: 0 4px;
+  font-size: 0.92em;
+}
+
+/* --- Surfaces / frontmatter tables --- */
+.opctx-agent-surfaces,
+.opctx-agent-frontmatter {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: var(--font-mono);
+  font-size: var(--text-body-xs);
+  color: var(--color-foreground);
+}
+.opctx-agent-surfaces thead th {
+  text-align: left;
+  font-weight: 600;
+  color: var(--color-mid);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  font-size: 10px;
+  padding: 0 var(--size-8) var(--size-6);
+  border-bottom: 1px solid var(--color-border-soft);
+}
+.opctx-agent-surfaces td,
+.opctx-agent-frontmatter td {
+  padding: var(--size-6) var(--size-8);
+  border-bottom: 1px solid var(--color-border-soft);
+  vertical-align: top;
+}
+.opctx-agent-surfaces tr:last-child td,
+.opctx-agent-frontmatter tr:last-child td { border-bottom: 0; }
+.opctx-agent-frontmatter td:first-child {
+  width: 30%;
+  white-space: nowrap;
+  color: var(--color-mid);
+}
+.opctx-agent-frontmatter code {
+  color: var(--color-link);
+  background: transparent;
+  padding: 0;
+}
+
+.opctx-agent-surface-label {
+  font-weight: 600;
+  color: var(--color-foreground);
+  white-space: nowrap;
+  width: 18%;
+}
+.opctx-agent-surface-url a,
+.opctx-agent-surface-url code {
+  color: var(--color-link);
+  text-decoration: none;
+  font-family: var(--font-mono);
+}
+.opctx-agent-surface-url code {
+  color: var(--color-mid);     /* planned URLs are dim — not yet clickable */
+}
+.opctx-agent-surface-url a:hover { text-decoration: underline; }
+.opctx-agent-surface-status {
+  white-space: nowrap;
+  width: 12%;
+  color: var(--color-mid);
+}
+.opctx-agent-surfaces tr[data-status="live"] .opctx-agent-surface-status {
+  color: var(--color-green);
+}
+.opctx-agent-surface-note {
+  color: var(--color-mid);
+  font-family: var(--font-body);
+  font-size: var(--text-body-xs);
+  line-height: 1.5;
+}
+
+/* --- Body: raw markdown in <pre>. Same wrap behavior as before. --- */
+.opctx-agent-pre {
+  margin: 0;
+  padding: var(--size-16) var(--size-20);
+  font-family: var(--font-mono);
+  font-size: 0.875rem;
+  line-height: 1.65;
+  color: var(--color-foreground);
+  white-space: pre-wrap;
+  word-break: break-word;
+  background: var(--color-surface-alt);
+  border: 1px solid var(--color-border-soft);
+  border-radius: var(--radius-s);
+  max-height: 70vh;
+  overflow: auto;
+}
+
+/* --- Programmatic-access snippet block --- */
+.opctx-agent-snippet {
+  margin: 0;
+  padding: var(--size-12) var(--size-16);
+  background: var(--color-surface-alt);
+  border: 1px solid var(--color-border-soft);
+  border-radius: var(--radius-s);
+  font-family: var(--font-mono);
+  font-size: var(--text-body-xs);
+  line-height: 1.65;
+  color: var(--color-foreground);
+  white-space: pre-wrap;
+  overflow-x: auto;
+}
+.opctx-agent-snippet code {
+  background: transparent;
+  padding: 0;
+  color: inherit;
+  font: inherit;
+}
+.opctx-agent-snippet-comment {
+  color: var(--color-mid);
+}
+.opctx-agent-snippet-planned {
+  color: var(--color-mid);
+  text-decoration: line-through;
+}
+
+/* ============================================================
+ * Internal-environment banner — sits above the sticky header on
+ * the internal Pages project / local dev only. Not sticky itself
+ * so it scrolls away with the page; the header stays put once
+ * the banner is gone (header's sticky top: 2px is viewport-relative,
+ * so it pops up to the top of the viewport correctly).
+ * ============================================================ */
+.opctx-env-banner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--size-10);
+  padding: var(--size-6) var(--size-12);
+  background: color-mix(in srgb, var(--color-green) 12%, var(--color-background));
+  border-bottom: 1px solid color-mix(in srgb, var(--color-green) 35%, transparent);
+  font-size: var(--text-body-xs);
+  color: var(--color-foreground);
+  flex-wrap: wrap;
+  text-align: center;
+}
+.opctx-env-banner-tag {
+  display: inline-block;
+  background: var(--color-green);
+  color: #fff;
+  padding: 2px var(--size-6);
+  border-radius: var(--radius-s);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  font-size: 10px;
+  text-transform: uppercase;
+  flex-shrink: 0;
+}
+.opctx-env-banner a {
+  color: var(--color-link);
+  text-decoration: none;
+  font-weight: 500;
+}
+.opctx-env-banner a:hover { text-decoration: underline; }
+
+/* ============================================================
+ * Per-section copy-as-markdown button. Absolutely positioned in
+ * the heading's right gutter so it never inflates line-height
+ * or shifts wrap points — heading text lays out exactly as it
+ * would without the button. Hover-reveal on desktop, always
+ * faintly visible on touch devices (no hover signal).
+ * ============================================================ */
+.opctx-article h2,
+.opctx-article h3 {
+  /* Anchor for the floating copy button. */
+  position: relative;
+  /* Reserve gutter so a long heading on its last line doesn't run
+   * under the button. Matches the button's reserved 28px + 8px
+   * breathing room. */
+  padding-right: 36px;
+}
+.opctx-section-copy {
+  position: absolute;
+  /* Sit in the gutter we reserved on the heading; vertically center
+   * on the heading's first line so multi-line headings still anchor
+   * the affordance where the eye expects it (next to the title, not
+   * floating in the middle of a 2-line block). 0.5lh = half a
+   * line-height = the optical center of one line.
+   *
+   * `font: inherit` is critical — without it, browser button defaults
+   * give the <button> its own ~13px font-size, and `lh` (which resolves
+   * against the *button's* line-height, not the heading's) ends up
+   * being half a button line, leaving the icon stuck near the top of
+   * the heading instead of the first-line center. */
+  font: inherit;
+  right: 0;
+  top: 0.5lh;
+  transform: translateY(-50%);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--color-mid);
+  cursor: pointer;
+  border-radius: var(--radius-s);
+  opacity: 0;
+  transition: opacity var(--dur-fast) var(--ease-out),
+              background var(--dur-fast) var(--ease-out),
+              color var(--dur-fast) var(--ease-out),
+              border-color var(--dur-fast) var(--ease-out);
+}
+.opctx-article h2:hover .opctx-section-copy,
+.opctx-article h3:hover .opctx-section-copy,
+.opctx-section-copy:focus-visible,
+.opctx-section-copy[data-state] {
+  opacity: 1;
+}
+.opctx-section-copy:hover {
+  background: var(--color-surface-alt);
+  color: var(--color-foreground);
+  border-color: var(--color-border);
+}
+.opctx-section-copy[data-state="copied"] {
+  color: var(--color-green);
+  border-color: color-mix(in srgb, var(--color-green) 35%, transparent);
+  background: color-mix(in srgb, var(--color-green) 10%, transparent);
+}
+.opctx-section-copy[data-state="error"] {
+  color: var(--color-orange);
+}
+.opctx-section-copy svg {
+  width: 16px;
+  height: 16px;
+  display: block;
+}
+/* Touch — no hover, so always show faintly. */
+@media (hover: none) {
+  .opctx-section-copy { opacity: 0.45; }
+}
+
+/* ============================================================
+ * Talk pages — themed render of the LKML-flavored markdown talk
+ * convention. Storage stays plain text; this layer makes it
+ * pleasant to read on the web. Subject prefix becomes a colored
+ * pill, status becomes a badge, replies are visually nested.
+ * ============================================================ */
+
+.opctx-talk-intro {
+  margin: var(--size-16) 0 var(--size-32);
+  padding: var(--size-12) var(--size-16);
+  background: var(--color-surface-alt);
+  border-left: 3px solid var(--color-mid);
+  font-size: var(--text-body-sm);
+  color: var(--color-foreground);
+  border-radius: 0 var(--radius-m) var(--radius-m) 0;
+}
+.opctx-talk-intro p { margin: 0; }
+.opctx-talk-intro p + p { margin-top: var(--size-8); }
+
+.opctx-talk-loading {
+  color: var(--color-mid);
+  font-size: var(--text-body-sm);
+}
+
+/* Per-topic card. Status colors the left edge so an open thread
+ * is unmissable while scanning the page. */
+.opctx-talk-topic {
+  margin: var(--size-32) 0;
+  padding: var(--size-20) var(--size-24);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border-soft);
+  border-left-width: 3px;
+  border-radius: var(--radius-m);
+}
+.opctx-talk-topic[data-talk-status="open"]    { border-left-color: var(--color-orange); }
+.opctx-talk-topic[data-talk-status="closed"]  { border-left-color: var(--color-green); }
+.opctx-talk-topic[data-talk-status="blocked"] { border-left-color: var(--color-pink); }
+.opctx-talk-topic[data-talk-status="decided"] { border-left-color: var(--color-link); }
+
+.opctx-talk-topic-head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--size-12);
+  flex-wrap: wrap;
+  margin-bottom: var(--size-12);
+}
+.opctx-talk-topic-head .opctx-talk-title {
+  margin: 0;
+  font-size: 1.4rem;
+  font-weight: 600;
+  letter-spacing: -0.005em;
+  flex: 1 1 auto;
+  /* Override the article-section copy-button gutter — talk titles
+   * don't need the per-section copy affordance. */
+  padding-right: 0;
+  position: static;
+}
+
+/* Subject-prefix pill. Different prefixes get different tints to
+ * make them visually distinguishable when scanning. */
+.opctx-talk-prefix {
+  display: inline-block;
+  padding: 2px var(--size-8);
+  border-radius: var(--radius-s);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  background: var(--color-surface-alt);
+  color: var(--color-mid);
+  flex: 0 0 auto;
+}
+.opctx-talk-prefix[data-prefix="question"] {
+  background: color-mix(in srgb, var(--color-link) 14%, transparent);
+  color: var(--color-link);
+}
+.opctx-talk-prefix[data-prefix="proposal"] {
+  background: color-mix(in srgb, var(--color-orange) 14%, transparent);
+  color: var(--color-orange);
+}
+.opctx-talk-prefix[data-prefix="bug"] {
+  background: color-mix(in srgb, var(--color-pink) 14%, transparent);
+  color: var(--color-pink);
+}
+.opctx-talk-prefix[data-prefix="todo"] {
+  background: color-mix(in srgb, var(--color-mid) 14%, transparent);
+  color: var(--color-foreground);
+}
+.opctx-talk-prefix[data-prefix="decided"],
+.opctx-talk-prefix[data-prefix="rfc"] {
+  background: color-mix(in srgb, var(--color-green) 14%, transparent);
+  color: var(--color-green);
+}
+
+.opctx-talk-status {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-mid);
+  flex: 0 0 auto;
+}
+.opctx-talk-status[data-status="closed"]  { color: var(--color-green); }
+.opctx-talk-status[data-status="blocked"] { color: var(--color-pink); }
+.opctx-talk-status[data-status="decided"] { color: var(--color-link); }
+
+/* Individual post within a topic. Replies indent visually. */
+.opctx-talk-post {
+  /* No margin on the topic-level post; nested replies get spacing
+   * via .opctx-talk-replies. */
+}
+.opctx-talk-post[data-talk-depth="0"] > .opctx-talk-body {
+  font-size: var(--text-body);
+  color: var(--color-foreground);
+}
+.opctx-talk-post .opctx-talk-body p {
+  margin: 0 0 var(--size-12);
+}
+.opctx-talk-post .opctx-talk-body p:last-child { margin-bottom: 0; }
+.opctx-talk-post .opctx-talk-body pre {
+  background: var(--color-surface-alt);
+  border: 1px solid var(--color-border-soft);
+  border-radius: var(--radius-s);
+  padding: var(--size-12) var(--size-16);
+  overflow-x: auto;
+  font-family: var(--font-mono);
+  font-size: var(--text-body-sm);
+}
+.opctx-talk-post .opctx-talk-body code {
+  font-family: var(--font-mono);
+  font-size: 0.92em;
+  background: var(--color-surface-alt);
+  border-radius: var(--radius-s);
+  padding: 1px 5px;
+}
+.opctx-talk-post .opctx-talk-body pre code {
+  background: transparent;
+  padding: 0;
+}
+
+.opctx-talk-sig {
+  margin-top: var(--size-8);
+  font-size: var(--text-body-xs);
+  color: var(--color-mid);
+}
+.opctx-talk-sig strong { color: var(--color-foreground); font-weight: 600; }
+.opctx-talk-sig time { font-family: var(--font-mono); }
+
+/* Replies — visually nest with a left rail and reduced margin. */
+.opctx-talk-replies {
+  margin-top: var(--size-16);
+  padding-left: var(--size-16);
+  border-left: 2px solid var(--color-border);
+}
+.opctx-talk-replies .opctx-talk-post {
+  margin-top: var(--size-12);
+  padding-top: var(--size-12);
+}
+.opctx-talk-replies .opctx-talk-post:first-child {
+  margin-top: 0;
+  padding-top: 0;
+}
+
+/* LKML-style trailers: `Closes:`, `Acked-by:`, `Reviewed-by:` etc.
+ * Render as a compact key/value strip below the topic post. */
+.opctx-talk-trailers {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--size-6) var(--size-16);
+  margin: var(--size-16) 0 0;
+  padding: var(--size-8) 0 0;
+  border-top: 1px dashed var(--color-border);
+  font-size: var(--text-body-xs);
+  color: var(--color-mid);
+  font-family: var(--font-mono);
+}
+.opctx-talk-trailers div { display: contents; }
+.opctx-talk-trailers dt {
+  font-weight: 600;
+  color: var(--color-foreground);
+  margin: 0;
+}
+.opctx-talk-trailers dt::after { content: '  '; white-space: pre; }
+.opctx-talk-trailers dd {
+  margin: 0;
+}
+.opctx-talk-trailers a { color: var(--color-link); }
+
+/* TOC of topics on talk pages. Same shell as the article TOC; just
+ * makes the bracketed prefix visually subordinate. */
+.opctx-talk-toc-prefix {
+  font-family: var(--font-mono);
+  font-size: 0.85em;
+  color: var(--color-mid);
+  margin-right: var(--size-4);
+}
+
+/* ============================================================
+ * Status banner — surfaces lifecycle state (draft / archived /
+ * superseded / custom deprecation_notice) at the top of the article.
+ * Emitted by the engine template based on the page's frontmatter
+ * `status` and `deprecation_notice` fields.
+ * ============================================================ */
+
+.opctx-status-banner {
+  display: block;
+  margin: 0 0 var(--size-24);
+  padding: var(--size-12) var(--size-16);
+  border-left: 3px solid var(--color-orange);
+  background: var(--color-orange-light);
+  color: var(--color-foreground);
+  font-size: var(--text-body-sm);
+  font-family: var(--font-body);
+  border-radius: 0 var(--radius-s) var(--radius-s) 0;
+}
+
+.opctx-status-banner[data-status="draft"] {
+  border-left-color: var(--color-blue);
+  background: var(--color-blue-light);
+}
+
+.opctx-status-banner[data-status="archived"] {
+  border-left-color: var(--color-mid);
+  background: var(--color-surface-alt);
+}
+
+.opctx-status-banner[data-status="superseded"] {
+  border-left-color: var(--color-error);
+  background: var(--color-pink-light);
+}
+
+.opctx-status-banner a {
+  color: var(--color-link);
+  text-decoration: underline;
+}
+
+/* ============================================================
+ * Talk-page conventions banner — Wikipedia-style talk header.
+ * Collapsed by default; the <summary> shows a one-liner; the
+ * full conventions render inside on expand. Sits at the top of
+ * the article body on talk pages.
+ * ============================================================ */
+
+.opctx-talk-conventions {
+  display: block;
+  margin: 0 0 var(--size-24);
+  padding: 0;
+  border-left: 3px solid var(--color-blue);
+  background: var(--color-blue-light);
+  color: var(--color-foreground);
+  font-size: var(--text-body-sm);
+  font-family: var(--font-body);
+  border-radius: 0 var(--radius-s) var(--radius-s) 0;
+}
+
+.opctx-talk-conventions > summary {
+  display: list-item;
+  padding: var(--size-12) var(--size-16);
+  cursor: pointer;
+  user-select: none;
+  list-style-position: inside;
+  color: var(--color-foreground);
+}
+
+.opctx-talk-conventions > summary:hover {
+  background: var(--color-blue-light-2, var(--color-blue-light));
+}
+
+.opctx-talk-conventions[open] > summary {
+  border-bottom: 1px solid var(--color-blue);
+}
+
+.opctx-talk-conventions-hint {
+  color: var(--color-mid);
+  font-style: italic;
+  margin-left: var(--size-8);
+}
+
+.opctx-talk-conventions[open] .opctx-talk-conventions-hint {
+  display: none;
+}
+
+.opctx-talk-conventions-body {
+  padding: var(--size-16);
+  background: var(--color-surface);
+  border-radius: 0 var(--radius-s) var(--radius-s) 0;
+}
+
+.opctx-talk-conventions-body h1 {
+  font-size: var(--text-body-lg);
+  margin: 0 0 var(--size-12);
+}
+
+.opctx-talk-conventions-body h2 {
+  font-size: var(--text-body);
+  margin: var(--size-20) 0 var(--size-8);
+  border: none;
+  padding: 0;
+}
+
+.opctx-talk-conventions-body h3 {
+  font-size: var(--text-body-sm);
+  margin: var(--size-16) 0 var(--size-4);
+}
+
+.opctx-talk-conventions-body p,
+.opctx-talk-conventions-body ul,
+.opctx-talk-conventions-body ol,
+.opctx-talk-conventions-body pre,
+.opctx-talk-conventions-body table {
+  margin: var(--size-8) 0;
+  font-size: var(--text-body-sm);
+}
+
+.opctx-talk-conventions-body code {
+  font-size: 0.9em;
+}
+
+.opctx-talk-conventions a {
+  color: var(--color-link);
+  text-decoration: underline;
+}
+
+/* ============================================================
+ * Curator-prompt banner — collapsible, sibling to the talk-page
+ * conventions banner. Surfaces the talk folder's `_curator.md` so
+ * the operator can see (and edit) how the curator agent for this
+ * page is instructed.
+ * ============================================================ */
+
+.opctx-talk-curator-prompt {
+  display: block;
+  margin: 0 0 var(--size-24);
+  padding: 0;
+  border-left: 3px solid var(--color-mid);
+  background: var(--color-surface-alt);
+  color: var(--color-foreground);
+  font-size: var(--text-body-sm);
+  font-family: var(--font-body);
+  border-radius: 0 var(--radius-s) var(--radius-s) 0;
+}
+
+.opctx-talk-curator-prompt > summary {
+  display: list-item;
+  padding: var(--size-12) var(--size-16);
+  cursor: pointer;
+  user-select: none;
+  list-style-position: inside;
+  color: var(--color-foreground);
+}
+
+.opctx-talk-curator-prompt > summary:hover {
+  background: var(--color-surface);
+}
+
+.opctx-talk-curator-prompt[open] > summary {
+  border-bottom: 1px solid var(--color-mid);
+}
+
+.opctx-talk-curator-hint {
+  color: var(--color-mid);
+  font-style: italic;
+  margin-left: var(--size-8);
+}
+
+.opctx-talk-curator-prompt[open] .opctx-talk-curator-hint {
+  display: none;
+}
+
+.opctx-talk-curator-prompt-body {
+  padding: var(--size-16);
+  background: var(--color-surface);
+  border-radius: 0 var(--radius-s) var(--radius-s) 0;
+}
+
+.opctx-talk-curator-prompt-body h1,
+.opctx-talk-curator-prompt-body h2,
+.opctx-talk-curator-prompt-body h3 {
+  font-size: var(--text-body);
+  margin: var(--size-16) 0 var(--size-8);
+  border: none;
+  padding: 0;
+}
+
+.opctx-talk-curator-prompt-body p,
+.opctx-talk-curator-prompt-body ul,
+.opctx-talk-curator-prompt-body ol,
+.opctx-talk-curator-prompt-body pre,
+.opctx-talk-curator-prompt-body blockquote {
+  margin: var(--size-8) 0;
+  font-size: var(--text-body-sm);
+}
+
+.opctx-talk-curator-prompt-body code {
+  font-size: 0.9em;
+}
+
+.opctx-talk-curator-prompt a {
+  color: var(--color-link);
+  text-decoration: underline;
+}
+
+/* ============================================================
+ * Site footer — fish + "1Context by Haptica" banner.
+ * Sits below .opctx-layout on every page. Centered, full-width
+ * top border, theme-token colors so it follows light/dark.
+ * ============================================================ */
+
+.opctx-site-footer {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: var(--size-12);
+  padding: var(--size-24) var(--size-16) calc(var(--size-24) + env(safe-area-inset-bottom));
+  margin-top: var(--size-32);
+  border-top: 1px solid var(--color-border);
+  color: var(--color-mid);
+  font-size: var(--text-body-sm);
+  font-family: var(--font-body);
+}
+
+.opctx-site-footer-logo {
+  width: 22px;
+  height: 22px;
+  flex-shrink: 0;
+  display: block;
+  opacity: 0.9;
+}
+
+:root[data-theme="dark"] .opctx-site-footer-logo {
+  filter: invert(1);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root[data-theme="auto"] .opctx-site-footer-logo {
+    filter: invert(1);
+  }
+}
+
+.opctx-site-footer-text strong {
+  color: var(--color-foreground);
+  font-weight: 600;
+}
+
+.opctx-site-footer-haptica {
+  text-decoration: none;
+  color: inherit;
+}
+
+.opctx-site-footer-haptica:hover {
+  color: var(--color-link);
+  text-decoration: underline;
+}
+
+/* Agent view keeps the footer — branding is part of the surface. */
+
+/* ============================================================
+ * Header brand dropdown — "1Context" title becomes a clickable
+ * menu surfacing per-user navigation (For You, Biography, Life
+ * story, etc.). Reuses existing surface/border/link tokens; no
+ * new theme primitives. Mobile collapses to a full-width sheet
+ * anchored to the header.
+ * ============================================================ */
+
+.opctx-header-brand,
+.opctx-header-version,
+.opctx-audience-switcher {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+/* Round 6: chrome dropdowns share one visual grammar so the brand,
+ * Era, and Audience controls feel like siblings. Only the brand
+ * keeps a visible chevron; Era and Audience rely on pill shape +
+ * hover/focus states for discoverability. */
+.opctx-brand-menu-toggle,
+.opctx-pill-menu-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--size-4);
+  padding: 2px var(--size-8);
+  border: none;
+  background: transparent;
+  color: var(--color-mid);
+  cursor: pointer;
+  border-radius: var(--radius-pill);
+  font: inherit;
+  text-align: left;
+  transition: color var(--dur-fast) var(--ease-out),
+              background var(--dur-fast) var(--ease-out);
+}
+
+.opctx-brand-menu-toggle {
+  padding-left: var(--size-4);
+}
+
+.opctx-pill-menu-toggle {
+  justify-content: flex-start;
+  min-height: 32px;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface-alt);
+  color: var(--color-foreground);
+  font-family: var(--font-body);
+  font-size: var(--text-body-sm);
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.opctx-pill-menu-toggle-label {
+  display: block;
+  min-width: 0;
+  white-space: nowrap;
+}
+
+.opctx-brand-menu-toggle .opctx-header-logo {
+  text-decoration: none;
+  cursor: inherit;
+}
+
+.opctx-brand-menu-toggle:hover,
+.opctx-brand-menu-toggle:focus-visible,
+.opctx-pill-menu-toggle:hover,
+.opctx-pill-menu-toggle:focus-visible,
+.opctx-pill-menu-toggle[aria-expanded="true"] {
+  color: var(--color-foreground);
+  background: var(--color-surface-alt);
+  outline: none;
+}
+
+.opctx-brand-menu-toggle:focus-visible,
+.opctx-pill-menu-toggle:focus-visible {
+  outline: 2px solid var(--color-link);
+  outline-offset: 2px;
+}
+
+.opctx-brand-menu-toggle[aria-expanded="true"] {
+  color: var(--color-foreground);
+  background: var(--color-surface-alt);
+}
+
+.opctx-brand-menu-toggle[aria-expanded="true"] .opctx-brand-menu-chevron {
+  transform: rotate(180deg);
+}
+
+.opctx-brand-menu-chevron {
+  display: block;
+  flex-shrink: 0;
+  transition: transform var(--dur-fast) var(--ease-out);
+}
+
+.opctx-brand-menu,
+.opctx-pill-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  z-index: 40;
+  max-width: calc(100vw - var(--size-16) * 2);
+  background: var(--color-background);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-m);
+  box-shadow: 0 12px 32px -8px rgba(0, 0, 0, 0.18), 0 2px 6px -2px rgba(0, 0, 0, 0.08);
+  font-family: var(--font-body);
+  font-size: var(--text-body-sm);
+}
+
+.opctx-brand-menu {
+  min-width: 280px;
+  padding: var(--size-12);
+  display: grid;
+  gap: var(--size-12);
+}
+
+.opctx-pill-menu {
+  min-width: 180px;
+  padding: var(--size-8);
+  display: grid;
+  gap: 2px;
+}
+
+.opctx-brand-menu[hidden],
+.opctx-pill-menu[hidden] {
+  display: none;
+}
+
+.opctx-brand-menu-group + .opctx-brand-menu-group {
+  border-top: 1px solid var(--color-border);
+  padding-top: var(--size-12);
+}
+
+.opctx-brand-menu-heading {
+  font-size: var(--text-caption, 0.75rem);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-mid);
+  margin: 0 0 var(--size-4) 0;
+  padding: 0 var(--size-4);
+}
+
+.opctx-brand-menu-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.opctx-brand-menu-list a,
+.opctx-pill-menu-item {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  gap: var(--size-8);
+  padding: var(--size-8) var(--size-10);
+  border-radius: var(--radius-s, 4px);
+  color: var(--color-foreground);
+  text-decoration: none;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+  transition: background var(--dur-fast) var(--ease-out),
+              color var(--dur-fast) var(--ease-out);
+}
+
+.opctx-brand-menu-list a {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 2px;
+  padding-inline: var(--size-4);
+}
+
+.opctx-brand-menu-list a:hover,
+.opctx-brand-menu-list a:focus-visible,
+.opctx-pill-menu-item:hover,
+.opctx-pill-menu-item:focus-visible {
+  background: var(--color-surface-alt);
+  outline: none;
+}
+
+.opctx-brand-menu-list a:focus-visible,
+.opctx-pill-menu-item:focus-visible {
+  box-shadow: 0 0 0 2px var(--color-link) inset;
+}
+
+.opctx-pill-menu-item[aria-checked="true"] {
+  background: var(--color-surface-alt);
+  color: var(--color-foreground);
+  font-weight: 600;
+}
+
+.opctx-audience-menu-item[aria-checked="true"][data-audience-target="private"] {
+  background: var(--color-green-light);
+  color: var(--color-green);
+}
+
+.opctx-audience-menu-item[aria-checked="true"][data-audience-target="internal"] {
+  background: var(--color-blue-light);
+  color: var(--color-link);
+}
+
+.opctx-audience-menu-item[aria-checked="true"][data-audience-target="public"] {
+  background: var(--color-orange-light);
+  color: var(--color-orange);
+}
+
+.opctx-pill-menu-divider {
+  height: 1px;
+  margin: var(--size-4) 0;
+  background: var(--color-border);
+}
+
+.opctx-brand-menu-label {
+  font-weight: 500;
+  color: var(--color-foreground);
+  line-height: 1.3;
+}
+
+.opctx-brand-menu-sub {
+  font-size: var(--text-caption, 0.75rem);
+  color: var(--color-mid);
+  line-height: 1.3;
+}
+
+.opctx-version-toggle,
+.opctx-version-menu-item {
+  font-variant-numeric: tabular-nums;
+}
+
+.opctx-version-toggle {
+  width: 100%;
+}
+
+/* Audience switcher — round 7 visual cleanup. Was inheriting the
+ * `border-radius: var(--radius-pill)` from .opctx-pill-menu-toggle,
+ * which made it look like a different family from the rectangular
+ * Reader/Agent/Talk page-mode group it sits next to. Override to
+ * match the page-mode group's rectangular shape and weight; the
+ * dropdown affordance is communicated by hover/focus + the
+ * aria-haspopup, not by a pill silhouette. */
+.opctx-audience-switcher-toggle {
+  font-size: var(--text-body-xs);
+  font-weight: 500;
+  border-radius: var(--radius-m);
+  padding: 0 var(--size-12);
+  background: var(--color-surface);
+}
+
+.opctx-audience-switcher-toggle:hover,
+.opctx-audience-switcher-toggle:focus-visible,
+.opctx-audience-switcher-toggle[aria-expanded="true"] {
+  background: var(--color-surface-alt);
+}
+
+.opctx-audience-menu {
+  left: auto;
+  right: 0;
+}
+
+/* Round 7: Era picker and the X close button share one row inside
+ * the TOC drawer / sidebar head. Picker takes available width;
+ * close button is intrinsic-sized on the right. The head provides
+ * its own top padding (drawer's top padding is now 0) so the
+ * Era pill sits at a consistent distance from the drawer top
+ * edge regardless of which page is rendering. */
+.opctx-toc-head {
+  display: flex;
+  align-items: center;
+  gap: var(--size-8);
+  min-height: 56px;
+  padding: var(--size-8);
+  margin-bottom: var(--size-12);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.opctx-toc-head .opctx-toc-version {
+  flex: 0 1 9rem;
+  min-width: 0;
+  max-width: calc(100% - 52px);
+  /* Reset the standalone-block layout from the previous round —
+   * inside the head it is just one of two flex children. */
+  display: block;
+  padding: 0;
+  margin: 0;
+  border-bottom: 0;
+}
+
+.opctx-toc-head .opctx-toc-version .opctx-header-version {
+  display: block;
+  width: 100%;
+}
+
+.opctx-toc-head .opctx-toc-version .opctx-pill-menu-toggle {
+  width: 100%;
+  min-width: 0;
+  min-height: 36px;
+  height: 36px;
+  padding: 0 var(--size-12);
+  border-radius: var(--radius-m);
+  justify-content: center;
+  overflow: hidden;
+}
+
+.opctx-toc-head .opctx-toc-version .opctx-pill-menu-toggle-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1;
+  max-width: 100%;
+}
+
+.opctx-toc-head .opctx-toc-version .opctx-version-menu {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.opctx-toc-head .opctx-toc-toggle {
+  flex: 0 0 auto;
+}
+
+/* Pages without an Era (concept pages, etc.): the head still exists
+ * for the close button alone. Right-align the toggle so it sits
+ * where the user expects rather than collapsing to the left. */
+.opctx-toc-head:not(:has(.opctx-toc-version)) {
+  justify-content: flex-end;
+}
+
+/* Mobile: render the brand dropdown as a full-width sheet hanging from
+ * under the header. Era stays anchored inside the TOC drawer. */
+@media (max-width: 720px) {
+  .opctx-brand-menu {
+    position: fixed;
+    top: calc(var(--header-height, 56px) + 4px);
+    left: var(--size-8);
+    right: var(--size-8);
+    max-width: none;
+    max-height: calc(100vh - var(--header-height, 56px) - var(--size-16) * 2);
+    overflow-y: auto;
+  }
+  .opctx-brand-menu-toggle {
+    padding: 2px var(--size-4) 2px 2px;
+    gap: 2px;
+  }
+  .opctx-pill-menu-toggle {
+    padding-inline: var(--size-6);
+  }
+}
+
+/* ============================================================
+ * Infinite-scroll snapshot dividers + end-of-history footer.
+ * Sit inside .opctx-article so they inherit article width.
+ * ============================================================ */
+
+.opctx-snapshot-divider {
+  display: flex;
+  align-items: center;
+  gap: var(--size-12);
+  margin: var(--size-32) 0 var(--size-16) 0;
+  font-family: var(--font-heading);
+  /* Visually load-bearing — this is the boundary between two
+   * snapshots. Not subtle. */
+}
+
+.opctx-snapshot-divider-line {
+  flex: 1;
+  height: 1px;
+  background: var(--color-border);
+}
+
+.opctx-snapshot-divider-label {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: var(--size-4) var(--size-12);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-m);
+  background: var(--color-surface-alt);
+}
+
+.opctx-snapshot-divider-date {
+  font-size: var(--text-body-sm);
+  font-weight: 600;
+  color: var(--color-foreground);
+}
+
+.opctx-snapshot-divider-iso {
+  font-size: var(--text-caption, 0.7rem);
+  color: var(--color-mid);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.04em;
+}
+
+.opctx-snapshot-sentinel {
+  display: block;
+  min-height: 1px;
+  margin: var(--size-16) 0;
+}
+
+.opctx-snapshot-end-of-history {
+  display: flex;
+  align-items: center;
+  gap: var(--size-12);
+  margin: var(--size-32) 0 var(--size-16) 0;
+  color: var(--color-mid);
+  font-family: var(--font-heading);
+  font-size: var(--text-body-sm);
+}
+
+.opctx-snapshot-end-line {
+  flex: 1;
+  height: 1px;
+  background: var(--color-border);
+}
+
+.opctx-snapshot-end-label {
+  padding: var(--size-4) var(--size-12);
+  border: 1px dashed var(--color-border);
+  border-radius: var(--radius-m);
+  background: transparent;
+  color: var(--color-mid);
+  white-space: nowrap;
+}
+
+.opctx-snapshot-retry {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--size-4);
+  margin: var(--size-12) auto;
+  padding: var(--size-8) var(--size-16);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-m);
+  background: var(--color-surface-alt);
+  color: var(--color-foreground);
+  font-family: var(--font-body);
+  font-size: var(--text-body-sm);
+  cursor: pointer;
+  transition: border-color var(--dur-fast) var(--ease-out),
+              background var(--dur-fast) var(--ease-out);
+}
+
+.opctx-snapshot-retry:hover,
+.opctx-snapshot-retry:focus-visible {
+  border-color: var(--color-link);
+  background: var(--color-background);
+  outline: none;
+}
+
+.opctx-snapshot-retry:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* ARIA-live status node for infinite-scroll announcements.
+ * Visually hidden but kept in the flow so screen readers get
+ * polite updates as snapshots load. */
+.opctx-snapshot-status {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

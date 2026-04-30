@@ -1,0 +1,7 @@
+talk_for: for-you-2026-04-26
+talk_audience: private
+talk_conventions: basic
+talk_conventions_path: ./_conventions.md
+lede: Fixture talk folder for wiki-engine import verification.
+see_also:
+  - for-you-2026-04-26.md

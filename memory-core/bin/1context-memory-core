@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+export ONECONTEXT_MEMORY_CORE_ROOT="${ONECONTEXT_MEMORY_CORE_ROOT:-$ROOT}"
+export ONECONTEXT_MEMORY_CORE_DIR="${ONECONTEXT_MEMORY_CORE_DIR:-$HOME/Library/Application Support/1Context/memory-core}"
+export UV_PROJECT_ENVIRONMENT="${ONECONTEXT_MEMORY_CORE_VENV:-$ONECONTEXT_MEMORY_CORE_DIR/venv}"
+
+mkdir -p "$ONECONTEXT_MEMORY_CORE_DIR"
+exec uv run --project "$ROOT" 1context-memory-core "$@"

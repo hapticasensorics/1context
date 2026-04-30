@@ -1,0 +1,55 @@
+%% title: Memory System
+%% description: Root config selects the active memory plugin, host/accounts provide local power, and hire_agent creates the birth certificate plus runtime experience.
+%% version: 1context
+%% consumer: base-memory-v1
+%% order: 10
+flowchart LR
+  Root[1context.toml] --> Plugin[base-memory-v1 plugin]
+  Root --> Accounts[accounts.toml]
+  Root --> Host[host.toml]
+  Root --> Runtime[memory/runtime]
+
+  Plugin --> Agents[agents]
+  Plugin --> Jobs[jobs]
+  Plugin --> StateMachines[state_machines]
+  Plugin --> Harnesses[harnesses]
+  Plugin --> Prompts[prompts]
+  Plugin --> Lived[lived-experiences]
+  Plugin --> Tools[custom-tools]
+  Plugin --> Deps[dependencies]
+  Plugin --> Linking[linking.toml]
+  Plugin --> Native[native-memory.toml]
+  Plugin --> Providers[providers.toml]
+
+  Deps --> Accounts
+  Host --> Permissions[local grants]
+  Agents --> Harnesses
+  Agents --> Prompts
+  Agents --> Lived
+  Agents --> Tools
+  StateMachines --> Jobs
+  Jobs --> Agents
+  Jobs --> Permissions
+
+  Jobs --> Invocation[job ids + job params]
+  Invocation --> Hire[hire_agent]
+  Linking --> Hire
+  Native --> Hire
+  Providers --> Hire
+  Accounts --> Hire
+  Harnesses --> Hire
+
+  Hire --> Birth[hired_agent.created]
+  Birth --> UUID[hired_agent_uuid]
+  Birth --> Experience[runtime experiences]
+  Birth --> Ledger[runtime ledger]
+
+  Experience --> CodexHome[Codex CODEX_HOME]
+  Experience --> ClaudeMemory[Claude native memory]
+  Experience --> Seeds[lived-experience seed]
+  Experience --> Views[readable views]
+
+  Runtime --> Ledger
+  Runtime --> Experience
+  Runtime --> Runs[runs]
+  Runtime --> Proposals[proposals]

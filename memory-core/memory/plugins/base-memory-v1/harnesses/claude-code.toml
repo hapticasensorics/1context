@@ -1,0 +1,101 @@
+id = "claude-code"
+version = "0.1.0"
+kind = "agent_harness"
+label = "Claude Code / Agent SDK"
+runner = "claude-code"
+command = "claude"
+primary_memory_format = "claude-project-jsonl"
+purpose = "Use Claude's native agent loop for Opus/Sonnet state-machine jobs instead of forcing Claude through the Codex Responses loop."
+
+endpoint_protocols = [
+  "anthropic-messages",
+  "anthropic-compatible",
+]
+
+default_tools = [
+  "workspace.read",
+  "workspace.write",
+  "patch.apply",
+  "shell.exec",
+  "artifact.write",
+]
+
+optional_tools = [
+  "web.search",
+  "web.open",
+  "browser.inspect",
+]
+
+receives = [
+  "CLAUDE.md",
+  "task_prompt",
+  "lived_experience",
+  "runtime_experience",
+  "workspace",
+]
+
+captures = [
+  "session",
+  "diff",
+  "commands",
+  "artifacts",
+  "summary",
+]
+
+[execution]
+mode = "non_interactive"
+command = "claude"
+internal_default = true
+user_facing_cli_required = false
+default_isolation = "account_clean"
+
+[execution.isolation_profiles.account_clean]
+label = "Account Clean"
+auth_mode = "account"
+purpose = "Use Claude Code subscription/account auth while minimizing ambient Claude Code state."
+bare = false
+no_session_persistence = true
+disable_slash_commands = true
+strict_mcp_config = true
+mcp_config = "{\"mcpServers\":{}}"
+setting_sources = ["project", "local"]
+tools = ["default"]
+permission_mode = "acceptEdits"
+cwd = "temporary_workspace"
+
+[execution.isolation_profiles.account_clean.blocks]
+claude_md_discovery = "Avoid by launching from a temporary workspace that has no CLAUDE.md."
+project_settings = "Avoid by not launching from the repo and by using explicit prompt input."
+session_resume = "Disabled with --no-session-persistence."
+mcp = "Disabled with --strict-mcp-config and empty --mcp-config."
+slash_commands = "Disabled with --disable-slash-commands."
+
+[execution.isolation_profiles.api_bare]
+label = "API Bare"
+auth_mode = "api_key"
+purpose = "Maximum isolation for API-key or apiKeyHelper runs; not compatible with normal Claude subscription login."
+bare = true
+no_session_persistence = true
+tools = ["Read", "Write", "Edit", "Bash"]
+
+[auth]
+default_mode = "account"
+modes = [
+  "account",
+  "api_key",
+]
+account = "Use Claude Code's logged-in paid/Console-capable account credentials."
+api_key = "Use host-provided Anthropic API credentials or a configured apiKeyHelper."
+api_key_env = "ANTHROPIC_API_KEY"
+api_key_helper = "apiKeyHelper"
+
+[prompt_control]
+memory_file = ""
+append_system_prompt = true
+project_memory_should_be_generated = false
+
+[model_requirements]
+tool_use = true
+patch_reliability = true
+long_horizon = true
+anthropic_messages_compatible = true

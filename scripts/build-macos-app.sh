@@ -23,6 +23,21 @@ cp "$BIN_DIR/OneContextMenuBar" "$MACOS_APP_DIR/1Context"
 cp "$BIN_DIR/1context" "$MACOS_APP_DIR/1context-cli"
 cp "$BIN_DIR/1contextd" "$MACOS_APP_DIR/1contextd"
 cp "$MENU_ICON_SOURCE" "$RESOURCES_DIR/MenuBarIcon.png"
+if [[ -d "$ROOT/memory-core" ]]; then
+  COPYFILE_DISABLE=1 ditto \
+    --norsrc \
+    --noextattr \
+    --noqtn \
+    --noacl \
+    "$ROOT/memory-core" \
+    "$RESOURCES_DIR/memory-core"
+  rm -rf \
+    "$RESOURCES_DIR/memory-core/.venv" \
+    "$RESOURCES_DIR/memory-core/.pytest_cache" \
+    "$RESOURCES_DIR/memory-core/wiki-engine/node_modules"
+  find "$RESOURCES_DIR/memory-core" -type d -name __pycache__ -prune -exec rm -rf {} +
+  chmod +x "$RESOURCES_DIR/memory-core/bin/1context-memory-core"
+fi
 
 ICONSET="$ROOT/dist/AppIcon.iconset"
 rm -rf "$ICONSET"

@@ -1,0 +1,21 @@
+flowchart TD
+  A["Agent-written source surfaces<br/><br/>Hourly/block/shard scribes create talk entries.<br/>Daily editor and concept scout create proposals.<br/>Librarian/curators/biographer create or update article and concept pages.<br/><br/>Important: agents may decide to skip, forget, defer, or flag concerns. The wiki layer must preserve those choices instead of forcing every event into prose."]
+  B["memory.wiki.build_inputs<br/><br/>Deterministic job, not a hired agent.<br/>Reads a markdown workspace and concept directory.<br/>Writes generated wiki input pages plus a render staging tree.<br/><br/>This is the e08 reader-loop substrate copied into the portable plugin."]
+  C["Generated index pages<br/><br/>topics.md groups concept pages by categories frontmatter.<br/>projects.md groups subject-type=project pages by project-status.<br/>open-questions.md aggregates concept Open Questions plus For You open-thread paragraphs.<br/><br/>No model call. The pages emerge from existing state."]
+  D["Bracket resolution into staging<br/><br/>[[Subject]] resolves in order:<br/>1. canonical concept slug<br/>2. concept aliases frontmatter<br/>3. external_url frontmatter<br/>4. built-in external fallback table<br/>5. otherwise plain text red-link discipline<br/><br/>Source prose stays clean; staging holds render-only links."]
+  E["Backlinks index<br/><br/>During resolution, every internal concept link records source -> target into _backlinks.json.<br/><br/>This powers Wikipedia-style What links here without a separate scan."]
+  F["Concept staging<br/><br/>Concept pages are copied into staging/concept with renderer frontmatter.<br/>Their own brackets are resolved.<br/>A What links here section is appended from _backlinks.json.<br/><br/>Operator-authored concept prose remains the source of truth."]
+  G["Landing and This Week<br/><br/>index.md is the front door: start here, counts, most-cited concepts.<br/>this-week.md is the recent-changes digest: promoted/deferred concepts, decision velocity, concerns, contradictions, open questions.<br/><br/>Both are generated from corpus signals."]
+  H["Renderer-ready tree<br/><br/>The wiki renderer can consume the staged markdown tree plus generated source pages.<br/>The system has outbound links, inbound backlinks, category indexes, project indexes, open questions, and a front door."]
+  I["Future agentic layers<br/><br/>Redactor tier alignment, cross-era curator hardening, librarian expand/sweep, section consolidation, and true multi-week validation remain agent/state-machine work.<br/><br/>The deterministic reader loop gives those agents a coherent wiki to write into."]
+
+  A --> B
+  B --> C
+  B --> D
+  D --> E
+  E --> F
+  C --> G
+  E --> G
+  F --> H
+  G --> H
+  H --> I

@@ -1,0 +1,20 @@
+[[native_memory_formats]]
+id = "codex-home"
+label = "Codex CODEX_HOME"
+path = "harnesses/codex/CODEX_HOME"
+kind = "directory"
+purpose = "Codex-native home containing the session index, session files, auth state references, and other Codex-owned memory."
+
+[[native_memory_formats]]
+id = "claude-project-jsonl"
+label = "Claude Project JSONL"
+path = "provider-memory/claude-project/session.jsonl"
+kind = "jsonl"
+purpose = "Local Claude project sessions use parent-linked JSONL records."
+
+[[native_memory_formats]]
+id = "openai-chat-messages"
+label = "OpenAI Chat Messages"
+path = "provider-memory/openai-chat/messages.json"
+kind = "json"
+purpose = "OpenAI-compatible chat message arrays for OpenAI-style endpoints such as Gemini, DeepSeek, and Kimi."

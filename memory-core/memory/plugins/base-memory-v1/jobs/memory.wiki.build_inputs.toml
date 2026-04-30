@@ -1,0 +1,38 @@
+id = "memory.wiki.build_inputs"
+version = "0.1.0"
+label = "Wiki Build Inputs"
+tools = []
+inputs = ["wiki_workspace", "concept_dir"]
+outputs = [
+  "topics_index",
+  "projects_index",
+  "open_questions_worklist",
+  "resolved_staging_tree",
+  "backlinks_index",
+  "staged_concept_pages",
+  "landing_page",
+  "this_week_digest",
+]
+
+[params]
+workspace = "path"
+concept_dir = "path"
+staging = "path"
+web_base = "/paul-demo2"
+
+[permissions]
+read = ["wiki_workspace", "concept_dir"]
+write = ["wiki_workspace/generated_pages", "wiki_staging"]
+deny = ["raw_data.query", "agent.hire"]
+
+[completion]
+done = [
+  "topics_index.exists",
+  "projects_index.exists",
+  "open_questions_worklist.exists",
+  "backlinks_index.exists",
+  "staged_concept_pages.exist",
+  "landing_page.exists",
+  "this_week_digest.exists",
+]
+failure = ["missing_workspace", "missing_concept_dir", "invalid_markdown", "write_error"]

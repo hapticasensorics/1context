@@ -1,5 +1,6 @@
 import Foundation
 import Darwin
+import OneContextMemoryCore
 import OneContextRuntimeSupport
 
 nonisolated(unsafe) private var signalSocketPath: UnsafeMutablePointer<CChar>?
@@ -66,6 +67,7 @@ final class OneContextDaemon: @unchecked Sendable {
   private let activeClients = DispatchSemaphore(value: maxActiveClients)
   private var listenFD: Int32 = -1
   private lazy var logger = Logger(path: paths.logPath)
+  private lazy var wikiServer = WikiServerManager(runtimePaths: paths)
 
   func run() throws {
     umask(0o077)
@@ -257,9 +259,36 @@ final class OneContextDaemon: @unchecked Sendable {
       return encode(result: healthPayload(), id: id)
     case "version":
       return encode(result: ["version": oneContextVersion], id: id)
+    case "wiki.status":
+      return encode(result: wikiPayload(wikiServer.status()), id: id)
+    case "wiki.start":
+      logger.write("wiki.start requested")
+      wikiServer.startInBackground()
+      logger.write("wiki.start accepted")
+      return encode(result: wikiPayload(WikiServerSnapshot(running: false, url: WikiServerManager.defaultURL, health: "starting")), id: id)
+    case "wiki.stop":
+      logger.write("wiki.stop requested")
+      wikiServer.stop()
+      return encode(result: wikiPayload(wikiServer.status()), id: id)
     default:
       return encode(error: "Unknown method: \(method)", id: id)
     }
+  }
+
+  private func wikiPayload(_ snapshot: WikiServerSnapshot) -> [String: Any] {
+    var payload: [String: Any] = [
+      "running": snapshot.running,
+      "url": snapshot.url,
+      "route": snapshot.route,
+      "health": snapshot.health
+    ]
+    if let pid = snapshot.pid {
+      payload["pid"] = Int(pid)
+    }
+    if let lastError = snapshot.lastError {
+      payload["lastError"] = lastError
+    }
+    return payload
   }
 
   private func healthPayload() -> [String: Any] {
@@ -344,6 +373,7 @@ final class OneContextDaemon: @unchecked Sendable {
   }
 
   private func cleanup() {
+    wikiServer.cleanupForDaemonExit()
     if listenFD >= 0 {
       close(listenFD)
     }

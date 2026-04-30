@@ -1,0 +1,13 @@
+[[custom_tools]]
+id = "raw_data.query"
+kind = "command"
+description = "Run read-only structured queries against the local raw-data SQLite database."
+entrypoint = "uv run python memory/plugins/base-memory-v1/custom-tools/raw-data-db/query.py"
+input_schema = "custom-tools/raw-data-db/input.schema.json"
+output_schema = "custom-tools/raw-data-db/output.schema.json"
+output = "json"
+permissions = [
+  "raw_data.read",
+]
+dependencies = ["raw-data-db"]
+database_env = "ONECTX_RAW_DATA_DB"

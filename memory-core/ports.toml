@@ -1,0 +1,31 @@
+# Local ports panel.
+#
+# This is the user-facing switchboard for boundary surfaces. The files under
+# ports/ define reusable adapter contracts; this file says which local ports
+# are live on this machine and can override their paths.
+
+enabled = true
+watch_interval_seconds = 300
+
+[defaults]
+enabled = true
+# Source import horizon. This limits which native transcript rows are imported
+# from Claude/Codex during first backfill and future ticks; it is NOT a
+# lakestore retention policy. Rows already imported remain in storage when they
+# age past this horizon. Use "all" for a deliberate full-history import, then
+# reset storage/cursors if you want to rerun history.
+since = "30d"
+# Backfill is intentionally sliced so a daemon tick stays interruptible and
+# cursor progress is durable. Set either to 0 for no cap.
+max_events_per_tick = 5000
+max_lines_per_tick = 25000
+
+[[ports]]
+id = "codex_sessions"
+enabled = true
+paths = ["~/.codex/sessions/**/rollout-*.jsonl"]
+
+[[ports]]
+id = "claude_sessions"
+enabled = true
+paths = ["~/.claude/projects/**/*.jsonl"]

@@ -1,0 +1,14 @@
+id = "hourly-shard-scribe"
+version = "0.1.0"
+label = "Hourly Shard Scribe"
+provider = "claude"
+harness = "claude-code"
+model = "opus"
+effort = "standard"
+tools = []
+prompt_paths = ["prompts/hourly-shard-scribe.md"]
+
+[runtime]
+isolation = "account_clean"
+subscription_compatible = true
+notes = "Writes one shard witness note for an oversized hour. The final hourly talk entry is written by memory.hourly.aggregate_scribe."

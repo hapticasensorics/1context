@@ -1,0 +1,26 @@
+id = "for-you"
+label = "For You"
+kind = "rolling_memory_surface"
+route = "/for-you"
+menu_group = "for-you"
+menu_order = 10
+template_version = "seed@0.1.0"
+
+[source]
+dir = "source"
+primary = "source/for-you.md"
+
+[talk]
+dir = "talk"
+
+[generated]
+dir = "generated"
+
+[jobs]
+curator = "memory.wiki.for_you_curator"
+historian = "memory.wiki.historian"
+
+[policies]
+operator_editable = true
+agent_editable = true
+generated_editable = false

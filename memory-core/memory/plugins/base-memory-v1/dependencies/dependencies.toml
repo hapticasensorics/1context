@@ -1,0 +1,121 @@
+# Plugin dependency declarations.
+# This file says what the plugin may need. It does not list every possible API key,
+# and it never stores secret values.
+
+[[dependencies]]
+id = "ai-state-machine-dsl"
+label = "AI State Machine DSL"
+kind = "state_machine_language"
+required = true
+language = "ai_state_machine"
+version_spec = ">=0.1.0,<0.2.0"
+purpose = "Required to load this plugin's state_machines/*.py definitions. The language/runtime lives in src/onectx/state_machines and compiles plugin-authored machines into inspectable IR."
+
+[[dependencies]]
+id = "lancedb-lakestore"
+label = "LanceDB Lakestore"
+kind = "storage_engine"
+required = true
+engine = "lancedb"
+version_spec = ">=0.30,<0.31"
+path = "storage/lakestore"
+purpose = "Required for runtime events, session archives, artifacts, evidence, and document surfaces. The host provides the local LanceDB/Lance store; the plugin writes through src/onectx/storage."
+
+[[dependencies]]
+id = "openai-models"
+label = "OpenAI / ChatGPT Models"
+kind = "model_provider_account"
+required = false
+account = "accounts.openai"
+auth_modes = [
+  "chatgpt_subscription",
+  "api_key",
+]
+models = [
+  "gpt-5.5",
+]
+model_patterns = [
+  "codex*",
+  "gpt-*",
+  "o*",
+]
+purpose = "Needed when this plugin hires Codex/OpenAI-backed agents. The host may satisfy this with ChatGPT subscription auth or an OpenAI API key."
+
+[[dependencies]]
+id = "anthropic-models"
+label = "Anthropic / Claude Models"
+kind = "model_provider_account"
+required = false
+account = "accounts.anthropic"
+auth_modes = [
+  "account",
+  "api_key",
+]
+models = [
+  "claude-opus-4-7",
+]
+model_patterns = [
+  "claude-*",
+]
+purpose = "Needed when this plugin hires Claude Code or Anthropic-backed agents. The host may satisfy this with Claude account auth or an Anthropic API key."
+
+[[dependencies]]
+id = "gemini-models"
+label = "Gemini Models"
+kind = "model_provider_account"
+required = false
+account = "accounts.gemini"
+auth_modes = [
+  "api_key",
+]
+models = [
+  "gemini-3-flash-preview",
+]
+model_patterns = [
+  "gemini-*",
+]
+purpose = "Needed when this plugin routes work to Gemini-compatible models. This account is API-key-only for now."
+
+[[dependencies]]
+id = "deepseek-models"
+label = "DeepSeek Models"
+kind = "model_provider_account"
+required = false
+account = "accounts.deepseek"
+auth_modes = [
+  "api_key",
+]
+models = [
+  "deepseek-chat",
+]
+model_patterns = [
+  "deepseek-*",
+]
+purpose = "Needed when this plugin routes work to DeepSeek-compatible models. This account is API-key-only for now."
+
+[[dependencies]]
+id = "kimi-models"
+label = "Kimi / Moonshot Models"
+kind = "model_provider_account"
+required = false
+account = "accounts.kimi"
+auth_modes = [
+  "api_key",
+]
+models = [
+  "kimi-k2",
+]
+model_patterns = [
+  "kimi-*",
+  "moonshot-*",
+]
+purpose = "Needed when this plugin routes work to Kimi/Moonshot-compatible models. This account is API-key-only for now."
+
+[[dependencies]]
+id = "raw-data-db"
+label = "Raw Data Database"
+kind = "local_resource"
+required = false
+env = "ONECTX_RAW_DATA_DB"
+required_for = ["custom_tools.raw_data.query"]
+purpose = "Optional local SQLite database used by the seed raw_data.query custom tool."

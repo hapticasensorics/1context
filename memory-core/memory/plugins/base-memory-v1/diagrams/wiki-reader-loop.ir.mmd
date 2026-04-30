@@ -1,0 +1,27 @@
+%% title: Wiki Reader Loop / wiki IR
+%% description: Generated from compiled 1Context state-machine IR; edit the DSL source, not this diagram.
+%% order: 40
+flowchart LR
+  wiki_dirty(["dirty<br/><br/>initial"])
+  wiki_building_inputs["building_inputs"]
+  wiki_staged["staged"]
+  wiki_rendering["rendering"]
+  wiki_rendered["rendered"]
+  wiki_blocked["blocked"]
+  wiki_dirty -->|"wiki.inputs.requested<br/><br/>step: build_topics_index&lt;br/&gt;step: build_projects_index&lt;br/&gt;step: build_open_questions&lt;br/&gt;step: resolve_brackets_to_staging&lt;br/&gt;step: build_landing_and_this_week&lt;br/&gt;step: resolve_brackets_to_staging&lt;br/&gt;step: stage_concepts_with_backlinks&lt;br/&gt;expect: wiki_inputs.ready&lt;br/&gt;expect: reader_loop.coherent&lt;br/&gt;emit: wiki.inputs.ready"| wiki_building_inputs
+  wiki_building_inputs -->|"wiki.inputs.ready<br/><br/>step: run_wiki_engine_render&lt;br/&gt;step: write_site_manifest_and_content_index&lt;br/&gt;expect: wiki_render.ready&lt;br/&gt;emit: wiki.render.ready"| wiki_rendering
+  wiki_rendering -->|"wiki.render.ready"| wiki_rendered
+
+  subgraph emitted_events["Emitted events"]
+    emit_1_0["wiki.inputs.ready"]
+    emit_2_1["wiki.render.ready"]
+  end
+
+  classDef state fill:#eef6ff,stroke:#2f6fa3,stroke-width:1px,color:#102033;
+  classDef initial fill:#eaf8ef,stroke:#2d7d46,stroke-width:2px,color:#102033;
+  class wiki_dirty initial;
+  class wiki_building_inputs state;
+  class wiki_staged state;
+  class wiki_rendering state;
+  class wiki_rendered state;
+  class wiki_blocked state;

@@ -1,0 +1,26 @@
+id = "local-codex"
+label = "Local Codex Host"
+trust_mode = "local_full"
+audit = true
+confirm_destructive = true
+
+allow = [
+  "artifact.write",
+  "browser.inspect",
+  "computer.use",
+  "image.input",
+  "mcp.client",
+  "patch.apply",
+  "raw_data.query",
+  "shell.exec",
+  "subagent.spawn",
+  "web.open",
+  "web.search",
+  "workspace.read",
+  "workspace.write",
+]
+
+deny = [
+  "secrets.read",
+  "destructive.unconfirmed",
+]

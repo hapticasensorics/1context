@@ -1,0 +1,44 @@
+%% title: For You Day State Machine
+%% description: The first ai_state_machine definition: one day fans out hourly witnesses, then runs daily editor and concept scout jobs.
+%% version: 1context
+%% consumer: base-memory-v1
+%% order: 70
+flowchart LR
+  Start[day.started] --> Discover[day: discovering_hours]
+  Discover --> ActiveHours[sessions.active_hours evidence]
+  ActiveHours --> Hourlies[day: writing_hourlies]
+
+  subgraph Fanout["parallel hourly witnesses"]
+    Hourlies --> HourJob[memory.hourly_witness<br/>for_each active_hour]
+    HourJob --> HourEntry[hourly talk entry<br/>or skip]
+  end
+
+  HourEntry --> Closed{day.hourlies_closed}
+  Closed --> Review[day: reviewing]
+
+  subgraph ReviewJobs["daily review jobs"]
+    Review --> DailyEditor[memory.daily_talk_editor]
+    Review --> ConceptScout[memory.concept_scout]
+    DailyEditor --> Synthesis[daily talk synthesis]
+    ConceptScout --> Concepts[concept candidates<br/>questions]
+  end
+
+  Synthesis --> Ready{day.review_ready}
+  Concepts --> Ready
+  Ready --> Complete[day: complete]
+  Complete --> Reviewed[day.reviewed]
+
+  User[user message<br/>target=daily_editor] --> Note[daily_editor.human_note]
+  Activity[activity tick] --> Observed[day.activity_observed]
+  Failure[job.failed] --> JobFailed[job: failed]
+  Approval[approval.needed] --> Blocked[day: blocked]
+
+  classDef state fill:#f5f7f3,stroke:#52615a,color:#1d2421;
+  classDef job fill:#eaf6ee,stroke:#407d5b,color:#102416;
+  classDef evidence fill:#fff3cf,stroke:#947335,color:#2b220c;
+  classDef event fill:#eef5ff,stroke:#5b75a0,color:#1c2a3d;
+
+  class Discover,Hourlies,Review,Complete,Blocked,JobFailed state;
+  class HourJob,DailyEditor,ConceptScout job;
+  class ActiveHours,HourEntry,Synthesis,Concepts,Closed,Ready evidence;
+  class Start,User,Activity,Failure,Approval,Note,Observed,Reviewed event;

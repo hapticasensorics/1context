@@ -1,0 +1,25 @@
+id = "memory.wiki.source_packet_aggregate"
+version = "0.1.0"
+label = "Wiki Source Packet Aggregate Planner"
+agent = "wiki-source-aggregate"
+tools = []
+prompt_paths = ["prompts/wiki-source-packet-aggregate.md"]
+inputs = ["source_packet_shard_notes", "parent_route_contract"]
+outputs = ["bounded_parent_route_context", "relaunch_recommendation"]
+
+[params]
+parent_route_id = "route id"
+parent_job = "job id"
+parent_job_key = "route job key"
+shard_count = "N"
+
+[permissions]
+read = ["runtime_shard_notes", "parent_route_contract"]
+write = ["runtime_aggregate_note"]
+deny = ["wiki_source_mutation", "raw_data.query_by_default"]
+
+[completion]
+done = ["source_packet_aggregate.ready"]
+skip = ["all_shards_no_change"]
+needs_approval = ["aggregate_unclear_for_mutation"]
+failure = ["missing_shard_note", "invalid_aggregate_note", "claude_error"]

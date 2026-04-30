@@ -1,0 +1,45 @@
+%% title: Memory System Fabric / replay IR
+%% description: Generated from compiled 1Context state-machine IR; edit the DSL source, not this diagram.
+%% order: 40
+flowchart LR
+  replay_idle["idle"]
+  replay_loading_events["loading_events"]
+  replay_scheduling["scheduling"]
+  replay_firing["firing"]
+  replay_analyzing["analyzing"]
+  replay_complete["complete"]
+  replay_blocked["blocked"]
+  replay_idle -.->|"replay.requested<br/><br/>step: load_historic_event_stream&lt;br/&gt;expect: runtime_events.ready&lt;br/&gt;emit: memory.replay.events_loaded"| replay_loading_events
+  replay_loading_events -->|"memory.replay.events_loaded<br/><br/>step: derive_replay_fire_schedule&lt;br/&gt;expect: replay_schedule.ready&lt;br/&gt;emit: memory.replay.schedule_ready"| replay_scheduling
+  replay_scheduling -->|"memory.replay.schedule_ready<br/><br/>step: execute_replay_fires&lt;br/&gt;expect: replay_run.completed&lt;br/&gt;emit: memory.replay.completed"| replay_firing
+  replay_firing -->|"memory.replay.completed<br/><br/>step: write_replay_summary&lt;br/&gt;emit: memory.real_time_policy_evidence.ready"| replay_analyzing
+  replay_analyzing -->|"memory.real_time_policy_evidence.ready<br/><br/>expect: replay_run.completed"| replay_complete
+  replay_idle -->|"daemon<br/><br/>emit: memory.work_available"| replay_idle
+
+  subgraph emitted_events["Emitted events"]
+    emit_3_0["memory.replay.events_loaded"]
+    emit_4_1["memory.replay.schedule_ready"]
+    emit_5_2["memory.replay.completed"]
+    emit_6_3["memory.real_time_policy_evidence.ready"]
+    emit_20_4["memory.work_available"]
+  end
+
+  subgraph signals["Signals"]
+    signal_memory_work_available["memory.work_available<br/><br/>activity.has_new_rows or filesystem.changed(wiki_workspace) or human.requested_memory_run or daemon.tick"]
+    signal_source_import_stale["source_import.stale<br/><br/>required importer cursor older than runtime_policy.max_importer_staleness"]
+    signal_replay_requested["replay.requested<br/><br/>human.requested_replay or daemon.requested_replay_experiment"]
+    signal_experience_too_large["experience.too_large<br/><br/>estimated_prompt_tokens &gt; runtime_policy.max_prompt_tokens"]
+    signal_agent_layer_closed["agent.layer_closed<br/><br/>all planned hires have terminal outcome events"]
+    signal_wiki_needs_routing["wiki.needs_routing<br/><br/>memory_artifacts.changed or wiki_source.changed or human.requested_review"]
+    signal_cycle_needs_retry["cycle.needs_retry<br/><br/>ledger.has(needs_retry) and retry_budget.remaining"]
+  end
+
+  classDef state fill:#eef6ff,stroke:#2f6fa3,stroke-width:1px,color:#102033;
+  classDef initial fill:#eaf8ef,stroke:#2d7d46,stroke-width:2px,color:#102033;
+  class replay_idle state;
+  class replay_loading_events state;
+  class replay_scheduling state;
+  class replay_firing state;
+  class replay_analyzing state;
+  class replay_complete state;
+  class replay_blocked state;

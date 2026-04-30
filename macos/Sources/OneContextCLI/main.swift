@@ -46,6 +46,8 @@ struct OneContextCLI {
         try agent()
       case "memory-core":
         try memoryCore()
+      case "wiki":
+        try await wiki()
       default:
         FileHandle.standardError.write(Data("Unknown command: \(command ?? "")\n".utf8))
         printHelp()
@@ -87,6 +89,7 @@ struct OneContextCLI {
       1context agent statusline --provider claude
       1context agent integrations <status|install|repair|uninstall>
       1context memory-core <status|doctor|configure|run>
+      1context wiki <open|start|status|stop>
     """)
   }
 
@@ -510,6 +513,102 @@ struct OneContextCLI {
     let runArgs = Array(args.dropFirst(3))
     let result = try adapter.run(arguments: runArgs)
     print(result.stdout, terminator: result.stdout.hasSuffix("\n") ? "" : "\n")
+  }
+
+  static func wiki() async throws {
+    guard args.count >= 2 else {
+      throw CLIError.commandFailed("wiki requires a subcommand")
+    }
+
+    switch args[1] {
+    case "open":
+      try rejectUnknownWikiArguments(allowed: [])
+      let snapshot = try await ensureWikiStarted()
+      try runProcess("/usr/bin/open", [snapshot.url])
+      print("Opened 1Context wiki: \(snapshot.url)")
+    case "start":
+      try rejectUnknownWikiArguments(allowed: [])
+      let snapshot = try await ensureWikiStarted()
+      print("1Context wiki is running.")
+      print("URL: \(snapshot.url)")
+    case "status":
+      try rejectUnknownWikiArguments(allowed: [])
+      let snapshot = try await wikiRPC("wiki.status")
+      printWikiSnapshot(snapshot)
+      if !snapshot.running {
+        Foundation.exit(1)
+      }
+    case "stop":
+      try rejectUnknownWikiArguments(allowed: [])
+      let snapshot = try await wikiRPC("wiki.stop")
+      print(snapshot.running ? "1Context wiki needs attention." : "1Context wiki is stopped.")
+    default:
+      throw CLIError.commandFailed("Unknown wiki subcommand: \(args[1])")
+    }
+  }
+
+  static func ensureWikiStarted() async throws -> WikiServerSnapshot {
+    _ = try await RuntimeController().start()
+    _ = try await wikiRPC("wiki.start", timeout: 5)
+    return try await waitForWikiRunning(timeout: 240)
+  }
+
+  static func waitForWikiRunning(timeout: TimeInterval) async throws -> WikiServerSnapshot {
+    let deadline = Date().addingTimeInterval(timeout)
+    var last = WikiServerSnapshot(running: false, health: "starting")
+    repeat {
+      last = try await wikiRPC("wiki.status", timeout: 5)
+      if last.running { return last }
+      try await Task.sleep(nanoseconds: 500_000_000)
+    } while Date() < deadline
+    throw CLIError.commandFailed("Timed out preparing local wiki. Last state: \(last.health)")
+  }
+
+  static func wikiRPC(_ method: String, timeout: TimeInterval = 60) async throws -> WikiServerSnapshot {
+    let deadline = Date().addingTimeInterval(timeout)
+    var lastError: Error?
+    let clientTimeout = Int32(max(2_000, min(120_000, Int(timeout * 1_000))))
+    repeat {
+      do {
+        let result = try UnixJSONRPCClient(timeoutMilliseconds: clientTimeout).call(method: method)
+        return wikiSnapshot(from: result)
+      } catch {
+        lastError = error
+        try await Task.sleep(nanoseconds: 250_000_000)
+      }
+    } while Date() < deadline
+    throw lastError ?? CLIError.commandFailed(method)
+  }
+
+  static func wikiSnapshot(from payload: [String: Any]) -> WikiServerSnapshot {
+    WikiServerSnapshot(
+      running: payload["running"] as? Bool ?? false,
+      url: payload["url"] as? String ?? WikiServerManager.defaultURL,
+      pid: (payload["pid"] as? NSNumber)?.int32Value,
+      route: payload["route"] as? String ?? "/for-you",
+      health: payload["health"] as? String ?? "unknown",
+      lastError: payload["lastError"] as? String
+    )
+  }
+
+  static func printWikiSnapshot(_ snapshot: WikiServerSnapshot) {
+    print(snapshot.running ? "1Context wiki is running." : "1Context wiki is not running.")
+    print("")
+    print("URL: \(snapshot.url)")
+    print("Health: \(snapshot.health)")
+    if let pid = snapshot.pid {
+      print("PID: \(pid)")
+    }
+    if let lastError = snapshot.lastError {
+      print("Last Error: \(lastError)")
+    }
+  }
+
+  static func rejectUnknownWikiArguments(allowed: Set<String>) throws {
+    let unknown = args.dropFirst(2).filter { !allowed.contains($0) }
+    if let first = unknown.first {
+      throw CLIError.unknownArgument(first)
+    }
   }
 
   static func printMemoryCoreStatusAndFailIfDegraded(_ status: MemoryCoreStatus, redact: Bool) throws {

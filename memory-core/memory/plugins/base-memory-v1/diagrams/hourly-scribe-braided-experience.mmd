@@ -1,0 +1,56 @@
+%% title: Hourly Scribe Braided Experience
+%% description: Render an hour into an experience packet, attach it as the hired agent's lived experience at birth, then write one talk post.
+%% version: 1context
+%% consumer: base-memory-v1
+%% order: 5
+flowchart TD
+  Source[Source memory already captured<br/><br/>Codex and Claude session rows have been imported into storage/lakestore/events.<br/><br/>For this job the lakestore is just the local timeline archive: ts, source, session_id, kind, text, payload, hash.]
+
+  Render[Deterministic hour renderer<br/><br/>Input: date, hour, source_harnesses.<br/><br/>Read one bounded time window once, outside the agent. Group rows by harness + session_id so each stream keeps local continuity. Build a concise global weave for overlap.]
+
+  Packet[Experience packet is the artifact<br/><br/>Write memory/runtime/experiences/&lt;experience_id&gt;/experience.md, streams/*.md, agent-context.md, and meta.yaml.<br/><br/>The packet is reproducible and hashable: renderer version, source window, source sessions, source event hashes, experience_sha256, agent_context_sha256.]
+
+  Role[Lived experience is literal<br/><br/>The packet is not merely background reading or a neutral seed.<br/><br/>agent-context.md is loaded into the initial prompt context before the task, like restored session continuity. That is the past life the new agent wakes up with.]
+
+  Hire[1Context hire request<br/><br/>Job: memory.hourly.scribe.<br/><br/>Harness: Claude Code using local Claude account/subscription auth.<br/><br/>Isolation mode: account_clean, not bare, so subscription login still works while session persistence, slash commands, and MCP are disabled as much as Claude Code allows.<br/><br/>Job params stay separate from experience: date, hour, audience, talk_folder, output filename, experience_id, experience_mode, experience_sha256.]
+
+  Birth[hired_agent.created birth certificate<br/><br/>Mint hired_agent_uuid.<br/><br/>Record job id, job params, agent, harness, provider/model, prompts, tools, accounts, host grants, and the lived experience attachment: packet path, mode, source window, hashes.]
+
+  Runtime[Runtime experience container<br/><br/>The local folder is the container for this hire's attached memory and artifacts.<br/><br/>It includes prompt-input.md, which embeds the full birth-loaded context, plus run logs, output files, and validation evidence.]
+
+  Prompt[Prompt assembly<br/><br/>System prompt: you inherit a past operational life and should answer from it directly.<br/><br/>Lived experience: full agent-context.md, including every stream transcript, already in context.<br/><br/>Job prompt: hourly scribe role.<br/><br/>Task prompt: write one talk entry.]
+
+  Agent[Fresh hired Claude agent<br/><br/>Claude Code is launched locally with the subscription-enabled account already installed on the host.<br/><br/>Launch profile account_clean:<br/>--no-session-persistence, temporary cwd, no repo CLAUDE.md, user hooks suppressed, strict empty MCP config, slash commands disabled, Claude default tools enabled.<br/><br/>It writes from inherited lived experience and may use tools, including web search, when the role prompt calls for it.]
+
+  Talk[Talk entry artifact<br/><br/>Write one append-only markdown file in a temporary wiki workspace, e.g. /tmp/onecontext-hourly-scribe-demo/for-you-2026-04-06.private.talk/2026-04-06T02-00Z.conversation.md.]
+
+  Evidence[Evidence checks<br/><br/>File exists. Frontmatter parses. kind = conversation. ts is inside source hour. Body is non-empty. Claims are grounded in the experience packet or marked uncertain.]
+
+  Outcome[Outcome ledger events<br/><br/>Record artifact path, evidence result, and job outcome: done, needs_wider_window, failure, no_change, or needs_approval.<br/><br/>The ledger tells the whole story: packet rendered, agent born, artifact produced, evidence trusted.]
+
+  Source --> Render
+  Render --> Packet
+  Packet --> Role
+  Role --> Hire
+  Hire --> Birth
+  Birth --> Runtime
+  Runtime --> Prompt
+  Packet --> Prompt
+  Prompt --> Agent
+  Agent --> Talk
+  Talk --> Evidence
+  Evidence --> Outcome
+  Birth --> Outcome
+  Packet --> Outcome
+
+  classDef control fill:#f5f7f3,stroke:#52615a,color:#1d2421;
+  classDef storage fill:#fff3cf,stroke:#947335,color:#2b220c;
+  classDef experience fill:#eaf6ee,stroke:#407d5b,color:#102416;
+  classDef prompt fill:#edf2ff,stroke:#5168a6,color:#111a33;
+  classDef artifact fill:#f8ecff,stroke:#805c9b,color:#261233;
+
+  class Render,Hire,Evidence control;
+  class Source,Outcome storage;
+  class Packet,Role,Birth,Runtime,Agent experience;
+  class Prompt prompt;
+  class Talk artifact;
