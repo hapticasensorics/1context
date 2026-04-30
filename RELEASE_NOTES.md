@@ -1,11 +1,11 @@
-# 1Context v0.1.46 Public Preview
+# 1Context v0.1.47 Public Preview
 
 This release includes:
 
-- managed Claude `SessionStart` hook installs with an explicit matcher
-- SessionStart hook context now includes a runtime timestamp from the 1Context daemon
-- runtime health RPC now reports the daemon's current time
-- tests for hook matcher installation and daemon-backed hook context
+- restored bundled memory-core wiki bridge
+- bundled local wiki engine resources inside the macOS app package
+- `1context wiki open/start/status/stop`
+- release packaging validation for memory-core wiki files
 
 Install:
 
