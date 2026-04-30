@@ -214,11 +214,11 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
     let start = perfStart()
     isMenuOpen = true
     renderGeneration += 1
-    refreshRuntimeStateForMenuOpen()
+    refreshRuntimeIntentForMenuOpen()
     perfLog("menu.willOpen", start: start)
   }
 
-  private func refreshRuntimeStateForMenuOpen() {
+  private func refreshRuntimeIntentForMenuOpen() {
     let desiredState = (try? String(contentsOfFile: RuntimePaths.current().desiredStatePath, encoding: .utf8))?
       .trimmingCharacters(in: .whitespacesAndNewlines)
     if desiredState == "stopped" {
@@ -229,7 +229,10 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
       }
       return
     }
-    ensureRuntimeRunning(userInitiated: false)
+    if runtimeState == .stopped {
+      runtimeState = .checking
+      refreshMenuItems()
+    }
   }
 
   func menuDidClose(_ menu: NSMenu) {
