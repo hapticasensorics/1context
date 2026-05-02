@@ -15,7 +15,6 @@ cleanup() {
   ONECONTEXT_LAUNCH_AGENT_DISABLED=1 \
   ONECONTEXT_LOG_DIR="$STATE_DIR/Logs/1Context" \
   ONECONTEXT_CACHE_DIR="$STATE_DIR/Caches/1Context" \
-  ONECONTEXT_UPDATE_STATE_DIR="$STATE_DIR/Application Support/1Context/update" \
   ONECONTEXT_NO_UPDATE_CHECK=1 \
   "$BIN_DIR/1context" stop >/dev/null 2>&1 || true
   rm -rf "$STATE_DIR"
@@ -27,7 +26,6 @@ export ONECONTEXT_USER_CONTENT_DIR="$STATE_DIR/1Context"
 export ONECONTEXT_LAUNCH_AGENT_DISABLED=1
 export ONECONTEXT_LOG_DIR="$STATE_DIR/Logs/1Context"
 export ONECONTEXT_CACHE_DIR="$STATE_DIR/Caches/1Context"
-export ONECONTEXT_UPDATE_STATE_DIR="$STATE_DIR/Application Support/1Context/update"
 export ONECONTEXT_NO_UPDATE_CHECK=1
 
 "$BIN_DIR/1context" start >/dev/null

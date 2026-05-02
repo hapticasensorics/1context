@@ -1207,34 +1207,49 @@
   }
 
   function renderAiMessageText(el, role, text) {
-    if (role !== 'bot') {
-      el.textContent = text;
-      return;
-    }
     el.innerHTML = renderChatMarkdown(text);
   }
 
   function renderChatMarkdown(text) {
     const src = String(text == null ? '' : text);
-    const linkRe = /\[([^\]\n]+)\]\(([^)\s]+)\)/g;
+    const markdownLinkRe = /!\[([^\]\n]*)\]\(([^)\s]+)\)|\[([^\]\n]+)\]\(([^)\s]+)\)/g;
     let html = '';
     let last = 0;
     let match;
-    while ((match = linkRe.exec(src)) !== null) {
+    while ((match = markdownLinkRe.exec(src)) !== null) {
       html += escapeHtml(src.slice(last, match.index));
-      const label = match[1];
-      const href = safeChatHref(match[2]);
-      if (href) {
-        const external = /^https?:\/\//i.test(href) && new URL(href, location.href).origin !== location.origin;
-        const target = external ? ' target="_blank" rel="noopener noreferrer"' : '';
-        html += `<a href="${escapeAttr(href)}"${target}>${escapeHtml(label)}</a>`;
+      if (match[1] !== undefined) {
+        const label = match[1] || 'Attached image';
+        const srcValue = safeChatImageSrc(match[2]);
+        if (srcValue) {
+          html += `<img class="opctx-ai-msg-image" src="${escapeAttr(srcValue)}" alt="${escapeAttr(label)}" loading="lazy">`;
+        } else {
+          html += escapeHtml(match[0]);
+        }
       } else {
-        html += escapeHtml(match[0]);
+        const label = match[3];
+        const href = safeChatHref(match[4]);
+        if (href) {
+          const external = /^https?:\/\//i.test(href) && new URL(href, location.href).origin !== location.origin;
+          const target = external ? ' target="_blank" rel="noopener noreferrer"' : '';
+          html += `<a href="${escapeAttr(href)}"${target}>${escapeHtml(label)}</a>`;
+        } else {
+          html += escapeHtml(match[0]);
+        }
       }
-      last = linkRe.lastIndex;
+      last = markdownLinkRe.lastIndex;
     }
     html += escapeHtml(src.slice(last));
     return html;
+  }
+
+  function safeChatImageSrc(raw) {
+    const href = String(raw || '').trim();
+    if (!href) return '';
+    if (/^data:image\/(?:png|jpe?g|gif|webp);base64,[A-Za-z0-9+/=]+$/i.test(href) && href.length < 2_500_000) {
+      return href;
+    }
+    return safeChatHref(href);
   }
 
   function safeChatHref(raw) {

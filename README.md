@@ -68,35 +68,29 @@ narrow contract without risking the whole app.
 
 ## Install
 
-```bash
-brew install --cask hapticasensorics/tap/1context
-```
-
 Requires Apple Silicon and macOS 13 Ventura or newer.
 
-Open the app from `/Applications`, then use the menu bar item to open or refresh
-your wiki.
+Download the latest `1Context.dmg` from GitHub Releases, open it, and move
+`1Context.app` to `/Applications`. If you launch the app from Downloads or the
+mounted DMG, it can move itself for you.
 
-Helpful commands:
+First launch opens 1Context Setup. Grant Local Wiki Access once, then use the
+menu bar item to open or refresh your wiki.
+
+Support commands are available through the bundled CLI:
 
 ```bash
-1context status
-1context diagnose
-1context wiki local-url
-1context agent integrations install
+/Applications/1Context.app/Contents/MacOS/1context-cli status
+/Applications/1Context.app/Contents/MacOS/1context-cli diagnose
+/Applications/1Context.app/Contents/MacOS/1context-cli setup local-web status
+/Applications/1Context.app/Contents/MacOS/1context-cli wiki local-url
+/Applications/1Context.app/Contents/MacOS/1context-cli agent integrations install
 ```
 
 Uninstall the app:
 
-```bash
-brew uninstall --cask hapticasensorics/tap/1context
-```
-
-Remove user content and local preview data too:
-
-```bash
-brew uninstall --cask --zap hapticasensorics/tap/1context
-```
+Quit 1Context, move `/Applications/1Context.app` to the Trash, and choose
+whether to keep or delete your `~/1Context` wiki files.
 
 ## Files And Privacy
 
@@ -107,7 +101,7 @@ brew uninstall --cask --zap hapticasensorics/tap/1context
   human-readable wiki files and user-owned content
 
 ~/Library/Application Support/1Context/
-  app/runtime state, config, indexes, local web state, and update metadata
+  app/runtime state, config, indexes, and local web state
 
 ~/Library/Logs/1Context/
   logs and debug/support information
@@ -117,8 +111,8 @@ brew uninstall --cask --zap hapticasensorics/tap/1context
 ```
 
 The public preview makes no product telemetry calls and does not upload project
-data. It checks GitHub Releases at most once per day to show whether an update
-is available.
+data. Native update checks are app-owned and will use the signed release feed
+when configured.
 
 See [PERMISSIONS.md](PERMISSIONS.md) for the ownership, consent, and privacy
 contract.

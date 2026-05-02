@@ -29,6 +29,10 @@ public struct LocalWebSnapshot: Codable, Equatable, Sendable {
 
 public struct LocalWebDiagnostics: Codable, Equatable, Sendable {
   public var snapshot: LocalWebSnapshot
+  public var urlMode: String
+  public var trustMode: String
+  public var privilegedBindRequired: Bool
+  public var setup: LocalWebSetupSnapshot
   public var apiURL: String
   public var apiHealth: String
   public var apiPort: Int
@@ -51,15 +55,224 @@ public struct LocalWebDiagnostics: Codable, Equatable, Sendable {
   public var currentSiteHasTheme: Bool
   public var currentSiteHasEnhanceJS: Bool
   public var currentSiteHasHealth: Bool
+
+  public init(
+    snapshot: LocalWebSnapshot,
+    urlMode: String,
+    trustMode: String,
+    privilegedBindRequired: Bool,
+    setup: LocalWebSetupSnapshot,
+    apiURL: String,
+    apiHealth: String,
+    apiPort: Int,
+    apiStatePath: String,
+    caddyExecutable: String,
+    caddyExecutableExists: Bool,
+    caddyExecutableIsExecutable: Bool,
+    caddyExecutableIsBundled: Bool,
+    bundledCaddyPath: String,
+    bundledCaddyVersionPath: String,
+    bundledCaddyVersion: String,
+    caddyfilePath: String,
+    statePath: String,
+    pidPath: String,
+    logPath: String,
+    currentSitePath: String,
+    nextSitePath: String,
+    previousSitePath: String,
+    currentSiteHasIndex: Bool,
+    currentSiteHasTheme: Bool,
+    currentSiteHasEnhanceJS: Bool,
+    currentSiteHasHealth: Bool
+  ) {
+    self.snapshot = snapshot
+    self.urlMode = urlMode
+    self.trustMode = trustMode
+    self.privilegedBindRequired = privilegedBindRequired
+    self.setup = setup
+    self.apiURL = apiURL
+    self.apiHealth = apiHealth
+    self.apiPort = apiPort
+    self.apiStatePath = apiStatePath
+    self.caddyExecutable = caddyExecutable
+    self.caddyExecutableExists = caddyExecutableExists
+    self.caddyExecutableIsExecutable = caddyExecutableIsExecutable
+    self.caddyExecutableIsBundled = caddyExecutableIsBundled
+    self.bundledCaddyPath = bundledCaddyPath
+    self.bundledCaddyVersionPath = bundledCaddyVersionPath
+    self.bundledCaddyVersion = bundledCaddyVersion
+    self.caddyfilePath = caddyfilePath
+    self.statePath = statePath
+    self.pidPath = pidPath
+    self.logPath = logPath
+    self.currentSitePath = currentSitePath
+    self.nextSitePath = nextSitePath
+    self.previousSitePath = previousSitePath
+    self.currentSiteHasIndex = currentSiteHasIndex
+    self.currentSiteHasTheme = currentSiteHasTheme
+    self.currentSiteHasEnhanceJS = currentSiteHasEnhanceJS
+    self.currentSiteHasHealth = currentSiteHasHealth
+  }
 }
 
 public enum LocalWebDefaults {
   public static let wikiHost = "wiki.1context.localhost"
   public static let bindHost = "127.0.0.1"
-  public static let wikiPort = 17319
-  public static let wikiAPIPort = 17320
+  public static let wikiPort = 39191
+  public static let wikiAPIPort = 39192
   public static let wikiRoute = "/your-context"
-  public static let defaultWikiURL = "http://\(wikiHost):\(wikiPort)\(wikiRoute)"
+  public static let defaultWikiURL = "https://\(wikiHost)\(wikiRoute)"
+}
+
+public enum LocalWebURLMode: String, Codable, Sendable {
+  case highPortHTTP = "high-port-http"
+  case localHTTPSPortless = "local-https-portless"
+
+  public init(environmentValue: String?) {
+    switch environmentValue {
+    case Self.highPortHTTP.rawValue:
+      self = .highPortHTTP
+    case Self.localHTTPSPortless.rawValue:
+      self = .localHTTPSPortless
+    default:
+      self = .localHTTPSPortless
+    }
+  }
+
+  public var trustMode: String {
+    switch self {
+    case .highPortHTTP:
+      return "none"
+    case .localHTTPSPortless:
+      return "local-ca-required"
+    }
+  }
+
+  public var privilegedBindRequired: Bool {
+    switch self {
+    case .highPortHTTP:
+      return false
+    case .localHTTPSPortless:
+      return true
+    }
+  }
+}
+
+public enum LocalWebSetupRequirementStatus: String, Codable, Sendable {
+  case satisfied
+  case needed
+  case notRequired = "not_required"
+}
+
+public struct LocalWebSetupRequirement: Codable, Equatable, Sendable {
+  public let id: String
+  public let title: String
+  public let status: LocalWebSetupRequirementStatus
+  public let owner: String
+  public let userConsentRequired: Bool
+  public let adminAuthorizationRequired: Bool
+  public let reversibleByUninstall: Bool
+  public let details: String
+  public let nextAction: String
+}
+
+public struct LocalWebSetupSnapshot: Codable, Equatable, Sendable {
+  public let urlMode: String
+  public let targetURL: String
+  public let ready: Bool
+  public let requirements: [LocalWebSetupRequirement]
+
+  public var blockingSummary: String {
+    let needed = requirements.filter { $0.status == .needed }.map(\.title)
+    guard !needed.isEmpty else { return "Local web setup is complete." }
+    return "Local web setup required: \(needed.joined(separator: ", "))"
+  }
+
+  public static func highPortHTTP(targetURL: String) -> LocalWebSetupSnapshot {
+    return LocalWebSetupSnapshot(
+      urlMode: LocalWebURLMode.highPortHTTP.rawValue,
+      targetURL: targetURL,
+      ready: true,
+      requirements: [
+        LocalWebSetupRequirement(
+          id: "local-web.high-port",
+          title: "High-port localhost web",
+          status: .satisfied,
+          owner: "1Context.app",
+          userConsentRequired: false,
+          adminAuthorizationRequired: false,
+          reversibleByUninstall: true,
+          details: "Uses a high localhost port and does not require privileged bind or local certificate trust.",
+          nextAction: "No setup required."
+        )
+      ]
+    )
+  }
+
+  public static func localHTTPSPortless(targetURL: String, state: LocalWebSetupState) -> LocalWebSetupSnapshot {
+    let privilegedStatus: LocalWebSetupRequirementStatus = state.privilegedBindReady ? .satisfied : .needed
+    let trustStatus: LocalWebSetupRequirementStatus = state.localCATrustReady ? .satisfied : .needed
+    return LocalWebSetupSnapshot(
+      urlMode: LocalWebURLMode.localHTTPSPortless.rawValue,
+      targetURL: targetURL,
+      ready: state.privilegedBindReady && state.localCATrustReady,
+      requirements: [
+        LocalWebSetupRequirement(
+          id: "local-web.privileged-bind",
+          title: "Local HTTPS helper",
+          status: privilegedStatus,
+          owner: "1Context.app ServiceManagement helper",
+          userConsentRequired: true,
+          adminAuthorizationRequired: true,
+          reversibleByUninstall: true,
+          details: "A bundled macOS ServiceManagement LaunchDaemon binds 127.0.0.1:443 and proxies encrypted local traffic to the user-owned Caddy backend on \(state.backendHost):\(state.backendPort). Service status: \(state.proxyServiceStatus). Plist: \(state.systemPaths.launchDaemonPlist). Proxy current: \(state.proxyExecutableCurrent ? "yes" : "no").",
+          nextAction: state.privilegedBindReady ? "No action required." : "Open 1Context and choose Settings > Setup... If macOS opens System Settings, allow 1Context."
+        ),
+        LocalWebSetupRequirement(
+          id: "local-web.local-ca-trust",
+          title: "Local certificate trust",
+          status: trustStatus,
+          owner: "1Context.app setup flow",
+          userConsentRequired: true,
+          adminAuthorizationRequired: false,
+          reversibleByUninstall: true,
+          details: "The setup flow trusts the 1Context local Caddy CA in the user's login keychain for SSL, then records the installed fingerprint at \(state.systemPaths.trustedRootSHA256).",
+          nextAction: state.localCATrustReady ? "No action required." : "Open 1Context and choose Settings > Setup..., or run 1context setup local-web install for support automation."
+        )
+      ]
+    )
+  }
+}
+
+public enum LocalWebSetupDiagnostics {
+  public static func render(_ snapshot: LocalWebSetupSnapshot) -> [String] {
+    var lines = [
+      "  Setup Ready: \(snapshot.ready ? "yes" : "no")",
+      "  Setup Target: \(snapshot.targetURL)"
+    ]
+    for requirement in snapshot.requirements {
+      lines.append("  Requirement: \(requirement.title)")
+      lines.append("    Status: \(display(requirement.status))")
+      lines.append("    Owner: \(requirement.owner)")
+      lines.append("    User Consent Required: \(requirement.userConsentRequired ? "yes" : "no")")
+      lines.append("    Admin Authorization Required: \(requirement.adminAuthorizationRequired ? "yes" : "no")")
+      lines.append("    Reversible By Uninstall: \(requirement.reversibleByUninstall ? "yes" : "no")")
+      lines.append("    Details: \(requirement.details)")
+      lines.append("    Next Action: \(requirement.nextAction)")
+    }
+    return lines
+  }
+
+  private static func display(_ status: LocalWebSetupRequirementStatus) -> String {
+    switch status {
+    case .satisfied:
+      return "satisfied"
+    case .needed:
+      return "needed"
+    case .notRequired:
+      return "not required"
+    }
+  }
 }
 
 public struct LocalWebPaths: Sendable {
@@ -91,6 +304,7 @@ public struct LocalWebPaths: Sendable {
 }
 
 public struct CaddyConfig: Equatable, Sendable {
+  public var mode: LocalWebURLMode
   public var siteRoot: URL
   public var logFile: URL
   public var host: String
@@ -100,6 +314,7 @@ public struct CaddyConfig: Equatable, Sendable {
   public var apiPort: Int
 
   public init(
+    mode: LocalWebURLMode = .highPortHTTP,
     siteRoot: URL,
     logFile: URL,
     host: String = LocalWebDefaults.wikiHost,
@@ -108,6 +323,7 @@ public struct CaddyConfig: Equatable, Sendable {
     apiBindHost: String = LocalWebDefaults.bindHost,
     apiPort: Int = LocalWebDefaults.wikiAPIPort
   ) {
+    self.mode = mode
     self.siteRoot = siteRoot
     self.logFile = logFile
     self.host = host
@@ -118,14 +334,33 @@ public struct CaddyConfig: Equatable, Sendable {
   }
 
   public var url: String {
-    "http://\(host):\(port)\(LocalWebDefaults.wikiRoute)"
+    switch mode {
+    case .highPortHTTP:
+      return "http://\(host):\(port)\(LocalWebDefaults.wikiRoute)"
+    case .localHTTPSPortless:
+      return "https://\(host)\(LocalWebDefaults.wikiRoute)"
+    }
   }
 
   public var healthURL: URL {
-    URL(string: "http://\(bindHost):\(port)/__1context/health")!
+    switch mode {
+    case .highPortHTTP:
+      return URL(string: "http://\(bindHost):\(port)/__1context/health")!
+    case .localHTTPSPortless:
+      return URL(string: "https://\(host)/__1context/health")!
+    }
   }
 
   public func caddyfileText() -> String {
+    switch mode {
+    case .highPortHTTP:
+      return highPortHTTPCaddyfileText()
+    case .localHTTPSPortless:
+      return localHTTPSPortlessCaddyfileText()
+    }
+  }
+
+  private func highPortHTTPCaddyfileText() -> String {
     """
     {
       admin off
@@ -152,14 +387,64 @@ public struct CaddyConfig: Equatable, Sendable {
       }
 
       route {
-        @wikiDynamicApi path /api/wiki/health /api/wiki/search /api/wiki/state /api/wiki/bookmarks /api/wiki/chat/config /api/wiki/chat/provider /api/wiki/chat/reset /api/wiki/chat
+        @wikiStaticApi path /api/wiki/site /api/wiki/pages /api/wiki/stats
+        handle @wikiStaticApi {
+          rewrite * {path}.json
+          file_server
+        }
+
+        @wikiDynamicApi path /api/wiki/*
         handle @wikiDynamicApi {
           reverse_proxy \(apiBindHost):\(apiPort)
         }
 
-        rewrite /api/wiki/site /api/wiki/site.json
-        rewrite /api/wiki/pages /api/wiki/pages.json
-        rewrite /api/wiki/stats /api/wiki/stats.json
+        try_files {path} {path}.html {path}/index.html /index.html
+        file_server
+      }
+    }
+    """
+  }
+
+  private func localHTTPSPortlessCaddyfileText() -> String {
+    """
+    {
+      admin off
+      skip_install_trust
+      auto_https disable_redirects
+    }
+
+    https://\(host):\(port) {
+      bind \(bindHost)
+      root * "\(escape(siteRoot.path))"
+
+      tls internal
+
+      log {
+        output file "\(escape(logFile.path))" {
+          roll_size 1MiB
+          roll_keep 2
+        }
+      }
+
+      encode zstd gzip
+
+      header {
+        X-Content-Type-Options nosniff
+        Referrer-Policy no-referrer
+        Cache-Control no-store
+      }
+
+      route {
+        @wikiStaticApi path /api/wiki/site /api/wiki/pages /api/wiki/stats
+        handle @wikiStaticApi {
+          rewrite * {path}.json
+          file_server
+        }
+
+        @wikiDynamicApi path /api/wiki/*
+        handle @wikiDynamicApi {
+          reverse_proxy \(apiBindHost):\(apiPort)
+        }
 
         try_files {path} {path}.html {path}/index.html /index.html
         file_server
@@ -196,6 +481,7 @@ public final class CaddyManager: @unchecked Sendable {
   private let paths: LocalWebPaths
   private let environment: [String: String]
   private let fileManager: FileManager
+  private let urlMode: LocalWebURLMode
   private let host: String
   private let port: Int
   private let apiBindHost: String
@@ -211,6 +497,7 @@ public final class CaddyManager: @unchecked Sendable {
     self.paths = LocalWebPaths(runtimePaths: runtimePaths)
     self.environment = environment
     self.fileManager = fileManager
+    self.urlMode = LocalWebURLMode(environmentValue: environment["ONECONTEXT_WIKI_URL_MODE"])
     self.host = environment["ONECONTEXT_WIKI_HOST"] ?? LocalWebDefaults.wikiHost
     self.port = Int(environment["ONECONTEXT_WIKI_PORT"] ?? "") ?? LocalWebDefaults.wikiPort
     self.apiBindHost = environment["ONECONTEXT_WIKI_API_BIND_HOST"] ?? LocalWebDefaults.bindHost
@@ -225,11 +512,69 @@ public final class CaddyManager: @unchecked Sendable {
     paths.wikiCurrent
   }
 
+  public var localHTTPSRootCertificateURL: URL {
+    LocalWebSetupInspector.localHTTPSRootCertificateURL(paths: paths)
+  }
+
+  public func localWebSetupState() -> LocalWebSetupState {
+    LocalWebSetupInspector.inspect(
+      runtimePaths: runtimePaths,
+      environment: environment,
+      fileManager: fileManager,
+      host: host,
+      backendHost: LocalWebDefaults.bindHost,
+      backendPort: port,
+      targetURL: caddyConfig().url,
+      sourceProxyExecutable: try? localWebProxyExecutable()
+    )
+  }
+
+  public func prepareLocalHTTPSAssets(timeout: TimeInterval = 10) throws -> LocalWebSetupAssets {
+    lifecycleLock.lock()
+    defer { lifecycleLock.unlock() }
+
+    try ensurePlaceholderSite()
+    let caddy = try caddyExecutable()
+    let proxy = try localWebProxyExecutable()
+    let config = CaddyConfig(
+      mode: .localHTTPSPortless,
+      siteRoot: paths.wikiCurrent,
+      logFile: paths.logFile,
+      host: host,
+      port: port,
+      apiBindHost: apiBindHost,
+      apiPort: apiPort
+    )
+    try prepareCaddyDirectories()
+    try RuntimePermissions.writePrivateString(config.caddyfileText() + "\n", toFile: paths.caddyfile.path)
+
+    let rootCertificate = localHTTPSRootCertificateURL
+    if !fileManager.fileExists(atPath: rootCertificate.path) {
+      try runCaddyUntilRootCertificateExists(caddy: caddy, timeout: timeout)
+    }
+
+    let fingerprints = try LocalWebSetupInspector.certificateFingerprints(at: rootCertificate)
+    return LocalWebSetupAssets(
+      proxyExecutable: proxy.path,
+      rootCertificate: rootCertificate.path,
+      rootCertificateSHA1: fingerprints.sha1,
+      rootCertificateSHA256: fingerprints.sha256,
+      backendHost: LocalWebDefaults.bindHost,
+      backendPort: port,
+      publicHost: host,
+      publicPort: LocalWebSetupConstants.privilegedHTTPSPort
+    )
+  }
+
   public func diagnostics() -> LocalWebDiagnostics {
     let caddy = (try? caddyExecutable()) ?? URL(fileURLWithPath: "")
     let bundled = bundledCaddyURL()
     return LocalWebDiagnostics(
       snapshot: status(),
+      urlMode: urlMode.rawValue,
+      trustMode: urlMode.trustMode,
+      privilegedBindRequired: urlMode.privilegedBindRequired,
+      setup: localWebSetupSnapshot(),
       apiURL: WikiLocalAPIConfig(environment: environment).healthURL.absoluteString,
       apiHealth: WikiLocalAPIProbe.health(environment: environment),
       apiPort: WikiLocalAPIConfig(environment: environment).port,
@@ -283,24 +628,22 @@ public final class CaddyManager: @unchecked Sendable {
     lifecycleLock.lock()
     defer { lifecycleLock.unlock() }
 
-    _ = LegacyPythonWikiServerMigration.run(runtimePaths: runtimePaths, fileManager: fileManager)
+    let setup = localWebSetupSnapshot()
+    guard setup.ready else {
+      throw LocalWebError.setupRequired(setup.blockingSummary)
+    }
+
     try ensurePlaceholderSite()
     let caddy = try caddyExecutable()
     let config = caddyConfig()
-    try RuntimePermissions.ensurePrivateDirectory(paths.directory)
-    try RuntimePermissions.ensurePrivateDirectory(paths.caddyDirectory)
-    try RuntimePermissions.ensurePrivateDirectory(paths.caddyDirectory.appendingPathComponent("home", isDirectory: true))
-    try RuntimePermissions.ensurePrivateDirectory(paths.caddyDirectory.appendingPathComponent("config", isDirectory: true))
-    try RuntimePermissions.ensurePrivateDirectory(paths.caddyDirectory.appendingPathComponent("data", isDirectory: true))
-    try RuntimePermissions.ensurePrivateDirectory(runtimePaths.runDirectory)
-    try RuntimePermissions.ensurePrivateDirectory(runtimePaths.logDirectory)
+    try prepareCaddyDirectories()
     try RuntimePermissions.writePrivateString(config.caddyfileText() + "\n", toFile: paths.caddyfile.path)
 
     let current = status()
     if current.running {
       return current
     }
-    if let pid = current.pid, processIsAlive(pid) {
+    if let pid = current.pid, processMatchesManagedCaddy(pid) {
       stopUnlocked()
     }
 
@@ -328,12 +671,22 @@ public final class CaddyManager: @unchecked Sendable {
 
   public func status() -> LocalWebSnapshot {
     let config = caddyConfig()
+    let setup = localWebSetupSnapshot()
+    guard setup.ready else {
+      return LocalWebSnapshot(running: false, url: config.url, health: "setup required", lastError: setup.blockingSummary)
+    }
     if let state = readState() {
-      if processIsAlive(state.pid), healthOK(config.healthURL) {
+      guard state.url == config.url else {
+        return LocalWebSnapshot(running: false, url: config.url, pid: state.pid, health: "url mode changed")
+      }
+      if processMatchesManagedCaddy(state.pid), healthOK(config.healthURL) {
         return LocalWebSnapshot(running: true, url: state.url, pid: state.pid, health: "OK")
       }
       if !processIsAlive(state.pid) {
         return LocalWebSnapshot(running: false, url: state.url, pid: state.pid, health: "stale")
+      }
+      if !processMatchesManagedCaddy(state.pid) {
+        return LocalWebSnapshot(running: false, url: state.url, pid: state.pid, health: "pid reused")
       }
       return LocalWebSnapshot(running: false, url: state.url, pid: state.pid, health: "no response")
     }
@@ -351,11 +704,11 @@ public final class CaddyManager: @unchecked Sendable {
   }
 
   private func stopUnlocked() {
-    if let state = readState(), processIsAlive(state.pid) {
+    if let state = readState(), processMatchesManagedCaddy(state.pid) {
       kill(state.pid, SIGTERM)
     } else if let text = try? String(contentsOf: paths.pidFile, encoding: .utf8),
       let pid = Int32(text.trimmingCharacters(in: .whitespacesAndNewlines)),
-      processIsAlive(pid)
+      processMatchesManagedCaddy(pid)
     {
       kill(pid, SIGTERM)
     }
@@ -367,7 +720,7 @@ public final class CaddyManager: @unchecked Sendable {
     let config = caddyConfig()
     let deadline = Date().addingTimeInterval(timeout)
     repeat {
-      if processIsAlive(state.pid), healthOK(config.healthURL) {
+      if processMatchesManagedCaddy(state.pid), healthOK(config.healthURL) {
         return LocalWebSnapshot(running: true, url: state.url, pid: state.pid, health: "OK")
       }
       Thread.sleep(forTimeInterval: 0.15)
@@ -384,6 +737,7 @@ public final class CaddyManager: @unchecked Sendable {
 
   private func caddyConfig() -> CaddyConfig {
     CaddyConfig(
+      mode: urlMode,
       siteRoot: paths.wikiCurrent,
       logFile: paths.logFile,
       host: host,
@@ -391,6 +745,83 @@ public final class CaddyManager: @unchecked Sendable {
       apiBindHost: apiBindHost,
       apiPort: apiPort
     )
+  }
+
+  private func localWebSetupSnapshot() -> LocalWebSetupSnapshot {
+    let targetURL = caddyConfig().url
+    switch urlMode {
+    case .highPortHTTP:
+      return .highPortHTTP(targetURL: targetURL)
+    case .localHTTPSPortless:
+      return .localHTTPSPortless(targetURL: targetURL, state: localWebSetupState())
+    }
+  }
+
+  private func prepareCaddyDirectories() throws {
+    try RuntimePermissions.ensurePrivateDirectory(paths.directory)
+    try RuntimePermissions.ensurePrivateDirectory(paths.caddyDirectory)
+    try RuntimePermissions.ensurePrivateDirectory(paths.caddyDirectory.appendingPathComponent("home", isDirectory: true))
+    try RuntimePermissions.ensurePrivateDirectory(paths.caddyDirectory.appendingPathComponent("config", isDirectory: true))
+    try RuntimePermissions.ensurePrivateDirectory(paths.caddyDirectory.appendingPathComponent("data", isDirectory: true))
+    try RuntimePermissions.ensurePrivateDirectory(runtimePaths.runDirectory)
+    try RuntimePermissions.ensurePrivateDirectory(runtimePaths.logDirectory)
+  }
+
+  private func runCaddyUntilRootCertificateExists(caddy: URL, timeout: TimeInterval) throws {
+    let process = Process()
+    process.executableURL = caddy
+    process.arguments = ["run", "--config", paths.caddyfile.path, "--adapter", "caddyfile"]
+    process.currentDirectoryURL = paths.caddyDirectory
+    process.environment = caddyProcessEnvironment()
+    process.standardInput = FileHandle.nullDevice
+    let logHandle = try appendLogHandle()
+    process.standardOutput = logHandle
+    process.standardError = logHandle
+    try process.run()
+    defer {
+      if process.isRunning {
+        process.terminate()
+        process.waitUntilExit()
+      }
+      try? logHandle.close()
+    }
+
+    let deadline = Date().addingTimeInterval(timeout)
+    repeat {
+      if fileManager.fileExists(atPath: localHTTPSRootCertificateURL.path) {
+        return
+      }
+      if !process.isRunning {
+        throw LocalWebError.timedOut("Caddy exited before creating the local HTTPS root certificate")
+      }
+      Thread.sleep(forTimeInterval: 0.15)
+    } while Date() < deadline
+    throw LocalWebError.timedOut("Caddy did not create the local HTTPS root certificate")
+  }
+
+  private func localWebProxyExecutable() throws -> URL {
+    for candidate in localWebProxyCandidates() where fileManager.isExecutableFile(atPath: candidate.path) {
+      return candidate
+    }
+    throw LocalWebSetupInstallerError.proxyExecutableMissing
+  }
+
+  private func localWebProxyCandidates() -> [URL] {
+    var candidates: [URL] = []
+    if let override = environment["ONECONTEXT_LOCAL_WEB_PROXY_SOURCE_PATH"], !override.isEmpty {
+      candidates.append(URL(fileURLWithPath: override))
+    }
+    if let executableDirectory = currentExecutableURL()?.deletingLastPathComponent() {
+      candidates.append(
+        executableDirectory
+          .deletingLastPathComponent()
+          .appendingPathComponent("Resources/\(LocalWebSetupConstants.proxyExecutableName)")
+      )
+      candidates.append(executableDirectory.appendingPathComponent(LocalWebSetupConstants.proxyExecutableName))
+      candidates.append(executableDirectory.appendingPathComponent("OneContextLocalWebProxy"))
+    }
+    candidates.append(URL(fileURLWithPath: "/Applications/1Context.app/Contents/Resources/\(LocalWebSetupConstants.proxyExecutableName)"))
+    return candidates
   }
 
   private func caddyCandidates() -> [URL] {
@@ -401,8 +832,6 @@ public final class CaddyManager: @unchecked Sendable {
     if let executableDirectory = currentExecutableURL()?.deletingLastPathComponent() {
       candidates.append(bundledCaddyURL(executableDirectory: executableDirectory))
     }
-    candidates.append(URL(fileURLWithPath: "/opt/homebrew/bin/caddy"))
-    candidates.append(URL(fileURLWithPath: "/usr/local/bin/caddy"))
     return candidates
   }
 
@@ -740,6 +1169,27 @@ public final class CaddyManager: @unchecked Sendable {
     pid > 0 && kill(pid, 0) == 0
   }
 
+  private func processMatchesManagedCaddy(_ pid: Int32) -> Bool {
+    guard processIsAlive(pid) else { return false }
+    let process = Process()
+    process.executableURL = URL(fileURLWithPath: "/bin/ps")
+    process.arguments = ["-p", "\(pid)", "-o", "command="]
+    let output = Pipe()
+    process.standardOutput = output
+    process.standardError = FileHandle.nullDevice
+    do {
+      try process.run()
+      process.waitUntilExit()
+    } catch {
+      return false
+    }
+    guard process.terminationStatus == 0 else { return false }
+    let command = String(data: output.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
+    return command.contains("caddy")
+      && command.contains("run")
+      && command.contains(paths.caddyfile.path)
+  }
+
   private func currentExecutableURL() -> URL? {
     var size = UInt32(0)
     _NSGetExecutablePath(nil, &size)
@@ -752,12 +1202,15 @@ public final class CaddyManager: @unchecked Sendable {
 
 public enum LocalWebError: Error, LocalizedError, Equatable {
   case caddyMissing
+  case setupRequired(String)
   case timedOut(String)
 
   public var errorDescription: String? {
     switch self {
     case .caddyMissing:
       return "Bundled Caddy web server was not found"
+    case .setupRequired(let message):
+      return message
     case .timedOut(let message):
       return message
     }

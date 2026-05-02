@@ -5,6 +5,7 @@ import OneContextPlatform
 final class LocalWebTests: XCTestCase {
   func testCaddyConfigIsOpinionatedLocalWebEdge() {
     let config = CaddyConfig(
+      mode: .highPortHTTP,
       siteRoot: URL(fileURLWithPath: "/tmp/1Context Wiki/current", isDirectory: true),
       logFile: URL(fileURLWithPath: "/tmp/1Context Logs/caddy.log")
     )
@@ -12,23 +13,61 @@ final class LocalWebTests: XCTestCase {
     let text = config.caddyfileText()
     XCTAssertTrue(text.contains("admin off"))
     XCTAssertTrue(text.contains("auto_https off"))
-    XCTAssertTrue(text.contains("http://wiki.1context.localhost:17319, http://127.0.0.1:17319"))
+    XCTAssertTrue(text.contains("http://wiki.1context.localhost:39191, http://127.0.0.1:39191"))
     XCTAssertTrue(text.contains("bind 127.0.0.1"))
     XCTAssertTrue(text.contains("root * \"/tmp/1Context Wiki/current\""))
     XCTAssertTrue(text.contains("route {"))
-    XCTAssertTrue(text.contains("@wikiDynamicApi path /api/wiki/health /api/wiki/search /api/wiki/state /api/wiki/bookmarks /api/wiki/chat/config /api/wiki/chat/provider /api/wiki/chat/reset /api/wiki/chat"))
+    XCTAssertTrue(text.contains("@wikiStaticApi path /api/wiki/site /api/wiki/pages /api/wiki/stats"))
+    XCTAssertTrue(text.contains("rewrite * {path}.json"))
+    XCTAssertTrue(text.contains("@wikiDynamicApi path /api/wiki/*"))
+    XCTAssertLessThan(
+      try XCTUnwrap(text.range(of: "@wikiStaticApi path")?.lowerBound),
+      try XCTUnwrap(text.range(of: "@wikiDynamicApi path")?.lowerBound)
+    )
     XCTAssertLessThan(
       try XCTUnwrap(text.range(of: "@wikiDynamicApi path")?.lowerBound),
       try XCTUnwrap(text.range(of: "try_files {path}")?.lowerBound)
     )
     XCTAssertTrue(text.contains("try_files {path} {path}.html {path}/index.html /index.html"))
     XCTAssertTrue(text.contains("file_server"))
-    XCTAssertTrue(text.contains("reverse_proxy 127.0.0.1:17320"))
-    XCTAssertTrue(text.contains("rewrite /api/wiki/pages /api/wiki/pages.json"))
+    XCTAssertTrue(text.contains("reverse_proxy 127.0.0.1:39192"))
     XCTAssertFalse(text.contains("rewrite /api/wiki/search /api/wiki/search.json"))
     XCTAssertFalse(text.contains("respond `"))
-    XCTAssertEqual(config.url, "http://wiki.1context.localhost:17319/your-context")
-    XCTAssertEqual(config.healthURL.absoluteString, "http://127.0.0.1:17319/__1context/health")
+    XCTAssertEqual(config.url, "http://wiki.1context.localhost:39191/your-context")
+    XCTAssertEqual(config.healthURL.absoluteString, "http://127.0.0.1:39191/__1context/health")
+  }
+
+  func testCaddyConfigSupportsProfessionalLocalHTTPSMode() {
+    let config = CaddyConfig(
+      mode: .localHTTPSPortless,
+      siteRoot: URL(fileURLWithPath: "/tmp/1Context Wiki/current", isDirectory: true),
+      logFile: URL(fileURLWithPath: "/tmp/1Context Logs/caddy.log")
+    )
+
+    let text = config.caddyfileText()
+    XCTAssertTrue(text.contains("admin off"))
+    XCTAssertTrue(text.contains("skip_install_trust"))
+    XCTAssertTrue(text.contains("auto_https disable_redirects"))
+    XCTAssertTrue(text.contains("https://wiki.1context.localhost:39191 {"))
+    XCTAssertTrue(text.contains("bind 127.0.0.1"))
+    XCTAssertTrue(text.contains("tls internal"))
+    XCTAssertFalse(text.contains("auto_https off"))
+    XCTAssertTrue(text.contains(":39191"))
+    XCTAssertEqual(config.url, "https://wiki.1context.localhost/your-context")
+    XCTAssertEqual(config.healthURL.absoluteString, "https://wiki.1context.localhost/__1context/health")
+  }
+
+  func testDefaultURLModeRequiresProfessionalLocalHTTPSSetup() {
+    let mode = LocalWebURLMode(environmentValue: nil)
+    let config = CaddyConfig(
+      mode: mode,
+      siteRoot: URL(fileURLWithPath: "/tmp/1Context Wiki/current", isDirectory: true),
+      logFile: URL(fileURLWithPath: "/tmp/1Context Logs/caddy.log")
+    )
+
+    XCTAssertEqual(mode, .localHTTPSPortless)
+    XCTAssertEqual(LocalWebDefaults.defaultWikiURL, "https://wiki.1context.localhost/your-context")
+    XCTAssertEqual(config.url, LocalWebDefaults.defaultWikiURL)
   }
 
   func testLocalWebPathsUseDedicatedInfrastructureFolders() {
@@ -61,9 +100,15 @@ final class LocalWebTests: XCTestCase {
       "ONECONTEXT_LOG_DIR": root.appendingPathComponent("Logs/1Context").path,
       "ONECONTEXT_CACHE_DIR": root.appendingPathComponent("Caches/1Context").path
     ])
-    let manager = CaddyManager(runtimePaths: paths, environment: ["ONECONTEXT_CADDY_PATH": caddy.path])
+    let manager = CaddyManager(runtimePaths: paths, environment: [
+      "ONECONTEXT_CADDY_PATH": caddy.path,
+      "ONECONTEXT_WIKI_URL_MODE": "high-port-http"
+    ])
     let diagnostics = manager.diagnostics()
 
+    XCTAssertEqual(diagnostics.urlMode, "high-port-http")
+    XCTAssertEqual(diagnostics.trustMode, "none")
+    XCTAssertFalse(diagnostics.privilegedBindRequired)
     XCTAssertEqual(diagnostics.caddyExecutable, caddy.path)
     XCTAssertTrue(diagnostics.caddyExecutableExists)
     XCTAssertTrue(diagnostics.caddyExecutableIsExecutable)
@@ -74,26 +119,151 @@ final class LocalWebTests: XCTestCase {
     XCTAssertTrue(diagnostics.apiStatePath.hasSuffix("Application Support/1Context/local-web/wiki-browser-state.json"))
   }
 
-  func testLegacyPythonWikiServerMigrationRemovesRetiredServerArtifacts() throws {
+  func testDiagnosticsReportsLocalHTTPSURLMode() throws {
+    let root = URL(fileURLWithPath: NSTemporaryDirectory())
+      .appendingPathComponent("1context-local-web-url-mode-\(UUID().uuidString)", isDirectory: true)
+    let caddy = root.appendingPathComponent("bin/caddy")
+    try FileManager.default.createDirectory(at: caddy.deletingLastPathComponent(), withIntermediateDirectories: true)
+    FileManager.default.createFile(atPath: caddy.path, contents: Data("#!/bin/sh\n".utf8))
+    chmod(caddy.path, 0o755)
+
+    let paths = RuntimePaths.current(environment: [
+      "ONECONTEXT_APP_SUPPORT_DIR": root.appendingPathComponent("Application Support/1Context").path,
+      "ONECONTEXT_LOG_DIR": root.appendingPathComponent("Logs/1Context").path,
+      "ONECONTEXT_CACHE_DIR": root.appendingPathComponent("Caches/1Context").path
+    ])
+    let manager = CaddyManager(runtimePaths: paths, environment: [
+      "ONECONTEXT_CADDY_PATH": caddy.path,
+      "ONECONTEXT_WIKI_URL_MODE": "local-https-portless"
+    ].merging(localWebSetupTestEnvironment(root: root)) { _, new in new })
+
+    let diagnostics = manager.diagnostics()
+
+    XCTAssertEqual(diagnostics.snapshot.url, "https://wiki.1context.localhost/your-context")
+    XCTAssertEqual(diagnostics.urlMode, "local-https-portless")
+    XCTAssertEqual(diagnostics.trustMode, "local-ca-required")
+    XCTAssertTrue(diagnostics.privilegedBindRequired)
+  }
+
+  func testStatusReportsTargetURLWhenStoredStateUsesDifferentMode() throws {
     let root = temporaryRoot()
-    defer { try? FileManager.default.removeItem(at: root) }
     let paths = testRuntimePaths(root: root)
-    let legacyRoot = paths.appSupportDirectory.appendingPathComponent("memory-core", isDirectory: true)
-    let legacySource = legacyRoot.appendingPathComponent("core/src/onectx/wiki", isDirectory: true)
-    try FileManager.default.createDirectory(at: legacySource, withIntermediateDirectories: true)
-    try Data(#"{"pid":999999}"#.utf8).write(to: legacyRoot.appendingPathComponent("wiki-server.json"))
-    try Data("old server log\n".utf8).write(to: legacyRoot.appendingPathComponent("wiki-server.log"))
-    try Data("old server\n".utf8).write(to: legacySource.appendingPathComponent("server.py"))
-    try Data("old serve main\n".utf8).write(to: legacySource.appendingPathComponent("serve_main.py"))
+    let web = LocalWebPaths(runtimePaths: paths)
+    try RuntimePermissions.ensurePrivateDirectory(web.caddyDirectory)
+    try writeJSON([
+      "schema_version": 1,
+      "pid": 999999,
+      "url": "http://wiki.1context.localhost:39191/your-context",
+      "caddy_executable": "/tmp/caddy",
+      "started_at": "2026-04-30T00:00:00Z"
+    ], to: web.stateFile)
 
-    let result = LegacyPythonWikiServerMigration.run(runtimePaths: paths)
+    let manager = CaddyManager(runtimePaths: paths, environment: [
+      "ONECONTEXT_WIKI_URL_MODE": "local-https-portless"
+    ].merging(localWebSetupTestEnvironment(root: root)) { _, new in new })
+    let snapshot = manager.status()
 
-    XCTAssertNil(result.stoppedPID)
-    XCTAssertEqual(result.removedPaths.count, 4)
-    XCTAssertFalse(FileManager.default.fileExists(atPath: legacyRoot.appendingPathComponent("wiki-server.json").path))
-    XCTAssertFalse(FileManager.default.fileExists(atPath: legacyRoot.appendingPathComponent("wiki-server.log").path))
-    XCTAssertFalse(FileManager.default.fileExists(atPath: legacySource.appendingPathComponent("server.py").path))
-    XCTAssertFalse(FileManager.default.fileExists(atPath: legacySource.appendingPathComponent("serve_main.py").path))
+    XCTAssertFalse(snapshot.running)
+    XCTAssertEqual(snapshot.health, "setup required")
+    XCTAssertEqual(snapshot.url, "https://wiki.1context.localhost/your-context")
+    XCTAssertEqual(snapshot.lastError, "Local web setup required: Local HTTPS helper, Local certificate trust")
+  }
+
+  func testStartRequiresSetupBeforeProfessionalLocalHTTPSModeRuns() throws {
+    let root = temporaryRoot()
+    let paths = testRuntimePaths(root: root)
+    let manager = CaddyManager(runtimePaths: paths, environment: [
+      "ONECONTEXT_WIKI_URL_MODE": "local-https-portless"
+    ].merging(localWebSetupTestEnvironment(root: root)) { _, new in new })
+
+    XCTAssertThrowsError(try manager.start()) { error in
+      XCTAssertEqual(
+        error as? LocalWebError,
+        .setupRequired("Local web setup required: Local HTTPS helper, Local certificate trust")
+      )
+    }
+  }
+
+  func testLocalHTTPSSetupSnapshotReflectsInstalledProxyAndTrust() {
+    let systemPaths = LocalWebSetupSystemPaths(environment: [
+      "ONECONTEXT_LOCAL_WEB_SYSTEM_SUPPORT_DIR": "/tmp/1Context/System",
+      "ONECONTEXT_LOCAL_WEB_SYSTEM_LOG_DIR": "/tmp/1Context/Logs",
+      "ONECONTEXT_LOCAL_WEB_LAUNCH_DAEMON_PATH": "/tmp/1Context/LaunchDaemons/proxy.plist"
+    ])
+    let state = LocalWebSetupState(
+      label: LocalWebSetupConstants.proxyLabel,
+      targetHost: LocalWebDefaults.wikiHost,
+      targetURL: LocalWebDefaults.defaultWikiURL,
+      backendHost: LocalWebDefaults.bindHost,
+      backendPort: LocalWebDefaults.wikiPort,
+      privilegedPort: LocalWebSetupConstants.privilegedHTTPSPort,
+      sourceProxyExecutablePath: "/tmp/source-proxy",
+      sourceProxyExecutableSHA256: "PROXY123",
+      installedProxyExecutableSHA256: "PROXY123",
+      userRootCertificatePath: "/tmp/root.crt",
+      userRootCertificateExists: true,
+      userRootCertificateSHA1: "ABC123",
+      userRootCertificateSHA256: "DEF456",
+      systemPaths: systemPaths,
+      proxyPlistInstalled: true,
+      proxyExecutableInstalled: true,
+      proxyServiceStatus: "enabled",
+      proxyLaunchDaemonLoaded: true,
+      proxyPortReachable: true,
+      trustedRootCertificateInstalled: true,
+      trustedRootSHA1: "ABC123",
+      trustedRootSHA256: "DEF456"
+    )
+
+    let snapshot = LocalWebSetupSnapshot.localHTTPSPortless(
+      targetURL: LocalWebDefaults.defaultWikiURL,
+      state: state
+    )
+
+    XCTAssertTrue(snapshot.ready)
+    XCTAssertEqual(snapshot.blockingSummary, "Local web setup is complete.")
+    XCTAssertTrue(snapshot.requirements.allSatisfy { $0.status == .satisfied })
+  }
+
+  func testLocalHTTPSSetupRequiresRepairWhenInstalledProxyIsStale() {
+    let systemPaths = LocalWebSetupSystemPaths(environment: [
+      "ONECONTEXT_LOCAL_WEB_SYSTEM_SUPPORT_DIR": "/tmp/1Context/System",
+      "ONECONTEXT_LOCAL_WEB_SYSTEM_LOG_DIR": "/tmp/1Context/Logs",
+      "ONECONTEXT_LOCAL_WEB_LAUNCH_DAEMON_PATH": "/tmp/1Context/LaunchDaemons/proxy.plist"
+    ])
+    let state = LocalWebSetupState(
+      label: LocalWebSetupConstants.proxyLabel,
+      targetHost: LocalWebDefaults.wikiHost,
+      targetURL: LocalWebDefaults.defaultWikiURL,
+      backendHost: LocalWebDefaults.bindHost,
+      backendPort: LocalWebDefaults.wikiPort,
+      privilegedPort: LocalWebSetupConstants.privilegedHTTPSPort,
+      sourceProxyExecutablePath: "/tmp/source-proxy",
+      sourceProxyExecutableSHA256: "NEW",
+      installedProxyExecutableSHA256: "OLD",
+      userRootCertificatePath: "/tmp/root.crt",
+      userRootCertificateExists: true,
+      userRootCertificateSHA1: "ABC123",
+      userRootCertificateSHA256: "DEF456",
+      systemPaths: systemPaths,
+      proxyPlistInstalled: true,
+      proxyExecutableInstalled: true,
+      proxyServiceStatus: "enabled",
+      proxyLaunchDaemonLoaded: true,
+      proxyPortReachable: true,
+      trustedRootCertificateInstalled: true,
+      trustedRootSHA1: "ABC123",
+      trustedRootSHA256: "DEF456"
+    )
+
+    let snapshot = LocalWebSetupSnapshot.localHTTPSPortless(
+      targetURL: LocalWebDefaults.defaultWikiURL,
+      state: state
+    )
+
+    XCTAssertFalse(snapshot.ready)
+    XCTAssertEqual(snapshot.blockingSummary, "Local web setup required: Local HTTPS helper")
+    XCTAssertTrue(snapshot.requirements.first?.details.contains("Proxy current: no") == true)
   }
 
   func testWikiLocalAPISearchesPublishedContentIndex() throws {
@@ -164,6 +334,14 @@ final class LocalWebTests: XCTestCase {
       "ONECONTEXT_LOG_DIR": root.appendingPathComponent("Logs/1Context").path,
       "ONECONTEXT_CACHE_DIR": root.appendingPathComponent("Caches/1Context").path
     ])
+  }
+
+  private func localWebSetupTestEnvironment(root: URL) -> [String: String] {
+    [
+      "ONECONTEXT_LOCAL_WEB_SYSTEM_SUPPORT_DIR": root.appendingPathComponent("System/Application Support/1Context").path,
+      "ONECONTEXT_LOCAL_WEB_SYSTEM_LOG_DIR": root.appendingPathComponent("System/Logs/1Context").path,
+      "ONECONTEXT_LOCAL_WEB_LAUNCH_DAEMON_PATH": root.appendingPathComponent("System/LaunchDaemons/com.haptica.1context.local-web-proxy.plist").path
+    ]
   }
 
   private func writeJSON(_ payload: [String: Any], to url: URL) throws {

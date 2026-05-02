@@ -50,7 +50,7 @@ def test_librarian_prompt_carries_session_metadata(tmp_path):
         "Who am I?",
         {
             "route": "/for-you",
-            "origin": "http://wiki.1context.localhost:17319",
+            "origin": "https://wiki.1context.localhost",
             "page": {"title": "For You"},
         },
         state={"thread_id": "thread-123", "claude_session_id": "claude-123"},

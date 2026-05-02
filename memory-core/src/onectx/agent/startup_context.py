@@ -10,7 +10,7 @@ from typing import Any
 from urllib.parse import quote
 
 
-DEFAULT_WIKI_URL = "http://wiki.1context.localhost:17319/your-context"
+DEFAULT_WIKI_URL = "https://wiki.1context.localhost/your-context"
 DEFAULT_TEMPLATE = """1Context is available for this session.
 
 Local wiki: {wiki_url}

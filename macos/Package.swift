@@ -10,7 +10,11 @@ let package = Package(
   products: [
     .executable(name: "1context", targets: ["OneContextCLI"]),
     .executable(name: "1contextd", targets: ["OneContextDaemon"]),
+    .executable(name: "1context-local-web-proxy", targets: ["OneContextLocalWebProxy"]),
     .executable(name: "OneContextMenuBar", targets: ["OneContextMenuBar"])
+  ],
+  dependencies: [
+    .package(url: "https://github.com/sparkle-project/Sparkle", from: "2.9.1")
   ],
   targets: [
     .target(name: "OneContextCore"),
@@ -25,6 +29,25 @@ let package = Package(
     .target(
       name: "OneContextUpdate",
       dependencies: ["OneContextCore", "OneContextPlatform"]
+    ),
+    .target(
+      name: "OneContextSparkleUpdate",
+      dependencies: [
+        "OneContextUpdate",
+        .product(name: "Sparkle", package: "Sparkle")
+      ]
+    ),
+    .target(
+      name: "OneContextInstall",
+      dependencies: ["OneContextCore"]
+    ),
+    .target(
+      name: "OneContextPermissions",
+      dependencies: ["OneContextCore", "OneContextPlatform"]
+    ),
+    .target(
+      name: "OneContextSetup",
+      dependencies: ["OneContextLocalWeb", "OneContextPermissions", "OneContextUpdate"]
     ),
     .target(
       name: "OneContextAgent",
@@ -49,21 +72,28 @@ let package = Package(
         "OneContextPlatform",
         "OneContextProtocol",
         "OneContextUpdate",
+        "OneContextPermissions",
         "OneContextSupervisor"
       ]
     ),
     .executableTarget(
       name: "OneContextCLI",
-      dependencies: ["OneContextRuntimeSupport", "OneContextAgent", "OneContextLocalWeb", "OneContextMemoryCore"]
+      dependencies: ["OneContextRuntimeSupport", "OneContextAgent", "OneContextInstall", "OneContextLocalWeb", "OneContextMemoryCore", "OneContextSetup"]
     ),
     .executableTarget(
       name: "OneContextDaemon",
-      dependencies: ["OneContextRuntimeSupport", "OneContextAgent", "OneContextLocalWeb", "OneContextMemoryCore"]
+      dependencies: ["OneContextRuntimeSupport", "OneContextAgent", "OneContextLocalWeb", "OneContextMemoryCore", "OneContextSetup"]
+    ),
+    .executableTarget(
+      name: "OneContextLocalWebProxy"
     ),
     .executableTarget(
       name: "OneContextMenuBar",
-      dependencies: ["OneContextRuntimeSupport", "OneContextAgent", "OneContextLocalWeb"],
-      exclude: ["Resources"]
+      dependencies: ["OneContextRuntimeSupport", "OneContextAgent", "OneContextInstall", "OneContextLocalWeb", "OneContextPermissions", "OneContextSetup", "OneContextSparkleUpdate"],
+      exclude: ["Resources"],
+      linkerSettings: [
+        .unsafeFlags(["-Xlinker", "-rpath", "-Xlinker", "@executable_path/../Frameworks"])
+      ]
     ),
     .testTarget(
       name: "OneContextCoreTests",
@@ -80,6 +110,18 @@ let package = Package(
     .testTarget(
       name: "OneContextUpdateTests",
       dependencies: ["OneContextUpdate"]
+    ),
+    .testTarget(
+      name: "OneContextInstallTests",
+      dependencies: ["OneContextInstall"]
+    ),
+    .testTarget(
+      name: "OneContextPermissionsTests",
+      dependencies: ["OneContextPermissions"]
+    ),
+    .testTarget(
+      name: "OneContextSetupTests",
+      dependencies: ["OneContextSetup"]
     ),
     .testTarget(
       name: "OneContextAgentTests",

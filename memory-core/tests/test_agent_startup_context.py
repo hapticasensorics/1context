@@ -13,7 +13,7 @@ def test_startup_context_renders_default_hook_payload(tmp_path, monkeypatch):
     context = build_startup_context(provider="claude", cwd=tmp_path)
 
     assert context.repo_root == tmp_path
-    assert "Local wiki: http://wiki.1context.localhost:17319/your-context" in context.message
+    assert "Local wiki: https://wiki.1context.localhost/your-context" in context.message
     assert "1Context Librarian" in context.message
     assert context.hook_payload() == {
         "hookSpecificOutput": {
@@ -58,7 +58,7 @@ def test_startup_context_uses_live_agent_config_for_wiki_url(tmp_path, monkeypat
     startup_config.write_text(
         json.dumps(
             {
-                "wiki_url": "http://wiki.1context.localhost:17319/your-context",
+                "wiki_url": "https://wiki.1context.localhost/your-context",
                 "message_template": "{wiki_url}",
             }
         ),
@@ -67,13 +67,13 @@ def test_startup_context_uses_live_agent_config_for_wiki_url(tmp_path, monkeypat
     agent_dir.mkdir()
     agent_config = agent_dir / "config.json"
     agent_config.write_text(
-        json.dumps({"wiki_url": "http://wiki.1context.localhost:17419/your-context"}),
+        json.dumps({"wiki_url": "http://wiki.1context.localhost:39191/your-context"}),
         encoding="utf-8",
     )
 
     context = build_startup_context(provider="claude", cwd=tmp_path)
 
-    assert context.message == "http://wiki.1context.localhost:17419/your-context"
+    assert context.message == "http://wiki.1context.localhost:39191/your-context"
     assert context.config_paths == (startup_config, agent_config)
 
 

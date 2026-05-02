@@ -135,7 +135,7 @@
       "template_version": "local-private-shell@0.1.0"
     }
   ],
-  "generated_at": "2026-04-30T11:40:17Z",
+  "generated_at": "2026-05-02T06:17:48Z",
   "pages": [
     {
       "excerpt": "# For You This is the working surface 1Context keeps close to the present. It should feel useful even before memory has accumulated: a quiet place to see what the system is ready to preserve, where agents should propose additions, and which durable pages those additions may eventually update. ## How This Page Works For You is a rolling private page. As 1Context observes repeated work, decisions, corrections, and open loops, memory agents should promote concise summaries here ...",
@@ -527,7 +527,7 @@
     "families": [
       {
         "archived_talk_entries": 0,
-        "bytes": 160542,
+        "bytes": 160684,
         "generated_files": 11,
         "generated_files_by_extension": {
           "(none)": 1,
@@ -615,7 +615,7 @@
         "words": 0
       }
     ],
-    "generated_at": "2026-04-30T11:40:17Z",
+    "generated_at": "2026-05-02T06:17:48Z",
     "generated_files_by_extension": {
       "(none)": 1,
       ".html": 9,
@@ -658,7 +658,7 @@
     },
     "schema_version": "wiki.stats.v1",
     "source_corpus": {
-      "events": 130,
+      "events": 223,
       "sessions": 0
     },
     "story": {
@@ -667,7 +667,7 @@
         "captured_days": 0
       },
       "compression": {
-        "events_per_reader_page": 26,
+        "events_per_reader_page": 45,
         "events_per_reader_word": 0
       },
       "connections": {
@@ -699,7 +699,7 @@
       },
       "coverage": {
         "days": 0,
-        "events": 130,
+        "events": 223,
         "sessions": 0
       },
       "families": [
@@ -728,7 +728,7 @@
           "words": 0
         }
       ],
-      "headline": "130 events condensed into 5 pages.",
+      "headline": "223 events condensed into 5 pages.",
       "reading": {
         "estimated_reading_minutes": 0,
         "reader_pages": 5,
@@ -740,7 +740,7 @@
     "totals": {
       "archived_talk_entries": 0,
       "broken_internal_links": 0,
-      "bytes": 444128,
+      "bytes": 444270,
       "content_pages": 5,
       "external_links": 0,
       "families": 4,

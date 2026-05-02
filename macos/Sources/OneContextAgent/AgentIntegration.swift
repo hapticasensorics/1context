@@ -304,10 +304,12 @@ public final class AgentIntegrationManager {
     currentExecutablePath: String?,
     fileManager: FileManager = .default
   ) -> String {
-    for candidate in ["/opt/homebrew/bin/1context", "/usr/local/bin/1context"] {
-      if fileManager.isExecutableFile(atPath: candidate) {
-        return candidate
-      }
+    if let currentExecutablePath, fileManager.isExecutableFile(atPath: currentExecutablePath) {
+      return currentExecutablePath
+    }
+    let installedAppCLI = "/Applications/1Context.app/Contents/MacOS/1context-cli"
+    if fileManager.isExecutableFile(atPath: installedAppCLI) {
+      return installedAppCLI
     }
     return currentExecutablePath ?? "1context"
   }
@@ -619,8 +621,6 @@ public final class AgentIntegrationManager {
     }
     return command == "\(AgentHookPolicy.managedStatusLinePrefix) \(shellQuote(executablePath)) agent statusline --provider claude"
       || (command.hasPrefix("\(AgentHookPolicy.managedStatusLinePrefix) ") && command.hasSuffix(" agent statusline --provider claude"))
-      || isLegacyOneContextCommand(command, suffix: " agent statusline --provider claude")
-      || LegacyPrivateAgentHookMigration.isStatusLineCommand(command)
   }
 
   private func matcherGroup(event: AgentHookEvent) -> [String: Any] {
@@ -681,16 +681,6 @@ public final class AgentIntegrationManager {
     return command == self.command(for: event)
       || (command.hasPrefix("\(AgentHookPolicy.managedHookPrefix) ")
         && command.hasSuffix(" agent hook --provider claude --event \(event.rawValue)"))
-      || isLegacyOneContextCommand(command, suffix: " agent hook --provider claude --event \(event.rawValue)")
-      || LegacyPrivateAgentHookMigration.isStartupHookCommand(command)
-  }
-
-  private func isLegacyOneContextCommand(_ command: String, suffix: String) -> Bool {
-    guard command.hasSuffix(suffix) else { return false }
-    let executable = String(command.dropLast(suffix.count))
-      .trimmingCharacters(in: .whitespacesAndNewlines)
-    let unquoted = unquoteShellToken(executable)
-    return unquoted == "1context" || unquoted.hasSuffix("/1context") || unquoted.hasSuffix("/1context-cli")
   }
 
   private func hasManagedCodexHook(in text: String, event: AgentHookEvent) -> Bool {
@@ -757,7 +747,7 @@ public final class AgentIntegrationManager {
     guard let range = codexEventBlockRange(in: text, event: event) else { return text }
     let block = String(text[range])
     let keptGroups = codexSessionGroups(in: block)
-      .filter { !isManagedOrLegacyCodexGroup($0, event: event) }
+      .filter { !isManagedCodexGroup($0, event: event) }
     var replacement = ""
     if !keptGroups.isEmpty {
       replacement = renderCodexEventBlock(event: event, groups: keptGroups)
@@ -793,10 +783,9 @@ public final class AgentIntegrationManager {
       .joined(separator: "\n")
   }
 
-  private func isManagedOrLegacyCodexGroup(_ group: String, event: AgentHookEvent) -> Bool {
+  private func isManagedCodexGroup(_ group: String, event: AgentHookEvent) -> Bool {
     group.contains(codexCommand(for: event))
       || group.contains(" agent hook --provider codex --event \(event.rawValue)")
-      || LegacyPrivateAgentHookMigration.isHookCommand(group)
   }
 
   private func codexEventBlockRange(in text: String, event: AgentHookEvent) -> Range<String.Index>? {
@@ -906,18 +895,6 @@ public final class AgentIntegrationManager {
     value
       .replacingOccurrences(of: "\\", with: "\\\\")
       .replacingOccurrences(of: "\"", with: "\\\"")
-  }
-
-  private func unquoteShellToken(_ value: String) -> String {
-    guard value.count >= 2 else { return value }
-    if value.first == "'", value.last == "'" {
-      let inner = value.dropFirst().dropLast()
-      return inner.replacingOccurrences(of: "'\\''", with: "'")
-    }
-    if value.first == "\"", value.last == "\"" {
-      return String(value.dropFirst().dropLast())
-    }
-    return value
   }
 
   private func readClaudeSettings() -> ClaudeSettingsReadResult {
@@ -1036,13 +1013,7 @@ public enum AgentIntegrationError: Error, LocalizedError {
 }
 
 public struct AgentHookExecutor {
-  public static let defaultWikiURL = "http://wiki.1context.localhost:17319/your-context"
-  private static let legacyDefaultWikiURLs: Set<String> = [
-    "http://localhost:3210",
-    "http://localhost:3210/",
-    "http://127.0.0.1:3210",
-    "http://127.0.0.1:3210/"
-  ]
+  public static let defaultWikiURL = "https://wiki.1context.localhost/your-context"
 
   private let paths: AgentPaths
   private let userContentDirectory: URL
@@ -1082,9 +1053,6 @@ public struct AgentHookExecutor {
   public static func normalizedWikiURL(_ value: String) -> String {
     let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
     guard !trimmed.isEmpty else { return defaultWikiURL }
-    if legacyDefaultWikiURLs.contains(trimmed) {
-      return defaultWikiURL
-    }
     return trimmed
   }
 

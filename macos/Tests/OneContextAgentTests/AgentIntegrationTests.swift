@@ -25,13 +25,13 @@ final class AgentIntegrationTests: XCTestCase {
       "status_line_label": "1Context private"
     ], to: paths.configFile)
 
-    try AgentConfigStore.writeWikiURL("http://wiki.1context.localhost:17419/your-context", paths: paths)
+    try AgentConfigStore.writeWikiURL("http://wiki.1context.localhost:39191/your-context", paths: paths)
 
     let object = try readObject(paths.configFile)
-    XCTAssertEqual(object["wiki_url"] as? String, "http://wiki.1context.localhost:17419/your-context")
+    XCTAssertEqual(object["wiki_url"] as? String, "http://wiki.1context.localhost:39191/your-context")
     XCTAssertEqual(object["custom_key"] as? String, "keep")
     XCTAssertEqual(object["status_line_label"] as? String, "1Context private")
-    XCTAssertEqual(AgentHookExecutor.configuredWikiURL(paths: paths), "http://wiki.1context.localhost:17419/your-context")
+    XCTAssertEqual(AgentHookExecutor.configuredWikiURL(paths: paths), "http://wiki.1context.localhost:39191/your-context")
   }
 
   func testInstallMergesOnlySessionStartHookIdempotently() throws {
@@ -59,7 +59,7 @@ final class AgentIntegrationTests: XCTestCase {
       paths: state,
       claudeSettingsPath: settings,
       codexConfigPath: root.appendingPathComponent(".codex/config.toml"),
-      executablePath: "/opt/homebrew/bin/1context"
+      executablePath: "/Applications/1Context.app/Contents/MacOS/1context-cli"
     )
 
     _ = try manager.install()
@@ -72,7 +72,7 @@ final class AgentIntegrationTests: XCTestCase {
     let sessionGroups = try XCTUnwrap(hooks["SessionStart"] as? [[String: Any]])
     XCTAssertEqual(sessionGroups.first?["matcher"] as? String, "*")
     let managedSessionCount = sessionGroups.flatMap { ($0["hooks"] as? [[String: Any]]) ?? [] }
-      .filter { ($0["command"] as? String) == "\(AgentHookPolicy.managedHookPrefix) '/opt/homebrew/bin/1context' agent hook --provider claude --event SessionStart" }
+      .filter { ($0["command"] as? String) == "\(AgentHookPolicy.managedHookPrefix) '/Applications/1Context.app/Contents/MacOS/1context-cli' agent hook --provider claude --event SessionStart" }
       .count
     XCTAssertEqual(managedSessionCount, 1)
 
@@ -88,7 +88,7 @@ final class AgentIntegrationTests: XCTestCase {
     XCTAssertEqual(statusLine["type"] as? String, "command")
     XCTAssertEqual(
       statusLine["command"] as? String,
-      "\(AgentHookPolicy.managedStatusLinePrefix) '/opt/homebrew/bin/1context' agent statusline --provider claude"
+      "\(AgentHookPolicy.managedStatusLinePrefix) '/Applications/1Context.app/Contents/MacOS/1context-cli' agent statusline --provider claude"
     )
     XCTAssertEqual(statusLine["refreshInterval"] as? Int, 30)
     XCTAssertTrue(FileManager.default.fileExists(atPath: state.configFile.path))
@@ -110,7 +110,7 @@ final class AgentIntegrationTests: XCTestCase {
       paths: AgentPaths(directory: root.appendingPathComponent("agent", isDirectory: true)),
       claudeSettingsPath: settings,
       codexConfigPath: root.appendingPathComponent(".codex/config.toml"),
-      executablePath: "/opt/homebrew/bin/1context"
+      executablePath: "/Applications/1Context.app/Contents/MacOS/1context-cli"
     )
 
     let report = try manager.install()
@@ -131,7 +131,7 @@ final class AgentIntegrationTests: XCTestCase {
       paths: AgentPaths(directory: root.appendingPathComponent("agent", isDirectory: true)),
       claudeSettingsPath: settings,
       codexConfigPath: root.appendingPathComponent(".codex/config.toml"),
-      executablePath: "/opt/homebrew/bin/1context"
+      executablePath: "/Applications/1Context.app/Contents/MacOS/1context-cli"
     )
 
     let report = try manager.install()
@@ -148,7 +148,7 @@ final class AgentIntegrationTests: XCTestCase {
       paths: AgentPaths(directory: root.appendingPathComponent("agent", isDirectory: true)),
       claudeSettingsPath: settings,
       codexConfigPath: root.appendingPathComponent(".codex/config.toml"),
-      executablePath: "/opt/homebrew/bin/1context"
+      executablePath: "/Applications/1Context.app/Contents/MacOS/1context-cli"
     )
 
     _ = try manager.install()
@@ -166,7 +166,7 @@ final class AgentIntegrationTests: XCTestCase {
       "hooks": [
         [
           "type": "command",
-          "command": "\(AgentHookPolicy.managedHookPrefix) '/opt/homebrew/bin/1context' agent hook --provider claude --event PostToolUse"
+          "command": "\(AgentHookPolicy.managedHookPrefix) '/Applications/1Context.app/Contents/MacOS/1context-cli' agent hook --provider claude --event PostToolUse"
         ]
       ]
     ]]
@@ -186,122 +186,6 @@ final class AgentIntegrationTests: XCTestCase {
     XCTAssertNil(uninstalled["statusLine"])
   }
 
-  func testUninstallRemovesLegacyUnmarkedOneContextHooks() throws {
-    let root = try temporaryRoot()
-    defer { try? FileManager.default.removeItem(at: root) }
-    let settings = root.appendingPathComponent("settings.json")
-    try writeObject([
-      "hooks": [
-        "SessionStart": [
-          [
-            "hooks": [
-              [
-                "type": "command",
-                "command": "'/Users/example/dev/1context-agent-public-hooks/macos/.build/debug/1context' agent hook --provider claude --event SessionStart"
-              ],
-              [
-                "type": "command",
-                "command": "python3 /Users/example/dev/1Context-private-4/tools/wiki-startup-context.py"
-              ]
-            ]
-          ]
-        ],
-        "UserPromptSubmit": [
-          [
-            "hooks": [
-              [
-                "type": "command",
-                "command": "'/Users/example/dev/1context-agent-public-hooks/macos/.build/debug/1context' agent hook --provider claude --event UserPromptSubmit"
-              ]
-            ]
-          ]
-        ]
-      ],
-      "statusLine": [
-        "type": "command",
-        "command": "python3 /Users/example/dev/1Context-private-4/tools/wiki-statusline.py"
-      ]
-    ], to: settings)
-
-    let manager = AgentIntegrationManager(
-      paths: AgentPaths(directory: root.appendingPathComponent("agent", isDirectory: true)),
-      claudeSettingsPath: settings,
-      codexConfigPath: root.appendingPathComponent(".codex/config.toml"),
-      executablePath: "/opt/homebrew/bin/1context"
-    )
-
-    _ = try manager.uninstall()
-
-    let object = try readObject(settings)
-    let hooks = try XCTUnwrap(object["hooks"] as? [String: Any])
-    XCTAssertNil(hooks["SessionStart"])
-    XCTAssertNil(hooks["UserPromptSubmit"])
-    XCTAssertNil(object["statusLine"])
-  }
-
-  func testRepairRemovesLegacyPrivateHooksAndInstallsFirstPartyHooks() throws {
-    let root = try temporaryRoot()
-    defer { try? FileManager.default.removeItem(at: root) }
-    let settings = root.appendingPathComponent("settings.json")
-    let codex = root.appendingPathComponent(".codex/config.toml")
-    try writeObject([
-      "hooks": [
-        "SessionStart": [
-          [
-            "matcher": "startup",
-            "hooks": [
-              [
-                "type": "command",
-                "command": "python3 /Users/example/dev/1Context-private-4/tools/wiki-startup-context.py"
-              ]
-            ]
-          ]
-        ]
-      ],
-      "statusLine": [
-        "type": "command",
-        "command": "python3 /Users/example/dev/1Context-private-4/tools/wiki-statusline.py"
-      ]
-    ], to: settings)
-    try FileManager.default.createDirectory(at: codex.deletingLastPathComponent(), withIntermediateDirectories: true)
-    try Data("""
-    [features]
-    codex_hooks = true
-
-    [hooks]
-    SessionStart = [
-      { matcher = "startup", hooks = [
-        { type = "command", command = "python3 /Users/example/dev/1Context-private-4/tools/wiki-startup-context.py" },
-      ] },
-    ]
-    """.utf8).write(to: codex)
-
-    let manager = AgentIntegrationManager(
-      paths: AgentPaths(directory: root.appendingPathComponent("agent", isDirectory: true)),
-      claudeSettingsPath: settings,
-      codexConfigPath: codex,
-      executablePath: "/opt/homebrew/bin/1context"
-    )
-
-    let report = try manager.repair()
-
-    XCTAssertEqual(report.claudeStatus.state, .installed)
-    XCTAssertEqual(report.codexStatus.state, .installed)
-    let claude = try readObject(settings)
-    let statusLine = try XCTUnwrap(claude["statusLine"] as? [String: Any])
-    XCTAssertEqual(statusLine["command"] as? String, "\(AgentHookPolicy.managedStatusLinePrefix) '/opt/homebrew/bin/1context' agent statusline --provider claude")
-    let claudeText = try String(contentsOf: settings)
-    XCTAssertFalse(claudeText.contains("1Context-private-4"))
-
-    let codexText = try String(contentsOf: codex)
-    XCTAssertFalse(codexText.contains("1Context-private-4"))
-    XCTAssertTrue(codexText.contains("agent hook --provider codex --event SessionStart"))
-    XCTAssertTrue(codexText.contains(#"matcher = "startup""#))
-    XCTAssertTrue(codexText.contains(#"matcher = "resume""#))
-    XCTAssertTrue(codexText.contains(#"matcher = "clear""#))
-    XCTAssertTrue(codexText.contains(#"matcher = "compact""#))
-  }
-
   func testCodexInstallPreservesOtherConfigAndIsIdempotent() throws {
     let root = try temporaryRoot()
     defer { try? FileManager.default.removeItem(at: root) }
@@ -319,7 +203,7 @@ final class AgentIntegrationTests: XCTestCase {
       paths: AgentPaths(directory: root.appendingPathComponent("agent", isDirectory: true)),
       claudeSettingsPath: settings,
       codexConfigPath: codex,
-      executablePath: "/opt/homebrew/bin/1context"
+      executablePath: "/Applications/1Context.app/Contents/MacOS/1context-cli"
     )
 
     _ = try manager.install()
@@ -346,7 +230,7 @@ final class AgentIntegrationTests: XCTestCase {
       paths: AgentPaths(directory: root.appendingPathComponent("agent", isDirectory: true)),
       claudeSettingsPath: settings,
       codexConfigPath: root.appendingPathComponent(".codex/config.toml"),
-      executablePath: "/opt/homebrew/bin/1context"
+      executablePath: "/Applications/1Context.app/Contents/MacOS/1context-cli"
     )
 
     let report = try manager.install()
@@ -429,29 +313,7 @@ final class AgentIntegrationTests: XCTestCase {
     )
       .execute(provider: .claude, event: .sessionStart, inputData: Data("{}".utf8))
 
-    XCTAssertEqual(output.systemMessage, "View 1Context wiki: http://wiki.1context.localhost:17319/your-context")
-  }
-
-  func testInstallMigratesLegacyAgentWikiURL() throws {
-    let root = try temporaryRoot()
-    defer { try? FileManager.default.removeItem(at: root) }
-    let settings = root.appendingPathComponent("settings.json")
-    let paths = AgentPaths(directory: root.appendingPathComponent("agent", isDirectory: true))
-    try FileManager.default.createDirectory(at: paths.directory, withIntermediateDirectories: true)
-    try writeObject(["wiki_url": "http://localhost:3210", "status_line_label": "1Context wiki"], to: paths.configFile)
-
-    let manager = AgentIntegrationManager(
-      paths: paths,
-      claudeSettingsPath: settings,
-      codexConfigPath: root.appendingPathComponent(".codex/config.toml"),
-      executablePath: "/opt/homebrew/bin/1context"
-    )
-
-    _ = try manager.install()
-
-    let data = try Data(contentsOf: paths.configFile)
-    let config = try JSONDecoder().decode(AgentConfig.self, from: data)
-    XCTAssertEqual(config.wikiURL, "http://wiki.1context.localhost:17319/your-context")
+    XCTAssertEqual(output.systemMessage, "View 1Context wiki: https://wiki.1context.localhost/your-context")
   }
 
   func testStatusLineRendererReadsLiveConfig() throws {

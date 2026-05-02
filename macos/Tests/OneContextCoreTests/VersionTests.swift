@@ -37,9 +37,4 @@ final class VersionTests: XCTestCase {
     XCTAssertEqual(decoded.health?.version, "0.1.25")
     XCTAssertEqual(decoded.recommendedAction, "Restart 1Context")
   }
-
-  func testHomebrewUpdateCommandUsesNarrowTapRefresh() {
-    XCTAssertEqual(oneContextHomebrewUpdateCommand, "brew upgrade --cask hapticasensorics/tap/1context")
-    XCTAssertFalse(oneContextHomebrewUpdateCommand.contains("brew update &&"))
-  }
 }

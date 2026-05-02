@@ -6,6 +6,22 @@ MACOS_DIR="$ROOT/macos"
 VERSION="$(tr -d '[:space:]' < "$ROOT/VERSION")"
 STATE_DIR="$(mktemp -d /tmp/1ctx-test-XXXXXX)"
 
+pick_free_port() {
+  python3 - <<'PY'
+import socket
+
+with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+    sock.bind(("127.0.0.1", 0))
+    print(sock.getsockname()[1])
+PY
+}
+
+HARNESS_WIKI_PORT="${ONECONTEXT_TEST_WIKI_PORT:-$(pick_free_port)}"
+HARNESS_WIKI_API_PORT="${ONECONTEXT_TEST_WIKI_API_PORT:-$(pick_free_port)}"
+if [[ "$HARNESS_WIKI_PORT" == "$HARNESS_WIKI_API_PORT" ]]; then
+  HARNESS_WIKI_API_PORT="$(pick_free_port)"
+fi
+
 kill_processes_matching() {
   local pattern="$1"
   local pids
@@ -27,9 +43,9 @@ cleanup() {
   ONECONTEXT_LAUNCH_AGENT_DISABLED=1 \
   ONECONTEXT_LOG_DIR="$STATE_DIR/Logs/1Context" \
   ONECONTEXT_CACHE_DIR="$STATE_DIR/Caches/1Context" \
-  ONECONTEXT_UPDATE_STATE_DIR="$STATE_DIR/Application Support/1Context/update" \
-  ONECONTEXT_WIKI_PORT="${ONECONTEXT_WIKI_PORT:-17419}" \
-  ONECONTEXT_WIKI_API_PORT="${ONECONTEXT_WIKI_API_PORT:-17420}" \
+  ONECONTEXT_WIKI_URL_MODE="${ONECONTEXT_WIKI_URL_MODE:-high-port-http}" \
+  ONECONTEXT_WIKI_PORT="${ONECONTEXT_WIKI_PORT:-$HARNESS_WIKI_PORT}" \
+  ONECONTEXT_WIKI_API_PORT="${ONECONTEXT_WIKI_API_PORT:-$HARNESS_WIKI_API_PORT}" \
   "$BIN_DIR/1context" quit >/dev/null 2>&1 || true
   if [ -f "$STATE_DIR/Application Support/1Context/run/local-web-caddy.pid" ]; then
     local caddy_pid
@@ -60,6 +76,36 @@ assert_url_contains() {
   return 1
 }
 
+wait_for_runtime_running() {
+  for _ in {1..60}; do
+    if "$BIN_DIR/1context" status >/tmp/1ctx-test-status-running.$$ 2>&1 \
+      && grep -q "Health: OK" /tmp/1ctx-test-status-running.$$ \
+      && [ -f "$ONECONTEXT_APP_SUPPORT_DIR/run/1contextd.pid" ]; then
+      rm -f /tmp/1ctx-test-status-running.$$
+      return 0
+    fi
+    sleep 0.1
+  done
+  cat /tmp/1ctx-test-status-running.$$ >&2 || true
+  rm -f /tmp/1ctx-test-status-running.$$
+  echo "1Context did not report running in time" >&2
+  return 1
+}
+
+wait_for_runtime_stopped() {
+  for _ in {1..60}; do
+    if ! "$BIN_DIR/1context" status >/tmp/1ctx-test-status-stopped.$$ 2>&1; then
+      rm -f /tmp/1ctx-test-status-stopped.$$
+      return 0
+    fi
+    sleep 0.1
+  done
+  cat /tmp/1ctx-test-status-stopped.$$ >&2 || true
+  rm -f /tmp/1ctx-test-status-stopped.$$
+  echo "1Context did not stop in time" >&2
+  return 1
+}
+
 swift build --package-path "$MACOS_DIR"
 BIN_DIR="$(swift build --package-path "$MACOS_DIR" --show-bin-path)"
 trap cleanup EXIT
@@ -70,13 +116,20 @@ export ONECONTEXT_USER_CONTENT_DIR="$STATE_DIR/1Context"
 export ONECONTEXT_LAUNCH_AGENT_DISABLED=1
 export ONECONTEXT_LOG_DIR="$STATE_DIR/Logs/1Context"
 export ONECONTEXT_CACHE_DIR="$STATE_DIR/Caches/1Context"
-export ONECONTEXT_UPDATE_STATE_DIR="$STATE_DIR/Application Support/1Context/update"
 export ONECONTEXT_NO_UPDATE_CHECK=1
 export ONECONTEXT_CLAUDE_SETTINGS_PATH="$STATE_DIR/.claude/settings.json"
 export ONECONTEXT_CODEX_CONFIG_PATH="$STATE_DIR/.codex/config.toml"
 export ONECONTEXT_AGENT_ALLOW_ENV_OVERRIDES=1
-export ONECONTEXT_WIKI_PORT=17419
-export ONECONTEXT_WIKI_API_PORT=17420
+export ONECONTEXT_WIKI_URL_MODE=high-port-http
+export ONECONTEXT_WIKI_PORT="$HARNESS_WIKI_PORT"
+export ONECONTEXT_WIKI_API_PORT="$HARNESS_WIKI_API_PORT"
+export ONECONTEXT_CADDY_PATH="${ONECONTEXT_CADDY_PATH:-$(command -v caddy 2>/dev/null || true)}"
+if [[ -z "$ONECONTEXT_CADDY_PATH" || ! -x "$ONECONTEXT_CADDY_PATH" ]]; then
+  echo "Smoke tests require Caddy. Install caddy or set ONECONTEXT_CADDY_PATH." >&2
+  exit 1
+fi
+WIKI_TEST_URL="http://wiki.1context.localhost:$ONECONTEXT_WIKI_PORT"
+WIKI_TEST_API_URL="http://127.0.0.1:$ONECONTEXT_WIKI_API_PORT"
 
 "$ROOT/scripts/check-version-consistency.sh"
 "$ROOT/scripts/test-menu-lifecycle-deterministic.sh"
@@ -86,6 +139,7 @@ test "$("$BIN_DIR/1context" --version)" = "$VERSION"
 "$BIN_DIR/1context" --help | grep -q "1context quit"
 "$BIN_DIR/1context" --help | grep -q "1context logs"
 "$BIN_DIR/1context" --help | grep -q "1context debug"
+"$BIN_DIR/1context" --help | grep -q "1context setup local-web"
 "$BIN_DIR/1context" --help | grep -q "1context agent integrations"
 "$BIN_DIR/1context" --help | grep -q "1context agent statusline --provider <claude|codex>"
 "$BIN_DIR/1context" --help | grep -q "1context memory-core"
@@ -114,7 +168,8 @@ if "$BIN_DIR/1context" status >"$STATE_DIR/status-down.out" 2>&1; then
   exit 1
 fi
 grep -q "1Context is not running" "$STATE_DIR/status-down.out"
-"$BIN_DIR/1context" start | grep -q "1Context is running"
+"$BIN_DIR/1context" start | grep -q "1Context Remembering"
+wait_for_runtime_running
 test -d "$ONECONTEXT_USER_CONTENT_DIR"
 test -d "$ONECONTEXT_APP_SUPPORT_DIR/run"
 test -f "$ONECONTEXT_APP_SUPPORT_DIR/run/1contextd.pid"
@@ -133,49 +188,51 @@ test "$(stat -f "%Lp" "$ONECONTEXT_LOG_DIR/1contextd.log")" = "600"
 "$BIN_DIR/1context" status | grep -q "Health: OK"
 "$BIN_DIR/1context" status --debug | grep -q "Socket: responding"
 "$BIN_DIR/1context" status --debug | grep -q "Local Web"
-"$BIN_DIR/1context" status --debug | grep -q "URL: http://wiki.1context.localhost:17419/your-context"
-"$BIN_DIR/1context" status --debug | grep -q "API URL: http://127.0.0.1:17420/api/wiki/health"
-"$BIN_DIR/1context" wiki local-url | grep -q "http://wiki.1context.localhost:17419/your-context"
-python3 - "$ONECONTEXT_APP_SUPPORT_DIR/agent/config.json" <<'PY'
+"$BIN_DIR/1context" status --debug | grep -q "URL: $WIKI_TEST_URL/your-context"
+"$BIN_DIR/1context" status --debug | grep -q "API URL: $WIKI_TEST_API_URL/api/wiki/health"
+"$BIN_DIR/1context" wiki local-url | grep -q "$WIKI_TEST_URL/your-context"
+python3 - "$ONECONTEXT_APP_SUPPORT_DIR/agent/config.json" "$WIKI_TEST_URL/your-context" <<'PY'
 import json
 import sys
 from pathlib import Path
 
 path = Path(sys.argv[1])
+expected = sys.argv[2]
 payload = json.loads(path.read_text(encoding="utf-8"))
-assert payload["wiki_url"] == "http://wiki.1context.localhost:17419/your-context"
+assert payload["wiki_url"] == expected
 PY
 for _ in {1..40}; do
-  if assert_url_contains "http://wiki.1context.localhost:17419/your-context" "Your Context"; then
+  if assert_url_contains "$WIKI_TEST_URL/your-context" "Your Context"; then
     break
   fi
   sleep 0.25
 done
-assert_url_contains "http://wiki.1context.localhost:17419/your-context" "Your Context"
-assert_url_contains "http://wiki.1context.localhost:17419/for-you" "For You"
-assert_url_contains "http://wiki.1context.localhost:17419/for-you.talk" "Talk Conventions"
-assert_url_contains "http://wiki.1context.localhost:17419/for-you.talk" "How to use this talk page"
-assert_url_contains "http://wiki.1context.localhost:17419/projects" "Projects"
-assert_url_contains "http://wiki.1context.localhost:17419/topics" "Topics"
-assert_url_contains "http://wiki.1context.localhost:17419/your-context.talk" "Talk"
-assert_url_contains "http://wiki.1context.localhost:17419/projects.talk" "Talk"
-assert_url_contains "http://wiki.1context.localhost:17419/topics.talk" "Talk"
-if curl --fail --silent "http://wiki.1context.localhost:17419/for-you" | grep -Eq "stub|empty: populated|<!-- empty"; then
+assert_url_contains "$WIKI_TEST_URL/your-context" "Your Context"
+assert_url_contains "$WIKI_TEST_URL/for-you" "For You"
+assert_url_contains "$WIKI_TEST_URL/for-you.talk" "Talk Conventions"
+assert_url_contains "$WIKI_TEST_URL/for-you.talk" "How to use this talk page"
+assert_url_contains "$WIKI_TEST_URL/projects" "Projects"
+assert_url_contains "$WIKI_TEST_URL/topics" "Topics"
+assert_url_contains "$WIKI_TEST_URL/your-context.talk" "Talk"
+assert_url_contains "$WIKI_TEST_URL/projects.talk" "Talk"
+assert_url_contains "$WIKI_TEST_URL/topics.talk" "Talk"
+if curl --fail --silent "$WIKI_TEST_URL/for-you" | grep -Eq "stub|empty: populated|<!-- empty"; then
   echo "published For You should not expose raw stubs" >&2
   exit 1
 fi
-assert_url_contains "http://127.0.0.1:17420/api/wiki/health" "1context-wiki-api"
+assert_url_contains "$WIKI_TEST_API_URL/api/wiki/health" "1context-wiki-api"
 state_response="$(curl --fail --silent --request POST \
   --header "Content-Type: application/json" \
   --data '{"settings":{"theme":"dark"},"bookmarks":[{"title":"For You","url":"/for-you"}]}' \
-  "http://127.0.0.1:17420/api/wiki/state")"
+  "$WIKI_TEST_API_URL/api/wiki/state")"
 grep -q "theme" <<<"$state_response"
-assert_url_contains "http://127.0.0.1:17420/api/wiki/state" "bookmarks"
-assert_url_contains "http://127.0.0.1:17420/api/wiki/search?q=for" "matches"
-assert_url_contains "http://127.0.0.1:17420/api/wiki/chat/config" "chat_available"
+assert_url_contains "$WIKI_TEST_API_URL/api/wiki/state" "bookmarks"
+assert_url_contains "$WIKI_TEST_API_URL/api/wiki/search?q=for" "matches"
+assert_url_contains "$WIKI_TEST_API_URL/api/wiki/chat/config" "chat_available"
 "$BIN_DIR/1context" logs | grep -q "1Context Logs"
 "$BIN_DIR/1context" restart --debug | grep -q "Completed in"
-"$BIN_DIR/1context" stop | grep -q "1Context is stopped"
+"$BIN_DIR/1context" stop | grep -q "1Context Stopped"
+wait_for_runtime_stopped
 test "$(tr -d '[:space:]' < "$ONECONTEXT_APP_SUPPORT_DIR/desired-state")" = "stopped"
 if "$BIN_DIR/1context" status >"$STATE_DIR/status-down-again.out" 2>&1; then
   echo "status should fail after 1Context stops" >&2
@@ -183,9 +240,12 @@ if "$BIN_DIR/1context" status >"$STATE_DIR/status-down-again.out" 2>&1; then
 fi
 grep -q "1Context is not running" "$STATE_DIR/status-down-again.out"
 
-PATH="$BIN_DIR:$PATH" 1context start | grep -q "1Context is running"
-PATH="$BIN_DIR:$PATH" 1context stop | grep -q "1Context is stopped"
-PATH="$BIN_DIR:$PATH" 1context start | grep -q "1Context is running"
+PATH="$BIN_DIR:$PATH" 1context start | grep -q "1Context Remembering"
+wait_for_runtime_running
+PATH="$BIN_DIR:$PATH" 1context stop | grep -q "1Context Stopped"
+wait_for_runtime_stopped
+PATH="$BIN_DIR:$PATH" 1context start | grep -q "1Context Remembering"
+wait_for_runtime_running
 PATH="$BIN_DIR:$PATH" 1context quit | grep -q "1Context quit"
 
 "$BIN_DIR/1context" agent integrations uninstall | grep -q "Claude: not installed"
@@ -205,28 +265,24 @@ if grep -q "agent hook --provider claude --event UserPromptSubmit" "$ONECONTEXT_
   echo "public preview should not install prompt-submit hooks by default" >&2
   exit 1
 fi
-if grep -q "1Context-private-4" "$ONECONTEXT_CODEX_CONFIG_PATH"; then
-  echo "agent install should remove legacy private Codex hooks" >&2
-  exit 1
-fi
 printf '{"cwd":"%s"}\n' "$ROOT" \
   | "$BIN_DIR/1context" agent hook --provider claude --event SessionStart \
   | grep -q '"systemMessage"'
 printf '{"cwd":"%s"}\n' "$ROOT" \
   | "$BIN_DIR/1context" agent hook --provider claude --event SessionStart \
-  | grep -q "wiki.1context.localhost:17419"
+  | grep -q "wiki.1context.localhost:$ONECONTEXT_WIKI_PORT"
 printf '{"cwd":"%s"}\n' "$ROOT" \
   | "$BIN_DIR/1context" agent hook --provider codex --event SessionStart \
-  | grep -q "wiki.1context.localhost:17419"
+  | grep -q "wiki.1context.localhost:$ONECONTEXT_WIKI_PORT"
 printf '{}\n' \
   | "$BIN_DIR/1context" agent hook --provider claude --event PostToolUse \
   | grep -q '"hookEventName":"PostToolUse"'
 printf '{}\n' \
   | "$BIN_DIR/1context" agent statusline --provider claude \
-  | grep -q "View 1Context wiki: http://wiki.1context.localhost:17419/your-context"
+  | grep -q "View 1Context wiki: $WIKI_TEST_URL/your-context"
 printf '{}\n' \
   | "$BIN_DIR/1context" agent statusline --provider codex \
-  | grep -q "View 1Context wiki: http://wiki.1context.localhost:17419/your-context"
+  | grep -q "View 1Context wiki: $WIKI_TEST_URL/your-context"
 python3 - "$ONECONTEXT_APP_SUPPORT_DIR/agent/config.json" <<'PY'
 import json
 import sys

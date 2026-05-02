@@ -93,10 +93,10 @@ memory cycles validate <cycle-id> --json
 Hired-agent live execution, transcript import, broad filesystem scanning, and
 web research are not part of this contract yet.
 
-## Private-4 Target Surface
+## Memory Core Target Surface
 
-The private memory repo already exposes a larger Python CLI. The public adapter
-targets only the stable-looking front edge of that surface:
+The memory core exposes a larger Python CLI. The public adapter targets only
+the stable-looking front edge of that surface:
 
 ```text
 storage init
@@ -109,15 +109,14 @@ memory replay-dry-run with bounded time range
 memory cycles list/show/validate with explicit cycle ids
 ```
 
-Private-4 also has broader commands for apps, ports, daemon loops, hired-agent
-jobs, scheduler work, migrations, quality probes, route dry-runs, and wiki
-apply/promotion. Those stay outside the public adapter until they have explicit
-product consent, timeout budgets, and diagnostics semantics.
+The memory core may grow broader commands for apps, ports, daemon loops,
+hired-agent jobs, scheduler work, migrations, quality probes, route dry-runs,
+and wiki apply/promotion. Those stay outside the public adapter until they have
+explicit product consent, timeout budgets, and diagnostics semantics.
 
-When private-4 is copied or packaged into the app, it should either provide a
-small executable that speaks this contract or wrap its existing CLI behind one.
-The public Swift app should continue to treat it as a subprocess boundary, not a
-linked library.
+When a memory core is packaged into the app, it should provide a small
+executable that speaks this contract. The public Swift app should continue to
+treat it as a subprocess boundary, not a linked library.
 
 ## JSON Shape
 

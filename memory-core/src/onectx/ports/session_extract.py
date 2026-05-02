@@ -95,6 +95,9 @@ def parse_codex_row(raw: dict[str, Any], *, path: Path, state: dict[str, str]) -
             state["cwd"] = str(payload["cwd"])
         return None
 
+    if row_type == "event_msg":
+        return parse_codex_event_msg(raw, payload, path=path, state=state)
+
     if row_type != "response_item":
         return None
 
@@ -120,6 +123,43 @@ def parse_codex_row(raw: dict[str, Any], *, path: Path, state: dict[str, str]) -
             "item_type": payload.get("type", ""),
             "call_id": payload.get("call_id", ""),
             "name": payload.get("name", ""),
+        },
+    )
+
+
+def parse_codex_event_msg(
+    raw: dict[str, Any],
+    payload: dict[str, Any],
+    *,
+    path: Path,
+    state: dict[str, str],
+) -> ParsedSessionEvent | None:
+    if payload.get("type") != "user_message":
+        return None
+    ts = raw.get("timestamp")
+    if not ts:
+        return None
+    text = str(payload.get("message") or "").strip()
+    if not text and not payload.get("local_images") and not payload.get("images"):
+        return None
+    session_id = state.get("session_id") or default_session_id("codex_rollout_jsonl", path)
+    local_images = [str(item) for item in payload.get("local_images") or [] if str(item or "").strip()]
+    images = [str(item) for item in payload.get("images") or [] if str(item or "").strip()]
+    text_elements = payload.get("text_elements") if isinstance(payload.get("text_elements"), list) else []
+    return ParsedSessionEvent(
+        event="session.codex.imported",
+        session_id=session_id,
+        ts=str(ts),
+        source="codex",
+        kind="user",
+        text=text,
+        cwd=state.get("cwd", ""),
+        payload={
+            "raw_type": row_type_string(raw),
+            "item_type": "user_message",
+            "local_images": local_images,
+            "images": images,
+            "text_elements": text_elements,
         },
     )
 
@@ -157,6 +197,10 @@ def extract_codex_payload(payload: dict[str, Any], ts: str | None, cwd: str) -> 
     if not text:
         return None
     return {"ts": ts, "kind": kind, "text": text, "source": "codex", "cwd": cwd}
+
+
+def row_type_string(raw: dict[str, Any]) -> str:
+    return str(raw.get("type") or "")
 
 
 def source_for_adapter(adapter: str) -> str:

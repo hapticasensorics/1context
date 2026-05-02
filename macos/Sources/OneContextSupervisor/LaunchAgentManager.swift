@@ -66,6 +66,12 @@ public final class LaunchAgentManager {
     }
   }
 
+  public func registerMenu(appPath: String) throws {
+    guard !isDisabled else { return }
+    try ensureNormalUserLifecycle()
+    try installMenu(appPath: appPath)
+  }
+
   public func restart(daemonPath: String) async throws {
     try ensureNormalUserLifecycle()
     try install(daemonPath: daemonPath)
@@ -221,8 +227,6 @@ public final class LaunchAgentManager {
         <string>\(plistEscape(paths.socketPath))</string>
         <key>ONECONTEXT_PREFERENCES_PATH</key>
         <string>\(plistEscape(paths.preferencesPath))</string>
-        <key>ONECONTEXT_UPDATE_STATE_DIR</key>
-        <string>\(plistEscape(UpdateStatePaths.current(environment: launchAgentPathEnvironment()).directory.path))</string>
       </dict>
     """
   }
@@ -260,11 +264,7 @@ public final class LaunchAgentManager {
   }
 
   private func quitMenuApp() async {
-    _ = await runProcess(
-      executable: "/usr/bin/osascript",
-      arguments: ["-e", "tell application id \"com.haptica.1context.menu\" to quit"],
-      timeout: 2
-    )
+    _ = await launchctl(["kill", "TERM", "\(guiDomain())/\(Self.menuLabel)"])
   }
 
   private func runProcess(executable: String, arguments: [String], timeout: TimeInterval) async -> ProcessResult {

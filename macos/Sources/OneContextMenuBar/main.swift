@@ -2,13 +2,25 @@ import AppKit
 import Darwin
 import Foundation
 import OneContextAgent
+import OneContextInstall
 import OneContextLocalWeb
+import OneContextPermissions
 import OneContextRuntimeSupport
+import OneContextSetup
+import OneContextSparkleUpdate
 
 private enum Constants {
   static let appName = "1Context"
   static let runtimeRefreshMinimumInterval: TimeInterval = 5
   static let localWebStartupRetryDelays: [TimeInterval] = [1, 3, 10]
+  static let setupReadinessPollInterval: TimeInterval = 1
+  static let setupReadinessPollTimeout: TimeInterval = 120
+}
+
+private struct ProcessCaptureResult: Sendable {
+  let status: Int32
+  let stdout: String
+  let stderr: String
 }
 
 nonisolated(unsafe) private var menuInstanceLockFD: Int32 = -1
@@ -99,6 +111,284 @@ private func currentExecutableURL() -> URL? {
 }
 
 @MainActor
+private final class AppSetupWindowController: NSWindowController {
+  var onGrantLocalWikiAccess: (() -> Void)?
+  var onOpenWiki: (() -> Void)?
+  var onRefresh: (() -> Void)?
+
+  private let messageLabel = NSTextField(labelWithString: "")
+  private let localWikiRow = SetupRequirementRow(title: "Local Wiki Access")
+  private let screenRecordingRow = SetupRequirementRow(title: "Screen Recording")
+  private let accessibilityRow = SetupRequirementRow(title: "Accessibility")
+  private let refreshButton = NSButton(title: "Check Again", target: nil, action: nil)
+
+  init() {
+    let window = NSWindow(
+      contentRect: NSRect(x: 0, y: 0, width: 500, height: 300),
+      styleMask: [.titled, .closable, .miniaturizable],
+      backing: .buffered,
+      defer: false
+    )
+    window.title = "1Context Setup"
+    window.isReleasedWhenClosed = false
+    window.center()
+    super.init(window: window)
+    buildContent()
+  }
+
+  @available(*, unavailable)
+  required init?(coder: NSCoder) {
+    fatalError("init(coder:) has not been implemented")
+  }
+
+  func render(
+    _ snapshot: OneContextAppSetupSnapshot,
+    isGrantingLocalWikiAccess: Bool,
+    message: String?
+  ) {
+    if let message, !message.isEmpty {
+      messageLabel.stringValue = message
+      messageLabel.isHidden = false
+    } else {
+      messageLabel.stringValue = ""
+      messageLabel.isHidden = true
+    }
+
+    let localStatus: SetupRequirementRow.Status
+    let localAction: SetupRequirementRow.Action?
+    if isGrantingLocalWikiAccess {
+      localStatus = .working("Granting")
+      localAction = nil
+    } else if snapshot.localWikiAccess.ready {
+      localStatus = .granted
+      localAction = SetupRequirementRow.Action(title: "Open Wiki", handler: { [weak self] in
+        self?.onOpenWiki?()
+      })
+    } else {
+      localStatus = .required
+      localAction = SetupRequirementRow.Action(title: "Grant", handler: { [weak self] in
+        self?.onGrantLocalWikiAccess?()
+      })
+    }
+    localWikiRow.render(
+      status: localStatus,
+      action: localAction
+    )
+
+    let permissions = Dictionary(uniqueKeysWithValues: snapshot.sensitivePermissions.map { ($0.kind, $0) })
+    renderSensitiveRow(screenRecordingRow, snapshot: permissions[.screenRecording])
+    renderSensitiveRow(accessibilityRow, snapshot: permissions[.accessibility])
+  }
+
+  private func renderSensitiveRow(_ row: SetupRequirementRow, snapshot: PermissionSnapshot?) {
+    guard let snapshot else {
+      row.render(status: .notRequired, action: nil)
+      return
+    }
+    let status: SetupRequirementRow.Status
+    switch snapshot.status {
+    case .granted:
+      status = .granted
+    case .unavailable:
+      status = .unavailable
+    case .notChecked, .notGranted:
+      status = .notRequired
+    }
+    row.render(status: status, action: nil)
+  }
+
+  private func buildContent() {
+    guard let window else { return }
+    let root = NSView()
+    root.translatesAutoresizingMaskIntoConstraints = false
+    window.contentView = root
+
+    let stack = NSStackView()
+    stack.orientation = .vertical
+    stack.alignment = .leading
+    stack.spacing = 18
+    stack.translatesAutoresizingMaskIntoConstraints = false
+    root.addSubview(stack)
+
+    let header = NSStackView()
+    header.orientation = .vertical
+    header.alignment = .leading
+    header.spacing = 0
+
+    let title = NSTextField(labelWithString: "Set Up 1Context")
+    title.font = .systemFont(ofSize: 28, weight: .bold)
+    title.textColor = .labelColor
+    header.addArrangedSubview(title)
+
+    stack.addArrangedSubview(header)
+
+    messageLabel.font = .systemFont(ofSize: 13, weight: .semibold)
+    messageLabel.textColor = .controlAccentColor
+    messageLabel.isHidden = true
+    stack.addArrangedSubview(messageLabel)
+
+    for row in [localWikiRow, screenRecordingRow, accessibilityRow] {
+      stack.addArrangedSubview(row)
+      row.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
+    }
+
+    let footer = NSStackView()
+    footer.orientation = .horizontal
+    footer.alignment = .centerY
+    footer.spacing = 8
+    footer.translatesAutoresizingMaskIntoConstraints = false
+    refreshButton.target = self
+    refreshButton.action = #selector(refresh)
+    refreshButton.bezelStyle = .rounded
+    footer.addArrangedSubview(NSView())
+    footer.addArrangedSubview(refreshButton)
+    stack.addArrangedSubview(footer)
+    footer.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
+
+    NSLayoutConstraint.activate([
+      stack.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 28),
+      stack.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -28),
+      stack.topAnchor.constraint(equalTo: root.topAnchor, constant: 28),
+      stack.bottomAnchor.constraint(lessThanOrEqualTo: root.bottomAnchor, constant: -20)
+    ])
+  }
+
+  @objc private func refresh() {
+    onRefresh?()
+  }
+}
+
+@MainActor
+private final class SetupRequirementRow: NSView {
+  struct Action {
+    let title: String
+    let handler: () -> Void
+  }
+
+  enum Status {
+    case granted
+    case required
+    case working(String)
+    case notRequired
+    case unavailable
+
+    var title: String {
+      switch self {
+      case .granted:
+        return "Granted"
+      case .required:
+        return "Required"
+      case .working(let title):
+        return title
+      case .notRequired:
+        return "Not Required Yet"
+      case .unavailable:
+        return "Unavailable"
+      }
+    }
+
+    var color: NSColor {
+      switch self {
+      case .granted:
+        return .systemGreen
+      case .required:
+        return .systemOrange
+      case .working:
+        return .controlAccentColor
+      case .notRequired:
+        return .secondaryLabelColor
+      case .unavailable:
+        return .systemRed
+      }
+    }
+
+    var showsEnabledState: Bool {
+      switch self {
+      case .granted:
+        return true
+      case .required, .working, .notRequired, .unavailable:
+        return false
+      }
+    }
+  }
+
+  private let titleLabel: NSTextField
+  private let actionButton = NSButton(title: "", target: nil, action: nil)
+  private var actionHandler: (() -> Void)?
+
+  init(title: String) {
+    self.titleLabel = NSTextField(labelWithString: title)
+    super.init(frame: .zero)
+    translatesAutoresizingMaskIntoConstraints = false
+    buildContent()
+  }
+
+  @available(*, unavailable)
+  required init?(coder: NSCoder) {
+    fatalError("init(coder:) has not been implemented")
+  }
+
+  func render(status: Status, action: Action?) {
+    if let action {
+      actionButton.title = action.title
+      actionButton.attributedTitle = NSAttributedString(string: action.title)
+      actionButton.isEnabled = true
+      actionHandler = action.handler
+    } else {
+      actionButton.attributedTitle = NSAttributedString(
+        string: status.title,
+        attributes: [
+          .foregroundColor: status.color,
+          .font: NSFont.systemFont(ofSize: 13, weight: .semibold)
+        ]
+      )
+      actionButton.isEnabled = status.showsEnabledState
+      actionHandler = nil
+    }
+    actionButton.isHidden = false
+  }
+
+  private func buildContent() {
+    let stack = NSStackView()
+    stack.orientation = .horizontal
+    stack.alignment = .centerY
+    stack.spacing = 12
+    stack.translatesAutoresizingMaskIntoConstraints = false
+    addSubview(stack)
+
+    let textStack = NSStackView()
+    textStack.orientation = .vertical
+    textStack.alignment = .leading
+    textStack.spacing = 0
+
+    titleLabel.font = .systemFont(ofSize: 15, weight: .semibold)
+    textStack.addArrangedSubview(titleLabel)
+    textStack.setContentHuggingPriority(.defaultLow, for: .horizontal)
+
+    actionButton.target = self
+    actionButton.action = #selector(runAction)
+    actionButton.bezelStyle = .rounded
+    actionButton.setContentHuggingPriority(.required, for: .horizontal)
+
+    stack.addArrangedSubview(textStack)
+    stack.addArrangedSubview(actionButton)
+
+    NSLayoutConstraint.activate([
+      heightAnchor.constraint(greaterThanOrEqualToConstant: 48),
+      stack.leadingAnchor.constraint(equalTo: leadingAnchor),
+      stack.trailingAnchor.constraint(equalTo: trailingAnchor),
+      stack.topAnchor.constraint(equalTo: topAnchor, constant: 10),
+      stack.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -10),
+      actionButton.widthAnchor.constraint(greaterThanOrEqualToConstant: 118)
+    ])
+  }
+
+  @objc private func runAction() {
+    actionHandler?()
+  }
+}
+
+@MainActor
 private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
   static var cachedFishAlertIcon: NSImage?
 
@@ -114,13 +404,23 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
   private var isRepairingRuntime = false
   private var isRuntimeActionInFlight = false
   private var isWikiRefreshInFlight = false
+  private var isLocalWebSetupInFlight = false
+  private var isUninstallInFlight = false
+  private var isReadinessRefreshInFlight = false
+  private var isSetupReadinessCheckInFlight = false
   private var isMenuOpen = false
+  private var didOfferLocalWebSetupAtLaunch = false
+  private var cachedRequiredSetupReady = false
+  private var runtimeToggleGeneration = 0
+  private var setupReadinessPollingStartedAt: Date?
+  private var setupReadinessPollingMessage: String?
   private var pendingUpdateState: UpdateState?
   private var activeAlertMessage: String?
   private var lastAlertShownAt: [String: Date] = [:]
   private var renderGeneration = 0
   private var lastRuntimeRefreshStartedAt: Date?
   private var desiredStateSource: DispatchSourceFileSystemObject?
+  private var setupReadinessTimer: Timer?
   private var desiredStateDescriptor: Int32 = -1
   private var desiredRuntimeIntent: RuntimeIntent = .running
   private let menu = NSMenu()
@@ -132,35 +432,262 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
   private let settingsMenu = NSMenu()
   private let versionItem = NSMenuItem(title: "", action: nil, keyEquivalent: "")
   private let aboutItem = NSMenuItem(title: "About 1Context", action: #selector(showAbout), keyEquivalent: "")
+  private let setupItem = NSMenuItem(title: "Setup...", action: #selector(showSetup), keyEquivalent: "")
   private let updateItem = NSMenuItem(title: "", action: nil, keyEquivalent: "")
+  private let uninstallItem = NSMenuItem(title: "Uninstall 1Context...", action: #selector(uninstallOneContext), keyEquivalent: "")
   private let quitItem = NSMenuItem(title: "Quit", action: #selector(quit), keyEquivalent: "q")
   private let appVersion = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String
     ?? oneContextVersion
   private let perfLoggingEnabled = ProcessInfo.processInfo.environment["ONECONTEXT_MENU_PERF_LOG"] == "1"
   private let localWeb = CaddyManager()
   private let localWebQueue = DispatchQueue(label: "com.haptica.1context.menu.local-web")
+  private lazy var nativeUpdater = SparkleUpdateController()
+  private lazy var setupWindowController: AppSetupWindowController = {
+    let controller = AppSetupWindowController()
+    controller.onGrantLocalWikiAccess = { [weak self] in
+      Task { @MainActor in
+        _ = await self?.runLocalWebSetupFlow()
+      }
+    }
+    controller.onOpenWiki = { [weak self] in
+      self?.openWiki()
+    }
+    controller.onRefresh = { [weak self] in
+      self?.reconcileSetupFromUserRefresh()
+    }
+    return controller
+  }()
 
   private var currentVersion: String {
     appVersion
   }
 
+  private func currentReadiness(checkSensitivePermissionsInCurrentProcess: Bool = false) -> OneContextAppReadinessSnapshot {
+    let readiness = OneContextAppReadiness.current(
+      localWeb: localWeb,
+      checkSensitivePermissionsInCurrentProcess: checkSensitivePermissionsInCurrentProcess
+    )
+    if !checkSensitivePermissionsInCurrentProcess {
+      cachedRequiredSetupReady = readiness.requiredSetupReady
+    }
+    return readiness
+  }
+
+  private func refreshApplicationLifecycle(userInitiated: Bool, force: Bool = false) {
+    guard !isReadinessRefreshInFlight || userInitiated else { return }
+    isReadinessRefreshInFlight = true
+    Task.detached(priority: userInitiated ? .userInitiated : .utility) {
+      let readiness = Self.computeReadiness()
+      await MainActor.run {
+        self.isReadinessRefreshInFlight = false
+        self.cachedRequiredSetupReady = readiness.requiredSetupReady
+        guard readiness.requiredSetupReady else {
+          self.setRuntimeState(.needsSetup)
+          return
+        }
+        self.startLocalWebEdge(requiredSetupReady: true)
+        self.ensureRuntimeRunning(userInitiated: userInitiated, force: force, requiredSetupReady: true)
+      }
+    }
+  }
+
+  nonisolated private static func computeReadiness() -> OneContextAppReadinessSnapshot {
+    OneContextAppReadiness.current(localWeb: CaddyManager())
+  }
+
+  private func registerMenuLaunchAgent() {
+    guard let appPath = Bundle.main.executableURL?.path else { return }
+    Task.detached(priority: .utility) {
+      try? LaunchAgentManager().registerMenu(appPath: appPath)
+    }
+  }
+
+  private func adoptLaunchRuntimeIntent() {
+    let paths = RuntimePaths.current()
+    do {
+      try RuntimePermissions.ensurePrivateDirectory(paths.appSupportDirectory)
+      try RuntimePermissions.writePrivateString("running\n", toFile: paths.desiredStatePath)
+      desiredRuntimeIntent = .running
+    } catch {
+      // Launch adoption is best-effort. The menu should still launch.
+    }
+  }
+
+  private func refreshRequiredSetupCache() -> Bool {
+    cachedRequiredSetupReady = currentReadiness().requiredSetupReady
+    return cachedRequiredSetupReady
+  }
+
+  private func handleAppInstallAtLaunch() -> Bool {
+    let planner = AppInstallPlanner()
+    switch planner.recommendation(currentBundleURL: Bundle.main.bundleURL, currentVersion: currentVersion) {
+    case .continueInPlace:
+      return false
+    case .moveToApplications(let request):
+      return presentAppInstallRequest(request)
+    }
+  }
+
+  private func presentAppInstallRequest(_ request: AppInstallRequest) -> Bool {
+    switch request.existingRelation {
+    case .newerVersion:
+      return presentOpenInstalledAppPrompt(request)
+    case .sameVersion:
+      return request.existingInstallMatchesCurrent
+        ? relaunchInstalledApp(request.destinationBundleURL)
+        : presentMoveToApplicationsPrompt(request)
+    case .none, .olderVersion, .unknownVersion:
+      return presentMoveToApplicationsPrompt(request)
+    }
+  }
+
+  private func presentMoveToApplicationsPrompt(_ request: AppInstallRequest) -> Bool {
+    let alert = NSAlert()
+    alert.messageText = "Install 1Context?"
+    alert.informativeText = movePromptDetail(for: request)
+    alert.icon = loadFishAlertIcon()
+    alert.addButton(withTitle: "Install and Open")
+    alert.addButton(withTitle: "Quit")
+    NSApp.setActivationPolicy(.regular)
+    NSApp.activate(ignoringOtherApps: true)
+    guard alert.runModal() == .alertFirstButtonReturn else { return false }
+    return moveAndRelaunch(request)
+  }
+
+  private func presentSameVersionInstallPrompt(_ request: AppInstallRequest) -> Bool {
+    let alert = NSAlert()
+    alert.messageText = "Open 1Context from Applications?"
+    alert.informativeText = "1Context is already installed. Open the installed app so updates and setup use the right copy."
+    alert.icon = loadFishAlertIcon()
+    alert.addButton(withTitle: "Open Installed")
+    alert.addButton(withTitle: "Quit")
+    NSApp.setActivationPolicy(.regular)
+    NSApp.activate(ignoringOtherApps: true)
+    guard alert.runModal() == .alertFirstButtonReturn else { return false }
+    return relaunchInstalledApp(request.destinationBundleURL)
+  }
+
+  private func presentOpenInstalledAppPrompt(_ request: AppInstallRequest) -> Bool {
+    let alert = NSAlert()
+    alert.messageText = "Open the Installed 1Context?"
+    alert.informativeText = "A newer 1Context is already installed. Open that copy to keep updates intact."
+    alert.icon = loadFishAlertIcon()
+    alert.addButton(withTitle: "Open Installed")
+    alert.addButton(withTitle: "Quit")
+    NSApp.setActivationPolicy(.regular)
+    NSApp.activate(ignoringOtherApps: true)
+    guard alert.runModal() == .alertFirstButtonReturn else { return false }
+    return relaunchInstalledApp(request.destinationBundleURL)
+  }
+
+  private func movePromptDetail(for request: AppInstallRequest) -> String {
+    switch request.existingRelation {
+    case .none:
+      return "1Context needs to run from Applications so local wiki access and updates work reliably."
+    case .olderVersion:
+      return "This replaces the older installed copy and opens 1Context from Applications."
+    case .unknownVersion:
+      return "This replaces the installed copy and opens 1Context from Applications."
+    case .sameVersion:
+      return "This refreshes the installed copy and opens 1Context from Applications."
+    case .newerVersion:
+      return "A newer 1Context is already installed."
+    }
+  }
+
+  private func moveAndRelaunch(_ request: AppInstallRequest) -> Bool {
+    do {
+      quitRunningInstalledApp(at: request.destinationBundleURL)
+      let mover = AppInstallMover()
+      try mover.install(request)
+      try mover.relaunch(destinationBundleURL: request.destinationBundleURL)
+      NSApp.terminate(nil)
+      return true
+    } catch {
+      presentInstallError(error)
+      return false
+    }
+  }
+
+  private func quitRunningInstalledApp(at destination: URL) {
+    let destinationPath = destination.standardizedFileURL.resolvingSymlinksInPath().path
+    let currentPID = getpid()
+    let apps = NSWorkspace.shared.runningApplications.filter { app in
+      guard app.processIdentifier != currentPID,
+        let bundleURL = app.bundleURL
+      else {
+        return false
+      }
+      return bundleURL.standardizedFileURL.resolvingSymlinksInPath().path == destinationPath
+    }
+
+    guard !apps.isEmpty else { return }
+    for app in apps {
+      app.terminate()
+    }
+    waitForInstalledApps(apps, timeout: 3.0)
+    for app in apps where !app.isTerminated {
+      app.forceTerminate()
+    }
+    waitForInstalledApps(apps, timeout: 2.0)
+  }
+
+  private func waitForInstalledApps(_ apps: [NSRunningApplication], timeout: TimeInterval) {
+    let deadline = Date().addingTimeInterval(timeout)
+    while Date() < deadline {
+      if apps.allSatisfy(\.isTerminated) {
+        return
+      }
+      RunLoop.current.run(mode: .default, before: Date().addingTimeInterval(0.1))
+    }
+  }
+
+  private func relaunchInstalledApp(_ destination: URL) -> Bool {
+    do {
+      try AppInstallMover().relaunch(destinationBundleURL: destination)
+      NSApp.terminate(nil)
+      return true
+    } catch {
+      presentInstallError(error)
+      return false
+    }
+  }
+
+  private func presentInstallError(_ error: Error) {
+    let alert = NSAlert()
+    alert.messageText = "Could not move 1Context to Applications."
+    alert.informativeText = error.localizedDescription
+    alert.icon = loadFishAlertIcon()
+    alert.addButton(withTitle: "OK")
+    NSApp.setActivationPolicy(.regular)
+    NSApp.activate(ignoringOtherApps: true)
+    alert.runModal()
+  }
+
   func applicationDidFinishLaunching(_ notification: Notification) {
     let start = perfStart()
+    guard !handleAppInstallAtLaunch() else { return }
+    guard acquireMenuInstanceLock() else {
+      NSApp.terminate(nil)
+      return
+    }
+    adoptLaunchRuntimeIntent()
+    registerMenuLaunchAgent()
     NSApp.setActivationPolicy(.accessory)
     statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
     configureStatusIcon()
     configureMenu()
+    startNativeUpdater()
     refreshMenuItems()
     startDesiredStateMonitor()
-    startLocalWebEdge()
+    showSetupWindowForHarnessIfRequested()
+    scheduleLocalWebSetupRepairPrompt()
+    refreshApplicationLifecycle(userInitiated: false, force: true)
     scheduleLocalWebEdgeStartupRetries()
-    runLaunchChores()
-    ensureRuntimeRunning(userInitiated: false, force: true)
 
     timer = Timer.scheduledTimer(withTimeInterval: 30, repeats: true) { [weak self] _ in
       Task { @MainActor in
-        self?.ensureRuntimeRunning(userInitiated: false, force: true)
-        self?.startLocalWebEdge()
+        self?.refreshApplicationLifecycle(userInitiated: false, force: true)
       }
     }
     perfLog("launch.ready", start: start)
@@ -192,20 +719,26 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
 
     versionItem.isEnabled = false
     settingsMenu.addItem(versionItem)
+    settingsMenu.addItem(setupItem)
     settingsMenu.addItem(aboutItem)
+    settingsMenu.addItem(uninstallItem)
     settingsItem.submenu = settingsMenu
     menu.addItem(settingsItem)
     menu.addItem(updateItem)
     menu.addItem(quitItem)
     menu.delegate = self
 
-    for item in [stateItem, startStopItem, openWikiItem, refreshWikiItem, settingsItem, versionItem, aboutItem, updateItem, quitItem] {
+    for item in [stateItem, startStopItem, openWikiItem, refreshWikiItem, settingsItem, versionItem, setupItem, aboutItem, uninstallItem, updateItem, quitItem] {
       item.target = self
       item.isEnabled = true
     }
     stateItem.isEnabled = false
     versionItem.isEnabled = false
     statusItem.menu = menu
+  }
+
+  private func startNativeUpdater() {
+    _ = nativeUpdater
   }
 
   private func refreshMenuItems() {
@@ -215,10 +748,15 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
       stateItem.title = stateTitle
       renderedStateTitle = stateTitle
     }
-    startStopItem.title = runtimeState == .stopped ? "Start" : "Stop"
+    startStopItem.title = runtimeState == .running ? "Stop" : "Start"
     startStopItem.isEnabled = !isRuntimeActionInFlight
     refreshWikiItem.title = isWikiRefreshInFlight ? "Refreshing Wiki..." : "Refresh Wiki"
     refreshWikiItem.isEnabled = !isWikiRefreshInFlight
+    let setupReady = cachedRequiredSetupReady
+    setupItem.title = isLocalWebSetupInFlight ? "Granting Setup..." : setupReady ? "Setup..." : "Finish Setup..."
+    setupItem.isEnabled = true
+    uninstallItem.title = isUninstallInFlight ? "Uninstalling 1Context..." : "Uninstall 1Context..."
+    uninstallItem.isEnabled = !isUninstallInFlight
 
     let versionTitle = "Version \(appVersion)"
     if renderedVersionTitle != versionTitle {
@@ -234,7 +772,7 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
       updateAction = #selector(checkForUpdatesNow)
     case .available:
       updateTitle = "Please Update"
-      updateAction = #selector(openUpgradeCommand)
+      updateAction = #selector(openUpdateFlow)
     }
 
     if renderedUpdateTitle != updateTitle {
@@ -309,8 +847,17 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
     }
   }
 
-  private func ensureRuntimeRunning(userInitiated: Bool, force: Bool = false) {
+  private func ensureRuntimeRunning(
+    userInitiated: Bool,
+    force: Bool = false,
+    requiredSetupReady: Bool? = nil
+  ) {
     guard !isRepairingRuntime else { return }
+    let setupReady = requiredSetupReady ?? refreshRequiredSetupCache()
+    guard setupReady else {
+      setRuntimeState(.needsSetup)
+      return
+    }
     guard userInitiated || desiredRuntimeIntent == .running else {
       setRuntimeState(.stopped)
       return
@@ -356,7 +903,7 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
         await MainActor.run {
           self.perfLog("runtime.health.ok", start: healthStart)
           self.setRuntimeState(.running)
-          self.startLocalWebEdge()
+          self.startLocalWebEdge(requiredSetupReady: true)
         }
         return
       } catch let error as UnixSocketError {
@@ -373,7 +920,7 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
             await MainActor.run {
               self.perfLog("runtime.start.ok", start: healthStart)
               self.setRuntimeState(.running)
-              self.startLocalWebEdge()
+              self.startLocalWebEdge(requiredSetupReady: true)
             }
           } catch {
             await MainActor.run {
@@ -433,12 +980,8 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
     desiredRuntimeIntent = intent
     switch intent {
     case .running:
-      if runtimeState == .stopped {
-        setRuntimeState(.checking)
-      } else {
-        refreshMenuItems()
-      }
-      ensureRuntimeRunning(userInitiated: false)
+      setRuntimeState(.running, forceRender: true)
+      ensureRuntimeRunning(userInitiated: false, requiredSetupReady: cachedRequiredSetupReady)
     case .stopped:
       setRuntimeState(.stopped)
     }
@@ -450,133 +993,71 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
     return state == "stopped" ? .stopped : .running
   }
 
-  private func loadCachedUpdateState() {
-    Task.detached(priority: .utility) {
-      let start = await self.perfStart()
-      let state = Self.readUpdateStateFromDisk()
-      guard let version = state?["last_seen_latest"] as? String else {
-        return
-      }
-      let currentVersion = self.appVersion
-      let cachedState: UpdateState = compareVersions(version, currentVersion) > 0 ? .available : .upToDate
-      await MainActor.run {
-        self.perfLog("update.cache.read", start: start)
-        self.setUpdateState(cachedState)
-      }
+  @objc private func openUpdateFlow() {
+    Task {
+      await runNativeUpdateFlow()
     }
-  }
-
-  private func checkForUpdates(force: Bool) {
-    guard !isCheckingForUpdates else { return }
-    isCheckingForUpdates = true
-
-    Task.detached(priority: .utility) {
-      let start = await self.perfStart()
-      defer {
-        Task { @MainActor in
-          self.isCheckingForUpdates = false
-        }
-      }
-
-      do {
-        guard force || Self.shouldCheckForUpdateFromDisk() else {
-          await MainActor.run {
-            self.perfLog("update.check.skipped", start: start)
-          }
-          return
-        }
-        let result = try await UpdateChecker().check(force: force, currentVersion: self.appVersion)
-        await MainActor.run {
-          self.perfLog("update.check.done", start: start)
-          self.setUpdateState(result.updateAvailable ? .available : .upToDate)
-        }
-      } catch {
-        // Update failures stay quiet. The menu remains usable offline.
-      }
-    }
-  }
-
-  nonisolated private static func shouldCheckForUpdateFromDisk() -> Bool {
-    guard let state = readUpdateStateFromDisk(),
-      let checked = state["last_checked_at"] as? String,
-      let date = ISO8601DateFormatter().date(from: checked)
-    else {
-      return true
-    }
-    return Date().timeIntervalSince(date) >= oneContextUpdateCheckInterval
-  }
-
-  nonisolated private static func readUpdateStateFromDisk() -> [String: Any]? {
-    guard let data = try? Data(contentsOf: UpdateStatePaths.current().file) else { return nil }
-    return try? JSONSerialization.jsonObject(with: data) as? [String: Any]
-  }
-
-  @objc private func openUpgradeCommand() {
-    guard confirmUpdate() else { return }
-    runUpdateCommandInTerminal()
   }
 
   @objc private func checkForUpdatesNow() {
     guard !isCheckingForUpdates else { return }
     isCheckingForUpdates = true
 
-    Task {
+    Task { @MainActor in
       defer {
-        Task { @MainActor in
-          self.isCheckingForUpdates = false
-        }
+        self.isCheckingForUpdates = false
+        self.refreshMenuItems()
       }
 
-      do {
-        let result = try await UpdateChecker().check(force: true, currentVersion: currentVersion)
-        await MainActor.run {
-          self.setUpdateState(result.updateAvailable ? .available : .upToDate)
-          if result.updateAvailable {
-            if self.confirmUpdate() {
-              self.runUpdateCommandInTerminal()
-            }
-          } else {
-            self.showUpToDateMessage()
-          }
-        }
-      } catch {
-        await MainActor.run {
-          self.showUpdateCheckFailedMessage()
-        }
+      let snapshot = await self.nativeUpdater.snapshot(currentVersion: self.appVersion)
+      self.setUpdateState(snapshot.updateAvailable ? .available : .upToDate)
+      guard snapshot.availability == .available else {
+        self.presentNativeUpdateSnapshot(snapshot)
+        return
+      }
+      if !self.nativeUpdater.checkForUpdates(self.updateItem) {
+        self.presentNativeUpdateSnapshot(snapshot)
       }
     }
   }
 
   @objc private func toggleRuntime() {
-    guard !isRuntimeActionInFlight else { return }
-    let targetIntent: RuntimeIntent = runtimeState == .stopped ? .running : .stopped
+    let targetIntent: RuntimeIntent = runtimeState == .running ? .stopped : .running
+    if targetIntent == .running, !cachedRequiredSetupReady {
+      Task {
+        showSetupWindow(message: "Finish setup to start 1Context.")
+      }
+      return
+    }
     desiredRuntimeIntent = targetIntent
-    isRuntimeActionInFlight = true
-    setRuntimeState(targetIntent == .running ? .checking : .stopped, forceRender: true)
+    runtimeToggleGeneration += 1
+    let generation = runtimeToggleGeneration
+    setRuntimeState(targetIntent == .running ? .running : .stopped, forceRender: true)
 
     Task.detached(priority: .userInitiated) {
       let start = await self.perfStart()
       do {
         let controller = RuntimeController()
         if targetIntent == .running {
-          _ = try await controller.start(startMenu: false)
+          try await controller.requestStart(startMenu: false)
           await MainActor.run {
+            guard generation == self.runtimeToggleGeneration else { return }
             self.perfLog("runtime.userStart.ok", start: start)
-            self.isRuntimeActionInFlight = false
             self.setRuntimeState(.running, forceRender: true)
+            self.startLocalWebEdge(requiredSetupReady: true)
           }
         } else {
-          _ = try await controller.stop()
+          try await controller.requestStop()
           await MainActor.run {
+            guard generation == self.runtimeToggleGeneration else { return }
             self.perfLog("runtime.userStop.ok", start: start)
-            self.isRuntimeActionInFlight = false
             self.setRuntimeState(.stopped, forceRender: true)
           }
         }
       } catch {
         await MainActor.run {
+          guard generation == self.runtimeToggleGeneration else { return }
           self.perfLog("runtime.userToggle.failed", start: start)
-          self.isRuntimeActionInFlight = false
           self.setRuntimeState(.needsAttention, forceRender: true)
           self.presentMenuAlert("Could not \(targetIntent == .running ? "start" : "stop") 1Context.")
         }
@@ -588,14 +1069,10 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
     presentMenuAlert("1Context up to date.")
   }
 
-  private func showUpdateCheckFailedMessage() {
-    presentMenuAlert("Could not check for updates.")
-  }
-
   private func confirmUpdate() -> Bool {
     let alert = NSAlert()
     alert.messageText = "Update 1Context?"
-    alert.informativeText = "A Terminal window will open and run Homebrew. If macOS asks for your password, Terminal will hide password characters."
+    alert.informativeText = "1Context updates use the native app updater. The updater will verify the signed release, install it, and relaunch the app."
     alert.icon = loadFishAlertIcon()
     alert.addButton(withTitle: "Update")
     alert.addButton(withTitle: "Cancel")
@@ -603,8 +1080,60 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
     return alert.runModal() == .alertFirstButtonReturn
   }
 
+  private func runNativeUpdateFlow(snapshot existingSnapshot: NativeUpdateSnapshot? = nil) async {
+    let snapshot: NativeUpdateSnapshot
+    if let existingSnapshot {
+      snapshot = existingSnapshot
+    } else {
+      snapshot = await nativeUpdater.snapshot(currentVersion: appVersion)
+    }
+    if snapshot.availability == .available, nativeUpdater.checkForUpdates(updateItem) {
+      setUpdateState(.upToDate)
+      return
+    }
+    presentNativeUpdateSnapshot(snapshot)
+  }
+
+  private func presentNativeUpdateSnapshot(_ snapshot: NativeUpdateSnapshot) {
+    setUpdateState(snapshot.updateAvailable ? .available : .upToDate)
+    if snapshot.availability == .notConfigured {
+      presentMenuAlert(snapshot.userFacingStatus)
+      return
+    }
+    presentMenuAlert(snapshot.userFacingStatus)
+  }
+
   @objc private func showAbout() {
     NSWorkspace.shared.open(oneContextGitHubURL)
+  }
+
+  @objc private func showSetup() {
+    showSetupWindow(message: nil)
+  }
+
+  private func showSetupWindow(message: String?) {
+    updateSetupWindow(message: message)
+    setupWindowController.showWindow(nil)
+    setupWindowController.window?.makeKeyAndOrderFront(nil)
+    NSApp.activate(ignoringOtherApps: true)
+  }
+
+  private func updateSetupWindow(message: String? = nil) {
+    let appSetup = currentReadiness(checkSensitivePermissionsInCurrentProcess: true).setup
+    setupWindowController.render(
+      appSetup,
+      isGrantingLocalWikiAccess: isLocalWebSetupInFlight,
+      message: message
+    )
+  }
+
+  private func reconcileSetupFromUserRefresh() {
+    let readiness = currentReadiness(checkSensitivePermissionsInCurrentProcess: true)
+    guard readiness.requiredSetupReady else {
+      updateSetupWindow()
+      return
+    }
+    completeLocalWebSetup(readiness: readiness, message: "Local Wiki Access is ready.")
   }
 
   @objc private func openWiki() {
@@ -631,7 +1160,11 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
         }
       } catch {
         openWikiItem.isEnabled = true
-        presentMenuAlert("Could not open 1Context wiki.")
+        if Self.isLocalWebSetupRequired(error) {
+          showSetupWindow(message: "Finish setup to open your wiki.")
+          return
+        }
+        presentMenuAlert(Self.wikiBlockedMessage(for: error))
       }
     }
   }
@@ -647,8 +1180,32 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
     }
   }
 
+  private nonisolated static func wikiBlockedMessage(for error: Error) -> String {
+    if let localWebError = error as? LocalWebError,
+      case .setupRequired(let message) = localWebError
+    {
+      return "1Context needs setup before the wiki can open. \(message) Use Settings > Setup... to continue."
+    }
+    return "Could not open 1Context wiki."
+  }
+
+  private nonisolated static func isLocalWebSetupRequired(_ error: Error) -> Bool {
+    guard let localWebError = error as? LocalWebError,
+      case .setupRequired = localWebError
+    else {
+      return false
+    }
+    return true
+  }
+
   @objc private func refreshWiki() {
     guard !isWikiRefreshInFlight else { return }
+    guard currentReadiness().requiredSetupReady else {
+      Task {
+        showSetupWindow(message: "Finish setup to refresh your wiki.")
+      }
+      return
+    }
     isWikiRefreshInFlight = true
     refreshMenuItems()
     Task {
@@ -664,10 +1221,116 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
         await MainActor.run {
           self.isWikiRefreshInFlight = false
           self.refreshMenuItems()
-          self.presentMenuAlert("Could not publish 1Context wiki.")
+          self.presentMenuAlert(Self.wikiBlockedMessage(for: error))
         }
       }
     }
+  }
+
+  private enum UninstallChoice {
+    case keepData
+    case deleteData
+  }
+
+  @objc private func uninstallOneContext() {
+    guard !isUninstallInFlight else { return }
+    guard let choice = confirmUninstall() else { return }
+    if choice == .deleteData, !confirmDeleteDataForUninstall() {
+      return
+    }
+
+    isUninstallInFlight = true
+    refreshMenuItems()
+
+    var arguments = ["uninstall", "--menu-process"]
+    if choice == .deleteData {
+      arguments.append("--delete-data")
+    }
+    Task.detached(priority: .userInitiated) {
+      let result = Self.runBundledCLI(arguments: arguments)
+      await MainActor.run {
+        self.isUninstallInFlight = false
+        self.refreshMenuItems()
+        if result.status == 0 {
+          self.presentMenuAlert("1Context was moved to Trash.")
+          NSApp.terminate(nil)
+        } else {
+          self.presentMenuAlert(Self.uninstallFailureMessage(result))
+        }
+      }
+    }
+  }
+
+  private func confirmUninstall() -> UninstallChoice? {
+    let alert = NSAlert()
+    alert.messageText = "Uninstall 1Context?"
+    alert.informativeText = "This moves 1Context to Trash and removes background services, Local Wiki Access, and agent integrations. Your wiki content stays unless you choose Delete Data."
+    alert.icon = loadFishAlertIcon()
+    alert.addButton(withTitle: "Uninstall")
+    alert.addButton(withTitle: "Cancel")
+    alert.addButton(withTitle: "Delete Data")
+    NSApp.activate(ignoringOtherApps: true)
+
+    switch alert.runModal() {
+    case .alertFirstButtonReturn:
+      return .keepData
+    case .alertThirdButtonReturn:
+      return .deleteData
+    default:
+      return nil
+    }
+  }
+
+  private func confirmDeleteDataForUninstall() -> Bool {
+    let alert = NSAlert()
+    alert.messageText = "Delete 1Context Data?"
+    alert.informativeText = "This removes app support files, logs, caches, and ~/1Context content owned by 1Context."
+    alert.icon = loadFishAlertIcon()
+    alert.addButton(withTitle: "Delete Data")
+    alert.addButton(withTitle: "Cancel")
+    NSApp.activate(ignoringOtherApps: true)
+    return alert.runModal() == .alertFirstButtonReturn
+  }
+
+  private nonisolated static func runBundledCLI(arguments: [String]) -> ProcessCaptureResult {
+    guard let executableURL = bundledCLIURL() else {
+      return ProcessCaptureResult(status: 1, stdout: "", stderr: "Bundled 1context-cli was not found.")
+    }
+
+    let process = Process()
+    process.executableURL = executableURL
+    process.arguments = arguments
+    let stdout = Pipe()
+    let stderr = Pipe()
+    process.standardOutput = stdout
+    process.standardError = stderr
+
+    do {
+      try process.run()
+      process.waitUntilExit()
+    } catch {
+      return ProcessCaptureResult(status: 1, stdout: "", stderr: error.localizedDescription)
+    }
+
+    let stdoutData = stdout.fileHandleForReading.readDataToEndOfFile()
+    let stderrData = stderr.fileHandleForReading.readDataToEndOfFile()
+    return ProcessCaptureResult(
+      status: process.terminationStatus,
+      stdout: String(data: stdoutData, encoding: .utf8) ?? "",
+      stderr: String(data: stderrData, encoding: .utf8) ?? ""
+    )
+  }
+
+  private nonisolated static func bundledCLIURL() -> URL? {
+    let url = Bundle.main.bundleURL.appendingPathComponent("Contents/MacOS/1context-cli")
+    return FileManager.default.isExecutableFile(atPath: url.path) ? url : nil
+  }
+
+  private nonisolated static func uninstallFailureMessage(_ result: ProcessCaptureResult) -> String {
+    let detail = [result.stderr, result.stdout]
+      .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+      .first { !$0.isEmpty }
+    return "Could not uninstall 1Context. \(detail ?? "Open 1context diagnose for details.")"
   }
 
   @objc private func quit() {
@@ -678,7 +1341,7 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
       NSStatusBar.system.removeStatusItem(statusItem)
     }
     Task.detached {
-      _ = try? await RuntimeController().quit(stopMenu: false)
+      _ = try? await RuntimeController().stopForAppQuit()
       localWeb.stop()
       await MainActor.run {
         NSApp.terminate(nil)
@@ -687,10 +1350,15 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
   }
 
   func applicationWillTerminate(_ notification: Notification) {
+    stopSetupReadinessPolling()
     localWeb.stop()
   }
 
-  private func startLocalWebEdge() {
+  private func startLocalWebEdge(requiredSetupReady: Bool? = nil) {
+    guard requiredSetupReady ?? cachedRequiredSetupReady else {
+      setRuntimeState(.needsSetup)
+      return
+    }
     localWebQueue.async { [localWeb] in
       AppDelegate.startLocalWebEdge(localWeb)
     }
@@ -698,9 +1366,210 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
 
   private func scheduleLocalWebEdgeStartupRetries() {
     for delay in Constants.localWebStartupRetryDelays {
-      localWebQueue.asyncAfter(deadline: .now() + delay) { [localWeb] in
-        AppDelegate.startLocalWebEdge(localWeb)
+      DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
+        self?.startLocalWebEdge()
       }
+    }
+  }
+
+  private func scheduleLocalWebSetupRepairPrompt() {
+    guard ProcessInfo.processInfo.environment["ONECONTEXT_WIKI_URL_MODE"] != LocalWebURLMode.highPortHTTP.rawValue else {
+      return
+    }
+    DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
+      guard let self else { return }
+      Task { @MainActor in
+        await self.offerLocalWebSetupRepairAtLaunch()
+      }
+    }
+  }
+
+  private func showSetupWindowForHarnessIfRequested() {
+    guard ProcessInfo.processInfo.environment["ONECONTEXT_SHOW_SETUP_ON_LAUNCH"] == "1" else {
+      return
+    }
+    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+      self?.showSetupWindow(message: nil)
+    }
+  }
+
+  private func offerLocalWebSetupRepairAtLaunch() async {
+    guard !didOfferLocalWebSetupAtLaunch else { return }
+    guard !currentReadiness().requiredSetupReady else { return }
+    didOfferLocalWebSetupAtLaunch = true
+    showSetupWindow(message: "Finish setup to use your local wiki.")
+  }
+
+  private func runLocalWebSetupFlow() async -> Bool {
+    if isLocalWebSetupInFlight {
+      pollSetupReadiness()
+      return false
+    }
+
+    let current = currentReadiness()
+    guard !current.requiredSetupReady else {
+      completeLocalWebSetup(readiness: current, message: "Local Wiki Access is ready.")
+      return true
+    }
+
+    startSetupReadinessPolling(message: "Grant Local Wiki Access in the macOS prompt.")
+    do {
+      let result = try await Task.detached(priority: .userInitiated) {
+        try LocalWebSetupInstaller().install()
+      }.value
+      let readiness = currentReadiness()
+      if let localWeb = result.localWeb {
+        recordWikiURL(localWeb.url)
+      } else {
+        recordWikiURL(result.setup.targetURL)
+      }
+      completeLocalWebSetup(readiness: readiness, message: "Local Wiki Access is ready.")
+      return true
+    } catch {
+      let readiness = currentReadiness()
+      if readiness.requiredSetupReady {
+        completeLocalWebSetup(readiness: readiness, message: "Local Wiki Access is ready.")
+        return true
+      }
+
+      if let recovery = localWebSetupRecovery(for: error), recovery.keepWaiting {
+        startSetupReadinessPolling(message: recovery.message)
+        showSetupWindow(message: recovery.message)
+        return false
+      }
+
+      stopSetupReadinessPolling()
+      isLocalWebSetupInFlight = false
+      refreshMenuItems()
+      if let recovery = localWebSetupRecovery(for: error) {
+        updateSetupWindow(message: recovery.message)
+        showSetupWindow(message: recovery.message)
+        return false
+      }
+      let message = "Could not finish setup. \(error.localizedDescription)"
+      updateSetupWindow(message: message)
+      showSetupWindow(message: message)
+      return false
+    }
+  }
+
+  private struct LocalWebSetupRecovery {
+    let message: String
+    let keepWaiting: Bool
+  }
+
+  private func startSetupReadinessPolling(message: String) {
+    isLocalWebSetupInFlight = true
+    setupReadinessPollingStartedAt = Date()
+    setupReadinessPollingMessage = message
+    refreshMenuItems()
+    updateSetupWindow(message: message)
+    setupReadinessTimer?.invalidate()
+    setupReadinessTimer = Timer.scheduledTimer(withTimeInterval: Constants.setupReadinessPollInterval, repeats: true) { [weak self] _ in
+      Task { @MainActor in
+        self?.pollSetupReadiness()
+      }
+    }
+    pollSetupReadiness()
+  }
+
+  private func stopSetupReadinessPolling() {
+    setupReadinessTimer?.invalidate()
+    setupReadinessTimer = nil
+    setupReadinessPollingStartedAt = nil
+    setupReadinessPollingMessage = nil
+    isSetupReadinessCheckInFlight = false
+  }
+
+  private func pollSetupReadiness() {
+    guard isLocalWebSetupInFlight else {
+      stopSetupReadinessPolling()
+      return
+    }
+    if let startedAt = setupReadinessPollingStartedAt,
+      Date().timeIntervalSince(startedAt) > Constants.setupReadinessPollTimeout
+    {
+      stopSetupReadinessPolling()
+      isLocalWebSetupInFlight = false
+      refreshMenuItems()
+      updateSetupWindow(message: "Allow 1Context in System Settings, then return here.")
+      return
+    }
+    guard !isSetupReadinessCheckInFlight else { return }
+    isSetupReadinessCheckInFlight = true
+    let message = setupReadinessPollingMessage
+
+    Task.detached(priority: .utility) {
+      let readiness = Self.computeReadiness()
+      await MainActor.run {
+        self.isSetupReadinessCheckInFlight = false
+        self.cachedRequiredSetupReady = readiness.requiredSetupReady
+        guard readiness.requiredSetupReady else {
+          self.setupWindowController.render(
+            readiness.setup,
+            isGrantingLocalWikiAccess: self.isLocalWebSetupInFlight,
+            message: message
+          )
+          return
+        }
+        self.completeLocalWebSetup(readiness: readiness, message: "Local Wiki Access is ready.")
+      }
+    }
+  }
+
+  private func completeLocalWebSetup(readiness: OneContextAppReadinessSnapshot, message: String) {
+    stopSetupReadinessPolling()
+    isLocalWebSetupInFlight = false
+    cachedRequiredSetupReady = readiness.requiredSetupReady
+    recordWikiURL(readiness.setup.localWikiAccess.targetURL)
+    desiredRuntimeIntent = .running
+    refreshMenuItems()
+    updateSetupWindow(message: message)
+    startRuntimeImmediatelyAfterSetup()
+    refreshApplicationLifecycle(userInitiated: false, force: true)
+  }
+
+  private func startRuntimeImmediatelyAfterSetup() {
+    setRuntimeState(.running, forceRender: true)
+    startLocalWebEdge(requiredSetupReady: true)
+    Task.detached(priority: .userInitiated) {
+      do {
+        try await RuntimeController().requestStart(startMenu: false)
+      } catch {
+        await MainActor.run {
+          self.markRuntimeNeedsAttention()
+        }
+      }
+    }
+  }
+
+  private func localWebSetupRecovery(for error: Error) -> LocalWebSetupRecovery? {
+    guard let setupError = error as? LocalWebSetupInstallerError else {
+      return nil
+    }
+    switch setupError {
+    case .backgroundItemRequiresApproval:
+      return LocalWebSetupRecovery(
+        message: "Allow 1Context in System Settings, then return here.",
+        keepWaiting: true
+      )
+    case .certificateTrustFailed:
+      return LocalWebSetupRecovery(
+        message: "Use Touch ID or your password to trust the local 1Context certificate.",
+        keepWaiting: false
+      )
+    case .setupStillIncomplete:
+      return LocalWebSetupRecovery(
+        message: "Waiting for macOS to finish Local Wiki Access.",
+        keepWaiting: true
+      )
+    case .appInstallRequired:
+      return LocalWebSetupRecovery(
+        message: "Install 1Context in Applications, then grant Local Wiki Access.",
+        keepWaiting: false
+      )
+    case .invalidCertificate, .proxyExecutableMissing, .serviceRegistrationFailed, .rootUserUnsupported:
+      return nil
     }
   }
 
@@ -786,141 +1655,6 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
     throw lastError ?? MenuError.wikiTimedOut(method)
   }
 
-  private func runUpdateCommandInTerminal() {
-    cleanupStaleUpdaterFiles()
-
-    let menuExecutable = URL(fileURLWithPath: CommandLine.arguments[0])
-      .resolvingSymlinksInPath()
-    let cliExecutable = menuExecutable.deletingLastPathComponent()
-      .appendingPathComponent("1context-cli")
-      .path
-    guard FileManager.default.isExecutableFile(atPath: cliExecutable) else {
-      presentMenuAlert("Could not find 1Context updater.")
-      return
-    }
-
-    let alertExecutable = menuExecutable.path
-    let script = """
-    #!/bin/zsh
-    set -euo pipefail
-    trap 'rm -f "$0"' EXIT
-
-    printf '%s\\n' 'Updating 1Context...'
-    printf '%s\\n\\n' 'If prompted, enter your Mac password. Terminal will hide password characters.'
-    if \(shellQuote(cliExecutable)) update; then
-      \(shellQuote(alertExecutable)) --update-success-alert >/dev/null 2>&1 || osascript -e 'display dialog "1Context updated." buttons {"OK"} default button "OK"'
-      printf '\\n%s\\n' 'Done.'
-      exit 0
-    else
-      status=$?
-      osascript -e 'display dialog "Could not update 1Context." buttons {"OK"} default button "OK" with icon caution'
-      printf '\\n%s\\n' 'Update failed. You can close this window.'
-      exit $status
-    fi
-    """
-    guard let scriptURL = writeUpdaterScript(script) else {
-      presentMenuAlert("Could not prepare updater.")
-      return
-    }
-
-    guard runTerminalScript(scriptURL.path) else {
-      try? FileManager.default.removeItem(at: scriptURL)
-      presentMenuAlert("Could not open updater.")
-      return
-    }
-  }
-
-  private func writeUpdaterScript(_ script: String) -> URL? {
-    let url = FileManager.default.temporaryDirectory
-      .appendingPathComponent("1context-update-\(UUID().uuidString).zsh")
-
-    do {
-      try script.write(to: url, atomically: true, encoding: .utf8)
-      chmod(url.path, S_IRUSR | S_IWUSR | S_IXUSR)
-      return url
-    } catch {
-      return nil
-    }
-  }
-
-  private func runTerminalScript(_ scriptPath: String) -> Bool {
-    do {
-      let process = Process()
-      process.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
-      process.arguments = [
-        "-e", "on run argv",
-        "-e", "set scriptPath to item 1 of argv",
-        "-e", "tell application \"Terminal\"",
-        "-e", "activate",
-        "-e", "do script \"/bin/zsh \" & quoted form of scriptPath",
-        "-e", "end tell",
-        "-e", "end run",
-        scriptPath,
-      ]
-      try process.run()
-      process.waitUntilExit()
-      return process.terminationStatus == 0
-    } catch {
-      return false
-    }
-  }
-
-  private func shellQuote(_ value: String) -> String {
-    "'\(value.replacingOccurrences(of: "'", with: "'\\''"))'"
-  }
-
-  private func cleanupStaleUpdaterFiles() {
-    let temporaryDirectory = FileManager.default.temporaryDirectory
-    guard let contents = try? FileManager.default.contentsOfDirectory(
-      at: temporaryDirectory,
-      includingPropertiesForKeys: [.isDirectoryKey],
-      options: [.skipsHiddenFiles]
-    ) else {
-      return
-    }
-
-    for url in contents {
-      let name = url.lastPathComponent
-      if (name.hasPrefix("1context-") && name.hasSuffix(".command"))
-        || name.hasPrefix("1context-update-")
-      {
-        try? FileManager.default.removeItem(at: url)
-      }
-    }
-  }
-
-  private func runLaunchChores() {
-    Task.detached(priority: .utility) {
-      let cleanupStart = await self.perfStart()
-      Self.cleanupStaleUpdaterFilesOnDisk()
-      await MainActor.run {
-        self.perfLog("launch.cleanupTemp", start: cleanupStart)
-      }
-      await self.loadCachedUpdateState()
-      await self.checkForUpdates(force: false)
-    }
-  }
-
-  nonisolated private static func cleanupStaleUpdaterFilesOnDisk() {
-    let temporaryDirectory = FileManager.default.temporaryDirectory
-    guard let contents = try? FileManager.default.contentsOfDirectory(
-      at: temporaryDirectory,
-      includingPropertiesForKeys: [.isDirectoryKey],
-      options: [.skipsHiddenFiles]
-    ) else {
-      return
-    }
-
-    for url in contents {
-      let name = url.lastPathComponent
-      if (name.hasPrefix("1context-") && name.hasSuffix(".command"))
-        || name.hasPrefix("1context-update-")
-      {
-        try? FileManager.default.removeItem(at: url)
-      }
-    }
-  }
-
   private func perfStart() -> UInt64 {
     DispatchTime.now().uptimeNanoseconds
   }
@@ -938,17 +1672,6 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
   }
 }
 
-if CommandLine.arguments.contains("--update-success-alert") {
-  _ = NSApplication.shared
-  NSApp.setActivationPolicy(.accessory)
-  showFishAlert("1Context updated.")
-  Foundation.exit(0)
-}
-
-guard acquireMenuInstanceLock() else {
-  Foundation.exit(0)
-}
-
 private let app = NSApplication.shared
 private let delegate = AppDelegate()
 app.delegate = delegate
@@ -958,6 +1681,7 @@ private enum RuntimeState {
   case checking
   case running
   case stopped
+  case needsSetup
   case needsAttention
 
   var title: String {
@@ -968,6 +1692,8 @@ private enum RuntimeState {
       return "1Context Remembering"
     case .stopped:
       return "1Context Stopped"
+    case .needsSetup:
+      return "1Context Needs Setup"
     case .needsAttention:
       return "1Context Sick"
     }
@@ -997,7 +1723,7 @@ private struct WikiMenuSnapshot {
 
   init(payload: [String: Any]) {
     self.running = payload["running"] as? Bool ?? false
-    self.url = payload["url"] as? String ?? "http://wiki.1context.localhost:17319/your-context"
+    self.url = payload["url"] as? String ?? LocalWebDefaults.defaultWikiURL
     self.health = payload["health"] as? String ?? "unknown"
   }
 }

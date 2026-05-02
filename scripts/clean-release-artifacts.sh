@@ -9,10 +9,10 @@ if [[ ! -d "$DIST" ]]; then
 fi
 
 find "$DIST" -mindepth 1 -maxdepth 1 \
-  \( -name '1context-*-macos-*.tar.gz' \
-    -o -name '1context-*-macos-*' \
+  \( -name '1Context-*-macos-*.dmg' \
     -o -name '1Context.app' \
-    -o -name '1Context-notary.zip' \) \
+    -o -name '1Context-notary.zip' \
+    -o -name 'sparkle-updates' \) \
   -exec rm -rf {} +
 
 find "$DIST" \( -name '._*' -o -name '.DS_Store' \) -delete

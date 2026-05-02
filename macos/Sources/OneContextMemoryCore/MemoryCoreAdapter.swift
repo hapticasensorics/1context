@@ -723,7 +723,6 @@ public struct MemoryCoreProcessRunner: MemoryCoreProcessRunning {
       "ONECONTEXT_USER_CONTENT_DIR",
       "ONECONTEXT_LOG_DIR",
       "ONECONTEXT_CACHE_DIR",
-      "ONECONTEXT_UPDATE_STATE_DIR",
       "ONECONTEXT_MEMORY_CORE_DIR",
       "ONECONTEXT_MEMORY_CORE_LOG_PATH"
     ]

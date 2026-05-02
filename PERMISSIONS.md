@@ -32,7 +32,7 @@ files:       0600
 sockets:     0600
 ```
 
-This includes config, update state, sockets, pid files, queues, indexes, caches, and logs. The runtime should repair these permissions on startup.
+This includes config, sockets, pid files, queues, indexes, caches, and logs. The runtime should repair these permissions on startup.
 
 Memory-core adapter state lives under:
 
@@ -51,11 +51,18 @@ The installer owns placement and registration only:
 
 ```text
 /Applications/1Context.app
-/opt/homebrew/bin/1context
+/Applications/1Context.app/Contents/MacOS/1context-cli
 ~/Library/LaunchAgents/com.haptica.1context*.plist
+1Context.app/Contents/Library/LaunchDaemons/com.haptica.1context.local-web-proxy.plist
+~/Library/Application Support/1Context/local-web/setup/
 ```
 
-The installer must not silently widen permissions, create root-owned user state, persist development overrides, or hide runtime startup failures.
+The local-web helper is bundled inside the signed app and registered with
+macOS ServiceManagement. Local CA trust metadata lives in user-owned app
+support. Neither location may contain user wiki content or memory data.
+
+The installer must not silently widen permissions, create root-owned user state,
+persist development overrides, or hide runtime startup failures.
 
 ## Consent Model
 
@@ -64,7 +71,9 @@ Product owns when users are asked for consent. Runtime and platform code enforce
 Current public preview:
 
 - Starts a user LaunchAgent for the menu bar app and local runtime.
-- Checks GitHub Releases for updates using a non-cookie, nonpersistent session.
+- Uses native app UI, ServiceManagement background-item approval, and user
+  keychain trust for `https://wiki.1context.localhost`.
+- Keeps native update checks behind app-owned signed release infrastructure.
 - Can optionally install managed Claude Code settings in `~/.claude/settings.json`.
 - Can optionally configure an external memory-core executable under the public app support directory.
 - Does not upload project data.
@@ -82,14 +91,13 @@ settings only. It adds:
 ```
 
 The public preview does not install prompt-submit, tool-use, pre-compact, or
-session-end hooks by default. Those hook commands exist as safe no-op/fallback
-entry points for future compatibility, but they require explicit future
-product consent before installation.
+session-end hooks by default. Those hook commands are reserved no-op entry
+points, and require explicit product consent before installation.
 
 `1context agent integrations uninstall` removes only 1Context-managed hook and
 status-line commands. It preserves unrelated Claude settings and user hooks.
-Homebrew uninstall also makes a best-effort call to this cleanup path before the
-app bundle is removed, so Claude should not keep calling a deleted binary.
+The uninstall path should call this cleanup before the app bundle is removed, so
+Claude should not keep calling a deleted binary.
 
 If Claude settings contain `disableAllHooks`, 1Context reports manual review and
 does not install or repair hooks.
@@ -115,7 +123,9 @@ Diagnostics            user-initiated support flow
 ## Security Invariants
 
 - Run as the logged-in user.
-- Avoid root unless there is a clear, reviewed need.
+- Avoid root unless there is a clear, reviewed need. The local HTTPS proxy is
+  the reviewed exception: it binds only `127.0.0.1:443` and forwards encrypted
+  TCP to the user-owned Caddy backend.
 - Never make local memory world-readable.
 - Keep user content separate from runtime state.
 - Keep destructive cleanup paths narrow and allowlisted.

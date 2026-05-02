@@ -338,7 +338,11 @@ public final class WikiLocalAPIServer: @unchecked Sendable {
     }
 
     let fd = socket(AF_INET, SOCK_STREAM, 0)
-    guard fd >= 0 else { throw WikiLocalAPIError.socketFailed }
+    guard fd >= 0 else {
+      let error = WikiLocalAPIError.socketFailed(String(cString: strerror(errno)))
+      lastError = error.localizedDescription
+      throw error
+    }
 
     var reuse: Int32 = 1
     setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &reuse, socklen_t(MemoryLayout<Int32>.size))
@@ -356,16 +360,23 @@ public final class WikiLocalAPIServer: @unchecked Sendable {
       }
     }
     guard bindResult == 0 else {
+      let message = String(cString: strerror(errno))
       close(fd)
-      throw WikiLocalAPIError.bindFailed(config.bindHost, config.port)
+      let error = WikiLocalAPIError.bindFailed(config.bindHost, config.port, message)
+      lastError = error.localizedDescription
+      throw error
     }
 
     guard listen(fd, 16) == 0 else {
+      let message = String(cString: strerror(errno))
       close(fd)
-      throw WikiLocalAPIError.socketFailed
+      let error = WikiLocalAPIError.socketFailed(message)
+      lastError = error.localizedDescription
+      throw error
     }
 
     listenFD = fd
+    lastError = nil
     queue.async { [self] in acceptLoop(fd) }
     return WikiLocalAPISnapshot(running: true, url: config.healthURL.absoluteString, health: "OK", port: config.port, lastError: lastError)
   }
@@ -455,7 +466,10 @@ public final class WikiLocalAPIServer: @unchecked Sendable {
       components.percentEncodedQuery = String(queryPart)
     }
     let path = components.path.isEmpty ? "/" : components.path
-    let query = Dictionary(uniqueKeysWithValues: (components.queryItems ?? []).map { ($0.name, $0.value ?? "") })
+    var query: [String: String] = [:]
+    for item in components.queryItems ?? [] {
+      query[item.name] = item.value ?? ""
+    }
     return (path, query)
   }
 
@@ -501,7 +515,10 @@ public enum WikiLocalAPIProbe {
     request.timeoutInterval = 0.5
     let semaphore = DispatchSemaphore(value: 0)
     nonisolated(unsafe) var result = "no response"
-    let task = URLSession.shared.dataTask(with: request) { data, _, _ in
+    let configuration = URLSessionConfiguration.ephemeral
+    configuration.connectionProxyDictionary = [:]
+    let session = URLSession(configuration: configuration)
+    let task = session.dataTask(with: request) { data, _, _ in
       defer { semaphore.signal() }
       guard let data,
         let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
@@ -514,22 +531,28 @@ public enum WikiLocalAPIProbe {
     task.resume()
     if semaphore.wait(timeout: .now() + 1) == .timedOut {
       task.cancel()
+      session.invalidateAndCancel()
       return "timeout"
     }
+    session.finishTasksAndInvalidate()
     return result
   }
 }
 
 public enum WikiLocalAPIError: Error, LocalizedError, Equatable {
-  case socketFailed
-  case bindFailed(String, Int)
+  case socketFailed(String)
+  case bindFailed(String, Int, String)
 
   public var errorDescription: String? {
     switch self {
-    case .socketFailed:
-      return "Could not start the 1Context wiki API listener"
-    case .bindFailed(let host, let port):
-      return "Could not bind the 1Context wiki API listener to \(host):\(port)"
+    case .socketFailed(let message):
+      return message.isEmpty
+        ? "Could not start the 1Context wiki API listener"
+        : "Could not start the 1Context wiki API listener: \(message)"
+    case .bindFailed(let host, let port, let message):
+      return message.isEmpty
+        ? "Could not bind the 1Context wiki API listener to \(host):\(port)"
+        : "Could not bind the 1Context wiki API listener to \(host):\(port): \(message)"
     }
   }
 }

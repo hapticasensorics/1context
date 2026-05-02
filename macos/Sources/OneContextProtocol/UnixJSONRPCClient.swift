@@ -69,6 +69,21 @@ public struct JSONRPCResponse<Result: Decodable>: Decodable {
   public let id: Int?
   public let result: Result?
   public let error: JSONRPCErrorPayload?
+
+  private enum CodingKeys: String, CodingKey {
+    case jsonrpc
+    case id
+    case result
+    case error
+  }
+
+  public init(from decoder: Decoder) throws {
+    let container = try decoder.container(keyedBy: CodingKeys.self)
+    self.jsonrpc = try container.decodeIfPresent(String.self, forKey: .jsonrpc)
+    self.id = try container.decodeIfPresent(Int.self, forKey: .id)
+    self.result = try container.decodeIfPresent(Result.self, forKey: .result)
+    self.error = try container.decodeIfPresent(JSONRPCErrorPayload.self, forKey: .error)
+  }
 }
 
 public func withUnixSocketAddress<T>(

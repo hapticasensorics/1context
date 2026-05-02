@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import re
 from collections import defaultdict
 from dataclasses import dataclass
@@ -11,11 +12,11 @@ from typing import Any, Iterable
 
 from onectx.config import MemorySystem
 from onectx.storage import LakeStore, stable_id, utc_now
-from onectx.storage.hour_events import HourEvent, events_between, format_ts, parse_ts
+from onectx.storage.hour_events import HourEvent, SessionImageArtifact, events_between, format_ts, parse_ts
 
 
 RENDERER_NAME = "render_hour_experience"
-RENDERER_VERSION = "0.1.0"
+RENDERER_VERSION = "0.1.1"
 FULL_TRANSCRIPT_EXPERIENCE_MODE = "braided_lived_transcript"
 MESSAGES_ONLY_EXPERIENCE_MODE = "braided_lived_messages"
 DEFAULT_EXPERIENCE_MODE = MESSAGES_ONLY_EXPERIENCE_MODE
@@ -148,6 +149,8 @@ def render_hour_experience_from_events(
                 stream_key,
                 rendered_stream_events,
                 raw_event_count=len(stream_events),
+                stream_path=path,
+                asset_root=base / "assets" / "session-images",
             ),
             encoding="utf-8",
         )
@@ -333,6 +336,9 @@ def cached_hour_experience(
     if not row:
         return None
     metadata = parse_json_object(row.get("metadata_json"))
+    renderer = metadata.get("renderer") if isinstance(metadata.get("renderer"), dict) else {}
+    if renderer.get("name") != RENDERER_NAME or renderer.get("version") != RENDERER_VERSION:
+        return None
     if metadata.get("experience_id") != experience_id:
         return None
     if metadata.get("experience_mode") != experience_mode:
@@ -471,7 +477,14 @@ def render_experience_markdown(
     return "\n".join(lines).rstrip() + "\n"
 
 
-def render_stream(stream_id: str, events: list[HourEvent], *, raw_event_count: int | None = None) -> str:
+def render_stream(
+    stream_id: str,
+    events: list[HourEvent],
+    *,
+    raw_event_count: int | None = None,
+    stream_path: Path | None = None,
+    asset_root: Path | None = None,
+) -> str:
     raw_count = raw_event_count if raw_event_count is not None else len(events)
     lines = [
         f"# Stream: {stream_id}",
@@ -499,11 +512,77 @@ def render_stream(stream_id: str, events: list[HourEvent], *, raw_event_count: i
                 f"- event_id: {event.event_id or '-'}",
                 f"- hash: {event.hash or '-'}",
                 "",
-                fenced(truncate_text(event.text or "", MAX_EVENT_TEXT_CHARS)),
+                render_event_markdown(event, stream_path=stream_path, asset_root=asset_root),
                 "",
             ]
         )
     return "\n".join(lines).rstrip() + "\n"
+
+
+def render_event_markdown(
+    event: HourEvent,
+    *,
+    stream_path: Path | None = None,
+    asset_root: Path | None = None,
+) -> str:
+    parts: list[str] = []
+    image_lines = render_event_images(event, stream_path=stream_path, asset_root=asset_root)
+    if image_lines:
+        parts.extend(image_lines)
+        parts.append("")
+    text = truncate_text(event.text or "", MAX_EVENT_TEXT_CHARS)
+    if text:
+        parts.append(fenced(text))
+    elif not image_lines:
+        parts.append(fenced(""))
+    return "\n".join(parts).rstrip()
+
+
+def render_event_images(
+    event: HourEvent,
+    *,
+    stream_path: Path | None = None,
+    asset_root: Path | None = None,
+) -> list[str]:
+    lines: list[str] = []
+    for index, image in enumerate(event.image_artifacts, start=1):
+        href = materialize_experience_image(image, stream_path=stream_path, asset_root=asset_root)
+        if not href:
+            continue
+        label = f"Attached image {index}"
+        lines.append(f"![{label}]({href})")
+    return lines
+
+
+def materialize_experience_image(
+    image: SessionImageArtifact,
+    *,
+    stream_path: Path | None,
+    asset_root: Path | None,
+) -> str:
+    source = Path(image.path)
+    if not source.is_file():
+        return image.uri if image.uri else ""
+    if asset_root is None or stream_path is None:
+        return source.as_uri()
+
+    suffix = safe_image_suffix(image.content_type, source.suffix)
+    filename = f"{safe_id(image.content_hash[:16] or image.artifact_id)}{suffix}"
+    destination = asset_root / filename
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    if not destination.exists():
+        destination.write_bytes(source.read_bytes())
+    return Path(os.path.relpath(destination, start=stream_path.parent)).as_posix()
+
+
+def safe_image_suffix(content_type: str, fallback: str) -> str:
+    subtype = content_type.split("/", 1)[1].split(";", 1)[0].lower() if "/" in content_type else ""
+    subtype = {"jpeg": "jpg", "svg+xml": "svg"}.get(subtype, subtype)
+    if re.fullmatch(r"[a-z0-9]+", subtype):
+        return f".{subtype}"
+    if re.fullmatch(r"\.[A-Za-z0-9]+", fallback):
+        return fallback.lower()
+    return ".img"
 
 
 def render_agent_context_markdown(

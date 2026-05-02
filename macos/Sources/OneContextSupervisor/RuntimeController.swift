@@ -23,6 +23,14 @@ public final class RuntimeController {
     switch status() {
     case .success(let health):
       if health.version == oneContextVersion {
+        if health.requiredSetupReady == false {
+          return RuntimeSnapshot(
+            state: .needsSetup,
+            health: health,
+            lastErrorDescription: health.requiredSetupSummary ?? "1Context setup is incomplete",
+            recommendedAction: "Open 1Context Setup"
+          )
+        }
         return RuntimeSnapshot(state: .running, health: health)
       }
       return RuntimeSnapshot(
@@ -74,9 +82,42 @@ public final class RuntimeController {
     return (false, health)
   }
 
-  public func stop() async throws -> Bool {
+  public func requestStart(startMenu: Bool = true) async throws {
     try ensureNormalUserLifecycle()
-    setStartDesired(false)
+    setStartDesired(true)
+    let current = status()
+    if case .success(let health) = current, health.version == oneContextVersion {
+      if startMenu { try await startMenuIfAvailable() }
+      return
+    }
+    guard let daemon = findDaemonPath() else { throw RuntimeControlError.daemonNotFound }
+
+    if launchAgent.isDisabled {
+      if case .success(let health) = current, health.pid > 0 {
+        kill(health.pid, SIGTERM)
+      }
+      try startDetached(daemonPath: daemon)
+    } else if case .success(let health) = current, health.version != oneContextVersion {
+      try await launchAgent.restart(daemonPath: daemon)
+    } else {
+      try await launchAgent.start(daemonPath: daemon)
+    }
+    if startMenu { try await startMenuIfAvailable() }
+  }
+
+  public func stop() async throws -> Bool {
+    try await stop(persistDesiredState: true)
+  }
+
+  public func stopForAppQuit() async throws -> Bool {
+    try await stop(persistDesiredState: false)
+  }
+
+  private func stop(persistDesiredState: Bool) async throws -> Bool {
+    try ensureNormalUserLifecycle()
+    if persistDesiredState {
+      setStartDesired(false)
+    }
     let current = status()
     if !launchAgent.isDisabled {
       await launchAgent.stop()
@@ -90,6 +131,18 @@ public final class RuntimeController {
     kill(health.pid, SIGTERM)
     try await waitForStopped()
     return true
+  }
+
+  public func requestStop() async throws {
+    try ensureNormalUserLifecycle()
+    setStartDesired(false)
+    if !launchAgent.isDisabled {
+      await launchAgent.stop()
+      return
+    }
+
+    guard case .success(let health) = status(), health.pid > 0 else { return }
+    kill(health.pid, SIGTERM)
   }
 
   public func quit() async throws -> Bool {

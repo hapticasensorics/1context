@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 from typing import Any, Iterable
 
@@ -10,6 +10,16 @@ from . import LakeStore
 
 class HourEventError(RuntimeError):
     """Raised when a bounded event window cannot be queried."""
+
+
+@dataclass(frozen=True)
+class SessionImageArtifact:
+    artifact_id: str
+    path: str
+    uri: str
+    content_type: str
+    content_hash: str
+    bytes: int
 
 
 @dataclass(frozen=True)
@@ -25,6 +35,7 @@ class HourEvent:
     cwd: str
     text: str
     payload: dict[str, Any]
+    image_artifacts: tuple[SessionImageArtifact, ...] = ()
 
 
 def events_between(
@@ -66,6 +77,7 @@ def events_between(
             continue
         result.append(hour_event_from_row(row, source=source))
 
+    result = attach_session_image_artifacts(store, result)
     return sorted(result, key=lambda item: (item.ts, item.source, item.session_id, item.event_id))
 
 
@@ -83,6 +95,57 @@ def hour_event_from_row(row: dict[str, Any], *, source: str) -> HourEvent:
         cwd=str(row.get("cwd") or ""),
         text=str(row.get("text") or ""),
         payload=payload,
+    )
+
+
+def attach_session_image_artifacts(store: LakeStore, events: list[HourEvent]) -> list[HourEvent]:
+    needed_ids: set[str] = set()
+    for event in events:
+        needed_ids.update(session_image_artifact_ids(event.payload))
+    if not needed_ids:
+        return events
+
+    artifact_rows = {
+        str(row.get("artifact_id") or ""): row
+        for row in store.rows("artifacts", limit=0)
+        if str(row.get("artifact_id") or "") in needed_ids
+    }
+    attached: list[HourEvent] = []
+    for event in events:
+        images = tuple(
+            image
+            for artifact_id in session_image_artifact_ids(event.payload)
+            if (image := session_image_artifact_from_row(artifact_rows.get(artifact_id))) is not None
+        )
+        attached.append(replace(event, image_artifacts=images))
+    return attached
+
+
+def session_image_artifact_ids(payload: dict[str, Any]) -> list[str]:
+    raw = payload.get("image_artifact_ids") if isinstance(payload, dict) else None
+    if not isinstance(raw, list):
+        return []
+    return [str(item) for item in raw if str(item or "").strip()]
+
+
+def session_image_artifact_from_row(row: dict[str, Any] | None) -> SessionImageArtifact | None:
+    if not row:
+        return None
+    content_type = str(row.get("content_type") or "")
+    path = str(row.get("path") or "")
+    try:
+        byte_count = int(row.get("bytes") or 0)
+    except (TypeError, ValueError):
+        byte_count = 0
+    if not content_type.startswith("image/") or not path or byte_count <= 0:
+        return None
+    return SessionImageArtifact(
+        artifact_id=str(row.get("artifact_id") or ""),
+        path=path,
+        uri=str(row.get("uri") or ""),
+        content_type=content_type,
+        content_hash=str(row.get("content_hash") or ""),
+        bytes=byte_count,
     )
 
 

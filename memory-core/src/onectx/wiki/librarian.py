@@ -268,7 +268,7 @@ def build_librarian_prompt(
 
     route = str(payload.get("route") or "")
     title = str((payload.get("page") or {}).get("title") or "")
-    origin = str(payload.get("origin") or "http://wiki.1context.localhost:17319").rstrip("/")
+    origin = str(payload.get("origin") or "https://wiki.1context.localhost").rstrip("/")
     state = state or {}
     turn = turn or build_turn_record(state, payload, message)
     metadata = {

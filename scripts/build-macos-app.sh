@@ -7,23 +7,43 @@ APP_DIR="$ROOT/dist/1Context.app"
 CONTENTS_DIR="$APP_DIR/Contents"
 MACOS_APP_DIR="$CONTENTS_DIR/MacOS"
 RESOURCES_DIR="$CONTENTS_DIR/Resources"
+FRAMEWORKS_DIR="$CONTENTS_DIR/Frameworks"
+LAUNCH_DAEMONS_DIR="$CONTENTS_DIR/Library/LaunchDaemons"
 SIGNING_MODE="${ONECONTEXT_SIGNING_MODE:-adhoc}"
 IDENTITY="${CODESIGN_IDENTITY:-}"
 VERSION="${ONECONTEXT_VERSION:-$(tr -d '[:space:]' < "$ROOT/VERSION")}"
 ARCH="${ONECONTEXT_ARCH:-arm64}"
 MENU_ICON_SOURCE="$MACOS_DIR/Sources/OneContextMenuBar/Resources/MenuBarIcon.png"
 CADDY_SOURCE="${ONECONTEXT_CADDY_PATH:-$(command -v caddy 2>/dev/null || true)}"
+SPARKLE_FEED_URL="${ONECONTEXT_SPARKLE_FEED_URL:-}"
+SPARKLE_PUBLIC_ED_KEY="${ONECONTEXT_SPARKLE_PUBLIC_ED_KEY:-}"
+
+plist_escape() {
+  local value="$1"
+  value="${value//&/&amp;}"
+  value="${value//</&lt;}"
+  value="${value//>/&gt;}"
+  value="${value//\"/&quot;}"
+  value="${value//\'/&apos;}"
+  printf '%s' "$value"
+}
 
 swift build --package-path "$MACOS_DIR" -c release --arch "$ARCH"
 BIN_DIR="$(swift build --package-path "$MACOS_DIR" -c release --arch "$ARCH" --show-bin-path)"
 
 rm -rf "$APP_DIR"
-mkdir -p "$MACOS_APP_DIR" "$RESOURCES_DIR"
+mkdir -p "$MACOS_APP_DIR" "$RESOURCES_DIR" "$FRAMEWORKS_DIR" "$LAUNCH_DAEMONS_DIR"
 
 cp "$BIN_DIR/OneContextMenuBar" "$MACOS_APP_DIR/1Context"
 cp "$BIN_DIR/1context" "$MACOS_APP_DIR/1context-cli"
 cp "$BIN_DIR/1contextd" "$MACOS_APP_DIR/1contextd"
+cp "$BIN_DIR/1context-local-web-proxy" "$RESOURCES_DIR/1context-local-web-proxy"
 cp "$MENU_ICON_SOURCE" "$RESOURCES_DIR/MenuBarIcon.png"
+if [[ ! -d "$BIN_DIR/Sparkle.framework" ]]; then
+  echo "SwiftPM did not build Sparkle.framework beside OneContextMenuBar." >&2
+  exit 1
+fi
+ditto "$BIN_DIR/Sparkle.framework" "$FRAMEWORKS_DIR/Sparkle.framework"
 CADDY_BUNDLE_DIR="$RESOURCES_DIR/local-web/caddy"
 if [[ -z "$CADDY_SOURCE" || ! -x "$CADDY_SOURCE" ]]; then
   echo "Release app build requires a Caddy binary. Install caddy or set ONECONTEXT_CADDY_PATH." >&2
@@ -89,6 +109,25 @@ sips -z 1024 1024 "$MENU_ICON_SOURCE" --out "$ICONSET/icon_512x512@2x.png" >/dev
 iconutil -c icns "$ICONSET" -o "$RESOURCES_DIR/AppIcon.icns"
 rm -rf "$ICONSET"
 
+SPARKLE_PLIST_KEYS=""
+if [[ -n "$SPARKLE_FEED_URL" || -n "$SPARKLE_PUBLIC_ED_KEY" ]]; then
+  if [[ -z "$SPARKLE_FEED_URL" || -z "$SPARKLE_PUBLIC_ED_KEY" ]]; then
+    echo "Set both ONECONTEXT_SPARKLE_FEED_URL and ONECONTEXT_SPARKLE_PUBLIC_ED_KEY to configure Sparkle." >&2
+    exit 1
+  fi
+  SPARKLE_FEED_URL_ESCAPED="$(plist_escape "$SPARKLE_FEED_URL")"
+  SPARKLE_PUBLIC_ED_KEY_ESCAPED="$(plist_escape "$SPARKLE_PUBLIC_ED_KEY")"
+  SPARKLE_PLIST_KEYS="$(cat <<PLIST
+  <key>SUFeedURL</key>
+  <string>$SPARKLE_FEED_URL_ESCAPED</string>
+  <key>SUPublicEDKey</key>
+  <string>$SPARKLE_PUBLIC_ED_KEY_ESCAPED</string>
+  <key>SUEnableAutomaticChecks</key>
+  <true/>
+PLIST
+)"
+fi
+
 cat > "$CONTENTS_DIR/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -97,7 +136,7 @@ cat > "$CONTENTS_DIR/Info.plist" <<PLIST
   <key>CFBundleExecutable</key>
   <string>1Context</string>
   <key>CFBundleIdentifier</key>
-  <string>com.haptica.1context.menu</string>
+  <string>com.haptica.1context</string>
   <key>CFBundleName</key>
   <string>1Context</string>
   <key>CFBundleDisplayName</key>
@@ -114,6 +153,24 @@ cat > "$CONTENTS_DIR/Info.plist" <<PLIST
   <string>13.0</string>
   <key>LSUIElement</key>
   <true/>
+$SPARKLE_PLIST_KEYS
+</dict>
+</plist>
+PLIST
+
+cat > "$LAUNCH_DAEMONS_DIR/com.haptica.1context.local-web-proxy.plist" <<'PLIST'
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.haptica.1context.local-web-proxy</string>
+  <key>BundleProgram</key>
+  <string>Contents/Resources/1context-local-web-proxy</string>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>KeepAlive</key>
+  <true/>
 </dict>
 </plist>
 PLIST
@@ -129,6 +186,36 @@ if [[ "$SIGNING_MODE" == "developer-id" ]]; then
     exit 1
   fi
 
+  codesign \
+    --force \
+    --options runtime \
+    --timestamp \
+    --sign "$IDENTITY" \
+    "$FRAMEWORKS_DIR/Sparkle.framework/Versions/B/Autoupdate" >/dev/null
+  codesign \
+    --force \
+    --options runtime \
+    --timestamp \
+    --sign "$IDENTITY" \
+    "$FRAMEWORKS_DIR/Sparkle.framework/Versions/B/Updater.app" >/dev/null
+  codesign \
+    --force \
+    --options runtime \
+    --timestamp \
+    --sign "$IDENTITY" \
+    "$FRAMEWORKS_DIR/Sparkle.framework/Versions/B/XPCServices/Downloader.xpc" >/dev/null
+  codesign \
+    --force \
+    --options runtime \
+    --timestamp \
+    --sign "$IDENTITY" \
+    "$FRAMEWORKS_DIR/Sparkle.framework/Versions/B/XPCServices/Installer.xpc" >/dev/null
+  codesign \
+    --force \
+    --options runtime \
+    --timestamp \
+    --sign "$IDENTITY" \
+    "$FRAMEWORKS_DIR/Sparkle.framework" >/dev/null
   codesign \
     --force \
     --options runtime \
@@ -155,6 +242,13 @@ if [[ "$SIGNING_MODE" == "developer-id" ]]; then
     --timestamp \
     --entitlements "$MACOS_DIR/entitlements.plist" \
     --sign "$IDENTITY" \
+    "$RESOURCES_DIR/1context-local-web-proxy" >/dev/null
+  codesign \
+    --force \
+    --options runtime \
+    --timestamp \
+    --entitlements "$MACOS_DIR/entitlements.plist" \
+    --sign "$IDENTITY" \
     "$MACOS_APP_DIR/1Context" >/dev/null
   codesign \
     --force \
@@ -164,7 +258,12 @@ if [[ "$SIGNING_MODE" == "developer-id" ]]; then
     --sign "$IDENTITY" \
     "$APP_DIR" >/dev/null
 elif command -v codesign >/dev/null 2>&1; then
+  codesign --force --deep --sign - "$FRAMEWORKS_DIR/Sparkle.framework" >/dev/null
   codesign --force --sign - "$CADDY_BUNDLE_DIR/caddy" >/dev/null
+  codesign --force --sign - "$MACOS_APP_DIR/1context-cli" >/dev/null
+  codesign --force --sign - "$MACOS_APP_DIR/1contextd" >/dev/null
+  codesign --force --sign - "$RESOURCES_DIR/1context-local-web-proxy" >/dev/null
+  codesign --force --sign - "$MACOS_APP_DIR/1Context" >/dev/null
   codesign --force --sign - "$APP_DIR" >/dev/null
 fi
 

@@ -2639,6 +2639,16 @@ body {
   border: 1px solid var(--color-border-soft);
   color: var(--color-foreground);
 }
+.opctx-ai-msg-image {
+  display: block;
+  max-width: min(100%, 360px);
+  max-height: 280px;
+  object-fit: contain;
+  margin: 0 0 var(--size-8);
+  border: 1px solid var(--color-border-soft);
+  border-radius: var(--radius-m);
+  background: var(--color-bg);
+}
 .opctx-ai-msg--bot.is-thinking::after {
   content: "";
   display: inline-block;

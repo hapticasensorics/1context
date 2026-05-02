@@ -1,9 +1,12 @@
 import Darwin
 import Foundation
 import OneContextAgent
+import OneContextInstall
 import OneContextLocalWeb
 import OneContextMemoryCore
 import OneContextRuntimeSupport
+import OneContextSetup
+import OneContextUpdate
 
 @main
 struct OneContextCLI {
@@ -40,9 +43,17 @@ struct OneContextCLI {
       case "logs":
         try rejectUnknownArguments(allowed: ["--follow"])
         try logs()
+      case "permissions":
+        try rejectUnknownArguments()
+        printRequiredSetup()
       case "update":
         try rejectUnknownArguments()
         try await update()
+      case "uninstall":
+        try rejectUnknownArguments(allowed: ["--delete-data", "--keep-app", "--menu-process"])
+        try await uninstall()
+      case "setup":
+        try setup()
       case "agent":
         try agent()
       case "memory-core":
@@ -85,7 +96,10 @@ struct OneContextCLI {
       1context diagnose [--no-redact]
       1context debug [--no-redact]
       1context logs [--follow]
+      1context permissions
       1context update
+      1context uninstall [--delete-data] [--keep-app]
+      1context setup local-web <status|install|repair|uninstall>
       1context agent hook --provider <claude|codex> --event <event>
       1context agent statusline --provider <claude|codex>
       1context agent integrations <status|install|repair|uninstall>
@@ -102,18 +116,8 @@ struct OneContextCLI {
   }
 
   static func maybeCheckForUpdate() async {
-    do {
-      let result = try await UpdateChecker().check(currentVersion: oneContextVersion)
-      if result.updateAvailable, let latest = result.latest {
-        FileHandle.standardError.write(Data("""
-        1Context \(latest.version) is available. You have \(oneContextVersion).
-        Update: \(oneContextHomebrewUpdateCommand)
-
-        """.utf8))
-      }
-    } catch {
-      // Network and parsing failures stay silent.
-    }
+    // Native update checks are app-owned. The CLI stays quiet until that
+    // adapter is configured.
   }
 
   static func printDebug(controller: RuntimeController, error: Error?) async {
@@ -139,9 +143,16 @@ struct OneContextCLI {
     let startedAt = Date()
     let controller = RuntimeController()
     do {
-      let result = try await controller.start()
-      recordCurrentWikiURL()
-      print(result.alreadyRunning ? "1Context is already running." : "1Context is running.")
+      try ensureRequiredSetupForUse()
+      if debug {
+        let result = try await controller.start()
+        recordCurrentWikiURL()
+        print(result.alreadyRunning ? "1Context is already running." : "1Context is running.")
+      } else {
+        try await controller.requestStart()
+        recordWikiURL(LocalWebDefaults.defaultWikiURL)
+        print("1Context Remembering.")
+      }
       if debug { await printLifecycleDebug(controller: controller, startedAt: startedAt, error: nil) }
     } catch {
       if debug { await printLifecycleDebug(controller: controller, startedAt: startedAt, error: error) }
@@ -154,8 +165,13 @@ struct OneContextCLI {
     let startedAt = Date()
     let controller = RuntimeController()
     do {
-      let stopped = try await controller.stop()
-      print(stopped ? "1Context is stopped." : "1Context is not running.")
+      if debug {
+        let stopped = try await controller.stop()
+        print(stopped ? "1Context is stopped." : "1Context is not running.")
+      } else {
+        try await controller.requestStop()
+        print("1Context Stopped.")
+      }
       if debug { await printLifecycleDebug(controller: controller, startedAt: startedAt, error: CLIError.runtimeStopped) }
     } catch {
       if debug { await printLifecycleDebug(controller: controller, startedAt: startedAt, error: error) }
@@ -183,6 +199,7 @@ struct OneContextCLI {
     let startedAt = Date()
     let controller = RuntimeController()
     do {
+      try ensureRequiredSetupForUse()
       _ = try await controller.restart()
       recordCurrentWikiURL()
       print("1Context is running.")
@@ -200,19 +217,14 @@ struct OneContextCLI {
   }
 
   static func update() async throws {
-    let currentVersion = effectiveCurrentVersion()
-    let result = try await UpdateChecker().check(force: true, currentVersion: currentVersion)
-    guard result.updateAvailable else {
-      print("1Context up to date.")
-      return
+    let snapshot = await nativeUpdateSnapshot(currentVersion: effectiveCurrentVersion())
+    for line in NativeUpdateDiagnostics.render(snapshot) {
+      print(line.trimmingCharacters(in: .whitespaces))
     }
-
-    guard let latest = result.latest else {
-      throw CLIError.commandFailed("Could not determine latest 1Context version")
+    guard snapshot.availability == .available else {
+      throw CLIError.commandFailed(snapshot.nextAction)
     }
-    print("1Context \(latest.version) is available. You have \(currentVersion).")
-    print("Updating 1Context...")
-    try updateWithHomebrew(expectedVersion: latest.version)
+    print(snapshot.userFacingStatus)
   }
 
   static func status() async {
@@ -232,13 +244,21 @@ struct OneContextCLI {
         if debug { await printDebug(controller: controller, error: RuntimeControlError.launchAgentFailed("runtime version mismatch")) }
         Foundation.exit(1)
       }
+      let setupReady = health.requiredSetupReady ?? true
       print("""
       1Context is running.
 
       Version: \(health.version)
-      Health: OK
+      Health: \(setupReady ? "OK" : "Needs Setup")
       Menu Bar: \(menuStatus.userFacingStatus)
       """)
+      if !setupReady {
+        print("""
+
+        Required Setup: \(health.requiredSetupSummary ?? "1Context setup is incomplete")
+        Open 1Context and choose Settings > Setup...
+        """)
+      }
       recordCurrentWikiURL()
       if !menuStatus.running {
         print("""
@@ -265,7 +285,6 @@ struct OneContextCLI {
     let paths = RuntimePaths.current()
     let controller = RuntimeController()
     let health = controller.status()
-    let updateState = readJSON(paths: UpdateStatePaths.current().file)
 
     print("1Context Diagnose\n")
     print("CLI:")
@@ -273,6 +292,14 @@ struct OneContextCLI {
     print("  Executable: \(displayPath(currentExecutablePath() ?? CommandLine.arguments[0], redact: redact))")
     print("  App Bundle: /Applications/1Context.app")
     print("  App Version: \(appVersion() ?? "not installed")")
+
+    let readiness = OneContextAppReadiness.current(
+      nativeUpdate: await nativeUpdateSnapshot(currentVersion: oneContextVersion)
+    )
+    print("\nApp Readiness:")
+    for line in OneContextAppReadinessDiagnostics.render(readiness) {
+      print("  \(line)")
+    }
 
     print("\nRuntime:")
     print("  Desired State: \(readTrimmed(paths.desiredStatePath) ?? "missing")")
@@ -292,15 +319,23 @@ struct OneContextCLI {
 
     printLocalWebDiagnostics(redact: redact)
 
+    print("\nPermissions:")
+    printPermissionDiagnostics()
+
     print("\nLaunchAgents:")
     printLaunchAgent(label: LaunchAgentManager.runtimeLabel, redact: redact)
     printLaunchAgent(label: LaunchAgentManager.menuLabel, redact: redact)
 
     print("\nUpdate:")
-    print("  Cache: \(displayPath(UpdateStatePaths.current().file.path, redact: redact))")
-    print("  Last Checked: \(updateState?["last_checked_at"] as? String ?? "missing")")
-    print("  Latest Seen: \(updateState?["last_seen_latest"] as? String ?? "missing")")
-    print("  Notes URL: \(updateState?["notes_url"] as? String ?? "missing")")
+    let updateSnapshot: NativeUpdateSnapshot
+    if let nativeUpdate = readiness.nativeUpdate {
+      updateSnapshot = nativeUpdate
+    } else {
+      updateSnapshot = await nativeUpdateSnapshot(currentVersion: oneContextVersion)
+    }
+    for line in NativeUpdateDiagnostics.render(updateSnapshot) {
+      print(line)
+    }
 
     print("\nMemory Core:")
     printMemoryCoreStatus(MemoryCoreAdapter().status(forceCheck: false), redact: redact)
@@ -318,6 +353,12 @@ struct OneContextCLI {
     print("\nLocal Web:")
     print("  Health: \(snapshot.running ? "OK" : snapshot.health)")
     print("  URL: \(snapshot.url)")
+    print("  URL Mode: \(diagnostics.urlMode)")
+    print("  Trust Mode: \(diagnostics.trustMode)")
+    print("  Privileged Bind Required: \(yesNo(diagnostics.privilegedBindRequired))")
+    for line in LocalWebSetupDiagnostics.render(diagnostics.setup) {
+      print(line)
+    }
     print("  API Health: \(diagnostics.apiHealth)")
     print("  API URL: \(diagnostics.apiURL)")
     print("  API Port: \(diagnostics.apiPort)")
@@ -341,6 +382,35 @@ struct OneContextCLI {
     print("  Current Has Theme: \(yesNo(diagnostics.currentSiteHasTheme))")
     print("  Current Has Enhance JS: \(yesNo(diagnostics.currentSiteHasEnhanceJS))")
     print("  Current Has Health: \(yesNo(diagnostics.currentSiteHasHealth))")
+  }
+
+  static func printRequiredSetup() {
+    print("1Context Setup\n")
+    let readiness = OneContextAppReadiness.current()
+    for line in OneContextAppReadinessDiagnostics.render(readiness) {
+      print(line)
+    }
+    print("")
+    for line in OneContextAppSetupDiagnostics.render(readiness.setup) {
+      print(line)
+    }
+  }
+
+  static func ensureRequiredSetupForUse() throws {
+    let ready: Bool
+    if LocalWebURLMode(environmentValue: ProcessInfo.processInfo.environment["ONECONTEXT_WIKI_URL_MODE"]) == .highPortHTTP {
+      ready = OneContextAppReadiness.current().requiredSetupReady
+    } else {
+      ready = OneContextAppSetup.current().requiredReady
+    }
+    guard ready else {
+      throw CLIError.commandFailed("""
+      Local wiki access is not set up.
+
+      Open 1Context and choose Settings > Setup..., or run:
+        1context setup local-web install
+      """)
+    }
   }
 
   @discardableResult
@@ -369,69 +439,6 @@ struct OneContextCLI {
     printLogTail(title: "Menu", path: menuLog, lineCount: 80)
   }
 
-  static func updateWithHomebrew(expectedVersion: String) throws {
-    guard let brew = brewExecutable() else {
-      throw CLIError.commandFailed("Homebrew is required to update 1Context")
-    }
-
-    print("Checking Homebrew...")
-    print("Checking 1Context tap...")
-    var tap = runCapture(brew, ["--repo", "hapticasensorics/tap"]).stdout
-      .trimmingCharacters(in: .whitespacesAndNewlines)
-    if tap.isEmpty {
-      try runProcess(brew, ["tap", "hapticasensorics/tap"])
-      tap = runCapture(brew, ["--repo", "hapticasensorics/tap"]).stdout
-        .trimmingCharacters(in: .whitespacesAndNewlines)
-    }
-    guard !tap.isEmpty else {
-      throw CLIError.commandFailed("brew --repo hapticasensorics/tap")
-    }
-
-    print("Refreshing 1Context cask metadata...")
-    let git = gitExecutable()
-    try runProcess(git, [
-      "-C", tap,
-      "fetch", "--quiet", "--no-tags", "origin", "main:refs/remotes/origin/main"
-    ])
-    try runProcess(git, [
-      "-C", tap,
-      "merge", "--quiet", "--ff-only", "refs/remotes/origin/main"
-    ])
-
-    print("Installing 1Context...")
-    try runProcess(
-      brew,
-      ["upgrade", "--cask", "hapticasensorics/tap/1context"],
-      environment: [
-        "HOMEBREW_NO_AUTO_UPDATE": "1",
-        "HOMEBREW_NO_INSTALL_CLEANUP": "1"
-      ]
-    )
-
-    if RuntimeController().shouldAutoStartRuntime(),
-      let cli = installedCLIExecutable()
-    {
-      _ = runCapture(cli, ["restart"])
-    }
-
-    try verifyInstalledVersion(expectedVersion)
-  }
-
-  static func verifyInstalledVersion(_ expectedVersion: String) throws {
-    guard let cli = installedCLIExecutable() else {
-      throw CLIError.commandFailed("Could not find installed 1context after update")
-    }
-
-    let version = runCapture(cli, ["--version"]).stdout.trimmingCharacters(in: .whitespacesAndNewlines)
-    guard version == expectedVersion else {
-      throw CLIError.commandFailed("Installed 1Context version is \(version.isEmpty ? "unknown" : version), expected \(expectedVersion)")
-    }
-
-    if let installedAppVersion = appVersion(), installedAppVersion != expectedVersion {
-      throw CLIError.commandFailed("Installed 1Context.app version is \(installedAppVersion), expected \(expectedVersion)")
-    }
-  }
-
   static func agent() throws {
     guard args.count >= 2 else {
       throw CLIError.commandFailed("agent requires a subcommand")
@@ -446,6 +453,129 @@ struct OneContextCLI {
       try agentStatusLine()
     default:
       throw CLIError.commandFailed("Unknown agent subcommand: \(args[1])")
+    }
+  }
+
+  static func setup() throws {
+    guard args.count >= 3 else {
+      throw CLIError.commandFailed("Usage: 1context setup local-web <status|install|repair|uninstall>")
+    }
+
+    switch args[1] {
+    case "local-web":
+      try localWebSetup()
+    default:
+      throw CLIError.commandFailed("Unknown setup domain: \(args[1])")
+    }
+  }
+
+  static func localWebSetup() throws {
+    guard args.count == 3 else {
+      throw CLIError.commandFailed("Usage: 1context setup local-web <status|install|repair|uninstall>")
+    }
+    let installer = LocalWebSetupInstaller()
+    switch args[2] {
+    case "status":
+      print("1Context Local HTTPS Setup\n")
+      for line in LocalWebSetupDiagnostics.render(installer.status()) {
+        print(line.trimmingCharacters(in: .whitespaces))
+      }
+    case "install":
+      print("Preparing 1Context local HTTPS setup...")
+      print("macOS may ask you to grant 1Context network permissions.")
+      let result = try installer.install()
+      print("\nLocal HTTPS setup complete.")
+      for line in LocalWebSetupDiagnostics.render(result.setup) {
+        print(line.trimmingCharacters(in: .whitespaces))
+      }
+      if let localWeb = result.localWeb {
+        print("URL: \(localWeb.url)")
+      }
+    case "repair":
+      print("Repairing 1Context local HTTPS setup...")
+      print("macOS may ask you to grant 1Context network permissions.")
+      let result = try installer.install()
+      print("\nLocal HTTPS setup repaired.")
+      for line in LocalWebSetupDiagnostics.render(result.setup) {
+        print(line.trimmingCharacters(in: .whitespaces))
+      }
+      if let localWeb = result.localWeb {
+        print("URL: \(localWeb.url)")
+      }
+    case "uninstall":
+      print("Removing 1Context local HTTPS setup...")
+      let result = try installer.uninstall()
+      print("\nLocal HTTPS setup removed.")
+      for line in LocalWebSetupDiagnostics.render(result.setup) {
+        print(line.trimmingCharacters(in: .whitespaces))
+      }
+    default:
+      throw CLIError.commandFailed("Unknown local-web setup command: \(args[2])")
+    }
+  }
+
+  static func uninstall() async throws {
+    try rejectRootInvocationForAppCleanup()
+
+    let deleteData = args.contains("--delete-data")
+    let keepApp = args.contains("--keep-app")
+    let menuProcess = args.contains("--menu-process")
+    var warnings: [String] = []
+
+    print("Uninstalling 1Context app-owned setup...")
+
+    _ = try? await RuntimeController().quit(stopMenu: !menuProcess)
+    CaddyManager().stop()
+    print("Removed: Runtime")
+
+    recordCleanupStep("Local Wiki Access", warnings: &warnings) {
+      _ = try LocalWebSetupInstaller().uninstall()
+    }
+
+    recordCleanupStep("Agent integrations", warnings: &warnings) {
+      _ = try agentIntegrationManager().uninstall()
+    }
+
+    for label in [LaunchAgentManager.menuLabel, LaunchAgentManager.runtimeLabel] {
+      recordCleanupStep("LaunchAgent \(label)", warnings: &warnings) {
+        try uninstallLaunchAgent(label: label)
+      }
+    }
+
+    if deleteData {
+      recordCleanupStep("User data", warnings: &warnings) {
+        try deleteApprovedUserData()
+      }
+    } else {
+      print("Preserved user data. Re-run with --delete-data to remove approved 1Context data paths.")
+    }
+
+    if keepApp {
+      print("Preserved application bundle.")
+    } else {
+      recordCleanupStep("Application bundle", warnings: &warnings) {
+        _ = try AppBundleTrasher(environment: ProcessInfo.processInfo.environment).trash(installedAppBundleURL())
+      }
+    }
+
+    if warnings.isEmpty {
+      print("1Context uninstalled.")
+      return
+    }
+
+    print("\nUninstall needs attention:")
+    for warning in warnings {
+      print("- \(warning)")
+    }
+    throw CLIError.commandFailed("Uninstall completed with cleanup warnings.")
+  }
+
+  static func recordCleanupStep(_ title: String, warnings: inout [String], action: () throws -> Void) {
+    do {
+      try action()
+      print("Removed: \(title)")
+    } catch {
+      warnings.append("\(title): \(error.localizedDescription)")
     }
   }
 
@@ -495,18 +625,22 @@ struct OneContextCLI {
     print(output)
   }
 
-  static func agentIntegrations() throws {
-    guard args.count == 3 else {
-      throw CLIError.commandFailed("Usage: 1context agent integrations <status|install|repair|uninstall>")
-    }
-
-    let manager = AgentIntegrationManager(
+  static func agentIntegrationManager() -> AgentIntegrationManager {
+    AgentIntegrationManager(
       paths: AgentPaths.current(environment: oneContextAgentRuntimeEnvironment()),
       claudeSettingsPath: AgentIntegrationManager.defaultClaudeSettingsPath(),
       executablePath: AgentIntegrationManager.preferredExecutablePath(
         currentExecutablePath: currentExecutablePath() ?? CommandLine.arguments[0]
       )
     )
+  }
+
+  static func agentIntegrations() throws {
+    guard args.count == 3 else {
+      throw CLIError.commandFailed("Usage: 1context agent integrations <status|install|repair|uninstall>")
+    }
+
+    let manager = agentIntegrationManager()
 
     let report: AgentIntegrationsReport
     switch args[2] {
@@ -577,11 +711,13 @@ struct OneContextCLI {
     switch args[1] {
     case "local-url":
       try rejectUnknownWikiArguments(allowed: [])
+      try ensureRequiredSetupForUse()
       _ = try await RuntimeController().start()
       let snapshot = try ensureLocalWebEdgeForCLIWiki()
       print(snapshot.url)
     case "refresh":
       try rejectUnknownWikiArguments(allowed: [])
+      try ensureRequiredSetupForUse()
       _ = try await RuntimeController().start()
       _ = try ensureLocalWebEdgeForCLIWiki()
       _ = try await wikiRPC("wiki.refresh", timeout: 5)
@@ -669,6 +805,13 @@ struct OneContextCLI {
     }
   }
 
+  static func printPermissionDiagnostics() {
+    let snapshots = PermissionReporter().snapshots()
+    for line in PermissionDiagnostics.render(snapshots) {
+      print(line)
+    }
+  }
+
   static func optionValue(_ name: String, in values: [String]) throws -> String {
     guard let index = values.firstIndex(of: name), index + 1 < values.count else {
       throw CLIError.commandFailed("Missing \(name)")
@@ -711,7 +854,13 @@ struct OneContextCLI {
   }
 
   static func launchAgentSummary(label: String) -> (loaded: Bool, running: Bool, userFacingStatus: String) {
+    let fallbackProgram = label == LaunchAgentManager.menuLabel
+      ? "/Applications/1Context.app/Contents/MacOS/1Context"
+      : nil
     guard let output = launchctlPrint(label: label) else {
+      if let fallbackProgram, processIsRunning(executablePath: fallbackProgram) {
+        return (false, true, "running")
+      }
       return (false, false, "not loaded")
     }
     let fields = launchctlFields(output)
@@ -719,6 +868,9 @@ struct OneContextCLI {
       return (true, true, "running")
     }
     if let program = fields["program"], processIsRunning(executablePath: program) {
+      return (true, true, "running")
+    }
+    if let fallbackProgram, processIsRunning(executablePath: fallbackProgram) {
       return (true, true, "running")
     }
     let state = fields["state"] ?? "loaded"
@@ -804,44 +956,105 @@ struct OneContextCLI {
     return try? JSONSerialization.jsonObject(with: data) as? [String: Any]
   }
 
-  static func appVersion() -> String? {
+  static func effectiveCurrentVersion() -> String {
+    ProcessInfo.processInfo.environment["ONECONTEXT_TEST_CURRENT_VERSION"] ?? oneContextVersion
+  }
+
+  static func nativeUpdateSnapshot(currentVersion: String) async -> NativeUpdateSnapshot {
+    let appBundleURL = installedAppBundleURL()
+    return await SparkleNativeUpdater(
+      configuration: SparkleUpdaterConfiguration(appBundleURL: appBundleURL),
+      appContext: NativeUpdaterAppContext(
+        bundleURL: appBundleURL,
+        executableURL: appBundleURL.appendingPathComponent("Contents/MacOS/1Context")
+      ),
+      driver: CLIAppManagedSparkleDriver()
+    ).snapshot(currentVersion: currentVersion)
+  }
+
+  static func installedAppBundleURL() -> URL {
     let environment = ProcessInfo.processInfo.environment
     let appPath = environment["ONECONTEXT_TEST_APP_BUNDLE_PATH"] ?? "/Applications/1Context.app"
-    let infoPlist = URL(fileURLWithPath: appPath)
+    return URL(fileURLWithPath: appPath, isDirectory: true)
+  }
+
+  static func appVersion() -> String? {
+    let infoPlist = installedAppBundleURL()
       .appendingPathComponent("Contents/Info.plist")
       .path
     return NSDictionary(contentsOfFile: infoPlist)?["CFBundleShortVersionString"] as? String
   }
 
-  static func effectiveCurrentVersion() -> String {
-    ProcessInfo.processInfo.environment["ONECONTEXT_TEST_CURRENT_VERSION"] ?? oneContextVersion
+  static func rejectRootInvocationForAppCleanup() throws {
+    if geteuid() == 0 || ProcessInfo.processInfo.environment["SUDO_USER"] != nil {
+      throw CLIError.commandFailed("Run 1Context uninstall as your normal macOS user, not with sudo or as root.")
+    }
   }
 
-  static func brewExecutable() -> String? {
-    if let override = ProcessInfo.processInfo.environment["ONECONTEXT_TEST_BREW_EXECUTABLE"],
-      FileManager.default.isExecutableFile(atPath: override)
-    {
-      return override
+  static func uninstallLaunchAgent(label: String) throws {
+    let fileManager = FileManager.default
+    let plist = fileManager.homeDirectoryForCurrentUser
+      .appendingPathComponent("Library/LaunchAgents/\(label).plist")
+    _ = runCapture("/bin/launchctl", ["bootout", "gui/\(getuid())/\(label)"])
+    _ = runCapture("/bin/launchctl", ["bootout", "gui/\(getuid())", plist.path])
+    if fileManager.fileExists(atPath: plist.path) {
+      try fileManager.removeItem(at: plist)
     }
-    return firstExecutable(["/opt/homebrew/bin/brew", "/usr/local/bin/brew"])
   }
 
-  static func gitExecutable() -> String {
-    if let override = ProcessInfo.processInfo.environment["ONECONTEXT_TEST_GIT_EXECUTABLE"],
-      FileManager.default.isExecutableFile(atPath: override)
-    {
-      return override
+  static func deleteApprovedUserData() throws {
+    let fileManager = FileManager.default
+    let home = fileManager.homeDirectoryForCurrentUser
+    let relativePaths = [
+      "1Context",
+      "Library/Application Support/1Context",
+      "Library/Logs/1Context",
+      "Library/Caches/1Context",
+      "Library/Caches/com.haptica.1context",
+      "Library/Caches/com.haptica.1context.menu",
+      "Library/HTTPStorages/com.haptica.1context",
+      "Library/HTTPStorages/com.haptica.1context.binarycookies",
+      "Library/HTTPStorages/1context",
+      "Library/HTTPStorages/1context.binarycookies",
+      "Library/HTTPStorages/com.haptica.1context.menu",
+      "Library/HTTPStorages/com.haptica.1context.menu.binarycookies",
+      "Library/Preferences/com.haptica.1context.plist",
+      "Library/Saved Application State/com.haptica.1context.savedState",
+      "Library/Saved Application State/com.haptica.1context.menu.savedState",
+      "Library/WebKit/com.haptica.1context",
+      "Library/WebKit/com.haptica.1context.menu"
+    ]
+
+    for relativePath in relativePaths {
+      try removeApprovedUserPath(home.appendingPathComponent(relativePath), home: home, fileManager: fileManager)
     }
-    return "/usr/bin/git"
+    try removeApprovedTemporaryFiles(fileManager: fileManager)
   }
 
-  static func installedCLIExecutable() -> String? {
-    if let override = ProcessInfo.processInfo.environment["ONECONTEXT_TEST_INSTALLED_CLI"],
-      FileManager.default.isExecutableFile(atPath: override)
-    {
-      return override
+  static func removeApprovedUserPath(_ url: URL, home: URL, fileManager: FileManager) throws {
+    let target = url.standardizedFileURL.path
+    let homePath = home.standardizedFileURL.path
+    guard target.hasPrefix(homePath + "/"), target != homePath, target != "/" else {
+      throw CLIError.commandFailed("Refusing to delete unsafe path: \(target)")
     }
-    return firstExecutable(["/opt/homebrew/bin/1context", "/usr/local/bin/1context"])
+    guard fileManager.fileExists(atPath: target) else { return }
+    try fileManager.removeItem(atPath: target)
+  }
+
+  static func removeApprovedTemporaryFiles(fileManager: FileManager) throws {
+    let temporaryDirectory = URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
+    guard let children = try? fileManager.contentsOfDirectory(at: temporaryDirectory, includingPropertiesForKeys: nil) else {
+      return
+    }
+    for child in children {
+      let name = child.lastPathComponent
+      guard (name.hasPrefix("1context-") && name.hasSuffix(".command"))
+        || name.hasPrefix("1context-update-")
+      else {
+        continue
+      }
+      try fileManager.removeItem(at: child)
+    }
   }
 
   static func currentExecutablePath() -> String? {
@@ -877,10 +1090,6 @@ struct OneContextCLI {
       String(data: stdoutData, encoding: .utf8) ?? "",
       String(data: stderrData, encoding: .utf8) ?? ""
     )
-  }
-
-  static func firstExecutable(_ candidates: [String]) -> String? {
-    candidates.first { FileManager.default.isExecutableFile(atPath: $0) }
   }
 
   static func runProcess(
@@ -919,5 +1128,21 @@ enum CLIError: Error, LocalizedError {
     case .unknownArgument(let argument):
       return "Unknown argument: \(argument)"
     }
+  }
+}
+
+private struct CLIAppManagedSparkleDriver: SparkleUpdateDriver, Sendable {
+  func snapshot(
+    currentVersion: String,
+    configuration: SparkleUpdaterConfiguration
+  ) async -> SparkleUpdateDriverSnapshot {
+    SparkleUpdateDriverSnapshot(
+      availability: .available,
+      latestVersion: nil,
+      updateAvailable: false,
+      canInstallUpdates: false,
+      userFacingStatus: "1Context app updates are managed by the installed app.",
+      nextAction: "Open 1Context from /Applications and choose Check for Updates."
+    )
   }
 }

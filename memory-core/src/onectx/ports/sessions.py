@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 import hashlib
 import json
+import mimetypes
 import re
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
@@ -356,58 +357,100 @@ def materialize_inline_images(
     event_id: str,
     existing_artifact_ids: set[str],
 ) -> tuple[list[str], list[dict[str, Any]]]:
-    if b"data:image/" not in raw_line:
-        return [], []
-    text = raw_line.decode("utf-8", errors="ignore")
-
     artifact_ids: list[str] = []
     artifact_rows: list[dict[str, Any]] = []
     seen_hashes: set[str] = set()
     output_dir = store.path.parent / "artifacts" / "session-images"
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    for match in _BASE64_IMAGE_RE.finditer(text):
-        fmt = match.group(1).lower()
-        try:
-            raw = base64.b64decode(match.group(2), validate=False)
-        except Exception:
-            continue
+    def append_image(raw: bytes, *, fmt: str, source_path: str = "") -> None:
+        nonlocal artifact_ids, artifact_rows
+        if not raw:
+            return
+        safe_fmt = safe_image_format(fmt)
+        if not safe_fmt:
+            return
+        content_type = image_content_type(safe_fmt)
         digest = hashlib.sha256(raw).hexdigest()
         if digest in seen_hashes:
-            continue
+            return
         seen_hashes.add(digest)
 
-        image_path = output_dir / f"{digest[:12]}.{fmt}"
+        image_path = output_dir / f"{digest[:12]}.{safe_fmt}"
         if not image_path.exists():
             image_path.write_bytes(raw)
         artifact_id = stable_id("artifact", "session_inline_image", digest)
         artifact_ids.append(artifact_id)
         if artifact_id in existing_artifact_ids:
-            continue
+            return
+        metadata = {
+            "port_id": port.id,
+            "adapter": port.adapter,
+            "file": str(path),
+            "session_id": parsed.session_id,
+            "event_id": event_id,
+        }
+        if source_path:
+            metadata["source_path"] = source_path
         artifact_rows.append(
             store.artifact_row(
                 "session_inline_image",
                 artifact_id=artifact_id,
                 uri=image_path.as_uri(),
                 path=str(image_path),
-                content_type=f"image/{fmt}",
+                content_type=content_type,
                 content_hash=digest,
                 bytes=len(raw),
                 source=parsed.source,
                 state="materialized",
                 text=f"Inline session image extracted from {parsed.source} {parsed.kind} event.",
-                metadata={
-                    "port_id": port.id,
-                    "adapter": port.adapter,
-                    "file": str(path),
-                    "session_id": parsed.session_id,
-                    "event_id": event_id,
-                },
+                metadata=metadata,
             )
         )
         existing_artifact_ids.add(artifact_id)
 
+    if b"data:image/" in raw_line:
+        text = raw_line.decode("utf-8", errors="ignore")
+        for match in _BASE64_IMAGE_RE.finditer(text):
+            fmt = match.group(1).lower()
+            try:
+                append_image(base64.b64decode(match.group(2), validate=False), fmt=fmt)
+            except Exception:
+                continue
+
+    local_images = parsed.payload.get("local_images", []) if isinstance(parsed.payload, dict) else []
+    for image_path in local_images:
+        local_path = Path(str(image_path)).expanduser()
+        if not local_path.is_file():
+            continue
+        try:
+            raw = local_path.read_bytes()
+        except OSError:
+            continue
+        append_image(raw, fmt=image_format_for_path(local_path), source_path=str(local_path))
+
     return artifact_ids, artifact_rows
+
+
+def safe_image_format(value: str) -> str:
+    fmt = value.lower().strip().lstrip(".")
+    fmt = {"jpeg": "jpg", "svg+xml": "svg"}.get(fmt, fmt)
+    return fmt if re.fullmatch(r"[a-z0-9]+", fmt) else ""
+
+
+def image_content_type(fmt: str) -> str:
+    if fmt == "jpg":
+        return "image/jpeg"
+    if fmt == "svg":
+        return "image/svg+xml"
+    return f"image/{fmt}"
+
+
+def image_format_for_path(path: Path) -> str:
+    guessed, _ = mimetypes.guess_type(path.name)
+    if guessed and guessed.startswith("image/"):
+        return guessed.split("/", 1)[1]
+    return path.suffix.lstrip(".") or "png"
 
 
 def build_log_artifact_row(

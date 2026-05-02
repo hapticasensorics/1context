@@ -261,7 +261,6 @@ final class MemoryCoreAdapterTests: XCTestCase {
       "ONECONTEXT_USER_CONTENT_DIR": "/tmp/user-content",
       "ONECONTEXT_LOG_DIR": "/tmp/logs",
       "ONECONTEXT_CACHE_DIR": "/tmp/cache",
-      "ONECONTEXT_UPDATE_STATE_DIR": "/tmp/update",
       "ONECONTEXT_MEMORY_CORE_DIR": "/tmp/memory-core",
       "ONECONTEXT_MEMORY_CORE_LOG_PATH": "/tmp/memory-core.log",
       "ONECONTEXT_UNRELATED": "drop-me"

@@ -4,6 +4,7 @@ import OneContextAgent
 import OneContextLocalWeb
 import OneContextMemoryCore
 import OneContextRuntimeSupport
+import OneContextSetup
 
 nonisolated(unsafe) private var signalSocketPath: UnsafeMutablePointer<CChar>?
 nonisolated(unsafe) private var signalPIDPath: UnsafeMutablePointer<CChar>?
@@ -320,12 +321,15 @@ final class OneContextDaemon: @unchecked Sendable {
   }
 
   private func healthPayload() -> [String: Any] {
-    [
+    let readiness = OneContextAppReadiness.current(localWeb: localWeb)
+    return [
       "status": "ok",
       "version": oneContextVersion,
       "currentTime": ISO8601DateFormatter().string(from: Date()),
       "uptimeSeconds": max(0, Int(Date().timeIntervalSince(startedAt))),
-      "pid": Int(getpid())
+      "pid": Int(getpid()),
+      "requiredSetupReady": readiness.requiredSetupReady,
+      "requiredSetupSummary": readiness.requiredSetupSummary
     ]
   }
 

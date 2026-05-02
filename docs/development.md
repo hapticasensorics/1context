@@ -12,8 +12,7 @@ like an engineering manual. The README should stay product-first.
   human-readable wiki files and user-owned content
 
 ~/Library/Application Support/1Context/
-  app/runtime state, config, indexes, sockets, queues, local web state, and
-  update metadata
+  app/runtime state, config, indexes, sockets, queues, and local web state
 
 ~/Library/Logs/1Context/
   logs and debug/support information
@@ -28,15 +27,8 @@ privacy contract used by the runtime and installer.
 ## Privacy
 
 The public preview makes no product telemetry calls and does not upload project
-data. It checks GitHub Releases at most once per day to show whether an update
-is available. The update check uses a non-cookie, nonpersistent network
-session.
-
-Disable update checks for a command invocation with:
-
-```bash
-ONECONTEXT_NO_UPDATE_CHECK=1 1context
-```
+data. Native update diagnostics live behind `OneContextUpdate`; Sparkle can land
+behind that boundary without changing setup, runtime, or CLI callers.
 
 ## Agent Integrations
 
@@ -87,6 +79,18 @@ URL reported by:
 1context wiki local-url
 ```
 
+Product mode requires local wiki access setup. The app opens the setup window
+on launch, repair, and from `Settings > Setup...`. Setup registers the bundled
+ServiceManagement helper for `127.0.0.1:443` and trusts the local Caddy CA in
+the user's login keychain so browsers can open the canonical URL without a port.
+The CLI remains a support path:
+
+```bash
+1context setup local-web status
+1context setup local-web install
+1context setup local-web uninstall
+```
+
 The menu bar owns Caddy lifetime. The daemon owns the local `/api/wiki/*`
 adapter. Browser code should call relative `/api/wiki/*` routes so the same
 static site can run behind local Caddy today and cloud hosting later.
@@ -94,12 +98,14 @@ static site can run behind local Caddy today and cloud hosting later.
 See [local-web-contract.md](local-web-contract.md) for the local-first web
 contract.
 
+See [macos-app-architecture.md](macos-app-architecture.md) for the app-owned
+setup, permissions, update, and local-web source boundaries.
+
 ## Test Commands
 
 ```bash
 swift test --package-path macos
 ./scripts/test.sh
-./scripts/test-upgrade-paths.sh
 ```
 
 For memory-core tests:
@@ -122,11 +128,9 @@ inspect `~/Library/Logs/1Context/menu.log`:
 ONECONTEXT_MENU_PERF_LOG=1 open /Applications/1Context.app
 ```
 
-For updater work, `./scripts/test-upgrade-paths.sh` is the standing contract
-test. It exercises CLI update against deterministic fake release metadata for
-previous-to-current and current-to-next version movement, then checks that the
-menu bar update path still routes through the bundled `1context-cli update`
-Terminal script rather than duplicating Homebrew logic in Swift.
+For updater work, keep tests on the native updater adapter and release feed.
+`1context update`, menu update, and diagnostics should all report the same
+app-owned update state.
 
 ## Release Packaging
 
@@ -139,12 +143,22 @@ ALLOW_UNNOTARIZED=1 NOTARIZE=0 ./scripts/package-macos-release.sh
 Maintainer release packaging uses Developer ID signing and notarization:
 
 ```bash
-ONECONTEXT_SIGNING_MODE=developer-id NOTARIZE=1 ./scripts/package-macos-release.sh
+CODESIGN_IDENTITY="Developer ID Application: Example, Inc. (TEAMID)" NOTARIZE=1 ./scripts/package-macos-release.sh
 ```
 
 Release packaging validates that archives do not contain local owner/group
 metadata, AppleDouble files, local build paths, or SwiftPM resource-bundle
 fallback paths.
+
+When `NOTARIZE=1`, packaging signs and notarizes both layers:
+
+1. `dist/1Context.app` is Developer ID signed, submitted as a ZIP, stapled, and
+   assessed with Gatekeeper.
+2. `dist/1Context-<version>-macos-arm64.dmg` is signed, submitted, stapled, and
+   assessed with Gatekeeper.
+
+`ALLOW_UNNOTARIZED=1 NOTARIZE=0` is the only supported local-dev bypass for
+stapler and Gatekeeper checks.
 
 To clear local release outputs before packaging:
 
@@ -152,9 +166,10 @@ To clear local release outputs before packaging:
 ./scripts/clean-release-artifacts.sh
 ```
 
-To notarize the built app directly, first configure a `notarytool` keychain
-profile, then run:
+To notarize a built release artifact directly, first configure a `notarytool`
+keychain profile. Direct DMG notarization expects the DMG to already be signed:
 
 ```bash
-NOTARYTOOL_PROFILE=1context-notary ./scripts/notarize-macos-app.sh
+NOTARYTOOL_PROFILE=1context-notary ./scripts/notarize-macos-artifact.sh dist/1Context.app
+NOTARYTOOL_PROFILE=1context-notary ./scripts/notarize-macos-artifact.sh dist/1Context-<version>-macos-arm64.dmg
 ```

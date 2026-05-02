@@ -15,14 +15,32 @@ Swift owns local web infrastructure:
 - writes Caddy config, pid, state, and logs under 1Context app paths
 - publishes the last successful wiki render into `wiki-site/current`
 - keeps `wiki-site/previous` and `wiki-site/next` for atomic publish safety
+- installs or repairs the required local HTTPS setup through an explicit admin
+  authorization flow
 
 Caddy owns serving:
 
 - binds only to `127.0.0.1`
-- serves `http://wiki.1context.localhost:17319/your-context`
+- serves the wiki on a high local TLS backend port owned by the user process
 - serves static wiki files directly
 - reverse-proxies dynamic `/api/wiki/*` routes to the Swift daemon adapter
 - does not know about memory jobs, imports, screen capture, or agent state
+
+The bundled 1Context ServiceManagement helper owns only `127.0.0.1:443`. It
+forwards encrypted TCP traffic to the user-owned Caddy backend and does not read
+wiki content. The app registers or repairs that helper through native setup UI
+and macOS Login Items & Extensions approval. The same flow trusts the local
+Caddy CA in the user's login keychain. Uninstall removes both.
+
+The canonical product URL is:
+
+```text
+https://wiki.1context.localhost/your-context
+```
+
+High-port HTTP (`http://wiki.1context.localhost:<port>/your-context`) remains a
+test and development harness mode only. Product code should not silently fall
+back to it when the local HTTPS setup is missing.
 
 The Swift daemon owns the local dynamic wiki API:
 
@@ -62,7 +80,11 @@ the render manifest no longer matches its inputs.
 ## Lifecycle
 
 The menu bar owns the local web edge. If the menu bar is present, Caddy should
-be up. Quitting 1Context stops Caddy.
+be up after required setup is satisfied. If local HTTPS trust or the privileged
+443 proxy is missing, the wiki is intentionally blocked and status/diagnose
+should report the missing requirement instead of starting a fallback web edge.
+Quitting 1Context stops Caddy; uninstall removes the ServiceManagement helper and
+trusted local CA.
 
 The daemon owns remembering work: screen capture, importers, memory jobs, and
 agentic memory orchestration. It also owns the local wiki API adapter because
@@ -89,33 +111,12 @@ daemon RPC. They should not hardcode ports or start web servers themselves.
 Message and context improvements should ship through 1Context updates and
 daemon state, not through separate hook plugin releases.
 
-## Temporary Migrations Pattern
-
-Because public release is still pre-user, backwards compatibility is not a
-standing product goal. When a migration is needed only to clean up our own
-developer machines or a short-lived pre-release shape, keep it contained and
-easy to delete:
-
-- put the cleanup in a `Migrations/` folder owned by the module that needs it
-- name the migration after the retired surface, not the new architecture
-- keep matching narrow and explicit; prefer deleting one known bad shape over
-  supporting many historical variants
-- call the migration from install/repair/startup paths only where stale state
-  can actually interfere with the current product
-- do not let temporary migration code become the normal abstraction boundary
-- delete the migration after both founder machines and the release package have
-  been through the new install/repair path
-
-Current example: `OneContextAgent/Migrations/LegacyPrivateAgentHookMigration.swift`
-removes the old private-4 Python hook commands from Claude and Codex configs
-so both agents use the installed first-party `1context agent hook` command and
-therefore read the live canonical wiki URL from 1Context config.
-
 ## Boundary Rules
 
 - No Python HTTP server in public release.
 - No direct serving from memory-core generated directories.
 - No user-installed Caddy dependency; release artifacts bundle Caddy.
 - No port fallback for the canonical product URL.
+- No root-owned process reads user wiki files or memory content.
 - No private stderr, prompts, or wiki source text should be surfaced through
   public CLI errors.

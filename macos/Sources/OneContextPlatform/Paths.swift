@@ -114,22 +114,6 @@ public enum RuntimePermissions {
   }
 }
 
-public struct UpdateStatePaths {
-  public let directory: URL
-  public let file: URL
-
-  public static func current(environment: [String: String] = ProcessInfo.processInfo.environment) -> UpdateStatePaths {
-    let runtimePaths = RuntimePaths.current(environment: environment)
-    let directory = URL(
-      fileURLWithPath: environment["ONECONTEXT_UPDATE_STATE_DIR"]
-        ?? runtimePaths.appSupportDirectory.appendingPathComponent("update").path,
-      isDirectory: true
-    )
-    return UpdateStatePaths(directory: directory, file: directory.appendingPathComponent("update-check.json"))
-  }
-}
-
-
 public func plistEscape(_ value: String) -> String {
   value
     .replacingOccurrences(of: "&", with: "&amp;")
