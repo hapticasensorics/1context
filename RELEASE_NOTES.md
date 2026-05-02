@@ -1,7 +1,10 @@
-# 1Context v0.1.50 Public Preview
+# 1Context v0.1.51 Public Preview
 
 This release includes:
 
+- Homebrew cask CLI setup diagnostics now resolve the `1context` symlink back to
+  `/Applications/1Context.app`, so local HTTPS helper paths are reported and
+  repaired from the installed app bundle.
 - Developer ID signed and notarized DMG installation
 - Sparkle-native update plumbing with signed appcast support
 - app-owned install-to-Applications, setup, and uninstall flows

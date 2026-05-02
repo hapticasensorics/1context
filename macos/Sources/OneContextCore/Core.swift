@@ -1,6 +1,6 @@
 import Foundation
 
-public let oneContextVersion = "0.1.50"
+public let oneContextVersion = "0.1.51"
 public let oneContextGitHubURL = URL(string: "https://github.com/hapticasensorics/1context")!
 
 

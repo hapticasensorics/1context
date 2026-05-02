@@ -87,6 +87,25 @@ final class LocalWebTests: XCTestCase {
     XCTAssertTrue(web.pidFile.path.hasSuffix("Application Support/1Context/run/local-web-caddy.pid"))
   }
 
+  func testLocalWebSetupResolvesHomebrewCLISymlinkToInstalledApp() throws {
+    let root = temporaryRoot()
+    let app = root.appendingPathComponent("Applications/1Context.app", isDirectory: true)
+    let cli = app.appendingPathComponent("Contents/MacOS/1context-cli")
+    let link = root.appendingPathComponent("homebrew/bin/1context")
+    try FileManager.default.createDirectory(at: cli.deletingLastPathComponent(), withIntermediateDirectories: true)
+    try FileManager.default.createDirectory(at: link.deletingLastPathComponent(), withIntermediateDirectories: true)
+    FileManager.default.createFile(atPath: cli.path, contents: Data("#!/bin/sh\n".utf8))
+    try FileManager.default.createSymbolicLink(at: link, withDestinationURL: cli)
+
+    let resolved = LocalWebSetupSystemPaths.appBundleURL(
+      environment: [:],
+      commandLineExecutable: link.path,
+      mainBundleURL: root.appendingPathComponent("homebrew/bin", isDirectory: true)
+    )
+
+    XCTAssertEqual(resolved.path, app.path)
+  }
+
   func testDiagnosticsReportsConfiguredCaddyAndSitePaths() throws {
     let root = URL(fileURLWithPath: NSTemporaryDirectory())
       .appendingPathComponent("1context-local-web-diagnostics-\(UUID().uuidString)", isDirectory: true)

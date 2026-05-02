@@ -58,16 +58,22 @@ public struct LocalWebSetupSystemPaths: Codable, Equatable, Sendable {
       ?? "\(log)/local-web-proxy.log"
   }
 
-  private static func appBundleURL(environment: [String: String]) -> URL {
+  static func appBundleURL(
+    environment: [String: String],
+    commandLineExecutable: String = CommandLine.arguments[0],
+    mainBundleURL: URL = Bundle.main.bundleURL
+  ) -> URL {
     if let override = environment["ONECONTEXT_APP_BUNDLE_PATH"], !override.isEmpty {
       return URL(fileURLWithPath: override, isDirectory: true)
     }
 
-    if Bundle.main.bundleURL.pathExtension == "app" {
-      return Bundle.main.bundleURL
+    if mainBundleURL.pathExtension == "app" {
+      return mainBundleURL
     }
 
-    var candidate = URL(fileURLWithPath: CommandLine.arguments[0]).standardizedFileURL
+    var candidate = URL(fileURLWithPath: commandLineExecutable)
+      .standardizedFileURL
+      .resolvingSymlinksInPath()
     while candidate.path != "/" {
       if candidate.pathExtension == "app" {
         return candidate
@@ -75,7 +81,7 @@ public struct LocalWebSetupSystemPaths: Codable, Equatable, Sendable {
       candidate.deleteLastPathComponent()
     }
 
-    return Bundle.main.bundleURL
+    return mainBundleURL
   }
 }
 
