@@ -27,7 +27,7 @@ flowchart TD
 - `OneContextPermissions`: owns macOS privacy permission snapshots such as Screen Recording and Accessibility.
 - `OneContextLocalWeb`: owns Caddy configuration, local HTTPS diagnostics, certificate trust installation, and ServiceManagement registration.
 - `OneContextLocalWebProxy`: stays intentionally tiny. It only binds the privileged local HTTPS port and forwards bytes to the user-owned Caddy backend.
-- `OneContextUpdate`: owns native app update state. Sparkle can land behind this boundary without changing menu or CLI callers.
+- `OneContextUpdate`: owns native app update state. Sparkle is contained behind this boundary so menu and CLI callers do not depend on updater framework details.
 - `OneContextCLI`: supports diagnostics, automation, and repair. It should route users back to the app-owned permissions/setup surface when required setup is missing.
 
 ## Setup Policy

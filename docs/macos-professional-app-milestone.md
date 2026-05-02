@@ -106,9 +106,9 @@ This gives each domain the same responsibilities:
 - [x] Add a Sparkle appcast generation entrypoint.
   Proof: `scripts/generate-sparkle-appcast.sh` wraps Sparkle `generate_appcast`
   for the release DMG and release notes.
-- [ ] Generate and validate production appcast feed artifacts.
-  Proof: feed generation validates EdDSA signature, version, release notes URL,
-  and downloadable DMG URL with the production key.
+- [x] Generate and validate production appcast feed artifacts.
+  Proof: `v0.1.51` generated a production Sparkle appcast with EdDSA signature,
+  versioned DMG URL, and embedded release notes.
 - [ ] Add local appcast update smoke from controlled fixture builds.
   Proof: harness installs one fixture app, serves a local appcast for the next
   fixture app, updates, then verifies version, wiki, setup readiness, helper
@@ -127,8 +127,10 @@ This gives each domain the same responsibilities:
 - [x] CLI exposes update-safe Local Wiki Access repair.
   Evidence: `1context setup local-web repair` re-runs the app-owned setup
   installer and refreshes the helper/trust state.
-- [ ] Sparkle update completion triggers setup re-check before opening the wiki.
-  Proof: update smoke verifies post-update helper repair.
+- [x] Sparkle update completion triggers setup re-check before opening the wiki.
+  Proof: the `0.1.50` to `0.1.51` GUI update relaunched into a healthy app;
+  `1context status --debug` reported setup ready, helper diagnostics current,
+  and the local wiki returned HTTP 200.
 
 ### 5. Permissions Suite
 
@@ -170,15 +172,17 @@ This gives each domain the same responsibilities:
 - [ ] Test first launch setup and local HTTPS wiki open.
 - [ ] Test quit/relaunch.
 - [ ] Test update.
+  Note: GUI Sparkle update from `0.1.50` to `0.1.51` passed on this machine, but
+  the clean-machine acceptance pass still needs its own captured evidence.
 - [ ] Test uninstall cleanup.
 
 ## Notes
 
-- Current baseline: install placement, setup readiness, local HTTPS, release DMG,
-  Sparkle wiring, menu uninstall, and support diagnostics are now in the
-  app-owned shape.
+- Current baseline: `v0.1.51` has install placement, setup readiness, local
+  HTTPS, signed/notarized DMG packaging, production Sparkle appcast, GUI update,
+  menu uninstall, and support diagnostics in the app-owned shape.
 - Remaining professional app work is summarized in
   [macos-professional-app-remaining-work.md](macos-professional-app-remaining-work.md).
-- Immediate next step: configure the notarytool issuer ID and production feed URL,
-  then produce one signed/notarized DMG plus production appcast and run the
-  clean-machine checklist against it.
+- Immediate next step: run the full clean-machine checklist against the
+  notarized DMG, then turn the manual update proof into a local appcast smoke
+  with rollback coverage.

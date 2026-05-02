@@ -27,8 +27,8 @@ privacy contract used by the runtime and installer.
 ## Privacy
 
 The public preview makes no product telemetry calls and does not upload project
-data. Native update diagnostics live behind `OneContextUpdate`; Sparkle can land
-behind that boundary without changing setup, runtime, or CLI callers.
+data. Native update diagnostics and Sparkle live behind `OneContextUpdate` so
+setup, runtime, menu, and CLI callers all see the same app-owned update state.
 
 ## Agent Integrations
 
@@ -140,11 +140,18 @@ Local ad-hoc packaging:
 ALLOW_UNNOTARIZED=1 NOTARIZE=0 ./scripts/package-macos-release.sh
 ```
 
-Maintainer release packaging uses Developer ID signing and notarization:
+Maintainer release packaging uses Developer ID signing, notarization, and the
+production Sparkle feed configuration:
 
 ```bash
-CODESIGN_IDENTITY="Developer ID Application: Example, Inc. (TEAMID)" NOTARIZE=1 ./scripts/package-macos-release.sh
+ONECONTEXT_SPARKLE_FEED_URL="https://github.com/hapticasensorics/1context/releases/latest/download/appcast.xml" \
+SPARKLE_DOWNLOAD_URL_PREFIX="https://github.com/hapticasensorics/1context/releases/download/v$(cat VERSION)/" \
+./scripts/package-macos-production-release.sh
 ```
+
+That command auto-detects the Developer ID Application identity, reads the
+Sparkle public EdDSA key from the release keychain account, signs and notarizes
+the app and DMG, then generates `dist/sparkle-updates/appcast.xml`.
 
 Release packaging validates that archives do not contain local owner/group
 metadata, AppleDouble files, local build paths, or SwiftPM resource-bundle
@@ -159,6 +166,12 @@ When `NOTARIZE=1`, packaging signs and notarizes both layers:
 
 `ALLOW_UNNOTARIZED=1 NOTARIZE=0` is the only supported local-dev bypass for
 stapler and Gatekeeper checks.
+
+The public Homebrew cask in `hapticasensorics/homebrew-tap` should point to the
+same versioned DMG and SHA as the GitHub release. Keep the cask marked
+`auto_updates true`: Sparkle owns app updates after installation, so Homebrew may
+retain an older Caskroom receipt after an in-app update even while
+`/Applications/1Context.app` and the linked `1context` command are current.
 
 To clear local release outputs before packaging:
 

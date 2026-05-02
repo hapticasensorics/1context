@@ -95,8 +95,9 @@ flowchart TD
 - [x] DMG validation mounts read-only, verifies app identity, verifies
   executable paths, and detaches cleanly.
   Proof: release validation or a dedicated DMG smoke script.
-- [ ] Notarized builds staple the app and the DMG.
-  Proof: `spctl` and `stapler validate` pass on the release artifacts.
+- [x] Notarized builds staple the app and the DMG.
+  Proof: `v0.1.51` release packaging passed `spctl` and `stapler validate` for
+  both `dist/1Context.app` and `dist/1Context-0.1.51-macos-arm64.dmg`.
 - [x] Local unnotarized builds remain possible for development.
   Proof: `ALLOW_UNNOTARIZED=1 NOTARIZE=0 ./scripts/package-macos-release.sh` passes.
 
@@ -181,14 +182,18 @@ flowchart TD
   EdDSA configuration.
   Proof: `scripts/configure-macos-release-secrets.sh` and
   `scripts/package-macos-production-release.sh`.
-- [ ] Run appcast generation with the production EdDSA key.
-  Proof: generated production appcast is signed and served from the configured
-  feed URL.
+- [x] Run appcast generation with the production EdDSA key.
+  Proof: `v0.1.51` generated `appcast.xml` with a Sparkle EdDSA signature and
+  served it from the GitHub Releases feed URL.
 - [x] Update install preserves or repairs required local web helper state at the
   readiness layer.
   Proof: post-update setup snapshot repairs stale helper binary SHA.
-- [ ] Update smoke replaces an older app with a newer app and verifies setup,
+- [x] Update smoke replaces an older app with a newer app and verifies setup,
   wiki, menu state, CLI status, and helper repair afterward.
+  Proof: Homebrew-installed `0.1.50` updated through the GUI Sparkle flow to
+  `0.1.51`; `/Applications/1Context.app`, the linked `1context` command,
+  `1context status --debug`, and the local wiki health endpoint all reported the
+  updated app and healthy Local Wiki Access afterward.
 - [ ] Update rollback/failure mode leaves the existing app usable.
   Proof: failed-update harness verifies old app still launches and status is clear.
 
@@ -219,11 +224,11 @@ flowchart TD
 
 ## Notes
 
-- Current baseline: the app owns install placement, required setup readiness,
-  local HTTPS gating, release DMG generation, and Sparkle update wiring.
-- Immediate next step: configure the notarytool issuer ID and production feed URL,
-  then generate one production DMG/appcast pair.
-- Next deeper step: run the clean-machine checklist against that production pair
-  and promote the manual update step into an automated local appcast smoke.
+- Current baseline: `v0.1.51` is published as a signed, notarized, stapled DMG
+  with a signed Sparkle appcast, and the Homebrew cask wraps the same DMG.
+- Immediate next step: run the full clean-machine checklist against the
+  notarized DMG, including app-owned uninstall cleanup.
+- Next deeper step: promote the manual update proof into an automated local
+  appcast smoke with rollback coverage.
 - The broader remaining professional-app work is tracked in
   [macos-professional-app-milestone.md](macos-professional-app-milestone.md).

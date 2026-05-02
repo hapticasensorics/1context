@@ -70,12 +70,22 @@ narrow contract without risking the whole app.
 
 Requires Apple Silicon and macOS 13 Ventura or newer.
 
-Download the latest `1Context.dmg` from GitHub Releases, open it, and move
-`1Context.app` to `/Applications`. If you launch the app from Downloads or the
-mounted DMG, it can move itself for you.
+Download the latest `1Context.dmg` from
+[GitHub Releases](https://github.com/hapticasensorics/1context/releases/latest),
+open it, and either drag `1Context.app` to `/Applications` or launch it and
+choose `Install and Open`.
 
 First launch opens 1Context Setup. Grant Local Wiki Access once, then use the
 menu bar item to open or refresh your wiki.
+
+Homebrew users can install the same signed app with:
+
+```bash
+brew install --cask hapticasensorics/tap/1context
+```
+
+The cask installs `1Context.app` in `/Applications`, links the `1context`
+support command, and leaves app updates to the signed in-app updater.
 
 Support commands are available through the bundled CLI:
 
@@ -89,8 +99,17 @@ Support commands are available through the bundled CLI:
 
 Uninstall the app:
 
-Quit 1Context, move `/Applications/1Context.app` to the Trash, and choose
-whether to keep or delete your `~/1Context` wiki files.
+From the menu bar, choose `Settings > Uninstall 1Context...`, or use the support
+CLI:
+
+```bash
+/Applications/1Context.app/Contents/MacOS/1context-cli uninstall
+/Applications/1Context.app/Contents/MacOS/1context-cli uninstall --delete-data
+```
+
+Moving the app to the Trash removes the app bundle. The app-owned uninstall path
+also removes 1Context background items, local HTTPS trust, and managed agent
+hooks while preserving `~/1Context` unless you choose `--delete-data`.
 
 ## Files And Privacy
 
@@ -111,8 +130,8 @@ whether to keep or delete your `~/1Context` wiki files.
 ```
 
 The public preview makes no product telemetry calls and does not upload project
-data. Native update checks are app-owned and will use the signed release feed
-when configured.
+data. Native update checks are app-owned and use the signed Sparkle release
+feed.
 
 See [PERMISSIONS.md](PERMISSIONS.md) for the ownership, consent, and privacy
 contract.

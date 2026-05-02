@@ -2,10 +2,10 @@
 
 ## Goal
 
-This document records the state of 1Context after the DMG install and Local Wiki
-Access work, and defines the remaining path to a first-class macOS app release.
-It is intentionally outcome-oriented: each remaining item should produce evidence
-that future agents can re-run or inspect.
+This document records the state of 1Context after the DMG install, Local Wiki
+Access, and Sparkle release work, and defines the remaining path to harden the
+first-class macOS app experience. It is intentionally outcome-oriented: each
+remaining item should produce evidence that future agents can re-run or inspect.
 
 The guiding product shape is:
 
@@ -14,13 +14,19 @@ The guiding product shape is:
 - local wiki access works at `https://wiki.1context.localhost/your-context`;
 - updates are app-owned through Sparkle behind `OneContextUpdate`;
 - uninstall removes app-owned privileged/background state cleanly;
-- clean-machine evidence proves the full flow before notarized release testing.
+- clean-machine evidence proves the full flow before broader release testing.
 
 ## Current State
 
 - DMG packaging exists and validates.
   Evidence: `scripts/package-macos-release.sh`,
   `scripts/create-macos-dmg.sh`, `scripts/validate-macos-dmg.sh`.
+- `v0.1.51` shipped as a signed, notarized, stapled DMG with a signed Sparkle
+  appcast served from GitHub Releases.
+- The Homebrew cask wraps the same signed DMG and leaves app updates to Sparkle.
+- The GUI Sparkle update path has been proven from `0.1.50` to `0.1.51`; after
+  update, `/Applications/1Context.app`, the linked `1context` command, setup
+  readiness, and the local wiki health endpoint were all current and healthy.
 - The app can be installed into `/Applications/1Context.app` from the DMG.
 - The app owns first-launch setup. Local Wiki Access is surfaced in the setup
   window and reported through CLI/status diagnostics.
@@ -70,26 +76,25 @@ we should keep for the local HTTPS proxy.
 
 ```mermaid
 flowchart TD
-  Current["Current state\nDMG + app setup + Sparkle wiring"]
-  Secrets["Release secrets\nDeveloper ID + notary + Sparkle EdDSA"]
-  Production["Production package\nsigned app, DMG, appcast"]
+  Current["Current state\nv0.1.51 DMG + setup + Sparkle update smoke"]
   Harness["Clean-machine checklist\nrepeatable evidence collection"]
   Manual["Manual first-user pass\ninstall, setup, wiki, relaunch"]
   Uninstall["Uninstall acceptance\nmenu + CLI cleanup proof"]
+  LocalSmoke["Automated local appcast smoke\nupdate + rollback"]
   CleanMachine["Notarized clean-machine acceptance\ninstall, setup, update, uninstall"]
 
-  Current --> Secrets --> Production
-  Production --> Harness --> Manual --> Uninstall --> CleanMachine
+  Current --> Harness --> Manual --> Uninstall --> LocalSmoke --> CleanMachine
 ```
 
 The sequencing matters:
 
-1. Configure the real release identities and Sparkle signing key before treating
-   any artifact as production-shaped.
-2. Build one signed/notarized DMG plus appcast from the same release command.
-3. Use the clean-machine checklist to make every manual consent step explicit.
-4. Verify install, setup, wiki, relaunch, update check, and uninstall cleanup from
+1. Keep signed/notarized DMG, appcast, and Homebrew cask artifacts generated
+   from the same release version.
+2. Use the clean-machine checklist to make every manual consent step explicit.
+3. Verify install, setup, wiki, relaunch, update check, and uninstall cleanup from
    the same evidence bundle.
+4. Promote the manual update proof into a local appcast smoke with rollback
+   coverage.
 5. Use the harness to make notarized clean-machine testing routine instead of
    bespoke.
 
@@ -117,10 +122,17 @@ The sequencing matters:
 ### 2. Manual First-User Flow
 
 - [ ] Run clean uninstall on this Mac.
-- [ ] Open the DMG and install to `/Applications`.
-- [ ] Launch app, grant Local Wiki Access, and open wiki.
-- [ ] Quit and relaunch app.
-- [ ] Verify menu status, CLI status, and runtime health all agree.
+- [x] Open the DMG and install to `/Applications`.
+  Proof: user-installed `1Context.app` from the production DMG.
+- [x] Launch app, grant Local Wiki Access, and open wiki.
+  Proof: post-install `1context status --debug` reported setup ready and the
+  local wiki returned HTTP 200.
+- [x] Quit and relaunch app.
+  Proof: relaunched app continued reporting setup ready and healthy local wiki
+  access.
+- [x] Verify menu status, CLI status, and runtime health all agree.
+  Proof: `/Applications/1Context.app`, linked `1context`, setup diagnostics, and
+  local wiki health checks agreed after install and update.
 - [ ] Run uninstall and verify cleanup.
 
 ### 3. Clean-Machine Harness
@@ -155,21 +167,22 @@ The sequencing matters:
   Sparkle EdDSA keys.
   Proof: `scripts/configure-macos-release-secrets.sh` detects the Developer ID
   identity, App Store Connect key file, and Sparkle public key.
-- [ ] Generate appcast artifacts with the production EdDSA key.
-  Proof: Sparkle `generate_appcast` validates update archives, version, EdDSA
-  signature, release notes, and downloadable artifact URL.
+- [x] Generate appcast artifacts with the production EdDSA key.
+  Proof: `v0.1.51` appcast contains the EdDSA update signature, release notes,
+  and versioned GitHub Release DMG URL.
 - [ ] Add local appcast update smoke.
   Proof: install older app, serve local appcast, update to newer app, relaunch.
-- [ ] After Sparkle update, re-run required setup readiness before opening wiki.
-  Proof: stale helper SHA triggers repair or setup window, then wiki returns 200.
+- [x] After Sparkle update, re-run required setup readiness before opening wiki.
+  Proof: after the `0.1.50` to `0.1.51` GUI update, setup diagnostics were ready
+  and the wiki health endpoint returned OK.
 - [ ] Verify failed update leaves old app usable.
   Proof: update-failure smoke preserves old app launch and status.
 
 ### 5. Notarized Release Acceptance
 
-- [ ] Build with Developer ID signing.
-- [ ] Notarize and staple the app and DMG.
-- [ ] Validate with `spctl` and `stapler`.
+- [x] Build with Developer ID signing.
+- [x] Notarize and staple the app and DMG.
+- [x] Validate with `spctl` and `stapler`.
 - [ ] Run the clean-machine harness against the notarized DMG.
 - [ ] Capture an evidence bundle for the release checklist.
 
@@ -203,7 +216,8 @@ Release artifact checks:
 ALLOW_UNNOTARIZED=1 NOTARIZE=0 ./scripts/package-macos-release.sh
 ./scripts/validate-macos-dmg.sh dist/1Context-<version>-macos-arm64.dmg
 
-ONECONTEXT_SPARKLE_FEED_URL="https://updates.1context.com/appcast.xml" \
+ONECONTEXT_SPARKLE_FEED_URL="https://github.com/hapticasensorics/1context/releases/latest/download/appcast.xml" \
+SPARKLE_DOWNLOAD_URL_PREFIX="https://github.com/hapticasensorics/1context/releases/download/v$(cat VERSION)/" \
   ./scripts/package-macos-production-release.sh
 
 ./scripts/harness-macos-clean-machine-checklist.sh \
@@ -222,6 +236,7 @@ ONECONTEXT_SPARKLE_FEED_URL="https://updates.1context.com/appcast.xml" \
 
 ## Immediate Next Step
 
-Configure the notarytool issuer ID and production update feed URL, then run one
-production package. After that, use the clean-machine checklist to collect the
-manual install -> setup -> wiki -> relaunch -> update -> uninstall evidence pass.
+Run the clean-machine checklist against the notarized DMG and collect one
+complete install -> setup -> wiki -> relaunch -> update -> uninstall evidence
+bundle. After that, turn the manual update proof into a local appcast smoke with
+rollback coverage.
