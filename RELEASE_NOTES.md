@@ -1,24 +1,21 @@
-# 1Context v0.1.53 Public Preview
+# 1Context v0.1.54 Public Preview
 
 This release includes:
 
-- Open Wiki, Refresh Wiki, and Start now open the app-owned setup flow when
-  Local Wiki Access blocks the requested action instead of failing silently.
-- Setup can resume the original Open Wiki or Refresh Wiki action once Local Wiki
-  Access is ready.
-- Sparkle update handling is more aggressive: release builds enable automatic
-  checks/downloads where supported, mandatory appcast items are surfaced in the
-  menu, and critical updates can install immediately when Sparkle is ready.
-- Passive remembering pauses or refuses to start while a mandatory update is
-  pending, so stale monitoring code does not keep running quietly.
-- App and bundled CLI version reporting now resolves from the installed app
-  bundle, which keeps Sparkle-replaced apps, diagnostics, and support commands
-  aligned.
-- A local Sparkle appcast smoke now proves an older installed fixture app can
-  update to a newer fixture app through Sparkle before remote releases are
-  promoted.
-- `/goal` is now a first-class local wiki page tracking the professional app
-  checklist, including the `0.1.53 -> 0.1.54` remote update trial.
+- Mandatory Sparkle updates now prefer the automatic background install path
+  from launch and from the menu's mandatory update action, avoiding the manual
+  "Install and Relaunch" flow when Sparkle can install silently.
+- Sparkle update defaults are reasserted from the release bundle, including the
+  aggressive scheduled check interval, so blessed builds keep checking often.
+- DMG validation now fails if Sparkle's `Updater.app`, `Autoupdate`, or update
+  XPC services are missing from the embedded framework.
+- Appcast generation now starts from a clean updates directory by default, so a
+  latest-release feed cannot accidentally inherit stale DMGs from a previous
+  release build.
+- The remote update proof now records the repaired `0.1.51 -> 0.1.53` path and
+  uses this release for the mandatory automatic `0.1.53 -> 0.1.54` trial.
+- `/goal` continues to track the permissions and update flywheel as a live
+  checklist with app-state evidence.
 
 Install:
 

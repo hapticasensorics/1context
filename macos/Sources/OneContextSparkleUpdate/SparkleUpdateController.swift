@@ -49,11 +49,16 @@ public final class SparkleUpdateController: NSObject {
 
   @discardableResult
   public func checkForUpdatesInBackgroundOnLaunch() -> Bool {
+    checkForUpdatesAutomatically()
+  }
+
+  @discardableResult
+  public func checkForUpdatesAutomatically() -> Bool {
     guard let updater = updaterController?.updater else {
       return false
     }
     configureAutomaticUpdateDefaults()
-    guard updater.automaticallyChecksForUpdates else {
+    guard updater.automaticallyChecksForUpdates, updater.automaticallyDownloadsUpdates else {
       return false
     }
     updater.checkForUpdatesInBackground()
@@ -87,6 +92,9 @@ public final class SparkleUpdateController: NSObject {
     }
     if configuration.automaticDownloadsEnabled, updater.allowsAutomaticUpdates {
       updater.automaticallyDownloadsUpdates = true
+    }
+    if let scheduledCheckInterval = configuration.scheduledCheckInterval {
+      updater.updateCheckInterval = scheduledCheckInterval
     }
   }
 }
@@ -165,9 +173,13 @@ private struct SparkleFrameworkStatusDriver: SparkleUpdateDriver, Sendable {
         status = observation.mandatoryUpdateAvailable
           ? "1Context \(displayedVersion) is a mandatory update."
           : "1Context \(displayedVersion) is available."
-        nextAction = observation.canInstallUpdates
-          ? "Install the Sparkle update from the app."
-          : "Wait for the current Sparkle update session to finish."
+        if observation.canInstallUpdates {
+          nextAction = observation.mandatoryUpdateAvailable
+            ? "Keep 1Context open while Sparkle installs and relaunches automatically."
+            : "Install the Sparkle update from the app."
+        } else {
+          nextAction = "Wait for the current Sparkle update session to finish."
+        }
       } else {
         status = "1Context is up to date."
         nextAction = "No action needed."

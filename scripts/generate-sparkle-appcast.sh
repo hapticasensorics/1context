@@ -24,6 +24,9 @@ if [[ ! -x "$GENERATE_APPCAST" ]]; then
   exit 1
 fi
 
+if [[ "${SPARKLE_CLEAN_UPDATES_DIR:-1}" == "1" ]]; then
+  rm -rf "$UPDATES_DIR"
+fi
 mkdir -p "$UPDATES_DIR"
 DMG_BASENAME="$(basename "$DMG")"
 UPDATE_DMG="$UPDATES_DIR/$DMG_BASENAME"

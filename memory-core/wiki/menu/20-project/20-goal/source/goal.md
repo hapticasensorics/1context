@@ -108,10 +108,11 @@ failure.
   installed version, and required setup state.
 - Passive remembering pauses or refuses to start when the installed version is
   below a declared mandatory minimum.
-- The currently installed `0.1.51` app can update through the real remote
+- A repaired healthy `0.1.51` baseline can update through the real remote
   GitHub Sparkle feed to `0.1.53`.
-- A later remote `0.1.54` release marked mandatory can move that installed
-  `0.1.53` app forward without a local appcast or hand-installed bundle.
+- A remote `0.1.54` release marked mandatory can move the installed `0.1.53`
+  app forward automatically, without a local appcast, hand-installed bundle, or
+  user click on an Install and Relaunch button.
 
 ## Done When
 
@@ -122,6 +123,9 @@ failure.
 - Sparkle release artifacts can be marked mandatory in the release pipeline.
 - The installed app checks aggressively, reports mandatory update state, and
   lets Sparkle automatically download and install eligible updates.
+- Mandatory updates use Sparkle's automatic background install path when
+  possible; UI is reserved for blocked cases where macOS or Sparkle needs the
+  user.
 - Every claim above has a deterministic local proof: Swift tests, release-script
   checks, wiki render checks, and live local wiki verification.
 
@@ -172,19 +176,30 @@ failure.
 ### Remote Release Train
 
 - [x] Baseline installed app is `0.1.51`.
-- [x] Baseline remote Sparkle feed is GitHub Releases
-  `latest/download/appcast.xml` and currently advertises `0.1.51`.
+- [x] Baseline remote Sparkle feed was GitHub Releases
+  `latest/download/appcast.xml` advertising `0.1.51` before this trial.
 - [x] Release workflow gap is identified: the current GitHub workflow still
   uploads an old tarball shape, while the real Sparkle path needs `1Context.dmg`,
   the versioned DMG, checksum, and `appcast.xml`.
-- [ ] Publish a signed/notarized `0.1.53` GitHub release with the production
+- [x] The first `0.1.51 -> 0.1.53` attempt failed with a visible Sparkle error,
+  captured as `dist/remote-update-evidence/0.1.51-to-0.1.53-error/`; logs
+  showed the installed copy was missing `Sparkle.framework/Versions/B/Updater.app`.
+- [x] The original `0.1.51` DMG was checked and contains the Sparkle helper
+  layout, so the machine baseline was repaired by reinstalling that same signed
+  `0.1.51` app from the cached DMG.
+- [x] Publish a signed/notarized `0.1.53` GitHub release with the production
   Sparkle key and appcast assets.
-- [ ] Prove the installed app moves from `0.1.51` to `0.1.53` through the remote
-  Sparkle feed.
+- [x] Prove a healthy installed app moves from `0.1.51` to `0.1.53` through the
+  remote Sparkle feed; this non-mandatory release downloaded, verified, and
+  installed after the Sparkle `Install and Relaunch` confirmation.
+- [x] Installed app is now `0.1.53` and setup status is healthy.
+- [x] Code path updated so mandatory update actions use Sparkle's automatic
+  background check/install flow instead of opening the manual update UI.
 - [ ] Publish a signed/notarized `0.1.54` GitHub release marked mandatory for
   automatic update from `0.1.53`.
 - [ ] Prove the installed `0.1.53` app moves to `0.1.54` through the remote
-  Sparkle feed without local appcast fixtures.
+  Sparkle feed without local appcast fixtures and without clicking Install and
+  Relaunch.
 - [ ] Capture release URLs, appcast snippets, installed app versions, CLI
   versions, setup status, and live wiki health as the final evidence bundle.
 

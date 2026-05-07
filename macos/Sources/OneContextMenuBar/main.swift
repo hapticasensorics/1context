@@ -1170,8 +1170,13 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
     } else {
       snapshot = await nativeUpdater.snapshot(currentVersion: appVersion)
     }
-    if snapshot.availability == .available, nativeUpdater.checkForUpdates(updateItem) {
-      return
+    if snapshot.availability == .available {
+      if snapshot.mandatoryUpdateAvailable, nativeUpdater.checkForUpdatesAutomatically() {
+        return
+      }
+      if nativeUpdater.checkForUpdates(updateItem) {
+        return
+      }
     }
     presentNativeUpdateSnapshot(snapshot)
   }

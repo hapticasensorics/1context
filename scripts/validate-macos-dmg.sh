@@ -117,6 +117,17 @@ if [[ ! -d "$APP/Contents/Frameworks/Sparkle.framework" ]]; then
   exit 1
 fi
 codesign --verify --deep --strict "$APP/Contents/Frameworks/Sparkle.framework" >/dev/null
+for sparkle_component in \
+  "$APP/Contents/Frameworks/Sparkle.framework/Versions/B/Autoupdate" \
+  "$APP/Contents/Frameworks/Sparkle.framework/Versions/B/Updater.app" \
+  "$APP/Contents/Frameworks/Sparkle.framework/Versions/B/XPCServices/Downloader.xpc" \
+  "$APP/Contents/Frameworks/Sparkle.framework/Versions/B/XPCServices/Installer.xpc"; do
+  if [[ ! -e "$sparkle_component" ]]; then
+    echo "DMG app is missing Sparkle update helper component: $sparkle_component" >&2
+    exit 1
+  fi
+  codesign --verify --deep --strict "$sparkle_component" >/dev/null
+done
 if ! otool -L "$APP/Contents/MacOS/1Context" | grep -q '@rpath/Sparkle.framework/Versions/B/Sparkle'; then
   echo "DMG menu app is not linked to Sparkle.framework." >&2
   exit 1
