@@ -2,6 +2,27 @@ name: Release
 
 on:
   workflow_dispatch:
+    inputs:
+      mandatory:
+        description: "Mark this release as a mandatory Sparkle update."
+        required: false
+        type: boolean
+        default: false
+      minimum_autoupdate_version:
+        description: "Oldest installed version eligible for automatic Sparkle install."
+        required: false
+        type: string
+        default: ""
+      minimum_update_version:
+        description: "Optional Sparkle minimum update version."
+        required: false
+        type: string
+        default: ""
+      critical_update_version:
+        description: "Optional Sparkle critical update version; defaults to VERSION when mandatory is true."
+        required: false
+        type: string
+        default: ""
 
 permissions:
   contents: write
@@ -64,30 +85,56 @@ jobs:
       - name: Build notarized artifact
         env:
           NOTARIZE: "1"
+          GENERATE_SPARKLE_APPCAST: "1"
           ONECONTEXT_SIGNING_MODE: developer-id
           CODESIGN_IDENTITY: ${{ secrets.CODESIGN_IDENTITY }}
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
-        run: ./scripts/package-macos-release.sh
-      - name: Write checksum
+          ONECONTEXT_SPARKLE_FEED_URL: https://github.com/hapticasensorics/1context/releases/latest/download/appcast.xml
+          ONECONTEXT_SPARKLE_PUBLIC_ED_KEY: ${{ secrets.ONECONTEXT_SPARKLE_PUBLIC_ED_KEY }}
+          SPARKLE_PRIVATE_ED_KEY: ${{ secrets.SPARKLE_PRIVATE_ED_KEY }}
+          SPARKLE_DOWNLOAD_URL_PREFIX: https://github.com/hapticasensorics/1context/releases/download/${{ github.ref_name }}/
+          SPARKLE_RELEASE_NOTES_URL_PREFIX: https://github.com/hapticasensorics/1context/releases/download/${{ github.ref_name }}/
+          SPARKLE_LINK_URL: https://github.com/hapticasensorics/1context/releases/tag/${{ github.ref_name }}
+          ONECONTEXT_SPARKLE_MANDATORY: ${{ inputs.mandatory && '1' || '0' }}
+          ONECONTEXT_SPARKLE_MANDATORY_FROM_VERSION: ${{ inputs.critical_update_version }}
+          ONECONTEXT_SPARKLE_MINIMUM_AUTOUPDATE_VERSION: ${{ inputs.minimum_autoupdate_version }}
+          ONECONTEXT_SPARKLE_MINIMUM_UPDATE_VERSION: ${{ inputs.minimum_update_version }}
         run: |
-          artifact="$(ls dist/1context-*-macos-arm64.tar.gz | tail -1)"
+          if [[ "$ONECONTEXT_SPARKLE_MANDATORY" == "1" && -z "$ONECONTEXT_SPARKLE_MANDATORY_FROM_VERSION" ]]; then
+            critical_update_version="$(tr -d '[:space:]' < VERSION)"
+            export ONECONTEXT_SPARKLE_MANDATORY_FROM_VERSION="$critical_update_version"
+          fi
+          ./scripts/package-macos-release.sh
+      - name: Collect Sparkle release assets
+        run: |
+          version="$(tr -d '[:space:]' < VERSION)"
+          artifact="dist/1Context-${version}-macos-arm64.dmg"
+          appcast="dist/sparkle-updates/appcast.xml"
+          test -f "$artifact"
+          test -f "$appcast"
           (
             cd dist
             shasum -a 256 "$(basename "$artifact")" > "$(basename "$artifact").sha256"
           )
-          artifact_sha="dist/$(basename "$artifact").sha256"
-          mv "$artifact_sha" "$artifact.sha256"
+          cp "$artifact" dist/1Context.dmg
+          cp "$appcast" dist/appcast.xml
           cat "$artifact.sha256"
       - name: Upload GitHub release artifacts
         if: startsWith(github.ref, 'refs/tags/')
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          artifact="$(ls dist/1context-*-macos-arm64.tar.gz | tail -1)"
+          version="$(tr -d '[:space:]' < VERSION)"
+          artifact="dist/1Context-${version}-macos-arm64.dmg"
           gh release view "${GITHUB_REF_NAME}" >/dev/null 2>&1 || \
             gh release create "${GITHUB_REF_NAME}" \
               --title "1Context ${GITHUB_REF_NAME}" \
               --notes-file RELEASE_NOTES.md
-          gh release upload "${GITHUB_REF_NAME}" "$artifact" "$artifact.sha256" --clobber
+          gh release upload "${GITHUB_REF_NAME}" \
+            "$artifact" \
+            "$artifact.sha256" \
+            dist/1Context.dmg \
+            dist/appcast.xml \
+            --clobber

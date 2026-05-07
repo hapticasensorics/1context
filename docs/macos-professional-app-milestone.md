@@ -107,8 +107,9 @@ This gives each domain the same responsibilities:
   Proof: `scripts/generate-sparkle-appcast.sh` wraps Sparkle `generate_appcast`
   for the release DMG and release notes.
 - [x] Generate and validate production appcast feed artifacts.
-  Proof: `v0.1.51` generated a production Sparkle appcast with EdDSA signature,
-  versioned DMG URL, and embedded release notes.
+  Proof: the production Sparkle feed now advertises `v0.1.55` with EdDSA
+  signature, versioned DMG URL, embedded release notes, and mandatory update
+  metadata.
 - [x] Add local appcast update smoke from controlled fixture builds.
   Proof: `scripts/smoke-sparkle-local-appcast.sh` installs an older fixture
   app, serves a mandatory local appcast for the next fixture app, waits for
@@ -136,9 +137,9 @@ This gives each domain the same responsibilities:
   Evidence: `1context setup local-web repair` re-runs the app-owned setup
   installer and refreshes the helper/trust state.
 - [x] Sparkle update completion triggers setup re-check before opening the wiki.
-  Proof: the `0.1.50` to `0.1.51` GUI update relaunched into a healthy app;
-  `1context status --debug` reported setup ready, helper diagnostics current,
-  and the local wiki returned HTTP 200.
+  Proof: the `0.1.54` to `0.1.55` mandatory automatic update relaunched into a
+  setup-ready app with Local Wiki Access granted and the local wiki returning
+  HTTP 200.
 
 ### 5. Permissions Suite
 
@@ -180,15 +181,19 @@ This gives each domain the same responsibilities:
 - [ ] Test first launch setup and local HTTPS wiki open.
 - [ ] Test quit/relaunch.
 - [ ] Test update.
-  Note: GUI Sparkle update from `0.1.50` to `0.1.51` passed on this machine, but
-  the clean-machine acceptance pass still needs its own captured evidence.
+  Note: the release train through `0.1.55` passed on this machine, including an
+  automatic mandatory update, but the clean-machine acceptance pass still needs
+  its own captured evidence.
 - [ ] Test uninstall cleanup.
 
 ## Notes
 
-- Current baseline: `v0.1.51` has install placement, setup readiness, local
-  HTTPS, signed/notarized DMG packaging, production Sparkle appcast, GUI update,
-  menu uninstall, and support diagnostics in the app-owned shape.
+- Current baseline: `v0.1.55` has install placement, setup readiness, local
+  HTTPS, signed/notarized DMG packaging, production Sparkle appcast, automatic
+  mandatory update proof, setup flywheel repair, menu uninstall, and support
+  diagnostics in the app-owned shape.
+- Active cleanup: `0.1.56` should prove runtime steady state after restart and
+  align the release workflow/docs with the shipped Sparkle DMG/appcast path.
 - Remaining professional app work is summarized in
   [macos-professional-app-remaining-work.md](macos-professional-app-remaining-work.md).
 - Immediate next step: run the full clean-machine checklist against the

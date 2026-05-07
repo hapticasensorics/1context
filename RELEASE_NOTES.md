@@ -1,20 +1,20 @@
-# 1Context v0.1.55 Public Preview
+# 1Context v0.1.56 Public Preview
 
 This release includes:
 
-- Setup now keeps observing readiness while the setup window is open, so grants
-  made outside the app are detected automatically instead of waiting for a
-  manual Check Again click.
-- When Local Wiki Access is already ready, setup shows the useful Open Wiki
-  action and removes the stale Check Again button.
-- Completing or rediscovering ready setup immediately marks remembering as the
-  desired state, starts the runtime, starts the local web edge, and resumes the
-  blocked action when safe.
-- The menu app now loads its LaunchAgent during launch instead of only writing
-  the plist for a future login, so an installed app can self-heal a missing menu
-  auto-start registration.
-- `0.1.55` is intended as the mandatory follow-up to `0.1.54` for the setup and
-  permissions flywheel.
+- The GitHub release workflow now publishes the product Sparkle artifact shape:
+  the versioned DMG, `1Context.dmg`, checksum, and signed `appcast.xml`.
+- Release dispatch now accepts mandatory Sparkle metadata, including critical
+  and minimum autoupdate versions.
+- A reusable installed-app steady-state verifier records CLI status, update
+  state, permissions, LaunchAgent state, runtime log deltas, and screenshot
+  evidence.
+- `/goal` now carries the full finish-it release train from `0.1.56` through
+  `0.1.65`, with every version tied to remote Sparkle update proof.
+- Professional-app docs now reflect the `0.1.55` shipped baseline and the active
+  `0.1.56` cleanup release instead of stale `0.1.51` current-state language.
+- `0.1.56` is intended as the mandatory follow-up to `0.1.55` for release
+  workflow truth, steady-state proof, and the update flywheel.
 
 Install:
 

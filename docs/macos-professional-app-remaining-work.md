@@ -21,19 +21,19 @@ The guiding product shape is:
 - DMG packaging exists and validates.
   Evidence: `scripts/package-macos-release.sh`,
   `scripts/create-macos-dmg.sh`, `scripts/validate-macos-dmg.sh`.
-- `v0.1.51` shipped as a signed, notarized, stapled DMG with a signed Sparkle
-  appcast served from GitHub Releases.
+- `v0.1.55` is the current signed, notarized, stapled DMG release with a signed
+  Sparkle appcast served from GitHub Releases.
 - The Homebrew cask wraps the same signed DMG and leaves app updates to Sparkle.
-- The GUI Sparkle update path has been proven from `0.1.50` to `0.1.51`; after
-  update, `/Applications/1Context.app`, the linked `1context` command, setup
-  readiness, and the local wiki health endpoint were all current and healthy.
-- The automated local Sparkle appcast smoke now builds two fixture app
+- The remote Sparkle release train has been proven from `0.1.51` through
+  `0.1.55`; the `0.1.54 -> 0.1.55` hop used the automatic mandatory path without
+  clicking Install and Relaunch.
+- The automated local Sparkle appcast smoke builds two fixture app
   versions, serves a mandatory local appcast, and verifies Sparkle replaces the
   installed fixture app and relaunches into the newer version.
 - The app can be installed into `/Applications/1Context.app` from the DMG.
 - The app owns first-launch setup. Local Wiki Access is surfaced in the setup
   window and reported through CLI/status diagnostics.
-- Local Wiki Access is now working on this machine:
+- Local Wiki Access is working on this machine:
   - `1context setup local-web status` reports `Setup Ready: yes`.
   - `launchctl print system/com.haptica.1context.local-web-proxy` reports the
     helper running.
@@ -79,7 +79,8 @@ we should keep for the local HTTPS proxy.
 
 ```mermaid
 flowchart TD
-  Current["Current state\nv0.1.51 DMG + setup + Sparkle update smoke"]
+  Current["Current state\nv0.1.55 DMG + setup + mandatory Sparkle update"]
+  Steady["Steady-state cleanup\nruntime, docs, release workflow"]
   Harness["Clean-machine checklist\nrepeatable evidence collection"]
   Manual["Manual first-user pass\ninstall, setup, wiki, relaunch"]
   Uninstall["Uninstall acceptance\nmenu + CLI cleanup proof"]
@@ -87,7 +88,7 @@ flowchart TD
   Rollback["Failed-update smoke\nrollback + stale-helper repair"]
   CleanMachine["Notarized clean-machine acceptance\ninstall, setup, update, uninstall"]
 
-  Current --> Harness --> Manual --> Uninstall --> LocalSmoke --> Rollback --> CleanMachine
+  Current --> Steady --> Harness --> Manual --> Uninstall --> LocalSmoke --> Rollback --> CleanMachine
 ```
 
 The sequencing matters:
@@ -173,8 +174,8 @@ The sequencing matters:
   Proof: `scripts/configure-macos-release-secrets.sh` detects the Developer ID
   identity, App Store Connect key file, and Sparkle public key.
 - [x] Generate appcast artifacts with the production EdDSA key.
-  Proof: `v0.1.51` appcast contains the EdDSA update signature, release notes,
-  and versioned GitHub Release DMG URL.
+  Proof: `v0.1.55` appcast contains the EdDSA update signature, release notes,
+  mandatory metadata, and versioned GitHub Release DMG URL.
 - [x] Add local appcast update smoke.
   Proof: `scripts/smoke-sparkle-local-appcast.sh` installed fixture
   `0.1.51.900`, served a mandatory appcast for fixture `0.1.51.901`, and
@@ -183,8 +184,8 @@ The sequencing matters:
   Proof: `MandatoryUpdateRuntimePolicy` blocks start/autostart for available
   mandatory updates and is covered by `OneContextUpdateTests`.
 - [x] After Sparkle update, re-run required setup readiness before opening wiki.
-  Proof: after the `0.1.50` to `0.1.51` GUI update, setup diagnostics were ready
-  and the wiki health endpoint returned OK.
+  Proof: after the `0.1.54` to `0.1.55` automatic mandatory update, setup
+  diagnostics were ready and the wiki health endpoint returned OK.
 - [ ] Verify failed update leaves old app usable.
   Proof: update-failure smoke preserves old app launch and status.
 
@@ -246,7 +247,9 @@ SPARKLE_DOWNLOAD_URL_PREFIX="https://github.com/hapticasensorics/1context/releas
 
 ## Immediate Next Step
 
-Run the clean-machine checklist against the notarized DMG and collect one
-complete install -> setup -> wiki -> relaunch -> update -> uninstall evidence
-bundle. After that, extend the local appcast smoke with failed-update rollback
-and stale-helper repair coverage.
+Finish the `0.1.56` steady-state cleanup: prove the installed app stays running
+across repeated probes, update the GitHub release workflow to publish
+Sparkle/DMG assets, and keep release docs aligned with the current appcast
+truth. After that, run the clean-machine checklist against the notarized DMG and
+collect one complete install -> setup -> wiki -> relaunch -> update -> uninstall
+evidence bundle.

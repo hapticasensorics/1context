@@ -101,6 +101,8 @@
             <li class="is-sub"><a href="#Closed_Loop">Closed Loop</a></li>
             <li class="is-sub"><a href="#Remote_Release_Train">Remote Release Train</a></li>
             <li class="is-sub"><a href="#0.1.55_Setup_Flywheel_Repair">0.1.55 Setup Flywheel Repair</a></li>
+            <li class="is-sub"><a href="#0.1.56_Steady_State_and_Design_Cleanup">0.1.56 Steady State and Design Cleanup</a></li>
+            <li class="is-sub"><a href="#0.1.56_to_0.1.65_Finish-It_Release_Flywheel">0.1.56 to 0.1.65 Finish-It Release Flywheel</a></li>
           </ul>
         </li>
         <li><a href="#See_Also">See Also</a></li>
@@ -307,8 +309,220 @@ shows Open Wiki plus granted permissions and no Check Again button.</li>
 <code>0.1.54</code>.</li>
 <li><input checked="" disabled="" type="checkbox"> Prove the installed <code>0.1.54</code> app moves to <code>0.1.55</code> through the remote
 Sparkle feed without clicking Install and Relaunch.</li>
-<li><input checked="" disabled="" type="checkbox"> Prove installed <code>0.1.55</code> is running, setup-ready, menu-loaded, and wiki
-healthy after the update.</li>
+<li><input checked="" disabled="" type="checkbox"> Prove installed <code>0.1.55</code> is setup-ready, menu-loaded, and wiki healthy
+immediately after the update.</li>
+<li><input checked="" disabled="" type="checkbox"> Prove installed <code>0.1.55</code> remains runtime-steady after restart and repeated
+status probes, with no fresh SIGTERM loop and no Sick/menu/CLI disagreement.
+Evidence: <code>dist/steady-state-evidence/20260507T071802Z/</code> crossed multiple
+menu refresh intervals with no new SIGTERM count and post-screenshot status
+still reported runtime, menu, setup, and wiki healthy.</li>
+</ul>
+<h3 id="0.1.56_Steady_State_and_Design_Cleanup">0.1.56 Steady State and Design Cleanup</h3>
+<p>This goal repairs the gap exposed by <code>0.1.55</code>: update/setup can succeed while
+the product still feels unprofessional if old release docs, stale workflow
+artifacts, or a flapping passive runtime survive.</p>
+<h4>Done When</h4>
+<ul>
+<li><code>1context-cli status --debug</code>, menu state, LaunchAgent state, local wiki
+health, and desired runtime intent agree over a repeated steady-state probe.</li>
+<li>No new runtime SIGTERM loop appears during the steady-state probe.</li>
+<li>The GitHub release workflow publishes the same Sparkle/DMG assets used by the
+real release train: versioned DMG, <code>1Context.dmg</code>, checksum, and <code>appcast.xml</code>.</li>
+<li>Stale docs no longer present <code>v0.1.51</code> or tarball releases as the current
+release truth.</li>
+<li><code>/goal</code> itself is rendered and visible in the live local wiki with this
+checklist.</li>
+</ul>
+<h4>Checklist</h4>
+<h5>Baseline Truth</h5>
+<ul>
+<li><input checked="" disabled="" type="checkbox"> Installed app reports <code>0.1.55</code>.
+Evidence: <code>/Applications/1Context.app/Contents/MacOS/1context-cli version</code>.</li>
+<li><input checked="" disabled="" type="checkbox"> Local Wiki Access is granted and the wiki is reachable.
+Evidence: <code>1context-cli permissions</code> reports Required Setup ready and Local
+Wiki reachable.</li>
+<li><input checked="" disabled="" type="checkbox"> Live appcast advertises <code>0.1.55</code> as the current Sparkle release.
+Evidence: GitHub Releases <code>latest/download/appcast.xml</code>.</li>
+<li><input checked="" disabled="" type="checkbox"> Release workflow drift is identified: <code>.github/workflows/release.yml</code>
+still uploads the old tarball artifact shape instead of Sparkle DMG/appcast
+assets.</li>
+<li><input checked="" disabled="" type="checkbox"> Documentation drift is identified: professional-app docs still describe
+<code>v0.1.51</code> as the current baseline.</li>
+<li><input checked="" disabled="" type="checkbox"> Runtime-health ambiguity is identified: a May 7 probe saw Local Web OK
+while runtime status returned socket no response.</li>
+</ul>
+<h5>Runtime Steady State</h5>
+<ul>
+<li><input checked="" disabled="" type="checkbox"> Add a reusable steady-state verifier that records CLI status, update
+state, permissions, LaunchAgent state, and runtime log deltas.</li>
+<li><input checked="" disabled="" type="checkbox"> Run the verifier against the installed app long enough to cross multiple
+menu refresh intervals.</li>
+<li><input checked="" disabled="" type="checkbox"> Confirm the current installed app does not send fresh SIGTERM during the
+verifier window while desired state is <code>running</code> and no mandatory update is
+pending.</li>
+<li><input checked="" disabled="" type="checkbox"> Prove the menu is visible and agrees with CLI/runtime state after the
+verifier passes.</li>
+</ul>
+<h5>Release Workflow Cleanup</h5>
+<ul>
+<li><input checked="" disabled="" type="checkbox"> Update the GitHub release workflow to build notarized DMG plus signed
+Sparkle appcast assets.</li>
+<li><input checked="" disabled="" type="checkbox"> Add workflow inputs for mandatory release metadata, including critical and
+minimum autoupdate versions.</li>
+<li><input checked="" disabled="" type="checkbox"> Stop publishing tarball-only assets from the release workflow.</li>
+<li><input checked="" disabled="" type="checkbox"> Validate the workflow syntax and artifact collection path locally.</li>
+</ul>
+<h5>Documentation Cleanup</h5>
+<ul>
+<li><input checked="" disabled="" type="checkbox"> Refresh professional-app docs so <code>0.1.55</code> is historical current truth and
+<code>0.1.56</code> is the active steady-state cleanup goal.</li>
+<li><input checked="" disabled="" type="checkbox"> Keep older <code>0.1.50</code> to <code>0.1.55</code> evidence as history, not current baseline
+language.</li>
+<li><input checked="" disabled="" type="checkbox"> Confirm stale <code>Install and Relaunch</code> and manual <code>Check Again</code> language is
+used only when describing old evidence or fixed bugs.</li>
+</ul>
+<h5>Live Wiki Proof</h5>
+<ul>
+<li><input checked="" disabled="" type="checkbox"> Render the updated <code>goal</code> wiki family from source.</li>
+<li><input checked="" disabled="" type="checkbox"> Publish or patch the live local wiki so <code>/goal</code> shows this checklist.</li>
+<li><input checked="" disabled="" type="checkbox"> Verify <code>/goal#0.1.56_Steady_State_and_Design_Cleanup</code> in the local
+browser or with a saved HTML/status artifact.</li>
+</ul>
+<h3 id="0.1.56_to_0.1.65_Finish-It_Release_Flywheel">0.1.56 to 0.1.65 Finish-It Release Flywheel</h3>
+<p>This is the full professional-app finish goal. The point is not to worship
+version numbers; the point is to keep moving the installed app through real
+signed releases until setup, update, permissions, lifecycle, uninstall, and
+diagnostics are boringly reliable. It is acceptable to use every version from
+<code>0.1.56</code> through <code>0.1.65</code> as a proof step if that is what the work needs.</p>
+<p>Each release in this train must answer four questions:</p>
+<ul>
+<li>What user-visible or operator-visible behavior improved?</li>
+<li>What local or CI harness proves it?</li>
+<li>Did the installed app update through the remote Sparkle feed?</li>
+<li>Did the app remain healthy after relaunch, restart, and repeated probes?</li>
+</ul>
+<h4>Done When</h4>
+<ul>
+<li>The currently installed app reaches the final blessed version in this train
+through the remote Sparkle feed, starting from the installed <code>0.1.55</code> baseline.</li>
+<li>At least one mandatory remote update is proven after <code>0.1.55</code>, with no
+Install and Relaunch click and no local appcast fixture.</li>
+<li>Every release artifact shape is the product shape: signed/notarized app,
+signed/notarized DMG, <code>1Context.dmg</code>, checksum, and signed <code>appcast.xml</code>.</li>
+<li>Runtime/menu/CLI/local wiki/setup state agree after every update and after at
+least one machine restart or login-style LaunchAgent recovery.</li>
+<li>Uninstall cleanup is proven against the app-owned helper, launch agents,
+trusted local CA, managed hooks, logs/cache, and optional data deletion.</li>
+<li>Permission flywheel behavior is proven for each shipped permission-dependent
+surface: blocked action opens setup/permission flow, granted state is noticed
+automatically, and the original action continues when safe.</li>
+<li>Failed update and stale helper cases leave the old app usable with a clear
+recovery path.</li>
+<li>The release docs, <code>/goal</code>, GitHub workflow, release notes, and live local wiki
+all agree on what the current blessed version is.</li>
+</ul>
+<h4>Version Train</h4>
+<h5>0.1.56 Release Workflow and Steady State</h5>
+<ul>
+<li><input checked="" disabled="" type="checkbox"> Add <code>/goal</code> checklist for steady-state cleanup and release workflow drift.</li>
+<li><input checked="" disabled="" type="checkbox"> Add reusable installed-app steady-state verifier.</li>
+<li><input checked="" disabled="" type="checkbox"> Prove installed <code>0.1.55</code> remains healthy over repeated probes.</li>
+<li><input checked="" disabled="" type="checkbox"> Update GitHub release workflow to publish DMG/appcast assets instead of
+tarball-only artifacts.</li>
+<li><input checked="" disabled="" type="checkbox"> Bump source version and release notes to <code>0.1.56</code>.</li>
+<li><input checked="" disabled="" type="checkbox"> Build/sign/notarize <code>0.1.56</code>.
+Evidence: <code>dist/1Context-0.1.56-macos-arm64.dmg</code> and <code>dist/1Context.app</code>
+passed Developer ID signing, Apple notarization, stapling, and DMG validation.</li>
+<li><input disabled="" type="checkbox"> Publish <code>v0.1.56</code> with <code>1Context.dmg</code>, versioned DMG, checksum, and
+<code>appcast.xml</code>.</li>
+<li><input disabled="" type="checkbox"> Prove remote Sparkle update from installed <code>0.1.55</code> to <code>0.1.56</code>.</li>
+<li><input disabled="" type="checkbox"> Prove <code>0.1.56</code> steady state after update with the reusable verifier.</li>
+</ul>
+<h5>0.1.57 Release Automation Proof</h5>
+<ul>
+<li><input disabled="" type="checkbox"> Run the updated GitHub release workflow or equivalent scripted release
+path end to end for a real release.</li>
+<li><input disabled="" type="checkbox"> Prove workflow-provided mandatory metadata appears correctly in the
+generated appcast.</li>
+<li><input disabled="" type="checkbox"> Prove <code>0.1.56 -&gt; 0.1.57</code> auto-update through the remote Sparkle feed.</li>
+<li><input disabled="" type="checkbox"> Add a release artifact audit script if the workflow still requires manual
+asset inspection.</li>
+</ul>
+<h5>0.1.58 Uninstall and Residue Proof</h5>
+<ul>
+<li><input disabled="" type="checkbox"> Add full uninstall smoke that can inspect helper, LaunchAgents, local CA,
+managed hooks, logs/cache, and optional data deletion.</li>
+<li><input disabled="" type="checkbox"> Run uninstall without <code>--delete-data</code> and prove user wiki content remains.</li>
+<li><input disabled="" type="checkbox"> Run uninstall with delete-data in a controlled fixture account or fixture
+path and prove only approved paths are removed.</li>
+<li><input disabled="" type="checkbox"> Reinstall from DMG and prove setup/update still works after residue cleanup.</li>
+<li><input disabled="" type="checkbox"> Prove remote Sparkle update into <code>0.1.58</code>.</li>
+</ul>
+<h5>0.1.59 Failed Update and Recovery Proof</h5>
+<ul>
+<li><input disabled="" type="checkbox"> Add failed-update rollback smoke for broken appcast, missing asset, bad
+signature, and interrupted download cases where feasible.</li>
+<li><input disabled="" type="checkbox"> Prove failed update leaves old app launchable and diagnostics clear.</li>
+<li><input disabled="" type="checkbox"> Prove stale local HTTPS helper is detected and repaired after app
+replacement.</li>
+<li><input disabled="" type="checkbox"> Prove remote Sparkle update into <code>0.1.59</code>.</li>
+</ul>
+<h5>0.1.60 Permission Flywheel Expansion</h5>
+<ul>
+<li><input disabled="" type="checkbox"> Define the permission readiness model for future Screen Recording and
+Accessibility surfaces without making the CLI the accidental permission owner.</li>
+<li><input disabled="" type="checkbox"> Add native setup rows for permission-dependent shipped surfaces only.</li>
+<li><input disabled="" type="checkbox"> Prove blocked action opens the relevant permission/setup flow.</li>
+<li><input disabled="" type="checkbox"> Prove granted state is detected automatically without manual Check Again.</li>
+<li><input disabled="" type="checkbox"> Prove remote Sparkle update into <code>0.1.60</code>.</li>
+</ul>
+<h5>0.1.61 Restart and Login Resilience</h5>
+<ul>
+<li><input disabled="" type="checkbox"> Prove menu LaunchAgent and runtime LaunchAgent recover after app relaunch.</li>
+<li><input disabled="" type="checkbox"> Prove machine-restart or login-style recovery on this Mac with screenshots
+and CLI status artifacts.</li>
+<li><input disabled="" type="checkbox"> Prove desired state <code>running</code> survives update/restart unless the user
+explicitly stops remembering.</li>
+<li><input disabled="" type="checkbox"> Prove remote Sparkle update into <code>0.1.61</code>.</li>
+</ul>
+<h5>0.1.62 Diagnostics and Supportability</h5>
+<ul>
+<li><input disabled="" type="checkbox"> Add one command or evidence bundle that collects version, appcast, Sparkle
+defaults, LaunchAgent state, helper state, setup state, runtime health, local
+wiki health, and recent logs.</li>
+<li><input disabled="" type="checkbox"> Redact sensitive paths/content by default while preserving operator-useful
+state.</li>
+<li><input disabled="" type="checkbox"> Prove diagnostics can distinguish healthy, needs setup, needs update,
+failed update, and stopped-by-user states.</li>
+<li><input disabled="" type="checkbox"> Prove remote Sparkle update into <code>0.1.62</code>.</li>
+</ul>
+<h5>0.1.63 Clean-Machine Acceptance</h5>
+<ul>
+<li><input disabled="" type="checkbox"> Run clean-machine checklist from DMG install through setup, wiki open,
+update, relaunch, and uninstall cleanup.</li>
+<li><input disabled="" type="checkbox"> Capture screenshots and command artifacts for every consent or native UI
+step.</li>
+<li><input disabled="" type="checkbox"> Prove Homebrew remains an install channel and Sparkle remains the update
+engine.</li>
+<li><input disabled="" type="checkbox"> Prove remote Sparkle update into <code>0.1.63</code>.</li>
+</ul>
+<h5>0.1.64 Release Train Rehearsal</h5>
+<ul>
+<li><input disabled="" type="checkbox"> Run a full release rehearsal where the only accepted proof is installed
+app behavior after remote update.</li>
+<li><input disabled="" type="checkbox"> Validate <code>/goal</code>, release docs, release notes, appcast, GitHub release
+assets, and installed app version all agree.</li>
+<li><input disabled="" type="checkbox"> Prove remote Sparkle update into <code>0.1.64</code>.</li>
+</ul>
+<h5>0.1.65 Blessed Professional App</h5>
+<ul>
+<li><input disabled="" type="checkbox"> Publish <code>0.1.65</code> as the final blessed version of this train.</li>
+<li><input disabled="" type="checkbox"> Mark it mandatory if any previous train version should stop running.</li>
+<li><input disabled="" type="checkbox"> Prove the installed app reaches <code>0.1.65</code> through remote Sparkle update.</li>
+<li><input disabled="" type="checkbox"> Prove the final installed app is runtime-steady, setup-ready, wiki-healthy,
+menu-visible, update-current, and uninstall-verifiable.</li>
+<li><input disabled="" type="checkbox"> Close this <code>/goal</code> section with evidence paths and any intentionally
+deferred future permissions work.</li>
 </ul>
 <h2 id="See_Also">See Also</h2>
 <ul>

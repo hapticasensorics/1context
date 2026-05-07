@@ -183,17 +183,16 @@ flowchart TD
   Proof: `scripts/configure-macos-release-secrets.sh` and
   `scripts/package-macos-production-release.sh`.
 - [x] Run appcast generation with the production EdDSA key.
-  Proof: `v0.1.51` generated `appcast.xml` with a Sparkle EdDSA signature and
-  served it from the GitHub Releases feed URL.
+  Proof: the release train now publishes signed Sparkle appcasts through the
+  GitHub Releases feed URL; `v0.1.55` is the current advertised appcast item.
 - [x] Update install preserves or repairs required local web helper state at the
   readiness layer.
   Proof: post-update setup snapshot repairs stale helper binary SHA.
 - [x] Update smoke replaces an older app with a newer app and verifies setup,
   wiki, menu state, CLI status, and helper repair afterward.
-  Proof: Homebrew-installed `0.1.50` updated through the GUI Sparkle flow to
-  `0.1.51`; `/Applications/1Context.app`, the linked `1context` command,
-  `1context status --debug`, and the local wiki health endpoint all reported the
-  updated app and healthy Local Wiki Access afterward.
+  Proof: the remote release train moved this Mac from `0.1.51` through `0.1.55`
+  using the production Sparkle feed; `0.1.54 -> 0.1.55` used the automatic
+  mandatory path without clicking Install and Relaunch.
 - [x] Local appcast update smoke replaces an older controlled fixture app with a
   newer controlled fixture app.
   Proof: `scripts/smoke-sparkle-local-appcast.sh` serves a mandatory local
@@ -232,10 +231,14 @@ flowchart TD
 
 ## Notes
 
-- Current baseline: `v0.1.51` is published as a signed, notarized, stapled DMG
-  with a signed Sparkle appcast, and the Homebrew cask wraps the same DMG.
-- Immediate next step: run the full clean-machine checklist against the
-  notarized DMG, including app-owned uninstall cleanup.
+- Current baseline: `v0.1.55` is published as a signed, notarized, stapled DMG
+  with a signed Sparkle appcast; setup/wiki access and mandatory automatic
+  update have been proven on this Mac.
+- Active cleanup: `0.1.56` should prove steady runtime state after restart,
+  refresh the GitHub release workflow to publish DMG/appcast assets, and remove
+  stale current-baseline language from release docs.
+- Immediate next step after the steady-state cleanup: run the full clean-machine
+  checklist against the notarized DMG, including app-owned uninstall cleanup.
 - Next deeper step: extend the automated local appcast smoke with failed-update
   rollback and stale-helper repair coverage.
 - The broader remaining professional-app work is tracked in
