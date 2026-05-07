@@ -163,7 +163,7 @@
       "template_version": "local-private-shell@0.1.0"
     }
   ],
-  "generated_at": "2026-05-07T05:54:52Z",
+  "generated_at": "2026-05-07T06:07:21Z",
   "pages": [
     {
       "excerpt": "# For You This is the working surface 1Context keeps close to the present. It should feel useful even before memory has accumulated: a quiet place to see what the system is ready to preserve, where agents should propose additions, and which durable pages those additions may eventually update. ## How This Page Works For You is a rolling private page. As 1Context observes repeated work, decisions, corrections, and open loops, memory agents should promote concise summaries here ...",
@@ -307,7 +307,7 @@
       ],
       "path": "wiki/menu/20-project/20-goal/generated/goal.md",
       "route": "/goal",
-      "sha256": "2cb0e9871845beb519c79c22e6bbe4840c405c043a05287f03259d03919e1038",
+      "sha256": "b345d19743421e008de1b0dd0c02f2d44c7bdc7c8a3fdd29b3a6a11929d8f397",
       "slug": "goal",
       "source": "generated_markdown",
       "summary": "The professional app bar for 1Context: permission flows, update discipline, and the behaviors that must feel reliable before broad release.",
@@ -715,7 +715,7 @@
       },
       {
         "archived_talk_entries": 0,
-        "bytes": 124054,
+        "bytes": 124087,
         "generated_files": 5,
         "generated_files_by_extension": {
           ".html": 2,
@@ -758,7 +758,7 @@
         "words": 0
       }
     ],
-    "generated_at": "2026-05-07T05:54:52Z",
+    "generated_at": "2026-05-07T06:07:21Z",
     "generated_files_by_extension": {
       "(none)": 1,
       ".html": 11,
@@ -899,7 +899,7 @@
     "totals": {
       "archived_talk_entries": 0,
       "broken_internal_links": 0,
-      "bytes": 568588,
+      "bytes": 568621,
       "content_pages": 6,
       "external_links": 0,
       "families": 5,
@@ -914,7 +914,7 @@
       "talk_entries": 5,
       "talk_folders": 5,
       "talk_words": 274,
-      "words": 2719
+      "words": 2722
     }
   },
   "wiki": {

@@ -222,11 +222,11 @@ failure.
 - [x] Prove the ready setup window with Accessibility and screenshot evidence;
   `dist/remote-update-evidence/setup-window-ready-no-check-again-after-patch/`
   shows Open Wiki plus granted permissions and no Check Again button.
-- [ ] Publish signed/notarized `0.1.55` as the mandatory remote update from
+- [x] Publish signed/notarized `0.1.55` as the mandatory remote update from
   `0.1.54`.
-- [ ] Prove the installed `0.1.54` app moves to `0.1.55` through the remote
+- [x] Prove the installed `0.1.54` app moves to `0.1.55` through the remote
   Sparkle feed without clicking Install and Relaunch.
-- [ ] Prove installed `0.1.55` is running, setup-ready, menu-loaded, and wiki
+- [x] Prove installed `0.1.55` is running, setup-ready, menu-loaded, and wiki
   healthy after the update.
 
 ## See Also
