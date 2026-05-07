@@ -394,7 +394,16 @@ Each release in this train must answer four questions:
   `sparkle:minimumAutoupdateVersion` of `0.1.56`, marks
   `sparkle:criticalUpdate` for `0.1.57`, points at the GitHub `v0.1.57` DMG,
   and includes an EdDSA signature.
-- [ ] Prove `0.1.56 -> 0.1.57` auto-update through the remote Sparkle feed.
+- [x] Prove `0.1.56 -> 0.1.57` bridge update through the remote Sparkle feed.
+  Note: this hop is initiated by already-installed `0.1.56`, so it may still
+  show the old Sparkle click-through. That is acceptable only as the bridge to
+  get the fixed `0.1.57` updater onto the machine.
+  Evidence: `dist/remote-update-evidence/0.1.56-to-0.1.57-bridge/` shows
+  installed version convergence to `0.1.57`, no captured Install/Relaunch prompt
+  in accessibility window text, and healthy signed app status after the update.
+  Nuance: the old updater had a stale `SULastCheckTime` and an orphaned menu
+  process, so the bridge required resetting that timestamp and relaunching the
+  old menu app before Sparkle moved.
 - [x] Make local production packaging collect the same release asset shape as
   GitHub: versioned DMG, `1Context.dmg`, checksums, and `appcast.xml`.
   Evidence: `scripts/package-macos-release.sh` now copies the generated
@@ -404,6 +413,16 @@ Each release in this train must answer four questions:
 
 ##### 0.1.58 Uninstall and Residue Proof
 
+- [ ] Prove `0.1.57 -> 0.1.58` mandatory update is truly no-click with the
+  fixed app-owned Sparkle driver: no Install Update prompt, no Install and
+  Relaunch prompt, automatic install, relaunch, and version convergence.
+- [x] Bump source version and release notes to `0.1.58`.
+- [x] Build/sign/notarize `0.1.58`.
+  Evidence: `dist/1Context-0.1.58-macos-arm64.dmg` and `dist/1Context.app`
+  passed Developer ID signing, Apple notarization, stapling, DMG validation,
+  Gatekeeper assessment, and full Swift tests.
+- [ ] Publish `v0.1.58` with `1Context.dmg`, versioned DMG, checksum, and
+  `appcast.xml`.
 - [ ] Add full uninstall smoke that can inspect helper, LaunchAgents, local CA,
   managed hooks, logs/cache, and optional data deletion.
 - [ ] Run uninstall without `--delete-data` and prove user wiki content remains.

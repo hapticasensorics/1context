@@ -1,7 +1,10 @@
-# 1Context v0.1.57 Public Preview
+# 1Context v0.1.58 Public Preview
 
 This release includes:
 
+- A real remote-update proof target for the app-owned no-click Sparkle updater:
+  installed `0.1.57` should move to this release without Install Update or
+  Install and Relaunch prompts.
 - Mandatory Sparkle updates now use an app-owned no-click driver instead of the
   standard interactive Install Update and Install and Relaunch prompts.
 - The updater grants Sparkle automatic-check permission in-app, auto-answers
@@ -18,8 +21,8 @@ This release includes:
   `0.1.65`, with every version tied to remote Sparkle update proof.
 - Professional-app docs now reflect the `0.1.55` shipped baseline and the active
   release train instead of stale `0.1.51` current-state language.
-- `0.1.57` is intended as the mandatory follow-up to `0.1.56` for the no-click
-  remote update proof.
+- `0.1.58` is intended as the mandatory follow-up to `0.1.57` for the first
+  fixed-driver no-click remote update proof.
 
 Install:
 

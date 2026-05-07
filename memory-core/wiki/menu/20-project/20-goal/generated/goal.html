@@ -471,7 +471,16 @@ Evidence: <code>dist/appcast.xml</code> advertises <code>0.1.57</code>, includes
 <code>sparkle:minimumAutoupdateVersion</code> of <code>0.1.56</code>, marks
 <code>sparkle:criticalUpdate</code> for <code>0.1.57</code>, points at the GitHub <code>v0.1.57</code> DMG,
 and includes an EdDSA signature.</li>
-<li><input disabled="" type="checkbox"> Prove <code>0.1.56 -&gt; 0.1.57</code> auto-update through the remote Sparkle feed.</li>
+<li><input checked="" disabled="" type="checkbox"> Prove <code>0.1.56 -&gt; 0.1.57</code> bridge update through the remote Sparkle feed.
+Note: this hop is initiated by already-installed <code>0.1.56</code>, so it may still
+show the old Sparkle click-through. That is acceptable only as the bridge to
+get the fixed <code>0.1.57</code> updater onto the machine.
+Evidence: <code>dist/remote-update-evidence/0.1.56-to-0.1.57-bridge/</code> shows
+installed version convergence to <code>0.1.57</code>, no captured Install/Relaunch prompt
+in accessibility window text, and healthy signed app status after the update.
+Nuance: the old updater had a stale <code>SULastCheckTime</code> and an orphaned menu
+process, so the bridge required resetting that timestamp and relaunching the
+old menu app before Sparkle moved.</li>
 <li><input checked="" disabled="" type="checkbox"> Make local production packaging collect the same release asset shape as
 GitHub: versioned DMG, <code>1Context.dmg</code>, checksums, and <code>appcast.xml</code>.
 Evidence: <code>scripts/package-macos-release.sh</code> now copies the generated
@@ -481,6 +490,16 @@ inspection.</li>
 </ul>
 <h5>0.1.58 Uninstall and Residue Proof</h5>
 <ul>
+<li><input disabled="" type="checkbox"> Prove <code>0.1.57 -&gt; 0.1.58</code> mandatory update is truly no-click with the
+fixed app-owned Sparkle driver: no Install Update prompt, no Install and
+Relaunch prompt, automatic install, relaunch, and version convergence.</li>
+<li><input checked="" disabled="" type="checkbox"> Bump source version and release notes to <code>0.1.58</code>.</li>
+<li><input checked="" disabled="" type="checkbox"> Build/sign/notarize <code>0.1.58</code>.
+Evidence: <code>dist/1Context-0.1.58-macos-arm64.dmg</code> and <code>dist/1Context.app</code>
+passed Developer ID signing, Apple notarization, stapling, DMG validation,
+Gatekeeper assessment, and full Swift tests.</li>
+<li><input disabled="" type="checkbox"> Publish <code>v0.1.58</code> with <code>1Context.dmg</code>, versioned DMG, checksum, and
+<code>appcast.xml</code>.</li>
 <li><input disabled="" type="checkbox"> Add full uninstall smoke that can inspect helper, LaunchAgents, local CA,
 managed hooks, logs/cache, and optional data deletion.</li>
 <li><input disabled="" type="checkbox"> Run uninstall without <code>--delete-data</code> and prove user wiki content remains.</li>
