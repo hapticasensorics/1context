@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 import OneContextCore
 import OneContextUpdate
@@ -7,7 +8,8 @@ import Sparkle
 public final class SparkleUpdateController: NSObject {
   private let configuration: SparkleUpdaterConfiguration
   private let appContext: NativeUpdaterAppContext
-  private var updaterController: SPUStandardUpdaterController?
+  private var updater: SPUUpdater?
+  private var userDriver: AppManagedSparkleUserDriver?
   private var observation: SparkleFrameworkObservation?
 
   public var onUpdateInformationChanged: (() -> Void)?
@@ -19,31 +21,48 @@ public final class SparkleUpdateController: NSObject {
   ) {
     self.configuration = configuration
     self.appContext = appContext
-    self.updaterController = nil
+    self.updater = nil
+    self.userDriver = nil
     super.init()
 
     if configuration.isConfigured, appContext.location.canInstallAppUpdates {
-      self.updaterController = SPUStandardUpdaterController(
-        startingUpdater: startUpdater,
-        updaterDelegate: self,
-        userDriverDelegate: nil
+      let userDriver = AppManagedSparkleUserDriver()
+      let updater = SPUUpdater(
+        hostBundle: .main,
+        applicationBundle: .main,
+        userDriver: userDriver,
+        delegate: self
       )
+      self.userDriver = userDriver
+      self.updater = updater
+      if startUpdater {
+        do {
+          try updater.start()
+        } catch {
+          recordUpdaterStartupError(error)
+          self.updater = nil
+          self.userDriver = nil
+          return
+        }
+      }
       configureAutomaticUpdateDefaults()
     } else {
-      self.updaterController = nil
+      self.updater = nil
+      self.userDriver = nil
     }
   }
 
   public var canCheckForUpdates: Bool {
-    updaterController?.updater.canCheckForUpdates ?? false
+    updater?.canCheckForUpdates ?? false
   }
 
   @discardableResult
   public func checkForUpdates(_ sender: Any? = nil) -> Bool {
-    guard let updaterController, updaterController.updater.canCheckForUpdates else {
+    guard let updater, updater.canCheckForUpdates else {
       return false
     }
-    updaterController.checkForUpdates(sender)
+    userDriver?.prepareForUserInitiatedCheck()
+    updater.checkForUpdates()
     return true
   }
 
@@ -54,23 +73,24 @@ public final class SparkleUpdateController: NSObject {
 
   @discardableResult
   public func checkForUpdatesAutomatically() -> Bool {
-    guard let updater = updaterController?.updater else {
+    guard let updater else {
       return false
     }
     configureAutomaticUpdateDefaults()
     guard updater.automaticallyChecksForUpdates, updater.automaticallyDownloadsUpdates else {
       return false
     }
-    updater.checkForUpdatesInBackground()
+    userDriver?.prepareForMandatoryAutomaticCheck()
+    updater.checkForUpdates()
     return true
   }
 
   @discardableResult
   public func probeForUpdateInformation() -> Bool {
-    guard let updaterController, updaterController.updater.canCheckForUpdates else {
+    guard let updater, updater.canCheckForUpdates else {
       return false
     }
-    updaterController.updater.checkForUpdateInformation()
+    updater.checkForUpdateInformation()
     return true
   }
 
@@ -86,7 +106,7 @@ public final class SparkleUpdateController: NSObject {
   }
 
   private func configureAutomaticUpdateDefaults() {
-    guard let updater = updaterController?.updater else { return }
+    guard let updater else { return }
     if configuration.automaticChecksEnabled {
       updater.automaticallyChecksForUpdates = true
     }
@@ -96,6 +116,19 @@ public final class SparkleUpdateController: NSObject {
     if let scheduledCheckInterval = configuration.scheduledCheckInterval {
       updater.updateCheckInterval = scheduledCheckInterval
     }
+  }
+
+  private func recordUpdaterStartupError(_ error: Error?) {
+    observation = SparkleFrameworkObservation(
+      latestVersion: nil,
+      updateAvailable: false,
+      mandatoryUpdateAvailable: false,
+      minimumUpdateVersion: nil,
+      minimumAutoupdateVersion: nil,
+      canInstallUpdates: false,
+      startupErrorDescription: error?.localizedDescription ?? "Sparkle updater could not start."
+    )
+    onUpdateInformationChanged?()
   }
 }
 
@@ -134,6 +167,14 @@ extension SparkleUpdateController: SPUUpdaterDelegate {
     recordNoUpdate(updater)
   }
 
+  public func updater(
+    _ updater: SPUUpdater,
+    didFinishUpdateCycleFor updateCheck: SPUUpdateCheck,
+    error: Error?
+  ) {
+    userDriver?.finishUpdateSession()
+  }
+
   private func recordNoUpdate(_ updater: SPUUpdater) {
     observation = SparkleFrameworkObservation(
       latestVersion: nil,
@@ -154,6 +195,25 @@ private struct SparkleFrameworkObservation: Sendable {
   let minimumUpdateVersion: String?
   let minimumAutoupdateVersion: String?
   let canInstallUpdates: Bool
+  let startupErrorDescription: String?
+
+  init(
+    latestVersion: String?,
+    updateAvailable: Bool,
+    mandatoryUpdateAvailable: Bool,
+    minimumUpdateVersion: String?,
+    minimumAutoupdateVersion: String?,
+    canInstallUpdates: Bool,
+    startupErrorDescription: String? = nil
+  ) {
+    self.latestVersion = latestVersion
+    self.updateAvailable = updateAvailable
+    self.mandatoryUpdateAvailable = mandatoryUpdateAvailable
+    self.minimumUpdateVersion = minimumUpdateVersion
+    self.minimumAutoupdateVersion = minimumAutoupdateVersion
+    self.canInstallUpdates = canInstallUpdates
+    self.startupErrorDescription = startupErrorDescription
+  }
 }
 
 private struct SparkleFrameworkStatusDriver: SparkleUpdateDriver, Sendable {
@@ -169,7 +229,10 @@ private struct SparkleFrameworkStatusDriver: SparkleUpdateDriver, Sendable {
       let displayedVersion = latestVersion ?? "latest"
       let status: String
       let nextAction: String
-      if observation.updateAvailable {
+      if let startupErrorDescription = observation.startupErrorDescription {
+        status = "Sparkle updater could not start."
+        nextAction = startupErrorDescription
+      } else if observation.updateAvailable {
         status = observation.mandatoryUpdateAvailable
           ? "1Context \(displayedVersion) is a mandatory update."
           : "1Context \(displayedVersion) is available."
@@ -209,5 +272,158 @@ private struct SparkleFrameworkStatusDriver: SparkleUpdateDriver, Sendable {
         ? "Choose Check for Updates from the app menu."
         : "Try again after the updater finishes starting."
     )
+  }
+}
+
+enum AppManagedSparkleCheckMode: Equatable {
+  case automaticMandatory
+  case userInitiated
+}
+
+enum AppManagedSparkleUpdateDecision: Equatable {
+  case installWithoutPrompt
+  case askUser
+  case dismiss
+}
+
+struct AppManagedSparkleUserDriverPolicy {
+  static func decision(
+    mode: AppManagedSparkleCheckMode,
+    isCriticalUpdate: Bool,
+    isInformationOnlyUpdate: Bool
+  ) -> AppManagedSparkleUpdateDecision {
+    if isInformationOnlyUpdate {
+      return .dismiss
+    }
+    if isCriticalUpdate {
+      return .installWithoutPrompt
+    }
+    switch mode {
+    case .automaticMandatory:
+      return .dismiss
+    case .userInitiated:
+      return .askUser
+    }
+  }
+}
+
+@MainActor
+private final class AppManagedSparkleUserDriver: NSObject, SPUUserDriver {
+  private var mode: AppManagedSparkleCheckMode = .automaticMandatory
+  private var shouldInstallAndRelaunchWithoutPrompt = false
+
+  func prepareForMandatoryAutomaticCheck() {
+    mode = .automaticMandatory
+    shouldInstallAndRelaunchWithoutPrompt = false
+  }
+
+  func prepareForUserInitiatedCheck() {
+    mode = .userInitiated
+    shouldInstallAndRelaunchWithoutPrompt = false
+  }
+
+  func finishUpdateSession() {
+    mode = .automaticMandatory
+    shouldInstallAndRelaunchWithoutPrompt = false
+  }
+
+  func show(
+    _ request: SPUUpdatePermissionRequest,
+    reply: @escaping (SUUpdatePermissionResponse) -> Void
+  ) {
+    reply(SUUpdatePermissionResponse(
+      automaticUpdateChecks: true,
+      automaticUpdateDownloading: NSNumber(value: true),
+      sendSystemProfile: false
+    ))
+  }
+
+  func showUserInitiatedUpdateCheck(cancellation: @escaping () -> Void) {}
+
+  func showUpdateFound(
+    with appcastItem: SUAppcastItem,
+    state: SPUUserUpdateState,
+    reply: @escaping (SPUUserUpdateChoice) -> Void
+  ) {
+    switch AppManagedSparkleUserDriverPolicy.decision(
+      mode: mode,
+      isCriticalUpdate: appcastItem.isCriticalUpdate,
+      isInformationOnlyUpdate: appcastItem.isInformationOnlyUpdate
+    ) {
+    case .installWithoutPrompt:
+      shouldInstallAndRelaunchWithoutPrompt = true
+      reply(.install)
+    case .askUser:
+      if confirmInstall(appcastItem) {
+        shouldInstallAndRelaunchWithoutPrompt = true
+        reply(.install)
+      } else {
+        reply(.dismiss)
+      }
+    case .dismiss:
+      reply(.dismiss)
+    }
+  }
+
+  func showUpdateReleaseNotes(with downloadData: SPUDownloadData) {}
+
+  func showUpdateReleaseNotesFailedToDownloadWithError(_ error: Error) {}
+
+  func showUpdateNotFoundWithError(_ error: Error) async {
+    if mode == .userInitiated {
+      presentAlert(title: "1Context is up to date.", message: "")
+    }
+  }
+
+  func showUpdaterError(_ error: Error) async {
+    if mode == .userInitiated || shouldInstallAndRelaunchWithoutPrompt {
+      presentAlert(title: "Update Error", message: error.localizedDescription)
+    }
+  }
+
+  func showDownloadInitiated(cancellation: @escaping () -> Void) {}
+
+  func showDownloadDidReceiveExpectedContentLength(_ expectedContentLength: UInt64) {}
+
+  func showDownloadDidReceiveData(ofLength length: UInt64) {}
+
+  func showDownloadDidStartExtractingUpdate() {}
+
+  func showExtractionReceivedProgress(_ progress: Double) {}
+
+  func showReady(toInstallAndRelaunch reply: @escaping (SPUUserUpdateChoice) -> Void) {
+    reply(shouldInstallAndRelaunchWithoutPrompt ? .install : .dismiss)
+  }
+
+  func showInstallingUpdate(
+    withApplicationTerminated applicationTerminated: Bool,
+    retryTerminatingApplication: @escaping () -> Void
+  ) {}
+
+  func showUpdateInstalledAndRelaunched(_ relaunched: Bool) async {}
+
+  func dismissUpdateInstallation() {
+    shouldInstallAndRelaunchWithoutPrompt = false
+  }
+
+  func showUpdateInFocus() {}
+
+  private func confirmInstall(_ appcastItem: SUAppcastItem) -> Bool {
+    let alert = NSAlert()
+    alert.messageText = "Update 1Context?"
+    alert.informativeText = "1Context \(appcastItem.displayVersionString) is available. The updater will verify the signed release, install it, and relaunch the app."
+    alert.addButton(withTitle: "Update")
+    alert.addButton(withTitle: "Later")
+    NSApp.activate(ignoringOtherApps: true)
+    return alert.runModal() == .alertFirstButtonReturn
+  }
+
+  private func presentAlert(title: String, message: String) {
+    let alert = NSAlert()
+    alert.messageText = title
+    alert.informativeText = message
+    alert.addButton(withTitle: "OK")
+    NSApp.activate(ignoringOtherApps: true)
+    alert.runModal()
   }
 }

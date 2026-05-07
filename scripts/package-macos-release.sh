@@ -38,6 +38,10 @@ fi
 "$ROOT/scripts/validate-macos-dmg.sh" "$DMG"
 if [[ "${GENERATE_SPARKLE_APPCAST:-0}" == "1" ]]; then
   "$ROOT/scripts/generate-sparkle-appcast.sh" "$DMG"
+  cp "$ROOT/dist/sparkle-updates/appcast.xml" "$ROOT/dist/appcast.xml"
 fi
-shasum -a 256 "$DMG"
+cp "$DMG" "$ROOT/dist/1Context.dmg"
+shasum -a 256 "$DMG" > "$DMG.sha256"
+shasum -a 256 "$ROOT/dist/1Context.dmg" > "$ROOT/dist/1Context.dmg.sha256"
+cat "$DMG.sha256"
 echo "$DMG"

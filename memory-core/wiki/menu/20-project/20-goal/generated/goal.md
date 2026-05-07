@@ -342,6 +342,9 @@ Each release in this train must answer four questions:
   recovery path.
 - The release docs, `/goal`, GitHub workflow, release notes, and live local wiki
   all agree on what the current blessed version is.
+- New findings discovered during closed-loop testing are immediately folded
+  back into `/goal` as either checked evidence, an unchecked repair item, or an
+  explicit deferred release-train item.
 
 #### Version Train
 
@@ -356,20 +359,48 @@ Each release in this train must answer four questions:
 - [x] Build/sign/notarize `0.1.56`.
   Evidence: `dist/1Context-0.1.56-macos-arm64.dmg` and `dist/1Context.app`
   passed Developer ID signing, Apple notarization, stapling, and DMG validation.
-- [ ] Publish `v0.1.56` with `1Context.dmg`, versioned DMG, checksum, and
+- [x] Publish `v0.1.56` with `1Context.dmg`, versioned DMG, checksum, and
   `appcast.xml`.
-- [ ] Prove remote Sparkle update from installed `0.1.55` to `0.1.56`.
-- [ ] Prove `0.1.56` steady state after update with the reusable verifier.
+- [x] Prove remote Sparkle update from installed `0.1.55` to `0.1.56`.
+  Evidence: `dist/remote-update-evidence/0.1.55-to-0.1.56-auto/` shows the
+  installed app crossing to `0.1.56` through the GitHub Sparkle feed.
+  Note: this was not a no-click automatic update; `0.1.55` still presented
+  Sparkle's Install Update and Install and Relaunch prompts.
+- [x] Prove `0.1.56` steady state after update with the reusable verifier.
+  Evidence: `dist/steady-state-evidence/0.1.56-after-update/`.
 
 ##### 0.1.57 Release Automation Proof
 
+- [x] Replace the remaining Sparkle standard interactive prompt path for
+  mandatory updates with a no-click app-owned automatic path.
+  Evidence: `SparkleUpdateController` now owns `SPUUpdater` directly with an
+  app-managed user driver; `swift test --package-path macos` passed including
+  the new mandatory no-click policy tests.
+- [ ] Prove a mandatory update can download, install, and relaunch without
+  Install Update or Install and Relaunch prompts.
+- [x] Bump source version and release notes to `0.1.57`.
+- [x] Build/sign/notarize `0.1.57`.
+  Evidence: `dist/1Context-0.1.57-macos-arm64.dmg` and `dist/1Context.app`
+  passed Developer ID signing, Apple notarization, stapling, DMG validation,
+  and Gatekeeper assessment.
+- [ ] Make `/goal` updates durable while an older installed app is still
+  republishing its bundled wiki. Repo render alone is not enough if live
+  `wiki refresh` can overwrite the served page with older bundled content.
 - [ ] Run the updated GitHub release workflow or equivalent scripted release
   path end to end for a real release.
-- [ ] Prove workflow-provided mandatory metadata appears correctly in the
+- [x] Prove workflow-provided mandatory metadata appears correctly in the
   generated appcast.
+  Evidence: `dist/appcast.xml` advertises `0.1.57`, includes
+  `sparkle:minimumAutoupdateVersion` of `0.1.56`, marks
+  `sparkle:criticalUpdate` for `0.1.57`, points at the GitHub `v0.1.57` DMG,
+  and includes an EdDSA signature.
 - [ ] Prove `0.1.56 -> 0.1.57` auto-update through the remote Sparkle feed.
-- [ ] Add a release artifact audit script if the workflow still requires manual
-  asset inspection.
+- [x] Make local production packaging collect the same release asset shape as
+  GitHub: versioned DMG, `1Context.dmg`, checksums, and `appcast.xml`.
+  Evidence: `scripts/package-macos-release.sh` now copies the generated
+  Sparkle appcast and writes both checksum files after packaging.
+- [ ] Add a release artifact audit script if upload still requires manual asset
+  inspection.
 
 ##### 0.1.58 Uninstall and Residue Proof
 
@@ -413,6 +444,9 @@ Each release in this train must answer four questions:
 - [ ] Add one command or evidence bundle that collects version, appcast, Sparkle
   defaults, LaunchAgent state, helper state, setup state, runtime health, local
   wiki health, and recent logs.
+- [ ] Add a reusable GUI evidence harness for app/menu/Sparkle windows using
+  osascript, accessibility window text, and screenshots; include a fallback path
+  when the in-app browser automation control surface is unavailable.
 - [ ] Redact sensitive paths/content by default while preserving operator-useful
   state.
 - [ ] Prove diagnostics can distinguish healthy, needs setup, needs update,

@@ -112,6 +112,10 @@ let package = Package(
       dependencies: ["OneContextUpdate"]
     ),
     .testTarget(
+      name: "OneContextSparkleUpdateTests",
+      dependencies: ["OneContextSparkleUpdate"]
+    ),
+    .testTarget(
       name: "OneContextInstallTests",
       dependencies: ["OneContextInstall"]
     ),

@@ -420,6 +420,9 @@ automatically, and the original action continues when safe.</li>
 recovery path.</li>
 <li>The release docs, <code>/goal</code>, GitHub workflow, release notes, and live local wiki
 all agree on what the current blessed version is.</li>
+<li>New findings discovered during closed-loop testing are immediately folded
+back into <code>/goal</code> as either checked evidence, an unchecked repair item, or an
+explicit deferred release-train item.</li>
 </ul>
 <h4>Version Train</h4>
 <h5>0.1.56 Release Workflow and Steady State</h5>
@@ -433,20 +436,48 @@ tarball-only artifacts.</li>
 <li><input checked="" disabled="" type="checkbox"> Build/sign/notarize <code>0.1.56</code>.
 Evidence: <code>dist/1Context-0.1.56-macos-arm64.dmg</code> and <code>dist/1Context.app</code>
 passed Developer ID signing, Apple notarization, stapling, and DMG validation.</li>
-<li><input disabled="" type="checkbox"> Publish <code>v0.1.56</code> with <code>1Context.dmg</code>, versioned DMG, checksum, and
+<li><input checked="" disabled="" type="checkbox"> Publish <code>v0.1.56</code> with <code>1Context.dmg</code>, versioned DMG, checksum, and
 <code>appcast.xml</code>.</li>
-<li><input disabled="" type="checkbox"> Prove remote Sparkle update from installed <code>0.1.55</code> to <code>0.1.56</code>.</li>
-<li><input disabled="" type="checkbox"> Prove <code>0.1.56</code> steady state after update with the reusable verifier.</li>
+<li><input checked="" disabled="" type="checkbox"> Prove remote Sparkle update from installed <code>0.1.55</code> to <code>0.1.56</code>.
+Evidence: <code>dist/remote-update-evidence/0.1.55-to-0.1.56-auto/</code> shows the
+installed app crossing to <code>0.1.56</code> through the GitHub Sparkle feed.
+Note: this was not a no-click automatic update; <code>0.1.55</code> still presented
+Sparkle&#39;s Install Update and Install and Relaunch prompts.</li>
+<li><input checked="" disabled="" type="checkbox"> Prove <code>0.1.56</code> steady state after update with the reusable verifier.
+Evidence: <code>dist/steady-state-evidence/0.1.56-after-update/</code>.</li>
 </ul>
 <h5>0.1.57 Release Automation Proof</h5>
 <ul>
+<li><input checked="" disabled="" type="checkbox"> Replace the remaining Sparkle standard interactive prompt path for
+mandatory updates with a no-click app-owned automatic path.
+Evidence: <code>SparkleUpdateController</code> now owns <code>SPUUpdater</code> directly with an
+app-managed user driver; <code>swift test --package-path macos</code> passed including
+the new mandatory no-click policy tests.</li>
+<li><input disabled="" type="checkbox"> Prove a mandatory update can download, install, and relaunch without
+Install Update or Install and Relaunch prompts.</li>
+<li><input checked="" disabled="" type="checkbox"> Bump source version and release notes to <code>0.1.57</code>.</li>
+<li><input checked="" disabled="" type="checkbox"> Build/sign/notarize <code>0.1.57</code>.
+Evidence: <code>dist/1Context-0.1.57-macos-arm64.dmg</code> and <code>dist/1Context.app</code>
+passed Developer ID signing, Apple notarization, stapling, DMG validation,
+and Gatekeeper assessment.</li>
+<li><input disabled="" type="checkbox"> Make <code>/goal</code> updates durable while an older installed app is still
+republishing its bundled wiki. Repo render alone is not enough if live
+<code>wiki refresh</code> can overwrite the served page with older bundled content.</li>
 <li><input disabled="" type="checkbox"> Run the updated GitHub release workflow or equivalent scripted release
 path end to end for a real release.</li>
-<li><input disabled="" type="checkbox"> Prove workflow-provided mandatory metadata appears correctly in the
-generated appcast.</li>
+<li><input checked="" disabled="" type="checkbox"> Prove workflow-provided mandatory metadata appears correctly in the
+generated appcast.
+Evidence: <code>dist/appcast.xml</code> advertises <code>0.1.57</code>, includes
+<code>sparkle:minimumAutoupdateVersion</code> of <code>0.1.56</code>, marks
+<code>sparkle:criticalUpdate</code> for <code>0.1.57</code>, points at the GitHub <code>v0.1.57</code> DMG,
+and includes an EdDSA signature.</li>
 <li><input disabled="" type="checkbox"> Prove <code>0.1.56 -&gt; 0.1.57</code> auto-update through the remote Sparkle feed.</li>
-<li><input disabled="" type="checkbox"> Add a release artifact audit script if the workflow still requires manual
-asset inspection.</li>
+<li><input checked="" disabled="" type="checkbox"> Make local production packaging collect the same release asset shape as
+GitHub: versioned DMG, <code>1Context.dmg</code>, checksums, and <code>appcast.xml</code>.
+Evidence: <code>scripts/package-macos-release.sh</code> now copies the generated
+Sparkle appcast and writes both checksum files after packaging.</li>
+<li><input disabled="" type="checkbox"> Add a release artifact audit script if upload still requires manual asset
+inspection.</li>
 </ul>
 <h5>0.1.58 Uninstall and Residue Proof</h5>
 <ul>
@@ -490,6 +521,9 @@ explicitly stops remembering.</li>
 <li><input disabled="" type="checkbox"> Add one command or evidence bundle that collects version, appcast, Sparkle
 defaults, LaunchAgent state, helper state, setup state, runtime health, local
 wiki health, and recent logs.</li>
+<li><input disabled="" type="checkbox"> Add a reusable GUI evidence harness for app/menu/Sparkle windows using
+osascript, accessibility window text, and screenshots; include a fallback path
+when the in-app browser automation control surface is unavailable.</li>
 <li><input disabled="" type="checkbox"> Redact sensitive paths/content by default while preserving operator-useful
 state.</li>
 <li><input disabled="" type="checkbox"> Prove diagnostics can distinguish healthy, needs setup, needs update,
