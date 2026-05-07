@@ -3,6 +3,45 @@ import OneContextLocalWeb
 import OneContextSetup
 
 final class AppSetupTests: XCTestCase {
+  func testBlockedSetupActionsUseSpecificSetupMessages() {
+    XCTAssertEqual(OneContextBlockedSetupAction.openWiki.setupMessage, "Finish setup to open your wiki.")
+    XCTAssertEqual(OneContextBlockedSetupAction.refreshWiki.setupMessage, "Finish setup to refresh your wiki.")
+    XCTAssertEqual(OneContextBlockedSetupAction.startRemembering.setupMessage, "Finish setup to start 1Context.")
+  }
+
+  func testSetupContinuationResumesOpenWikiOnceAfterSetup() {
+    var continuation = OneContextSetupContinuation()
+
+    let message = continuation.block(.openWiki)
+    let action = continuation.consumeResumableActionAfterSetup()
+    let secondAction = continuation.consumeResumableActionAfterSetup()
+
+    XCTAssertEqual(message, "Finish setup to open your wiki.")
+    XCTAssertEqual(action, .openWiki)
+    XCTAssertNil(secondAction)
+    XCTAssertNil(continuation.pendingAction)
+  }
+
+  func testSetupContinuationKeepsStartAsRuntimeIntentInsteadOfReplayingButtonPress() {
+    var continuation = OneContextSetupContinuation()
+
+    let message = continuation.block(.startRemembering)
+    let action = continuation.consumeResumableActionAfterSetup()
+
+    XCTAssertEqual(message, "Finish setup to start 1Context.")
+    XCTAssertNil(action)
+    XCTAssertNil(continuation.pendingAction)
+  }
+
+  func testNewBlockedActionReplacesOlderPendingAction() {
+    var continuation = OneContextSetupContinuation()
+
+    continuation.block(.openWiki)
+    continuation.block(.refreshWiki)
+
+    XCTAssertEqual(continuation.consumeResumableActionAfterSetup(), .refreshWiki)
+  }
+
   func testReadinessNeedsSetupBeforeLocalWebAttention() {
     let readiness = OneContextAppReadiness.snapshot(
       localWebDiagnostics: diagnostics(

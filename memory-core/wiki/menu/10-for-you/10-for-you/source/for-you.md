@@ -63,5 +63,6 @@ the page body.
 ## See Also
 
 - [Your Context](/your-context)
+- [Goal](/goal)
 - [Projects](/projects)
 - [Topics](/topics)

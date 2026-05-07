@@ -19,8 +19,13 @@ public struct NativeUpdateSnapshot: Codable, Equatable, Sendable {
   public let feedURL: String?
   public let configurationComplete: Bool?
   public let automaticChecksEnabled: Bool?
+  public let automaticDownloadsEnabled: Bool?
+  public let scheduledCheckInterval: TimeInterval?
   public let appLocation: NativeUpdaterAppLocation?
   public let updateAvailable: Bool
+  public let mandatoryUpdateAvailable: Bool
+  public let minimumUpdateVersion: String?
+  public let minimumAutoupdateVersion: String?
   public let canInstallFromCurrentProcess: Bool
   public let userFacingStatus: String
   public let nextAction: String
@@ -33,8 +38,13 @@ public struct NativeUpdateSnapshot: Codable, Equatable, Sendable {
     feedURL: String? = nil,
     configurationComplete: Bool? = nil,
     automaticChecksEnabled: Bool? = nil,
+    automaticDownloadsEnabled: Bool? = nil,
+    scheduledCheckInterval: TimeInterval? = nil,
     appLocation: NativeUpdaterAppLocation? = nil,
     updateAvailable: Bool,
+    mandatoryUpdateAvailable: Bool = false,
+    minimumUpdateVersion: String? = nil,
+    minimumAutoupdateVersion: String? = nil,
     canInstallFromCurrentProcess: Bool,
     userFacingStatus: String,
     nextAction: String
@@ -46,8 +56,13 @@ public struct NativeUpdateSnapshot: Codable, Equatable, Sendable {
     self.feedURL = feedURL
     self.configurationComplete = configurationComplete
     self.automaticChecksEnabled = automaticChecksEnabled
+    self.automaticDownloadsEnabled = automaticDownloadsEnabled
+    self.scheduledCheckInterval = scheduledCheckInterval
     self.appLocation = appLocation
     self.updateAvailable = updateAvailable
+    self.mandatoryUpdateAvailable = mandatoryUpdateAvailable
+    self.minimumUpdateVersion = minimumUpdateVersion
+    self.minimumAutoupdateVersion = minimumAutoupdateVersion
     self.canInstallFromCurrentProcess = canInstallFromCurrentProcess
     self.userFacingStatus = userFacingStatus
     self.nextAction = nextAction
@@ -56,6 +71,21 @@ public struct NativeUpdateSnapshot: Codable, Equatable, Sendable {
 
 public protocol NativeUpdater {
   func snapshot(currentVersion: String) async -> NativeUpdateSnapshot
+}
+
+public enum MandatoryUpdateRuntimePolicy {
+  public static func shouldPausePassiveRemembering(_ snapshot: NativeUpdateSnapshot) -> Bool {
+    snapshot.availability == .available
+      && snapshot.updateAvailable
+      && snapshot.mandatoryUpdateAvailable
+  }
+
+  public static func startBlockedMessage(_ snapshot: NativeUpdateSnapshot) -> String {
+    if let latestVersion = snapshot.latestVersion {
+      return "1Context \(latestVersion) is mandatory. Update before starting passive remembering."
+    }
+    return "A mandatory 1Context update is available. Update before starting passive remembering."
+  }
 }
 
 public enum NativeUpdaterAppLocation: String, Codable, Equatable, Sendable {
@@ -123,10 +153,14 @@ public struct SparkleUpdaterConfiguration: Codable, Equatable, Sendable {
   public static let feedURLInfoKey = "SUFeedURL"
   public static let publicEdKeyInfoKey = "SUPublicEDKey"
   public static let automaticChecksInfoKey = "SUEnableAutomaticChecks"
+  public static let automaticDownloadsInfoKey = "SUAutomaticallyUpdate"
+  public static let scheduledCheckIntervalInfoKey = "SUScheduledCheckInterval"
 
   public let feedURL: URL?
   public let publicEdKey: String?
   public let automaticChecksEnabled: Bool
+  public let automaticDownloadsEnabled: Bool
+  public let scheduledCheckInterval: TimeInterval?
 
   public var isConfigured: Bool {
     feedURL != nil && trimmedPublicEdKey != nil
@@ -146,18 +180,24 @@ public struct SparkleUpdaterConfiguration: Codable, Equatable, Sendable {
   public init(
     feedURL: URL?,
     publicEdKey: String?,
-    automaticChecksEnabled: Bool = false
+    automaticChecksEnabled: Bool = false,
+    automaticDownloadsEnabled: Bool = false,
+    scheduledCheckInterval: TimeInterval? = nil
   ) {
     self.feedURL = feedURL
     self.publicEdKey = publicEdKey
     self.automaticChecksEnabled = automaticChecksEnabled
+    self.automaticDownloadsEnabled = automaticDownloadsEnabled
+    self.scheduledCheckInterval = scheduledCheckInterval
   }
 
   public init(infoDictionary: [String: Any]) {
     self.init(
       feedURL: Self.parseURL(infoDictionary[Self.feedURLInfoKey]),
       publicEdKey: infoDictionary[Self.publicEdKeyInfoKey] as? String,
-      automaticChecksEnabled: Self.parseBool(infoDictionary[Self.automaticChecksInfoKey])
+      automaticChecksEnabled: Self.parseBool(infoDictionary[Self.automaticChecksInfoKey]),
+      automaticDownloadsEnabled: Self.parseBool(infoDictionary[Self.automaticDownloadsInfoKey]),
+      scheduledCheckInterval: Self.parseTimeInterval(infoDictionary[Self.scheduledCheckIntervalInfoKey])
     )
   }
 
@@ -206,12 +246,27 @@ public struct SparkleUpdaterConfiguration: Codable, Equatable, Sendable {
     }
     return false
   }
+
+  private static func parseTimeInterval(_ value: Any?) -> TimeInterval? {
+    if let number = value as? NSNumber {
+      return number.doubleValue > 0 ? number.doubleValue : nil
+    }
+    if let string = value as? String {
+      let trimmed = string.trimmingCharacters(in: .whitespacesAndNewlines)
+      guard let interval = TimeInterval(trimmed), interval > 0 else { return nil }
+      return interval
+    }
+    return nil
+  }
 }
 
 public struct SparkleUpdateDriverSnapshot: Codable, Equatable, Sendable {
   public let availability: NativeUpdaterAvailability
   public let latestVersion: String?
   public let updateAvailable: Bool
+  public let mandatoryUpdateAvailable: Bool
+  public let minimumUpdateVersion: String?
+  public let minimumAutoupdateVersion: String?
   public let canInstallUpdates: Bool
   public let userFacingStatus: String
   public let nextAction: String
@@ -220,6 +275,9 @@ public struct SparkleUpdateDriverSnapshot: Codable, Equatable, Sendable {
     availability: NativeUpdaterAvailability,
     latestVersion: String?,
     updateAvailable: Bool,
+    mandatoryUpdateAvailable: Bool = false,
+    minimumUpdateVersion: String? = nil,
+    minimumAutoupdateVersion: String? = nil,
     canInstallUpdates: Bool,
     userFacingStatus: String,
     nextAction: String
@@ -227,6 +285,9 @@ public struct SparkleUpdateDriverSnapshot: Codable, Equatable, Sendable {
     self.availability = availability
     self.latestVersion = latestVersion
     self.updateAvailable = updateAvailable
+    self.mandatoryUpdateAvailable = mandatoryUpdateAvailable
+    self.minimumUpdateVersion = minimumUpdateVersion
+    self.minimumAutoupdateVersion = minimumAutoupdateVersion
     self.canInstallUpdates = canInstallUpdates
     self.userFacingStatus = userFacingStatus
     self.nextAction = nextAction
@@ -265,8 +326,11 @@ public struct SparkleNativeUpdater: NativeUpdater, Sendable {
         feedURL: configuration.feedURL?.absoluteString,
         configurationComplete: false,
         automaticChecksEnabled: configuration.automaticChecksEnabled,
+        automaticDownloadsEnabled: configuration.automaticDownloadsEnabled,
+        scheduledCheckInterval: configuration.scheduledCheckInterval,
         appLocation: appContext.location,
         updateAvailable: false,
+        mandatoryUpdateAvailable: false,
         canInstallFromCurrentProcess: false,
         userFacingStatus: "Sparkle updates are not configured in this build.",
         nextAction: "Set \(configuration.missingConfigurationSummary ?? "Sparkle Info.plist keys") before release."
@@ -282,8 +346,11 @@ public struct SparkleNativeUpdater: NativeUpdater, Sendable {
         feedURL: configuration.feedURL?.absoluteString,
         configurationComplete: true,
         automaticChecksEnabled: configuration.automaticChecksEnabled,
+        automaticDownloadsEnabled: configuration.automaticDownloadsEnabled,
+        scheduledCheckInterval: configuration.scheduledCheckInterval,
         appLocation: appContext.location,
         updateAvailable: false,
+        mandatoryUpdateAvailable: false,
         canInstallFromCurrentProcess: false,
         userFacingStatus: "Move 1Context to Applications to install app updates.",
         nextAction: "Open 1Context from /Applications/1Context.app."
@@ -302,8 +369,13 @@ public struct SparkleNativeUpdater: NativeUpdater, Sendable {
       feedURL: configuration.feedURL?.absoluteString,
       configurationComplete: true,
       automaticChecksEnabled: configuration.automaticChecksEnabled,
+      automaticDownloadsEnabled: configuration.automaticDownloadsEnabled,
+      scheduledCheckInterval: configuration.scheduledCheckInterval,
       appLocation: appContext.location,
       updateAvailable: driverSnapshot.updateAvailable,
+      mandatoryUpdateAvailable: driverSnapshot.mandatoryUpdateAvailable,
+      minimumUpdateVersion: driverSnapshot.minimumUpdateVersion,
+      minimumAutoupdateVersion: driverSnapshot.minimumAutoupdateVersion,
       canInstallFromCurrentProcess: driverSnapshot.canInstallUpdates,
       userFacingStatus: driverSnapshot.userFacingStatus,
       nextAction: driverSnapshot.nextAction
@@ -319,6 +391,7 @@ public enum NativeUpdateDiagnostics {
       "  Current Version: \(snapshot.currentVersion)",
       "  Latest Version: \(snapshot.latestVersion ?? "unknown")",
       "  Update Available: \(snapshot.updateAvailable ? "yes" : "no")",
+      "  Mandatory Update: \(snapshot.mandatoryUpdateAvailable ? "yes" : "no")",
       "  Can Install Here: \(snapshot.canInstallFromCurrentProcess ? "yes" : "no")",
       "  Status: \(snapshot.userFacingStatus)",
       "  Next Action: \(snapshot.nextAction)"
@@ -334,6 +407,18 @@ public enum NativeUpdateDiagnostics {
     }
     if let automaticChecksEnabled = snapshot.automaticChecksEnabled {
       lines.append("  Automatic Checks: \(automaticChecksEnabled ? "yes" : "no")")
+    }
+    if let automaticDownloadsEnabled = snapshot.automaticDownloadsEnabled {
+      lines.append("  Automatic Downloads: \(automaticDownloadsEnabled ? "yes" : "no")")
+    }
+    if let scheduledCheckInterval = snapshot.scheduledCheckInterval {
+      lines.append("  Scheduled Check Interval: \(Int(scheduledCheckInterval))s")
+    }
+    if let minimumUpdateVersion = snapshot.minimumUpdateVersion {
+      lines.append("  Minimum Update Version: \(minimumUpdateVersion)")
+    }
+    if let minimumAutoupdateVersion = snapshot.minimumAutoupdateVersion {
+      lines.append("  Minimum Autoupdate Version: \(minimumAutoupdateVersion)")
     }
     return lines
   }

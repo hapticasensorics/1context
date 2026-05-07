@@ -3,19 +3,19 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <title>Projects — 1Context</title>
+  <title>Goal - Talk — 1Context</title>
 
-  <link rel="alternate" type="text/markdown" href="/projects.md">
+  <link rel="alternate" type="text/markdown" href="/goal.talk.md">
   <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png">
   <link rel="icon" type="image/png" sizes="16x16" href="/assets/favicon-16.png">
   <link rel="apple-touch-icon" sizes="180x180" href="/assets/apple-touch-icon.png">
 
   <meta name="generator" content="1Context wiki-engine">
 
-  <meta property="og:title" content="Projects">
+  <meta property="og:title" content="Goal - Talk">
   <meta property="og:type"  content="article">
-  <meta property="og:description" content="The private index of work 1Context can recognize, resume, and connect across sessions.">
-  <meta name="description" content="The private index of work 1Context can recognize, resume, and connect across sessions.">
+  <meta property="og:description" content="">
+  <meta name="description" content="">
 
   <script>
     /* No-flash theme bootstrap. enhance.js reads opctx-theme from
@@ -86,54 +86,68 @@
     <nav class="opctx-toc" aria-label="Table of contents">
       <span class="opctx-toc-label">Contents</span>
       <ol>
-        <li><a href="#Active">Active</a></li>
-        <li><a href="#Paused_Or_Blocked">Paused Or Blocked</a></li>
-        <li><a href="#Recently_Completed">Recently Completed</a></li>
-        <li><a href="#Archived">Archived</a></li>
-        <li><a href="#Cross-Project_Patterns">Cross-Project Patterns</a></li>
-        <li><a href="#See_Also">See Also</a></li>
+        <li><a href="#decided">Decided</a></li>
+        <li><a href="#2026-05-07t01-32z-decided-professional-app-goal">[DECIDED] decided</a></li>
+        <li><a href="#see-also">See also</a></li>
       </ol>
     </nav>
 
     <main class="opctx-main">
       <article class="opctx-article">
-        <h1>Projects</h1>
-        <p class="opctx-subtitle">The private index of work 1Context can recognize, resume, and connect across sessions.</p>
+        <h1>Goal - Talk</h1>
 
-        <div class="opctx-article-body"><p>Projects is the memory system&#39;s map of active work. It should help a future
-session answer: what exists, what state it is in, what changed recently, and
-where the next useful action probably lives.</p>
-<h2 id="Active">Active</h2>
-<p>No active projects have been promoted yet.</p>
-<p>For agents: add a project when it has a stable name, a working directory or
-artifact trail, and enough recent evidence that future sessions would benefit
-from a durable pointer.</p>
-<h2 id="Paused_Or_Blocked">Paused Or Blocked</h2>
-<p>No paused or blocked projects have been promoted yet.</p>
-<p>Record blockers when the reason matters: waiting for a person, permission,
-hardware, an upstream decision, a failed build, or a design question that should
-not be rediscovered.</p>
-<h2 id="Recently_Completed">Recently Completed</h2>
-<p>No completed projects have been promoted yet.</p>
-<p>Record completed work when its result is reusable: a shipped release, a fixed
-integration, a migrated system, a retired experiment, or a lesson that should
-shape future work.</p>
-<h2 id="Archived">Archived</h2>
-<p>No archived projects have been promoted yet.</p>
-<p>Archive projects when they are no longer active but still explain why the
-current system looks the way it does.</p>
-<h2 id="Cross-Project_Patterns">Cross-Project Patterns</h2>
-<p>Use this section for repeated engineering patterns that show up across multiple
-projects. Stable patterns may also belong in <a href="/your-context">Your Context</a> or
-<a href="/topics">Topics</a>.</p>
-<h2 id="See_Also">See Also</h2>
+        <div class="opctx-article-body"><details class="opctx-talk-conventions" data-collapsed-by-default="true">
+        <summary><strong>Talk-page conventions</strong> — Goal private talk page · Wikipedia + LKML conventions, append-only <span class="opctx-talk-conventions-hint">click to expand</span></summary>
+        <div class="opctx-talk-conventions-body"><h1>Talk Conventions - Goal</h1>
+<p>The Goal talk page is the product-quality workbench for professional 1Context
+behavior. It should turn strong product instincts into concrete acceptance
+criteria, implementation notes, and release checks.</p>
+<p>Use one timestamped markdown file per contribution. Each top-level file is one
+thread. Replies use <code>parent:</code> frontmatter pointing to the parent filename or
+stem.</p>
+<h2>What Belongs Here</h2>
 <ul>
-<li><a href="/for-you">For You</a></li>
-<li><a href="/your-context">Your Context</a></li>
-<li><a href="/goal">Goal</a></li>
-<li><a href="/topics">Topics</a></li>
+<li>Proposals about permission timing, setup repair, and blocked actions.</li>
+<li>Sparkle update policy, mandatory release rules, and old-version behavior.</li>
+<li>Evidence from local installs, update smokes, menu interactions, or support
+diagnostics.</li>
+<li>Decisions that explain why the Goal article changed.</li>
+<li>Corrections when a product standard is too broad, too timid, or not feasible
+on macOS.</li>
 </ul>
+<h2>Promotion Rule</h2>
+<p>Do not turn a vague wish into a requirement. A goal entry should name the user
+experience, the required system behavior, and how we will prove it.</p>
+<h2>Archive Policy</h2>
+<p>Keep active talk entries in this folder for 90 days. After that, move settled
+conversation files into <code>archive/</code> while preserving filenames, frontmatter, and
+parent/thread references.</p>
 </div>
+      </details><blockquote class="opctx-talk-lede"><p>This is the private discussion layer for the 1Context professional app goal. Use it for proposals, acceptance criteria, contradictions, and release-readiness decisions before editing the article.</p>
+</blockquote>
+<details class="opctx-talk-curator-prompt"><summary><strong>Curator prompt for this page</strong> <span class="opctx-talk-curator-hint">click to expand · edit <code>_curator.md</code> in this talk folder to change how the curator agent for this page behaves</span></summary><div class="opctx-talk-curator-prompt-body"><h1>Curator Prompt - Goal</h1>
+<p>Maintain <code>/goal</code> as the private professional app standard for 1Context. Keep it
+practical, assertive, and tied to shippable behavior.</p>
+<p>Use this talk folder for proposals about permissions, setup recovery, Sparkle
+updates, mandatory release policy, passive remembering safety, and release
+verification.</p>
+<p>When applying a decision, leave an explicit <code>decided</code> entry in talk. Do not
+silently erase uncertainty from the discussion history.</p>
+</div></details>
+<section class="opctx-talk-section" data-kind="decided"><h2 id="decided">Decided</h2>
+<article class="opctx-talk-entry" data-kind="decided"><h2 id="2026-05-07t01-32z-decided-professional-app-goal">[DECIDED] decided</h2>
+<p>The operator explicitly asked to create <code>/goal</code> for professional 1Context
+behavior: use Sparkle as the update path, be willing to request required
+permissions, open setup whenever an action is blocked by missing permission, and
+treat blessed mandatory releases aggressively so old passive-monitoring code
+does not linger.</p>
+<p>Accepted into the Goal article as product doctrine plus verification targets.</p>
+
+<p class="opctx-talk-entry-sig"><em>— codex · 2026-05-07T01:32:00.000Z</em></p></article>
+</section>
+<section class="opctx-talk-section opctx-talk-see-also"><h2 id="see-also">See also</h2><ul>
+<li><a href="/goal">Source page</a></li>
+</ul></section></div>
       </article>
     </main>
   </div>

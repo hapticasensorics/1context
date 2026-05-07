@@ -109,10 +109,18 @@ This gives each domain the same responsibilities:
 - [x] Generate and validate production appcast feed artifacts.
   Proof: `v0.1.51` generated a production Sparkle appcast with EdDSA signature,
   versioned DMG URL, and embedded release notes.
-- [ ] Add local appcast update smoke from controlled fixture builds.
-  Proof: harness installs one fixture app, serves a local appcast for the next
-  fixture app, updates, then verifies version, wiki, setup readiness, helper
-  repair, and rollback behavior.
+- [x] Add local appcast update smoke from controlled fixture builds.
+  Proof: `scripts/smoke-sparkle-local-appcast.sh` installs an older fixture
+  app, serves a mandatory local appcast for the next fixture app, waits for
+  Sparkle to replace and relaunch it, then verifies the bundle and embedded CLI
+  report the new version.
+- [x] Pause passive remembering while a mandatory Sparkle update is pending.
+  Proof: `MandatoryUpdateRuntimePolicy` is covered by
+  `OneContextUpdateTests`.
+- [ ] Extend update smoke to failed-update rollback and post-update helper
+  repair.
+  Proof: harness verifies the old app remains launchable after a failed update
+  and readiness prompts repair when helper state is stale.
 
 ### 4. Update-Safe Local HTTPS
 
@@ -184,5 +192,5 @@ This gives each domain the same responsibilities:
 - Remaining professional app work is summarized in
   [macos-professional-app-remaining-work.md](macos-professional-app-remaining-work.md).
 - Immediate next step: run the full clean-machine checklist against the
-  notarized DMG, then turn the manual update proof into a local appcast smoke
-  with rollback coverage.
+  notarized DMG, then extend the local appcast smoke with rollback and stale
+  helper repair coverage.

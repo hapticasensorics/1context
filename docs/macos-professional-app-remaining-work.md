@@ -27,6 +27,9 @@ The guiding product shape is:
 - The GUI Sparkle update path has been proven from `0.1.50` to `0.1.51`; after
   update, `/Applications/1Context.app`, the linked `1context` command, setup
   readiness, and the local wiki health endpoint were all current and healthy.
+- The automated local Sparkle appcast smoke now builds two fixture app
+  versions, serves a mandatory local appcast, and verifies Sparkle replaces the
+  installed fixture app and relaunches into the newer version.
 - The app can be installed into `/Applications/1Context.app` from the DMG.
 - The app owns first-launch setup. Local Wiki Access is surfaced in the setup
   window and reported through CLI/status diagnostics.
@@ -80,10 +83,11 @@ flowchart TD
   Harness["Clean-machine checklist\nrepeatable evidence collection"]
   Manual["Manual first-user pass\ninstall, setup, wiki, relaunch"]
   Uninstall["Uninstall acceptance\nmenu + CLI cleanup proof"]
-  LocalSmoke["Automated local appcast smoke\nupdate + rollback"]
+  LocalSmoke["Automated local appcast smoke\nupdate"]
+  Rollback["Failed-update smoke\nrollback + stale-helper repair"]
   CleanMachine["Notarized clean-machine acceptance\ninstall, setup, update, uninstall"]
 
-  Current --> Harness --> Manual --> Uninstall --> LocalSmoke --> CleanMachine
+  Current --> Harness --> Manual --> Uninstall --> LocalSmoke --> Rollback --> CleanMachine
 ```
 
 The sequencing matters:
@@ -93,9 +97,10 @@ The sequencing matters:
 2. Use the clean-machine checklist to make every manual consent step explicit.
 3. Verify install, setup, wiki, relaunch, update check, and uninstall cleanup from
    the same evidence bundle.
-4. Promote the manual update proof into a local appcast smoke with rollback
+4. Keep the local appcast smoke in the normal verification loop.
+5. Extend update testing with failed-update rollback and stale-helper repair
    coverage.
-5. Use the harness to make notarized clean-machine testing routine instead of
+6. Use the harness to make notarized clean-machine testing routine instead of
    bespoke.
 
 ## Remaining Checklist
@@ -170,8 +175,13 @@ The sequencing matters:
 - [x] Generate appcast artifacts with the production EdDSA key.
   Proof: `v0.1.51` appcast contains the EdDSA update signature, release notes,
   and versioned GitHub Release DMG URL.
-- [ ] Add local appcast update smoke.
-  Proof: install older app, serve local appcast, update to newer app, relaunch.
+- [x] Add local appcast update smoke.
+  Proof: `scripts/smoke-sparkle-local-appcast.sh` installed fixture
+  `0.1.51.900`, served a mandatory appcast for fixture `0.1.51.901`, and
+  verified the installed bundle and embedded CLI reported `0.1.51.901`.
+- [x] Pause passive remembering while a mandatory Sparkle update is pending.
+  Proof: `MandatoryUpdateRuntimePolicy` blocks start/autostart for available
+  mandatory updates and is covered by `OneContextUpdateTests`.
 - [x] After Sparkle update, re-run required setup readiness before opening wiki.
   Proof: after the `0.1.50` to `0.1.51` GUI update, setup diagnostics were ready
   and the wiki health endpoint returned OK.
@@ -238,5 +248,5 @@ SPARKLE_DOWNLOAD_URL_PREFIX="https://github.com/hapticasensorics/1context/releas
 
 Run the clean-machine checklist against the notarized DMG and collect one
 complete install -> setup -> wiki -> relaunch -> update -> uninstall evidence
-bundle. After that, turn the manual update proof into a local appcast smoke with
-rollback coverage.
+bundle. After that, extend the local appcast smoke with failed-update rollback
+and stale-helper repair coverage.

@@ -2,6 +2,53 @@ import XCTest
 @testable import OneContextCore
 
 final class VersionTests: XCTestCase {
+  func testVersionResolutionPrefersEnvironmentOverrideForFixtureBuilds() {
+    let version = OneContextVersion.resolve(
+      environment: [OneContextVersion.overrideEnvironmentKey: "9.9.9"],
+      bundleVersion: "1.0.0",
+      executableURL: nil,
+      appBundleVersion: { _ in nil }
+    )
+
+    XCTAssertEqual(version, "9.9.9")
+  }
+
+  func testVersionResolutionUsesMainBundleVersionBeforeFallback() {
+    let version = OneContextVersion.resolve(
+      environment: [:],
+      bundleVersion: "1.2.3",
+      executableURL: nil,
+      appBundleVersion: { _ in nil }
+    )
+
+    XCTAssertEqual(version, "1.2.3")
+  }
+
+  func testVersionResolutionFindsContainingAppBundleForEmbeddedTools() {
+    let executableURL = URL(fileURLWithPath: "/Applications/1Context.app/Contents/MacOS/1context-cli")
+    let version = OneContextVersion.resolve(
+      environment: [:],
+      bundleVersion: nil,
+      executableURL: executableURL,
+      appBundleVersion: { appURL in
+        appURL.path == "/Applications/1Context.app" ? "2.3.4" : nil
+      }
+    )
+
+    XCTAssertEqual(version, "2.3.4")
+  }
+
+  func testVersionResolutionFallsBackForSwiftPMExecutables() {
+    let version = OneContextVersion.resolve(
+      environment: [:],
+      bundleVersion: nil,
+      executableURL: URL(fileURLWithPath: "/tmp/1context"),
+      appBundleVersion: { _ in nil }
+    )
+
+    XCTAssertEqual(version, OneContextVersion.fallback)
+  }
+
   func testCompareVersionsHandlesBasicSemver() {
     XCTAssertEqual(compareVersions("0.1.33", "0.1.33"), 0)
     XCTAssertGreaterThan(compareVersions("0.1.34", "0.1.33"), 0)

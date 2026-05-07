@@ -44,6 +44,15 @@ fi
 if [[ -n "${SPARKLE_LINK_URL:-}" ]]; then
   ARGS+=("--link" "$SPARKLE_LINK_URL")
 fi
+if [[ "${ONECONTEXT_SPARKLE_MANDATORY:-}" == "1" || "${SPARKLE_CRITICAL_UPDATE:-}" == "1" ]]; then
+  ARGS+=("--critical-update-version" "${ONECONTEXT_SPARKLE_MANDATORY_FROM_VERSION:-${SPARKLE_CRITICAL_UPDATE_VERSION:-}}")
+fi
+if [[ -n "${ONECONTEXT_SPARKLE_MINIMUM_UPDATE_VERSION:-}" ]]; then
+  ARGS+=("--minimum-update-version" "$ONECONTEXT_SPARKLE_MINIMUM_UPDATE_VERSION")
+fi
+if [[ -n "${ONECONTEXT_SPARKLE_MINIMUM_AUTOUPDATE_VERSION:-}" ]]; then
+  ARGS+=("--major-version" "$ONECONTEXT_SPARKLE_MINIMUM_AUTOUPDATE_VERSION")
+fi
 if [[ -n "${SPARKLE_ED_KEY_FILE:-}" && -z "${SPARKLE_PRIVATE_ED_KEY:-}" ]]; then
   ARGS+=("--ed-key-file" "$SPARKLE_ED_KEY_FILE")
 fi

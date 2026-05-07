@@ -92,6 +92,18 @@ if [[ -n "${ONECONTEXT_SPARKLE_FEED_URL:-}" || -n "${ONECONTEXT_SPARKLE_PUBLIC_E
     echo "DMG app Info.plist does not enable Sparkle automatic checks." >&2
     exit 1
   fi
+  if [[ "$(plutil -extract SUAutomaticallyUpdate raw "$APP/Contents/Info.plist" 2>/dev/null || true)" != "true" ]]; then
+    echo "DMG app Info.plist does not enable Sparkle automatic downloads and installs." >&2
+    exit 1
+  fi
+  if [[ "$(plutil -extract SUAllowsAutomaticUpdates raw "$APP/Contents/Info.plist" 2>/dev/null || true)" != "true" ]]; then
+    echo "DMG app Info.plist does not allow Sparkle automatic updates." >&2
+    exit 1
+  fi
+  if [[ "$(plutil -extract SUScheduledCheckInterval raw "$APP/Contents/Info.plist" 2>/dev/null || true)" != "3600" ]]; then
+    echo "DMG app Info.plist does not set the aggressive Sparkle check interval." >&2
+    exit 1
+  fi
 fi
 
 if [[ "$("$APP/Contents/MacOS/1context-cli" --version)" != "$VERSION" ]]; then

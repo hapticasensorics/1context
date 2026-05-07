@@ -9,21 +9,29 @@ final class NativeUpdaterTests: XCTestCase {
 
     let missingKey = SparkleUpdaterConfiguration(infoDictionary: [
       "SUFeedURL": "https://updates.1context.localhost/appcast.xml",
-      "SUEnableAutomaticChecks": true
+      "SUEnableAutomaticChecks": true,
+      "SUAutomaticallyUpdate": true,
+      "SUScheduledCheckInterval": 3600
     ])
     XCTAssertFalse(missingKey.isConfigured)
     XCTAssertEqual(missingKey.feedURL?.absoluteString, "https://updates.1context.localhost/appcast.xml")
     XCTAssertTrue(missingKey.automaticChecksEnabled)
+    XCTAssertTrue(missingKey.automaticDownloadsEnabled)
+    XCTAssertEqual(missingKey.scheduledCheckInterval, 3600)
     XCTAssertEqual(missingKey.missingConfigurationSummary, "SUPublicEDKey")
 
     let configured = SparkleUpdaterConfiguration(infoDictionary: [
       "SUFeedURL": " https://updates.1context.localhost/appcast.xml ",
       "SUPublicEDKey": "ed25519-public-key",
-      "SUEnableAutomaticChecks": "yes"
+      "SUEnableAutomaticChecks": "yes",
+      "SUAutomaticallyUpdate": "yes",
+      "SUScheduledCheckInterval": "1800"
     ])
     XCTAssertTrue(configured.isConfigured)
     XCTAssertEqual(configured.feedURL?.absoluteString, "https://updates.1context.localhost/appcast.xml")
     XCTAssertTrue(configured.automaticChecksEnabled)
+    XCTAssertTrue(configured.automaticDownloadsEnabled)
+    XCTAssertEqual(configured.scheduledCheckInterval, 1800)
     XCTAssertNil(configured.missingConfigurationSummary)
   }
 
@@ -48,7 +56,9 @@ final class NativeUpdaterTests: XCTestCase {
     let plist: [String: Any] = [
       "SUFeedURL": "https://updates.example.com/appcast.xml",
       "SUPublicEDKey": "ed25519-public-key",
-      "SUEnableAutomaticChecks": true
+      "SUEnableAutomaticChecks": true,
+      "SUAutomaticallyUpdate": true,
+      "SUScheduledCheckInterval": 3600
     ]
     let data = try PropertyListSerialization.data(fromPropertyList: plist, format: .xml, options: 0)
     try data.write(to: infoPlist)
@@ -62,6 +72,8 @@ final class NativeUpdaterTests: XCTestCase {
     XCTAssertEqual(configuration.feedURL?.absoluteString, "https://updates.example.com/appcast.xml")
     XCTAssertEqual(configuration.publicEdKey, "ed25519-public-key")
     XCTAssertTrue(configuration.automaticChecksEnabled)
+    XCTAssertTrue(configuration.automaticDownloadsEnabled)
+    XCTAssertEqual(configuration.scheduledCheckInterval, 3600)
   }
 
   func testAppLocationClassifiesApplicationsBundleAsInstallable() {
@@ -148,9 +160,70 @@ final class NativeUpdaterTests: XCTestCase {
     XCTAssertEqual(snapshot.currentVersion, "0.1.49")
     XCTAssertEqual(snapshot.latestVersion, "0.1.50")
     XCTAssertTrue(snapshot.updateAvailable)
+    XCTAssertFalse(snapshot.mandatoryUpdateAvailable)
     XCTAssertTrue(snapshot.canInstallFromCurrentProcess)
     XCTAssertEqual(snapshot.userFacingStatus, "1Context 0.1.50 is available.")
     XCTAssertEqual(snapshot.nextAction, "Install from the app.")
+  }
+
+  func testSparkleUpdaterSurfacesMandatoryUpdateMetadata() async {
+    let updater = SparkleNativeUpdater(
+      configuration: .testConfigured,
+      appContext: .testApplicationsApp,
+      driver: FakeSparkleDriver.mandatoryUpdate
+    )
+
+    let snapshot = await updater.snapshot(currentVersion: "0.1.49")
+
+    XCTAssertTrue(snapshot.updateAvailable)
+    XCTAssertTrue(snapshot.mandatoryUpdateAvailable)
+    XCTAssertEqual(snapshot.minimumUpdateVersion, "0.1.49")
+    XCTAssertEqual(snapshot.minimumAutoupdateVersion, "0.1.49")
+    XCTAssertEqual(snapshot.userFacingStatus, "1Context 0.1.51 is a mandatory update.")
+  }
+
+  func testMandatoryUpdateRuntimePolicyOnlyPausesForAvailableMandatoryUpdates() {
+    let mandatory = NativeUpdateSnapshot(
+      implementation: .sparkle,
+      availability: .available,
+      currentVersion: "0.1.50",
+      latestVersion: "0.1.51",
+      updateAvailable: true,
+      mandatoryUpdateAvailable: true,
+      canInstallFromCurrentProcess: true,
+      userFacingStatus: "1Context 0.1.51 is a mandatory update.",
+      nextAction: "Install from the app."
+    )
+    let normal = NativeUpdateSnapshot(
+      implementation: .sparkle,
+      availability: .available,
+      currentVersion: "0.1.50",
+      latestVersion: "0.1.51",
+      updateAvailable: true,
+      mandatoryUpdateAvailable: false,
+      canInstallFromCurrentProcess: true,
+      userFacingStatus: "1Context 0.1.51 is available.",
+      nextAction: "Install from the app."
+    )
+    let unavailable = NativeUpdateSnapshot(
+      implementation: .sparkle,
+      availability: .unavailable,
+      currentVersion: "0.1.50",
+      latestVersion: nil,
+      updateAvailable: false,
+      mandatoryUpdateAvailable: true,
+      canInstallFromCurrentProcess: false,
+      userFacingStatus: "Move 1Context to Applications to install app updates.",
+      nextAction: "Open 1Context from /Applications/1Context.app."
+    )
+
+    XCTAssertTrue(MandatoryUpdateRuntimePolicy.shouldPausePassiveRemembering(mandatory))
+    XCTAssertEqual(
+      MandatoryUpdateRuntimePolicy.startBlockedMessage(mandatory),
+      "1Context 0.1.51 is mandatory. Update before starting passive remembering."
+    )
+    XCTAssertFalse(MandatoryUpdateRuntimePolicy.shouldPausePassiveRemembering(normal))
+    XCTAssertFalse(MandatoryUpdateRuntimePolicy.shouldPausePassiveRemembering(unavailable))
   }
 
   func testNativeUpdateDiagnosticsRenderStableLines() {
@@ -172,9 +245,10 @@ final class NativeUpdaterTests: XCTestCase {
     XCTAssertEqual(lines[2], "  Current Version: 0.1.49")
     XCTAssertEqual(lines[3], "  Latest Version: 0.1.50")
     XCTAssertEqual(lines[4], "  Update Available: yes")
-    XCTAssertEqual(lines[5], "  Can Install Here: yes")
-    XCTAssertEqual(lines[6], "  Status: 1Context 0.1.50 is available.")
-    XCTAssertEqual(lines[7], "  Next Action: Install from the app.")
+    XCTAssertEqual(lines[5], "  Mandatory Update: no")
+    XCTAssertEqual(lines[6], "  Can Install Here: yes")
+    XCTAssertEqual(lines[7], "  Status: 1Context 0.1.50 is available.")
+    XCTAssertEqual(lines[8], "  Next Action: Install from the app.")
   }
 
   func testNativeUpdateDiagnosticsIncludeSparkleContextWhenPresent() async {
@@ -190,6 +264,8 @@ final class NativeUpdaterTests: XCTestCase {
     XCTAssertTrue(lines.contains("  Configuration: complete"))
     XCTAssertTrue(lines.contains("  Feed URL: https://updates.1context.localhost/appcast.xml"))
     XCTAssertTrue(lines.contains("  Automatic Checks: yes"))
+    XCTAssertTrue(lines.contains("  Automatic Downloads: yes"))
+    XCTAssertTrue(lines.contains("  Scheduled Check Interval: 3600s"))
   }
 }
 
@@ -212,6 +288,18 @@ private struct FakeSparkleDriver: SparkleUpdateDriver {
     nextAction: "No action needed."
   ))
 
+  static let mandatoryUpdate = FakeSparkleDriver(snapshot: SparkleUpdateDriverSnapshot(
+    availability: .available,
+    latestVersion: "0.1.51",
+    updateAvailable: true,
+    mandatoryUpdateAvailable: true,
+    minimumUpdateVersion: "0.1.49",
+    minimumAutoupdateVersion: "0.1.49",
+    canInstallUpdates: true,
+    userFacingStatus: "1Context 0.1.51 is a mandatory update.",
+    nextAction: "Install from the app."
+  ))
+
   let snapshot: SparkleUpdateDriverSnapshot
 
   func snapshot(
@@ -226,7 +314,9 @@ private extension SparkleUpdaterConfiguration {
   static let testConfigured = SparkleUpdaterConfiguration(
     feedURL: URL(string: "https://updates.1context.localhost/appcast.xml"),
     publicEdKey: "ed25519-public-key",
-    automaticChecksEnabled: true
+    automaticChecksEnabled: true,
+    automaticDownloadsEnabled: true,
+    scheduledCheckInterval: 3600
   )
 }
 

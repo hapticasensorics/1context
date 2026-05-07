@@ -88,11 +88,11 @@
       "sha256": "a75fe0cb5e3d19978ecd8dfabef35a3aac58fe1e457bdb38ac244e2f733c2684"
     },
     {
-      "bytes": 1707,
+      "bytes": 1723,
       "content_type": "text/markdown",
       "path": "wiki/menu/20-project/10-projects/source/projects.md",
       "role": "source_canonical_private",
-      "sha256": "f20f5048b7a42c5ee612686d57dad617af7aac44efe89ae9002e8ccff00d7f83"
+      "sha256": "3e26958761c9a728cf50a65dc3ee06cfdc5ff38b9b7238a339c76a85a2366988"
     },
     {
       "bytes": 365,
@@ -134,7 +134,7 @@
     {
       "input_path": "wiki/menu/20-project/10-projects/source/projects.md",
       "stderr": "",
-      "stdout": "\u2713 projects: 39471 bytes \u2192 /Users/paulhan/dev/1context-public-launch/memory-core/wiki/menu/20-project/10-projects/generated/projects.html"
+      "stdout": "\u2713 projects: 39505 bytes \u2192 /Users/paulhan/dev/1context-public-launch/memory-core/wiki/menu/20-project/10-projects/generated/projects.html"
     },
     {
       "input_path": "wiki/menu/20-project/10-projects/talk/projects.talk",
@@ -146,19 +146,19 @@
   "outputs": [
     {
       "audience_tier": "public",
-      "bytes": 39491,
+      "bytes": 39525,
       "content_type": "text/html",
       "path": "wiki/menu/20-project/10-projects/generated/projects.html",
       "role": "generated_output",
-      "sha256": "11a7dec81a2924353356431461cb681a24831bccf2b2fda337becefeae878856"
+      "sha256": "59859d16496ca8039a38ff0742f1309f8c6e8e85e17d9904fc593dbaa9b1df21"
     },
     {
       "audience_tier": "public",
-      "bytes": 1707,
+      "bytes": 1723,
       "content_type": "text/markdown",
       "path": "wiki/menu/20-project/10-projects/generated/projects.md",
       "role": "generated_output",
-      "sha256": "f20f5048b7a42c5ee612686d57dad617af7aac44efe89ae9002e8ccff00d7f83"
+      "sha256": "3e26958761c9a728cf50a65dc3ee06cfdc5ff38b9b7238a339c76a85a2366988"
     },
     {
       "audience_tier": "public",
@@ -177,7 +177,7 @@
       "sha256": "741032b130cab69731317b28d1c56c1930967755951381459b507e83f4fb45ab"
     }
   ],
-  "rendered_at": "2026-04-30T11:40:00Z",
+  "rendered_at": "2026-05-07T01:30:21Z",
   "routes": [
     {
       "kind": "latest_family_html",
@@ -216,7 +216,7 @@
           "exists": true,
           "path": "wiki/menu/20-project/10-projects/source/projects.md",
           "selected_for_render": true,
-          "sha256": "f20f5048b7a42c5ee612686d57dad617af7aac44efe89ae9002e8ccff00d7f83"
+          "sha256": "3e26958761c9a728cf50a65dc3ee06cfdc5ff38b9b7238a339c76a85a2366988"
         },
         "public": {
           "exists": false,

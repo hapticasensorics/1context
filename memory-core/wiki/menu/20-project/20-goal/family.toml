@@ -1,0 +1,26 @@
+id = "goal"
+label = "Goal"
+kind = "professional_app_goal"
+route = "/goal"
+menu_group = "project"
+menu_order = 20
+template_version = "local-private-shell@0.1.0"
+
+[source]
+primary = "source/goal.md"
+
+[talk]
+primary = "talk/goal.talk"
+conventions = "talk/goal.talk/_conventions.md"
+curator_prompt = "talk/goal.talk/_curator.md"
+
+[generated]
+dir = "generated"
+
+[jobs]
+curator = "memory.wiki.goal_curator"
+
+[policies]
+operator_editable = true
+agent_editable = true
+generated_editable = false

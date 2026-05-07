@@ -10,7 +10,7 @@ if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
 fi
 
 CORE_VERSION="$(
-  sed -nE 's/^public let oneContextVersion = "([^"]+)"/\1/p' \
+  sed -nE 's/^  public static let fallback = "([^"]+)"/\1/p' \
     "$ROOT/macos/Sources/OneContextCore/Core.swift"
 )"
 

@@ -1,11 +1,11 @@
 {
   "by_source": {
-    "generated_markdown": 5
+    "generated_markdown": 6
   },
   "families": [
     {
       "archived_talk_entries": 0,
-      "bytes": 160684,
+      "bytes": 160750,
       "generated_files": 11,
       "generated_files_by_extension": {
         "(none)": 1,
@@ -16,7 +16,7 @@
       "generated_markdown_pages": 2,
       "id": "for-you",
       "label": "For You",
-      "links": 9,
+      "links": 10,
       "menu_group": "for-you",
       "path": "wiki/menu/10-for-you/10-for-you",
       "route": "/for-you",
@@ -28,7 +28,7 @@
     },
     {
       "archived_talk_entries": 0,
-      "bytes": 97818,
+      "bytes": 97884,
       "generated_files": 5,
       "generated_files_by_extension": {
         ".html": 2,
@@ -38,7 +38,7 @@
       "generated_markdown_pages": 1,
       "id": "your-context",
       "label": "Your Context",
-      "links": 3,
+      "links": 4,
       "menu_group": "for-you",
       "path": "wiki/menu/10-for-you/20-your-context",
       "route": "/your-context",
@@ -50,7 +50,7 @@
     },
     {
       "archived_talk_entries": 0,
-      "bytes": 92715,
+      "bytes": 92781,
       "generated_files": 5,
       "generated_files_by_extension": {
         ".html": 2,
@@ -60,7 +60,7 @@
       "generated_markdown_pages": 1,
       "id": "projects",
       "label": "Projects",
-      "links": 5,
+      "links": 6,
       "menu_group": "project",
       "path": "wiki/menu/20-project/10-projects",
       "route": "/projects",
@@ -72,7 +72,29 @@
     },
     {
       "archived_talk_entries": 0,
-      "bytes": 93053,
+      "bytes": 115393,
+      "generated_files": 5,
+      "generated_files_by_extension": {
+        ".html": 2,
+        ".json": 1,
+        ".md": 2
+      },
+      "generated_markdown_pages": 1,
+      "id": "goal",
+      "label": "Goal",
+      "links": 4,
+      "menu_group": "project",
+      "path": "wiki/menu/20-project/20-goal",
+      "route": "/goal",
+      "routes": 4,
+      "source_pages": 1,
+      "talk_entries": 1,
+      "talk_folders": 1,
+      "words": 0
+    },
+    {
+      "archived_talk_entries": 0,
+      "bytes": 93119,
       "generated_files": 5,
       "generated_files_by_extension": {
         ".html": 2,
@@ -82,7 +104,7 @@
       "generated_markdown_pages": 1,
       "id": "topics",
       "label": "Topics",
-      "links": 3,
+      "links": 4,
       "menu_group": "topics",
       "path": "wiki/menu/30-topics/10-topics",
       "route": "/topics",
@@ -93,146 +115,162 @@
       "words": 0
     }
   ],
-  "generated_at": "2026-05-02T06:17:48Z",
+  "generated_at": "2026-05-07T04:29:02Z",
   "generated_files_by_extension": {
     "(none)": 1,
-    ".html": 9,
-    ".json": 6,
-    ".md": 10
+    ".html": 11,
+    ".json": 7,
+    ".md": 12
   },
   "links": {
     "anchors": 0,
     "broken_internal": 0,
     "broken_internal_routes": [],
     "external": 0,
-    "internal": 20,
+    "internal": 28,
     "top_destinations": [
       {
-        "count": 6,
+        "count": 7,
         "route": "/topics",
         "title": "Topics"
       },
       {
-        "count": 6,
+        "count": 7,
         "route": "/your-context",
         "title": "Your Context"
       },
       {
-        "count": 5,
+        "count": 6,
         "route": "/projects",
         "title": "Projects"
       },
       {
-        "count": 3,
+        "count": 4,
         "route": "/for-you",
         "title": "for-you"
+      },
+      {
+        "count": 4,
+        "route": "/goal",
+        "title": "Goal"
       }
     ]
   },
   "routes_by_kind": {
-    "generated_output": 9,
-    "html": 6,
-    "latest_family_html": 4
+    "generated_output": 11,
+    "html": 7,
+    "latest_family_html": 5
   },
   "schema_version": "wiki.stats.v1",
   "source_corpus": {
-    "events": 223,
+    "events": 248,
     "sessions": 0
   },
   "story": {
     "behind_the_scenes": {
-      "agent_debate_words": 217,
+      "agent_debate_words": 274,
       "captured_days": 0
     },
     "compression": {
-      "events_per_reader_page": 45,
+      "events_per_reader_page": 41,
       "events_per_reader_word": 0
     },
     "connections": {
       "external_links": 0,
-      "internal_links": 20,
-      "links": 20,
+      "internal_links": 28,
+      "links": 28,
       "top_destinations": [
         {
-          "count": 6,
+          "count": 7,
           "route": "/topics",
           "title": "Topics"
         },
         {
-          "count": 6,
+          "count": 7,
           "route": "/your-context",
           "title": "Your Context"
         },
         {
-          "count": 5,
+          "count": 6,
           "route": "/projects",
           "title": "Projects"
         },
         {
-          "count": 3,
+          "count": 4,
           "route": "/for-you",
           "title": "for-you"
+        },
+        {
+          "count": 4,
+          "route": "/goal",
+          "title": "Goal"
         }
       ]
     },
     "coverage": {
       "days": 0,
-      "events": 223,
+      "events": 248,
       "sessions": 0
     },
     "families": [
       {
         "id": "for-you",
         "label": "For You",
-        "links": 9,
+        "links": 10,
+        "words": 0
+      },
+      {
+        "id": "goal",
+        "label": "Goal",
+        "links": 4,
         "words": 0
       },
       {
         "id": "projects",
         "label": "Projects",
-        "links": 5,
+        "links": 6,
         "words": 0
       },
       {
         "id": "topics",
         "label": "Topics",
-        "links": 3,
+        "links": 4,
         "words": 0
       },
       {
         "id": "your-context",
         "label": "Your Context",
-        "links": 3,
+        "links": 4,
         "words": 0
       }
     ],
-    "headline": "223 events condensed into 5 pages.",
+    "headline": "248 events condensed into 6 pages.",
     "reading": {
       "estimated_reading_minutes": 0,
-      "reader_pages": 5,
+      "reader_pages": 6,
       "reader_words": 0,
-      "reading_surfaces": 5,
+      "reading_surfaces": 6,
       "total_indexed_words": 0
     }
   },
   "totals": {
     "archived_talk_entries": 0,
     "broken_internal_links": 0,
-    "bytes": 444270,
-    "content_pages": 5,
+    "bytes": 559927,
+    "content_pages": 6,
     "external_links": 0,
-    "families": 4,
-    "generated_files": 26,
-    "generated_markdown_pages": 5,
-    "internal_links": 20,
-    "links": 20,
-    "render_manifests": 4,
-    "routes": 19,
-    "source_markdown_files": 4,
-    "source_pages": 4,
-    "talk_entries": 4,
-    "talk_folders": 4,
-    "talk_words": 217,
-    "words": 1092
+    "families": 5,
+    "generated_files": 31,
+    "generated_markdown_pages": 6,
+    "internal_links": 28,
+    "links": 28,
+    "render_manifests": 5,
+    "routes": 23,
+    "source_markdown_files": 5,
+    "source_pages": 5,
+    "talk_entries": 5,
+    "talk_folders": 5,
+    "talk_words": 274,
+    "words": 2318
   }
 }

@@ -408,12 +408,14 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
   private var isUninstallInFlight = false
   private var isReadinessRefreshInFlight = false
   private var isSetupReadinessCheckInFlight = false
+  private var isPausingRuntimeForMandatoryUpdate = false
   private var isMenuOpen = false
   private var didOfferLocalWebSetupAtLaunch = false
   private var cachedRequiredSetupReady = false
   private var runtimeToggleGeneration = 0
   private var setupReadinessPollingStartedAt: Date?
   private var setupReadinessPollingMessage: String?
+  private var setupContinuation = OneContextSetupContinuation()
   private var pendingUpdateState: UpdateState?
   private var activeAlertMessage: String?
   private var lastAlertShownAt: [String: Date] = [:]
@@ -460,6 +462,22 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
 
   private var currentVersion: String {
     appVersion
+  }
+
+  private var smokeFixtureEnabled: Bool {
+    Bundle.main.object(forInfoDictionaryKey: "OneContextSmokeFixture") as? Bool == true
+  }
+
+  private func configureSmokeFixtureEnvironmentIfNeeded() {
+    guard smokeFixtureEnabled else { return }
+    let stateDir = (Bundle.main.object(forInfoDictionaryKey: "OneContextSmokeStateDir") as? String)
+      ?? NSTemporaryDirectory().appending("1context-sparkle-smoke")
+    setenv("ONECONTEXT_APP_SUPPORT_DIR", "\(stateDir)/Application Support/1Context", 1)
+    setenv("ONECONTEXT_USER_CONTENT_DIR", "\(stateDir)/1Context", 1)
+    setenv("ONECONTEXT_LOG_DIR", "\(stateDir)/Logs/1Context", 1)
+    setenv("ONECONTEXT_CACHE_DIR", "\(stateDir)/Caches/1Context", 1)
+    setenv("ONECONTEXT_LAUNCH_AGENT_DISABLED", "1", 1)
+    setenv("ONECONTEXT_WIKI_URL_MODE", LocalWebURLMode.highPortHTTP.rawValue, 1)
   }
 
   private func currentReadiness(checkSensitivePermissionsInCurrentProcess: Bool = false) -> OneContextAppReadinessSnapshot {
@@ -666,28 +684,34 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
 
   func applicationDidFinishLaunching(_ notification: Notification) {
     let start = perfStart()
-    guard !handleAppInstallAtLaunch() else { return }
+    configureSmokeFixtureEnvironmentIfNeeded()
+    let smokeFixture = smokeFixtureEnabled
+    guard smokeFixture || !handleAppInstallAtLaunch() else { return }
     guard acquireMenuInstanceLock() else {
       NSApp.terminate(nil)
       return
     }
-    adoptLaunchRuntimeIntent()
-    registerMenuLaunchAgent()
+    if !smokeFixture {
+      adoptLaunchRuntimeIntent()
+      registerMenuLaunchAgent()
+    }
     NSApp.setActivationPolicy(.accessory)
     statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
     configureStatusIcon()
     configureMenu()
     startNativeUpdater()
     refreshMenuItems()
-    startDesiredStateMonitor()
-    showSetupWindowForHarnessIfRequested()
-    scheduleLocalWebSetupRepairPrompt()
-    refreshApplicationLifecycle(userInitiated: false, force: true)
-    scheduleLocalWebEdgeStartupRetries()
+    if !smokeFixture {
+      startDesiredStateMonitor()
+      showSetupWindowForHarnessIfRequested()
+      scheduleLocalWebSetupRepairPrompt()
+      refreshApplicationLifecycle(userInitiated: false, force: true)
+      scheduleLocalWebEdgeStartupRetries()
 
-    timer = Timer.scheduledTimer(withTimeInterval: 30, repeats: true) { [weak self] _ in
-      Task { @MainActor in
-        self?.refreshApplicationLifecycle(userInitiated: false, force: true)
+      timer = Timer.scheduledTimer(withTimeInterval: 30, repeats: true) { [weak self] _ in
+        Task { @MainActor in
+          self?.refreshApplicationLifecycle(userInitiated: false, force: true)
+        }
       }
     }
     perfLog("launch.ready", start: start)
@@ -738,7 +762,15 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
   }
 
   private func startNativeUpdater() {
-    _ = nativeUpdater
+    nativeUpdater.onUpdateInformationChanged = { [weak self] in
+      Task { @MainActor in
+        await self?.refreshNativeUpdateState()
+      }
+    }
+    nativeUpdater.checkForUpdatesInBackgroundOnLaunch()
+    Task { @MainActor in
+      await refreshNativeUpdateState()
+    }
   }
 
   private func refreshMenuItems() {
@@ -748,7 +780,13 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
       stateItem.title = stateTitle
       renderedStateTitle = stateTitle
     }
-    startStopItem.title = runtimeState == .running ? "Stop" : "Start"
+    if updateState == .mandatoryAvailable, runtimeState != .running {
+      startStopItem.title = "Update"
+      startStopItem.action = #selector(openUpdateFlow)
+    } else {
+      startStopItem.title = runtimeState == .running ? "Stop" : "Start"
+      startStopItem.action = #selector(toggleRuntime)
+    }
     startStopItem.isEnabled = !isRuntimeActionInFlight
     refreshWikiItem.title = isWikiRefreshInFlight ? "Refreshing Wiki..." : "Refresh Wiki"
     refreshWikiItem.isEnabled = !isWikiRefreshInFlight
@@ -772,6 +810,9 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
       updateAction = #selector(checkForUpdatesNow)
     case .available:
       updateTitle = "Please Update"
+      updateAction = #selector(openUpdateFlow)
+    case .mandatoryAvailable:
+      updateTitle = "Mandatory Update"
       updateAction = #selector(openUpdateFlow)
     }
 
@@ -805,6 +846,40 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
     }
     updateState = newValue
     refreshMenuItems()
+  }
+
+  private func refreshNativeUpdateState() async {
+    let snapshot = await nativeUpdater.snapshot(currentVersion: appVersion)
+    applyMandatoryUpdateRuntimePolicy(to: snapshot)
+    setUpdateState(Self.updateState(for: snapshot))
+  }
+
+  private func applyMandatoryUpdateRuntimePolicy(to snapshot: NativeUpdateSnapshot) {
+    guard MandatoryUpdateRuntimePolicy.shouldPausePassiveRemembering(snapshot) else { return }
+    pauseRuntimeForMandatoryUpdate()
+  }
+
+  private func pauseRuntimeForMandatoryUpdate() {
+    guard !isPausingRuntimeForMandatoryUpdate else { return }
+    isPausingRuntimeForMandatoryUpdate = true
+    setRuntimeState(.needsUpdate, forceRender: true)
+
+    Task.detached(priority: .utility) {
+      _ = try? await RuntimeController().stopForAppQuit()
+      await MainActor.run {
+        self.isPausingRuntimeForMandatoryUpdate = false
+        if self.updateState == .mandatoryAvailable {
+          self.setRuntimeState(.needsUpdate, forceRender: true)
+        }
+      }
+    }
+  }
+
+  private nonisolated static func updateState(for snapshot: NativeUpdateSnapshot) -> UpdateState {
+    if snapshot.mandatoryUpdateAvailable {
+      return .mandatoryAvailable
+    }
+    return snapshot.updateAvailable ? .available : .upToDate
   }
 
   private func presentMenuAlert(_ message: String) {
@@ -856,6 +931,10 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
     let setupReady = requiredSetupReady ?? refreshRequiredSetupCache()
     guard setupReady else {
       setRuntimeState(.needsSetup)
+      return
+    }
+    guard updateState != .mandatoryAvailable else {
+      pauseRuntimeForMandatoryUpdate()
       return
     }
     guard userInitiated || desiredRuntimeIntent == .running else {
@@ -1010,7 +1089,8 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
       }
 
       let snapshot = await self.nativeUpdater.snapshot(currentVersion: self.appVersion)
-      self.setUpdateState(snapshot.updateAvailable ? .available : .upToDate)
+      self.applyMandatoryUpdateRuntimePolicy(to: snapshot)
+      self.setUpdateState(Self.updateState(for: snapshot))
       guard snapshot.availability == .available else {
         self.presentNativeUpdateSnapshot(snapshot)
         return
@@ -1023,10 +1103,13 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
 
   @objc private func toggleRuntime() {
     let targetIntent: RuntimeIntent = runtimeState == .running ? .stopped : .running
+    if targetIntent == .running, updateState == .mandatoryAvailable {
+      setRuntimeState(.needsUpdate, forceRender: true)
+      openUpdateFlow()
+      return
+    }
     if targetIntent == .running, !cachedRequiredSetupReady {
-      Task {
-        showSetupWindow(message: "Finish setup to start 1Context.")
-      }
+      showSetupWindow(forBlockedAction: .startRemembering)
       return
     }
     desiredRuntimeIntent = targetIntent
@@ -1088,14 +1171,14 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
       snapshot = await nativeUpdater.snapshot(currentVersion: appVersion)
     }
     if snapshot.availability == .available, nativeUpdater.checkForUpdates(updateItem) {
-      setUpdateState(.upToDate)
       return
     }
     presentNativeUpdateSnapshot(snapshot)
   }
 
   private func presentNativeUpdateSnapshot(_ snapshot: NativeUpdateSnapshot) {
-    setUpdateState(snapshot.updateAvailable ? .available : .upToDate)
+    applyMandatoryUpdateRuntimePolicy(to: snapshot)
+    setUpdateState(Self.updateState(for: snapshot))
     if snapshot.availability == .notConfigured {
       presentMenuAlert(snapshot.userFacingStatus)
       return
@@ -1116,6 +1199,10 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
     setupWindowController.showWindow(nil)
     setupWindowController.window?.makeKeyAndOrderFront(nil)
     NSApp.activate(ignoringOtherApps: true)
+  }
+
+  private func showSetupWindow(forBlockedAction action: OneContextBlockedSetupAction) {
+    showSetupWindow(message: setupContinuation.block(action))
   }
 
   private func updateSetupWindow(message: String? = nil) {
@@ -1161,7 +1248,7 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
       } catch {
         openWikiItem.isEnabled = true
         if Self.isLocalWebSetupRequired(error) {
-          showSetupWindow(message: "Finish setup to open your wiki.")
+          showSetupWindow(forBlockedAction: .openWiki)
           return
         }
         presentMenuAlert(Self.wikiBlockedMessage(for: error))
@@ -1201,9 +1288,7 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
   @objc private func refreshWiki() {
     guard !isWikiRefreshInFlight else { return }
     guard currentReadiness().requiredSetupReady else {
-      Task {
-        showSetupWindow(message: "Finish setup to refresh your wiki.")
-      }
+      showSetupWindow(forBlockedAction: .refreshWiki)
       return
     }
     isWikiRefreshInFlight = true
@@ -1527,9 +1612,30 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
     updateSetupWindow(message: message)
     startRuntimeImmediatelyAfterSetup()
     refreshApplicationLifecycle(userInitiated: false, force: true)
+    resumeBlockedSetupActionAfterSetup()
+  }
+
+  private func resumeBlockedSetupActionAfterSetup() {
+    guard let action = setupContinuation.consumeResumableActionAfterSetup() else {
+      return
+    }
+    Task { @MainActor in
+      switch action {
+      case .openWiki:
+        self.openWiki()
+      case .refreshWiki:
+        self.refreshWiki()
+      case .startRemembering:
+        break
+      }
+    }
   }
 
   private func startRuntimeImmediatelyAfterSetup() {
+    guard updateState != .mandatoryAvailable else {
+      setRuntimeState(.needsUpdate, forceRender: true)
+      return
+    }
     setRuntimeState(.running, forceRender: true)
     startLocalWebEdge(requiredSetupReady: true)
     Task.detached(priority: .userInitiated) {
@@ -1682,6 +1788,7 @@ private enum RuntimeState {
   case running
   case stopped
   case needsSetup
+  case needsUpdate
   case needsAttention
 
   var title: String {
@@ -1694,6 +1801,8 @@ private enum RuntimeState {
       return "1Context Stopped"
     case .needsSetup:
       return "1Context Needs Setup"
+    case .needsUpdate:
+      return "1Context Needs Update"
     case .needsAttention:
       return "1Context Sick"
     }
@@ -1703,6 +1812,7 @@ private enum RuntimeState {
 private enum UpdateState {
   case upToDate
   case available
+  case mandatoryAvailable
 }
 
 private enum RuntimeIntent {

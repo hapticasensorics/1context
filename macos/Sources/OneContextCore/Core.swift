@@ -1,8 +1,68 @@
 import Foundation
 
-public let oneContextVersion = "0.1.51"
+public let oneContextVersion = OneContextVersion.current()
 public let oneContextGitHubURL = URL(string: "https://github.com/hapticasensorics/1context")!
 
+public enum OneContextVersion {
+  public static let fallback = "0.1.53"
+  public static let overrideEnvironmentKey = "ONECONTEXT_VERSION_OVERRIDE"
+
+  public static func current(
+    environment: [String: String] = ProcessInfo.processInfo.environment,
+    bundle: Bundle = .main,
+    executableURL: URL? = Self.currentExecutableURL()
+  ) -> String {
+    resolve(
+      environment: environment,
+      bundleVersion: bundle.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String,
+      executableURL: executableURL,
+      appBundleVersion: Self.appBundleVersion(containing:)
+    )
+  }
+
+  static func resolve(
+    environment: [String: String],
+    bundleVersion: String?,
+    executableURL: URL?,
+    appBundleVersion: (URL) -> String?
+  ) -> String {
+    if let override = nonEmptyVersion(environment[overrideEnvironmentKey]) {
+      return override
+    }
+    if let bundleVersion = nonEmptyVersion(bundleVersion) {
+      return bundleVersion
+    }
+    if let executableURL {
+      var candidate = executableURL.standardizedFileURL.resolvingSymlinksInPath()
+      while candidate.path != "/" {
+        if candidate.pathExtension == "app",
+          let version = nonEmptyVersion(appBundleVersion(candidate))
+        {
+          return version
+        }
+        candidate.deleteLastPathComponent()
+      }
+    }
+    return fallback
+  }
+
+  private static func nonEmptyVersion(_ value: String?) -> String? {
+    guard let value else { return nil }
+    let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+    return trimmed.isEmpty ? nil : trimmed
+  }
+
+  private static func appBundleVersion(containing appURL: URL) -> String? {
+    NSDictionary(contentsOf: appURL.appendingPathComponent("Contents/Info.plist"))?["CFBundleShortVersionString"] as? String
+  }
+
+  public static func currentExecutableURL() -> URL? {
+    guard let executablePath = CommandLine.arguments.first, !executablePath.isEmpty else {
+      return nil
+    }
+    return URL(fileURLWithPath: executablePath)
+  }
+}
 
 public struct RuntimeHealth: Codable, Sendable {
   public let status: String

@@ -92,5 +92,6 @@ system has enough history.
 ## See Also
 
 - [For You](/for-you)
+- [Goal](/goal)
 - [Projects](/projects)
 - [Topics](/topics)

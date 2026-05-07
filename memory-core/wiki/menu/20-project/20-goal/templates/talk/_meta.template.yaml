@@ -1,0 +1,11 @@
+title: {title} - Talk
+slug: {slug}.talk
+talk_for: {slug}
+talk_audience: private
+talk_conventions: {family_id}
+talk_conventions_path: ./_conventions.md
+archive_after_days: {archive_after_days}
+lede: Talk folder for {title}.
+see_also:
+  - text: Source page
+    url: {route}

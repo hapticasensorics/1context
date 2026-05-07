@@ -194,6 +194,14 @@ flowchart TD
   `0.1.51`; `/Applications/1Context.app`, the linked `1context` command,
   `1context status --debug`, and the local wiki health endpoint all reported the
   updated app and healthy Local Wiki Access afterward.
+- [x] Local appcast update smoke replaces an older controlled fixture app with a
+  newer controlled fixture app.
+  Proof: `scripts/smoke-sparkle-local-appcast.sh` serves a mandatory local
+  appcast and verified `0.1.51.900` updated to `0.1.51.901` with the embedded
+  CLI reporting the new version.
+- [x] Mandatory update state pauses passive remembering until Sparkle can install
+  the update.
+  Proof: `MandatoryUpdateRuntimePolicy` is covered by `OneContextUpdateTests`.
 - [ ] Update rollback/failure mode leaves the existing app usable.
   Proof: failed-update harness verifies old app still launches and status is clear.
 
@@ -228,7 +236,7 @@ flowchart TD
   with a signed Sparkle appcast, and the Homebrew cask wraps the same DMG.
 - Immediate next step: run the full clean-machine checklist against the
   notarized DMG, including app-owned uninstall cleanup.
-- Next deeper step: promote the manual update proof into an automated local
-  appcast smoke with rollback coverage.
+- Next deeper step: extend the automated local appcast smoke with failed-update
+  rollback and stale-helper repair coverage.
 - The broader remaining professional-app work is tracked in
   [macos-professional-app-milestone.md](macos-professional-app-milestone.md).

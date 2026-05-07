@@ -13,6 +13,7 @@ SIGNING_MODE="${ONECONTEXT_SIGNING_MODE:-adhoc}"
 IDENTITY="${CODESIGN_IDENTITY:-}"
 VERSION="${ONECONTEXT_VERSION:-$(tr -d '[:space:]' < "$ROOT/VERSION")}"
 ARCH="${ONECONTEXT_ARCH:-arm64}"
+BUNDLE_IDENTIFIER="${ONECONTEXT_BUNDLE_IDENTIFIER:-com.haptica.1context}"
 MENU_ICON_SOURCE="$MACOS_DIR/Sources/OneContextMenuBar/Resources/MenuBarIcon.png"
 CADDY_SOURCE="${ONECONTEXT_CADDY_PATH:-$(command -v caddy 2>/dev/null || true)}"
 SPARKLE_FEED_URL="${ONECONTEXT_SPARKLE_FEED_URL:-}"
@@ -124,6 +125,24 @@ if [[ -n "$SPARKLE_FEED_URL" || -n "$SPARKLE_PUBLIC_ED_KEY" ]]; then
   <string>$SPARKLE_PUBLIC_ED_KEY_ESCAPED</string>
   <key>SUEnableAutomaticChecks</key>
   <true/>
+  <key>SUAutomaticallyUpdate</key>
+  <true/>
+  <key>SUAllowsAutomaticUpdates</key>
+  <true/>
+  <key>SUScheduledCheckInterval</key>
+  <integer>3600</integer>
+PLIST
+)"
+fi
+
+SMOKE_PLIST_KEYS=""
+if [[ "${ONECONTEXT_SMOKE_FIXTURE:-0}" == "1" ]]; then
+  SMOKE_STATE_DIR_ESCAPED="$(plist_escape "${ONECONTEXT_SMOKE_STATE_DIR:-/tmp/1context-sparkle-smoke}")"
+  SMOKE_PLIST_KEYS="$(cat <<PLIST
+  <key>OneContextSmokeFixture</key>
+  <true/>
+  <key>OneContextSmokeStateDir</key>
+  <string>$SMOKE_STATE_DIR_ESCAPED</string>
 PLIST
 )"
 fi
@@ -136,7 +155,7 @@ cat > "$CONTENTS_DIR/Info.plist" <<PLIST
   <key>CFBundleExecutable</key>
   <string>1Context</string>
   <key>CFBundleIdentifier</key>
-  <string>com.haptica.1context</string>
+  <string>$BUNDLE_IDENTIFIER</string>
   <key>CFBundleName</key>
   <string>1Context</string>
   <key>CFBundleDisplayName</key>
@@ -154,6 +173,7 @@ cat > "$CONTENTS_DIR/Info.plist" <<PLIST
   <key>LSUIElement</key>
   <true/>
 $SPARKLE_PLIST_KEYS
+$SMOKE_PLIST_KEYS
 </dict>
 </plist>
 PLIST

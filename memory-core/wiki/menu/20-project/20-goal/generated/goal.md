@@ -1,0 +1,196 @@
+---
+title: Goal
+slug: goal
+section: project
+access: private
+summary: "The professional app bar for 1Context: permission flows, update discipline, and the behaviors that must feel reliable before broad release."
+status: published
+last_updated: 2026-05-07
+toc_enabled: true
+talk_enabled: true
+agent_view_enabled: true
+copy_buttons_enabled: true
+footer_enabled: true
+---
+
+# Goal
+
+1Context should behave like a professional macOS app whose job is to remember
+user-directed work. The app is not a shy utility hiding its needs. When a
+feature needs setup or permission to do the thing the user asked for, 1Context
+should say so, open the right flow, and finish the job.
+
+## Permission Doctrine
+
+Use permissions directly and honestly. 1Context creates memory from user action,
+local work, and passive monitoring surfaces, so permissions are part of the
+product contract. People installing this app are signing up for a system that
+can see enough of their work to help them later.
+
+This does not mean surprise access or vague permission prompts. It means:
+
+- ask at the moment a blocked action needs the permission
+- explain what 1Context will use the permission for
+- retry or continue the original action after the permission is granted
+- show a repair path when macOS says the grant is missing, stale, or attached
+  to the wrong app copy
+- never fail silently
+
+## Blocked Action Rule
+
+Any menu, CLI, hook, or local web action blocked by missing setup or permission
+must launch the relevant setup or permissions flow.
+
+Concrete example: the menu bar's Open Wiki action must not silently do nothing
+when Local Wiki Access is missing. It should open setup, name the missing
+grant, and then open the wiki once the setup check passes.
+
+The same rule applies to future capture surfaces: screen recording,
+accessibility, microphone, calendar, contacts, browser/MCP connectors, and
+folder access. If a user asks 1Context to remember or act from that surface,
+the app should request the permission needed for that surface at that moment.
+
+## Sparkle Doctrine
+
+Sparkle is the app update engine. Homebrew and the DMG are install channels;
+Sparkle is how an installed app becomes the blessed current app.
+
+Once a release is marked blessed, old code should stop surviving in the field.
+The update path should be aggressive because 1Context is a passive monitoring
+memory system: stale app code can keep observing, missing fixes, or producing
+bad local state long after a release has fixed the issue.
+
+## Mandatory Update Policy
+
+Not every release needs to be mandatory. But when a release is marked
+mandatory, 1Context should use Sparkle's automatic update path as strongly as
+the platform allows.
+
+The desired behavior:
+
+- check for updates on launch and on a recurring background cadence
+- surface mandatory updates prominently in the menu
+- prefer automatic download, install, and relaunch for mandatory blessed builds
+- stop passive remembering on versions below the minimum blessed version when
+  update is available but not yet applied
+- report update status in diagnostics so support can tell whether a machine is
+  current, stale, blocked, or unable to reach the appcast
+
+Daily checks are not enough if they leave users running old builds for days.
+The product standard is: after a blessed mandatory release, there should be no
+long-lived previous-version 1Context process continuing to monitor work.
+
+## Product Standard
+
+Professional 1Context behavior is direct:
+
+- Open Wiki opens the wiki or opens the setup flow that makes opening possible.
+- Refresh Wiki refreshes the wiki or opens the setup flow that makes refresh
+  possible.
+- Start starts remembering or opens the setup and permission flow required to
+  start remembering.
+- Please Update means Sparkle can take the user into the signed update flow.
+- Mandatory Update means old passive monitoring should not continue quietly.
+
+The app can be privacy-respecting and still be assertive. The professional
+shape is explicit consent, immediate repair, visible state, and no silent
+failure.
+
+## Verification Targets
+
+- Open Wiki with missing Local Wiki Access opens setup instead of failing
+  silently.
+- After setup is granted, the original Open Wiki action completes without the
+  user needing to rediscover it.
+- A mandatory Sparkle appcast item moves an older installed app to the blessed
+  version through a deterministic update smoke.
+- Menu, CLI, and diagnostics agree on update availability, mandatory status,
+  installed version, and required setup state.
+- Passive remembering pauses or refuses to start when the installed version is
+  below a declared mandatory minimum.
+- The currently installed `0.1.51` app can update through the real remote
+  GitHub Sparkle feed to `0.1.53`.
+- A later remote `0.1.54` release marked mandatory can move that installed
+  `0.1.53` app forward without a local appcast or hand-installed bundle.
+
+## Done When
+
+- Blocked menu actions open the setup or permission flow that unblocks the
+  original user intent.
+- Setup completion resumes the original action when replaying that action is
+  safe.
+- Sparkle release artifacts can be marked mandatory in the release pipeline.
+- The installed app checks aggressively, reports mandatory update state, and
+  lets Sparkle automatically download and install eligible updates.
+- Every claim above has a deterministic local proof: Swift tests, release-script
+  checks, wiki render checks, and live local wiki verification.
+
+## Checklist
+
+### Baseline
+
+- [x] `/goal` exists as a first-class wiki family with source, generated page,
+  talk page, and route-table coverage.
+- [x] `/goal` is linked from For You, Your Context, Projects, and Topics.
+- [x] The live local wiki can serve `/goal` and `/goal.talk`.
+
+### Permission Flow
+
+- [x] Blocked Open Wiki records the original action, opens setup, and resumes
+  Open Wiki after Local Wiki Access becomes ready.
+- [x] Blocked Refresh Wiki records the original action, opens setup, and resumes
+  Refresh Wiki after Local Wiki Access becomes ready.
+- [x] Blocked Start opens setup and preserves the desired running intent without
+  replaying a second button press.
+- [x] Setup continuation has focused Swift tests for messages, replacement, and
+  one-shot resume behavior.
+
+### Sparkle Updates
+
+- [x] Release app bundles enable automatic Sparkle checks, automatic eligible
+  downloads/installs, and an aggressive scheduled check interval.
+- [x] Appcast generation can mark a release mandatory through a release-time
+  flag.
+- [x] Menu and diagnostics can distinguish normal updates from mandatory
+  updates.
+- [x] Mandatory update state blocks new passive remembering starts and pauses a
+  running passive monitor until Sparkle can install the update.
+- [x] A local appcast smoke proves an older installed app moves to the blessed
+  version and relaunches.
+
+### Closed Loop
+
+- [x] Swift setup and updater tests pass.
+- [x] Wiki render and wiki regression tests pass.
+- [x] Release scripts pass syntax or fixture validation for the new Sparkle
+  flags.
+- [x] `scripts/smoke-sparkle-local-appcast.sh` passed on this Mac, updating a
+  fixture app from `0.1.51.900` to `0.1.51.901` and verifying the embedded CLI
+  reports the new version.
+- [x] The live local wiki route shows the current checklist.
+
+### Remote Release Train
+
+- [x] Baseline installed app is `0.1.51`.
+- [x] Baseline remote Sparkle feed is GitHub Releases
+  `latest/download/appcast.xml` and currently advertises `0.1.51`.
+- [x] Release workflow gap is identified: the current GitHub workflow still
+  uploads an old tarball shape, while the real Sparkle path needs `1Context.dmg`,
+  the versioned DMG, checksum, and `appcast.xml`.
+- [ ] Publish a signed/notarized `0.1.53` GitHub release with the production
+  Sparkle key and appcast assets.
+- [ ] Prove the installed app moves from `0.1.51` to `0.1.53` through the remote
+  Sparkle feed.
+- [ ] Publish a signed/notarized `0.1.54` GitHub release marked mandatory for
+  automatic update from `0.1.53`.
+- [ ] Prove the installed `0.1.53` app moves to `0.1.54` through the remote
+  Sparkle feed without local appcast fixtures.
+- [ ] Capture release URLs, appcast snippets, installed app versions, CLI
+  versions, setup status, and live wiki health as the final evidence bundle.
+
+## See Also
+
+- [For You](/for-you)
+- [Your Context](/your-context)
+- [Projects](/projects)
+- [Topics](/topics)

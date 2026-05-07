@@ -1,20 +1,24 @@
-# 1Context v0.1.51 Public Preview
+# 1Context v0.1.53 Public Preview
 
 This release includes:
 
-- Homebrew cask CLI setup diagnostics now resolve the `1context` symlink back to
-  `/Applications/1Context.app`, so local HTTPS helper paths are reported and
-  repaired from the installed app bundle.
-- Developer ID signed and notarized DMG installation
-- Sparkle-native update plumbing with signed appcast support
-- app-owned install-to-Applications, setup, and uninstall flows
-- required Local Wiki Access setup for `https://wiki.1context.localhost/your-context`
-- product-first README with screenshots of the menu bar, local wiki templates,
-  talk pages, and the populated Haptica demo
-- clearer preview positioning: polished local shell today, manual memory
-  creation today, passive remembering and agentic wiki writing in active
-  development
-- local web and hook positioning kept cloud-compatible for future sharing
+- Open Wiki, Refresh Wiki, and Start now open the app-owned setup flow when
+  Local Wiki Access blocks the requested action instead of failing silently.
+- Setup can resume the original Open Wiki or Refresh Wiki action once Local Wiki
+  Access is ready.
+- Sparkle update handling is more aggressive: release builds enable automatic
+  checks/downloads where supported, mandatory appcast items are surfaced in the
+  menu, and critical updates can install immediately when Sparkle is ready.
+- Passive remembering pauses or refuses to start while a mandatory update is
+  pending, so stale monitoring code does not keep running quietly.
+- App and bundled CLI version reporting now resolves from the installed app
+  bundle, which keeps Sparkle-replaced apps, diagnostics, and support commands
+  aligned.
+- A local Sparkle appcast smoke now proves an older installed fixture app can
+  update to a newer fixture app through Sparkle before remote releases are
+  promoted.
+- `/goal` is now a first-class local wiki page tracking the professional app
+  checklist, including the `0.1.53 -> 0.1.54` remote update trial.
 
 Install:
 

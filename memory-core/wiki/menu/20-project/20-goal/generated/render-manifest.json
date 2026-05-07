@@ -1,0 +1,230 @@
+{
+  "checks": [
+    {
+      "id": "wiki.render.succeeded",
+      "status": "passed",
+      "text": "Rendered wiki family goal."
+    },
+    {
+      "id": "wiki.generated.available",
+      "status": "passed",
+      "text": "4 generated file(s), 2 HTML file(s)."
+    },
+    {
+      "id": "wiki.manifest.written",
+      "status": "passed",
+      "text": "render-manifest.json written beside generated outputs."
+    }
+  ],
+  "engine": {
+    "manifest_schema": "wiki.render-manifest.v1",
+    "name": "@1context/wiki-engine",
+    "path": "wiki-engine",
+    "version": "local"
+  },
+  "family": {
+    "curator_prompt": "wiki/menu/20-project/20-goal/talk/goal.talk/_curator.md",
+    "generated_dir": "wiki/menu/20-project/20-goal/generated",
+    "id": "goal",
+    "jobs": {
+      "curator": "memory.wiki.goal_curator"
+    },
+    "kind": "professional_app_goal",
+    "label": "Goal",
+    "manifest_path": "wiki/menu/20-project/20-goal/family.toml",
+    "menu_group": "project",
+    "menu_group_label": "Project",
+    "menu_group_order": 20,
+    "menu_order": 20,
+    "path": "wiki/menu/20-project/20-goal",
+    "policies": {
+      "agent_editable": true,
+      "generated_editable": false,
+      "operator_editable": true
+    },
+    "route": "/goal",
+    "source_dir": "wiki/menu/20-project/20-goal/source",
+    "source_primary": "wiki/menu/20-project/20-goal/source/goal.md",
+    "talk_conventions": "wiki/menu/20-project/20-goal/talk/goal.talk/_conventions.md",
+    "talk_dir": "wiki/menu/20-project/20-goal/talk",
+    "talk_primary": "wiki/menu/20-project/20-goal/talk/goal.talk",
+    "template_version": "local-private-shell@0.1.0"
+  },
+  "include_talk": true,
+  "inputs": [
+    {
+      "bytes": 487,
+      "content_type": "application/toml",
+      "path": "wiki/menu/20-project/20-goal/family.toml",
+      "role": "family_manifest",
+      "sha256": "097a54b78622ad3ceed1ce597167d123ac70745a78c9b4a8de809beeba70c65a"
+    },
+    {
+      "bytes": 49,
+      "content_type": "application/toml",
+      "path": "wiki/menu/20-project/group.toml",
+      "role": "menu_group_manifest",
+      "sha256": "17111887523d12513ac6a75098a722c2b2f3d7157610e38fedd2fe2538ada138"
+    },
+    {
+      "bytes": 128,
+      "content_type": "application/toml",
+      "path": "wiki/wiki.toml",
+      "role": "wiki_manifest",
+      "sha256": "0baf8d0f116d5715790f5631b585bdf91aef60aa2c5abd9c2d008388c7e438cb"
+    },
+    {
+      "bytes": 265,
+      "content_type": "application/json",
+      "path": "wiki-engine/package.json",
+      "role": "engine_package",
+      "sha256": "3eddedc2e582c7a2131d0f95bcf2a74b24aaca0112fe97e626337548f26c84c8"
+    },
+    {
+      "bytes": 4592,
+      "content_type": "application/json",
+      "path": "wiki-engine/package-lock.json",
+      "role": "engine_lock",
+      "sha256": "a75fe0cb5e3d19978ecd8dfabef35a3aac58fe1e457bdb38ac244e2f733c2684"
+    },
+    {
+      "bytes": 8372,
+      "content_type": "text/markdown",
+      "path": "wiki/menu/20-project/20-goal/source/goal.md",
+      "role": "source_canonical_private",
+      "sha256": "9dc6976c2ee0a48a2eb3f799d243176c5afac98b9bbbfcee5aa03c16e2607586"
+    },
+    {
+      "bytes": 556,
+      "content_type": "text/markdown",
+      "path": "wiki/menu/20-project/20-goal/talk/goal.talk/2026-05-07T01-32Z.decided-professional-app-goal.md",
+      "role": "talk_entry",
+      "sha256": "aaa2880a53d59ff7d9254b05637d4c8b7697eff0c5c3b2f704550a567d180516"
+    },
+    {
+      "bytes": 1175,
+      "content_type": "text/markdown",
+      "path": "wiki/menu/20-project/20-goal/talk/goal.talk/_conventions.md",
+      "role": "talk_conventions",
+      "sha256": "5f47a2ff084571397a13b9dc643f7e9d6cd1a1dd7e0967a31b7d8cfa91944322"
+    },
+    {
+      "bytes": 460,
+      "content_type": "text/markdown",
+      "path": "wiki/menu/20-project/20-goal/talk/goal.talk/_curator.md",
+      "role": "curator_prompt",
+      "sha256": "c8041ca0871354024cdda3ee682d4564fca110e599aba76714e416471b635025"
+    },
+    {
+      "bytes": 409,
+      "content_type": "application/yaml",
+      "path": "wiki/menu/20-project/20-goal/talk/goal.talk/_meta.yaml",
+      "role": "talk_meta",
+      "sha256": "0f230ecc6a87926c83aeba146928a1a14c6391019b5775ea83b56ca0dcf96a4e"
+    },
+    {
+      "bytes": 1,
+      "content_type": "application/octet-stream",
+      "path": "wiki/menu/20-project/20-goal/talk/goal.talk/archive/.gitkeep",
+      "role": "talk_entry",
+      "sha256": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b"
+    }
+  ],
+  "invocations": [
+    {
+      "input_path": "wiki/menu/20-project/20-goal/source/goal.md",
+      "stderr": "",
+      "stdout": "\u2713 goal: 48769 bytes \u2192 /Users/paulhan/dev/1context-public-launch/memory-core/wiki/menu/20-project/20-goal/generated/goal.html"
+    },
+    {
+      "input_path": "wiki/menu/20-project/20-goal/talk/goal.talk",
+      "stderr": "",
+      "stdout": "\u2713 goal.talk: 40944 bytes \u2192 /Users/paulhan/dev/1context-public-launch/memory-core/wiki/menu/20-project/20-goal/generated/goal.talk.html"
+    }
+  ],
+  "output_dir": "wiki/menu/20-project/20-goal/generated",
+  "outputs": [
+    {
+      "audience_tier": "public",
+      "bytes": 48789,
+      "content_type": "text/html",
+      "path": "wiki/menu/20-project/20-goal/generated/goal.html",
+      "role": "generated_output",
+      "sha256": "116e7063ac3afcdb44e67507bf9f8f82b3d1900ead4d6e8a1051169266321723"
+    },
+    {
+      "audience_tier": "public",
+      "bytes": 8372,
+      "content_type": "text/markdown",
+      "path": "wiki/menu/20-project/20-goal/generated/goal.md",
+      "role": "generated_output",
+      "sha256": "9dc6976c2ee0a48a2eb3f799d243176c5afac98b9bbbfcee5aa03c16e2607586"
+    },
+    {
+      "audience_tier": "public",
+      "bytes": 40971,
+      "content_type": "text/html",
+      "path": "wiki/menu/20-project/20-goal/generated/goal.talk.html",
+      "role": "generated_output",
+      "sha256": "5a410dbfbae0ffb68b58478e7059986a34f9d124c82e3e6aa290f1c25333e5db"
+    },
+    {
+      "audience_tier": "public",
+      "bytes": 1115,
+      "content_type": "text/markdown",
+      "path": "wiki/menu/20-project/20-goal/generated/goal.talk.md",
+      "role": "generated_output",
+      "sha256": "70850f095a7e5ea45babaedadc97d1b037bba720394835f4cb8f0d43cf674de3"
+    }
+  ],
+  "rendered_at": "2026-05-07T04:29:01Z",
+  "routes": [
+    {
+      "kind": "latest_family_html",
+      "output_path": "wiki/menu/20-project/20-goal/generated/goal.html",
+      "route": "/goal",
+      "source": "latest_for_family.json"
+    },
+    {
+      "kind": "html",
+      "output_path": "wiki/menu/20-project/20-goal/generated/goal.html",
+      "route": "/goal",
+      "source": "generated_output"
+    },
+    {
+      "kind": "html",
+      "output_path": "wiki/menu/20-project/20-goal/generated/goal.talk.html",
+      "route": "/goal.talk",
+      "source": "generated_output"
+    }
+  ],
+  "schema_version": "wiki.render-manifest.v1",
+  "tier_sources": [
+    {
+      "base": "goal",
+      "canonical_private_source": "wiki/menu/20-project/20-goal/source/goal.md",
+      "model": "canonical-private-with-explicit-tier-siblings",
+      "public_reads_private": false,
+      "tiers": {
+        "internal": {
+          "exists": false,
+          "path": "wiki/menu/20-project/20-goal/source/goal.internal.md",
+          "selected_for_render": false,
+          "sha256": ""
+        },
+        "private": {
+          "exists": true,
+          "path": "wiki/menu/20-project/20-goal/source/goal.md",
+          "selected_for_render": true,
+          "sha256": "9dc6976c2ee0a48a2eb3f799d243176c5afac98b9bbbfcee5aa03c16e2607586"
+        },
+        "public": {
+          "exists": false,
+          "path": "wiki/menu/20-project/20-goal/source/goal.public.md",
+          "selected_for_render": false,
+          "sha256": ""
+        }
+      }
+    }
+  ]
+}

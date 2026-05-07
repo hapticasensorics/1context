@@ -212,9 +212,12 @@ assert_url_contains "$WIKI_TEST_URL/for-you" "For You"
 assert_url_contains "$WIKI_TEST_URL/for-you.talk" "Talk Conventions"
 assert_url_contains "$WIKI_TEST_URL/for-you.talk" "How to use this talk page"
 assert_url_contains "$WIKI_TEST_URL/projects" "Projects"
+assert_url_contains "$WIKI_TEST_URL/goal" "Goal"
+assert_url_contains "$WIKI_TEST_URL/goal" "Permission Doctrine"
 assert_url_contains "$WIKI_TEST_URL/topics" "Topics"
 assert_url_contains "$WIKI_TEST_URL/your-context.talk" "Talk"
 assert_url_contains "$WIKI_TEST_URL/projects.talk" "Talk"
+assert_url_contains "$WIKI_TEST_URL/goal.talk" "Talk"
 assert_url_contains "$WIKI_TEST_URL/topics.talk" "Talk"
 if curl --fail --silent "$WIKI_TEST_URL/for-you" | grep -Eq "stub|empty: populated|<!-- empty"; then
   echo "published For You should not expose raw stubs" >&2
