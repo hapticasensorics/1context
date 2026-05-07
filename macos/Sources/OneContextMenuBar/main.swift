@@ -120,6 +120,7 @@ private final class AppSetupWindowController: NSWindowController {
   private let localWikiRow = SetupRequirementRow(title: "Local Wiki Access")
   private let screenRecordingRow = SetupRequirementRow(title: "Screen Recording")
   private let accessibilityRow = SetupRequirementRow(title: "Accessibility")
+  private let footer = NSStackView()
   private let refreshButton = NSButton(title: "Check Again", target: nil, action: nil)
 
   init() {
@@ -174,6 +175,7 @@ private final class AppSetupWindowController: NSWindowController {
       status: localStatus,
       action: localAction
     )
+    setRefreshButtonVisible(!snapshot.localWikiAccess.ready || isGrantingLocalWikiAccess)
 
     let permissions = Dictionary(uniqueKeysWithValues: snapshot.sensitivePermissions.map { ($0.kind, $0) })
     renderSensitiveRow(screenRecordingRow, snapshot: permissions[.screenRecording])
@@ -232,7 +234,6 @@ private final class AppSetupWindowController: NSWindowController {
       row.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
     }
 
-    let footer = NSStackView()
     footer.orientation = .horizontal
     footer.alignment = .centerY
     footer.spacing = 8
@@ -255,6 +256,23 @@ private final class AppSetupWindowController: NSWindowController {
 
   @objc private func refresh() {
     onRefresh?()
+  }
+
+  private func setRefreshButtonVisible(_ visible: Bool) {
+    refreshButton.isEnabled = visible
+    if visible {
+      if refreshButton.superview == nil {
+        footer.addArrangedSubview(refreshButton)
+      }
+      refreshButton.isHidden = false
+      return
+    }
+
+    refreshButton.isHidden = true
+    if refreshButton.superview != nil {
+      footer.removeArrangedSubview(refreshButton)
+      refreshButton.removeFromSuperview()
+    }
   }
 }
 
@@ -516,7 +534,7 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
   private func registerMenuLaunchAgent() {
     guard let appPath = Bundle.main.executableURL?.path else { return }
     Task.detached(priority: .utility) {
-      try? LaunchAgentManager().registerMenu(appPath: appPath)
+      try? await LaunchAgentManager().startMenu(appPath: appPath)
     }
   }
 
@@ -1204,6 +1222,7 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
     setupWindowController.showWindow(nil)
     setupWindowController.window?.makeKeyAndOrderFront(nil)
     NSApp.activate(ignoringOtherApps: true)
+    startSetupReadinessObservation(message: message)
   }
 
   private func showSetupWindow(forBlockedAction action: OneContextBlockedSetupAction) {
@@ -1550,6 +1569,16 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
 
   private func startSetupReadinessPolling(message: String) {
     isLocalWebSetupInFlight = true
+    startSetupReadinessObservation(message: message)
+  }
+
+  private func startSetupReadinessObservation(message: String?) {
+    let current = currentReadiness(checkSensitivePermissionsInCurrentProcess: true)
+    if current.requiredSetupReady {
+      completeLocalWebSetup(readiness: current, message: message ?? "Local Wiki Access is ready.")
+      return
+    }
+
     setupReadinessPollingStartedAt = Date()
     setupReadinessPollingMessage = message
     refreshMenuItems()
@@ -1572,11 +1601,12 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
   }
 
   private func pollSetupReadiness() {
-    guard isLocalWebSetupInFlight else {
+    guard isLocalWebSetupInFlight || setupWindowController.window?.isVisible == true else {
       stopSetupReadinessPolling()
       return
     }
     if let startedAt = setupReadinessPollingStartedAt,
+      isLocalWebSetupInFlight,
       Date().timeIntervalSince(startedAt) > Constants.setupReadinessPollTimeout
     {
       stopSetupReadinessPolling()

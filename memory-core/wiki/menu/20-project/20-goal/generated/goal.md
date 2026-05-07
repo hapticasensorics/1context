@@ -113,6 +113,10 @@ failure.
 - A remote `0.1.54` release marked mandatory can move the installed `0.1.53`
   app forward automatically, without a local appcast, hand-installed bundle, or
   user click on an Install and Relaunch button.
+- A remote `0.1.55` release marked mandatory can repair the installed `0.1.54`
+  setup flywheel: ready permissions are recognized without Check Again, setup
+  starts the app/runtime instead of leaving the user to hunt, and the menu
+  LaunchAgent is loaded during launch.
 
 ## Done When
 
@@ -203,6 +207,27 @@ failure.
   version crossing from `0.1.53` to `0.1.54` with `windows=0`.
 - [x] Capture release URLs, appcast snippets, installed app versions, CLI
   versions, setup status, and live wiki health as the final evidence bundle.
+
+### 0.1.55 Setup Flywheel Repair
+
+- [x] Reproduce the stale setup shape after restart/update: `0.1.54` can have
+  Local Wiki Access and a working wiki while setup still invites manual
+  Check Again.
+- [x] Update setup so a visible setup window continuously rechecks readiness
+  and completes setup automatically once required setup is ready.
+- [x] Remove the footer Check Again control entirely when Local Wiki Access is
+  ready, leaving Open Wiki as the relevant action.
+- [x] Load the menu LaunchAgent during app launch, not just by writing the plist
+  for a future login.
+- [x] Prove the ready setup window with Accessibility and screenshot evidence;
+  `dist/remote-update-evidence/setup-window-ready-no-check-again-after-patch/`
+  shows Open Wiki plus granted permissions and no Check Again button.
+- [ ] Publish signed/notarized `0.1.55` as the mandatory remote update from
+  `0.1.54`.
+- [ ] Prove the installed `0.1.54` app moves to `0.1.55` through the remote
+  Sparkle feed without clicking Install and Relaunch.
+- [ ] Prove installed `0.1.55` is running, setup-ready, menu-loaded, and wiki
+  healthy after the update.
 
 ## See Also
 

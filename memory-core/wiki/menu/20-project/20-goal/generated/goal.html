@@ -100,6 +100,7 @@
             <li class="is-sub"><a href="#Sparkle_Updates">Sparkle Updates</a></li>
             <li class="is-sub"><a href="#Closed_Loop">Closed Loop</a></li>
             <li class="is-sub"><a href="#Remote_Release_Train">Remote Release Train</a></li>
+            <li class="is-sub"><a href="#0.1.55_Setup_Flywheel_Repair">0.1.55 Setup Flywheel Repair</a></li>
           </ul>
         </li>
         <li><a href="#See_Also">See Also</a></li>
@@ -194,6 +195,10 @@ GitHub Sparkle feed to <code>0.1.53</code>.</li>
 <li>A remote <code>0.1.54</code> release marked mandatory can move the installed <code>0.1.53</code>
 app forward automatically, without a local appcast, hand-installed bundle, or
 user click on an Install and Relaunch button.</li>
+<li>A remote <code>0.1.55</code> release marked mandatory can repair the installed <code>0.1.54</code>
+setup flywheel: ready permissions are recognized without Check Again, setup
+starts the app/runtime instead of leaving the user to hunt, and the menu
+LaunchAgent is loaded during launch.</li>
 </ul>
 <h2 id="Done_When">Done When</h2>
 <ul>
@@ -283,6 +288,27 @@ Relaunch; <code>dist/remote-update-evidence/0.1.53-to-0.1.54-auto/</code> shows 
 version crossing from <code>0.1.53</code> to <code>0.1.54</code> with <code>windows=0</code>.</li>
 <li><input checked="" disabled="" type="checkbox"> Capture release URLs, appcast snippets, installed app versions, CLI
 versions, setup status, and live wiki health as the final evidence bundle.</li>
+</ul>
+<h3 id="0.1.55_Setup_Flywheel_Repair">0.1.55 Setup Flywheel Repair</h3>
+<ul>
+<li><input checked="" disabled="" type="checkbox"> Reproduce the stale setup shape after restart/update: <code>0.1.54</code> can have
+Local Wiki Access and a working wiki while setup still invites manual
+Check Again.</li>
+<li><input checked="" disabled="" type="checkbox"> Update setup so a visible setup window continuously rechecks readiness
+and completes setup automatically once required setup is ready.</li>
+<li><input checked="" disabled="" type="checkbox"> Remove the footer Check Again control entirely when Local Wiki Access is
+ready, leaving Open Wiki as the relevant action.</li>
+<li><input checked="" disabled="" type="checkbox"> Load the menu LaunchAgent during app launch, not just by writing the plist
+for a future login.</li>
+<li><input checked="" disabled="" type="checkbox"> Prove the ready setup window with Accessibility and screenshot evidence;
+<code>dist/remote-update-evidence/setup-window-ready-no-check-again-after-patch/</code>
+shows Open Wiki plus granted permissions and no Check Again button.</li>
+<li><input disabled="" type="checkbox"> Publish signed/notarized <code>0.1.55</code> as the mandatory remote update from
+<code>0.1.54</code>.</li>
+<li><input disabled="" type="checkbox"> Prove the installed <code>0.1.54</code> app moves to <code>0.1.55</code> through the remote
+Sparkle feed without clicking Install and Relaunch.</li>
+<li><input disabled="" type="checkbox"> Prove installed <code>0.1.55</code> is running, setup-ready, menu-loaded, and wiki
+healthy after the update.</li>
 </ul>
 <h2 id="See_Also">See Also</h2>
 <ul>

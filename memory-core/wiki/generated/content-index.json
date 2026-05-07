@@ -11,7 +11,7 @@
       "public generated page metadata and excerpts"
     ]
   },
-  "generated_at": "2026-05-07T04:54:03Z",
+  "generated_at": "2026-05-07T05:54:52Z",
   "pages": [
     {
       "excerpt": "# For You This is the working surface 1Context keeps close to the present. It should feel useful even before memory has accumulated: a quiet place to see what the system is ready to preserve, where agents should propose additions, and which durable pages those additions may eventually update. ## How This Page Works For You is a rolling private page. As 1Context observes repeated work, decisions, corrections, and open loops, memory agents should promote concise summaries here ...",
@@ -155,7 +155,7 @@
       ],
       "path": "wiki/menu/20-project/20-goal/generated/goal.md",
       "route": "/goal",
-      "sha256": "63b9d02106ef2cdcd24cc3bea6eb9067cb639e85fd9ead36fd475c7567dc9a9a",
+      "sha256": "2cb0e9871845beb519c79c22e6bbe4840c405c043a05287f03259d03919e1038",
       "slug": "goal",
       "source": "generated_markdown",
       "summary": "The professional app bar for 1Context: permission flows, update discipline, and the behaviors that must feel reliable before broad release.",
@@ -377,7 +377,7 @@
       },
       {
         "archived_talk_entries": 0,
-        "bytes": 119251,
+        "bytes": 124054,
         "generated_files": 5,
         "generated_files_by_extension": {
           ".html": 2,
@@ -420,7 +420,7 @@
         "words": 0
       }
     ],
-    "generated_at": "2026-05-07T04:54:03Z",
+    "generated_at": "2026-05-07T05:54:52Z",
     "generated_files_by_extension": {
       "(none)": 1,
       ".html": 11,
@@ -561,7 +561,7 @@
     "totals": {
       "archived_talk_entries": 0,
       "broken_internal_links": 0,
-      "bytes": 563785,
+      "bytes": 568588,
       "content_pages": 6,
       "external_links": 0,
       "families": 5,
@@ -576,7 +576,7 @@
       "talk_entries": 5,
       "talk_folders": 5,
       "talk_words": 274,
-      "words": 2505
+      "words": 2719
     }
   }
 }
