@@ -195,12 +195,13 @@ failure.
 - [x] Installed app is now `0.1.53` and setup status is healthy.
 - [x] Code path updated so mandatory update actions use Sparkle's automatic
   background check/install flow instead of opening the manual update UI.
-- [ ] Publish a signed/notarized `0.1.54` GitHub release marked mandatory for
+- [x] Publish a signed/notarized `0.1.54` GitHub release marked mandatory for
   automatic update from `0.1.53`.
-- [ ] Prove the installed `0.1.53` app moves to `0.1.54` through the remote
+- [x] Prove the installed `0.1.53` app moves to `0.1.54` through the remote
   Sparkle feed without local appcast fixtures and without clicking Install and
-  Relaunch.
-- [ ] Capture release URLs, appcast snippets, installed app versions, CLI
+  Relaunch; `dist/remote-update-evidence/0.1.53-to-0.1.54-auto/` shows the
+  version crossing from `0.1.53` to `0.1.54` with `windows=0`.
+- [x] Capture release URLs, appcast snippets, installed app versions, CLI
   versions, setup status, and live wiki health as the final evidence bundle.
 
 ## See Also
