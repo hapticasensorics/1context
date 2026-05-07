@@ -72,7 +72,7 @@
     },
     {
       "archived_talk_entries": 0,
-      "bytes": 170707,
+      "bytes": 174012,
       "generated_files": 5,
       "generated_files_by_extension": {
         ".html": 2,
@@ -115,7 +115,7 @@
       "words": 0
     }
   ],
-  "generated_at": "2026-05-07T08:46:54Z",
+  "generated_at": "2026-05-07T08:51:40Z",
   "generated_files_by_extension": {
     "(none)": 1,
     ".html": 11,
@@ -256,7 +256,7 @@
   "totals": {
     "archived_talk_entries": 0,
     "broken_internal_links": 0,
-    "bytes": 615241,
+    "bytes": 618546,
     "content_pages": 6,
     "external_links": 0,
     "families": 5,
@@ -271,6 +271,6 @@
     "talk_entries": 5,
     "talk_folders": 5,
     "talk_words": 274,
-    "words": 4717
+    "words": 4868
   }
 }

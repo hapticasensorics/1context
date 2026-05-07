@@ -490,16 +490,32 @@ inspection.</li>
 </ul>
 <h5>0.1.58 Uninstall and Residue Proof</h5>
 <ul>
-<li><input disabled="" type="checkbox"> Prove <code>0.1.57 -&gt; 0.1.58</code> mandatory update is truly no-click with the
+<li><input checked="" disabled="" type="checkbox"> Prove <code>0.1.57 -&gt; 0.1.58</code> mandatory update is truly no-click with the
 fixed app-owned Sparkle driver: no Install Update prompt, no Install and
-Relaunch prompt, automatic install, relaunch, and version convergence.</li>
+Relaunch prompt, automatic install, relaunch, and version convergence.
+Evidence: <code>dist/remote-update-evidence/0.1.57-to-0.1.58-no-click/</code> shows
+<code>plist=0.1.57 cli=0.1.57</code> moving to <code>plist=0.1.58 cli=0.1.58</code> at watcher
+iteration 2 with no captured Install/Relaunch prompt file, followed by
+healthy CLI status, local web health, codesign verification, and Gatekeeper
+acceptance.</li>
 <li><input checked="" disabled="" type="checkbox"> Bump source version and release notes to <code>0.1.58</code>.</li>
 <li><input checked="" disabled="" type="checkbox"> Build/sign/notarize <code>0.1.58</code>.
 Evidence: <code>dist/1Context-0.1.58-macos-arm64.dmg</code> and <code>dist/1Context.app</code>
 passed Developer ID signing, Apple notarization, stapling, DMG validation,
 Gatekeeper assessment, and full Swift tests.</li>
-<li><input disabled="" type="checkbox"> Publish <code>v0.1.58</code> with <code>1Context.dmg</code>, versioned DMG, checksum, and
-<code>appcast.xml</code>.</li>
+<li><input checked="" disabled="" type="checkbox"> Publish <code>v0.1.58</code> with <code>1Context.dmg</code>, versioned DMG, checksum, and
+<code>appcast.xml</code>.
+Evidence: GitHub release <code>v0.1.58</code> contains <code>1Context-0.1.58-macos-arm64.dmg</code>,
+checksum, <code>1Context.dmg</code>, and <code>appcast.xml</code>; the live latest appcast advertises
+<code>0.1.58</code> as mandatory from installed <code>0.1.57</code>.</li>
+<li><input checked="" disabled="" type="checkbox"> Prove <code>0.1.58</code> steady state after no-click update with the reusable
+verifier.
+Evidence: <code>dist/steady-state-evidence/0.1.58-after-no-click-update-settled/</code>
+passed 75 seconds, 11 probes, and no new runtime SIGTERMs.</li>
+<li><input disabled="" type="checkbox"> Harden the immediate post-update settling window. The first steady-state
+run after the no-click update observed a short runtime socket gap at
+<code>dist/steady-state-evidence/0.1.58-after-no-click-update/</code>, even though the
+app recovered and the settled verifier passed.</li>
 <li><input disabled="" type="checkbox"> Add full uninstall smoke that can inspect helper, LaunchAgents, local CA,
 managed hooks, logs/cache, and optional data deletion.</li>
 <li><input disabled="" type="checkbox"> Run uninstall without <code>--delete-data</code> and prove user wiki content remains.</li>

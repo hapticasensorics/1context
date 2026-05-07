@@ -413,16 +413,32 @@ Each release in this train must answer four questions:
 
 ##### 0.1.58 Uninstall and Residue Proof
 
-- [ ] Prove `0.1.57 -> 0.1.58` mandatory update is truly no-click with the
+- [x] Prove `0.1.57 -> 0.1.58` mandatory update is truly no-click with the
   fixed app-owned Sparkle driver: no Install Update prompt, no Install and
   Relaunch prompt, automatic install, relaunch, and version convergence.
+  Evidence: `dist/remote-update-evidence/0.1.57-to-0.1.58-no-click/` shows
+  `plist=0.1.57 cli=0.1.57` moving to `plist=0.1.58 cli=0.1.58` at watcher
+  iteration 2 with no captured Install/Relaunch prompt file, followed by
+  healthy CLI status, local web health, codesign verification, and Gatekeeper
+  acceptance.
 - [x] Bump source version and release notes to `0.1.58`.
 - [x] Build/sign/notarize `0.1.58`.
   Evidence: `dist/1Context-0.1.58-macos-arm64.dmg` and `dist/1Context.app`
   passed Developer ID signing, Apple notarization, stapling, DMG validation,
   Gatekeeper assessment, and full Swift tests.
-- [ ] Publish `v0.1.58` with `1Context.dmg`, versioned DMG, checksum, and
+- [x] Publish `v0.1.58` with `1Context.dmg`, versioned DMG, checksum, and
   `appcast.xml`.
+  Evidence: GitHub release `v0.1.58` contains `1Context-0.1.58-macos-arm64.dmg`,
+  checksum, `1Context.dmg`, and `appcast.xml`; the live latest appcast advertises
+  `0.1.58` as mandatory from installed `0.1.57`.
+- [x] Prove `0.1.58` steady state after no-click update with the reusable
+  verifier.
+  Evidence: `dist/steady-state-evidence/0.1.58-after-no-click-update-settled/`
+  passed 75 seconds, 11 probes, and no new runtime SIGTERMs.
+- [ ] Harden the immediate post-update settling window. The first steady-state
+  run after the no-click update observed a short runtime socket gap at
+  `dist/steady-state-evidence/0.1.58-after-no-click-update/`, even though the
+  app recovered and the settled verifier passed.
 - [ ] Add full uninstall smoke that can inspect helper, LaunchAgents, local CA,
   managed hooks, logs/cache, and optional data deletion.
 - [ ] Run uninstall without `--delete-data` and prove user wiki content remains.
