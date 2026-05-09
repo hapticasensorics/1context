@@ -606,12 +606,26 @@ is <code>false</code> by default.</li>
 <li><input checked="" disabled="" type="checkbox"> Produce signed/notarized local release artifacts for the policy-control
 build.
 Evidence: <code>scripts/package-macos-production-release.sh</code> produced
-<code>dist/1Context-0.1.58-macos-arm64.dmg</code>; Apple notarization accepted and
+<code>dist/1Context-0.1.59-macos-arm64.dmg</code>; Apple notarization accepted and
 stapled both <code>dist/1Context.app</code> and the DMG; <code>codesign --verify</code>,
 <code>xcrun stapler validate</code>, DMG validation, <code>scripts/test.sh</code>, full Swift tests,
 and <code>scripts/check-update-policy.sh --appcast dist/sparkle-updates/appcast.xml</code>
 passed.</li>
-<li><input disabled="" type="checkbox"> Prove remote Sparkle update into <code>0.1.59</code>.</li>
+<li><input checked="" disabled="" type="checkbox"> Add reusable remote Sparkle update proof harness.
+Evidence: <code>scripts/prove-remote-sparkle-update.sh</code> fetches the live appcast,
+validates policy/appcast agreement, records versions, status, osascript window
+text, screenshots, and watches the installed bundle and embedded CLI cross to
+the expected version.</li>
+<li><input checked="" disabled="" type="checkbox"> Prove remote Sparkle update into <code>0.1.59</code>.
+Evidence: GitHub release <code>v0.1.59</code> contains the signed/notarized DMG,
+versioned DMG, checksum files, and <code>appcast.xml</code>; the live latest appcast
+advertises <code>0.1.59</code> as a mandatory update from <code>0.1.58</code> with no release notes;
+<code>dist/remote-update-evidence/0.1.58-to-0.1.59-remote/</code> shows installed
+<code>plist=0.1.58 cli=0.1.58</code> moving to <code>plist=0.1.59 cli=0.1.59</code>.</li>
+<li><input checked="" disabled="" type="checkbox"> Prove <code>0.1.59</code> steady state after remote update.
+Evidence: <code>dist/steady-state-evidence/0.1.59-after-remote-update/</code> passed 35
+seconds, 6 probes, runtime health OK, menu bar running, setup ready, and no
+new runtime SIGTERMs.</li>
 </ul>
 <h5>0.1.60 Optional Update UX Proof</h5>
 <ul>
@@ -660,7 +674,11 @@ defaults, LaunchAgent state, helper state, setup state, runtime health, local
 wiki health, and recent logs.</li>
 <li><input disabled="" type="checkbox"> Add a reusable GUI evidence harness for app/menu/Sparkle windows using
 osascript, accessibility window text, and screenshots; include a fallback path
-when the in-app browser automation control surface is unavailable.</li>
+when the in-app browser automation control surface is unavailable.
+Partial evidence: <code>scripts/prove-remote-sparkle-update.sh</code> now captures
+osascript window text plus desktop screenshots for remote update proofs; this
+item stays open until failed-update and optional-update windows use the same
+harness.</li>
 <li><input disabled="" type="checkbox"> Redact sensitive paths/content by default while preserving operator-useful
 state.</li>
 <li><input disabled="" type="checkbox"> Prove diagnostics can distinguish healthy, needs setup, needs update,

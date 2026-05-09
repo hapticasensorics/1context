@@ -530,12 +530,26 @@ Each release in this train must answer four questions:
 - [x] Produce signed/notarized local release artifacts for the policy-control
   build.
   Evidence: `scripts/package-macos-production-release.sh` produced
-  `dist/1Context-0.1.58-macos-arm64.dmg`; Apple notarization accepted and
+  `dist/1Context-0.1.59-macos-arm64.dmg`; Apple notarization accepted and
   stapled both `dist/1Context.app` and the DMG; `codesign --verify`,
   `xcrun stapler validate`, DMG validation, `scripts/test.sh`, full Swift tests,
   and `scripts/check-update-policy.sh --appcast dist/sparkle-updates/appcast.xml`
   passed.
-- [ ] Prove remote Sparkle update into `0.1.59`.
+- [x] Add reusable remote Sparkle update proof harness.
+  Evidence: `scripts/prove-remote-sparkle-update.sh` fetches the live appcast,
+  validates policy/appcast agreement, records versions, status, osascript window
+  text, screenshots, and watches the installed bundle and embedded CLI cross to
+  the expected version.
+- [x] Prove remote Sparkle update into `0.1.59`.
+  Evidence: GitHub release `v0.1.59` contains the signed/notarized DMG,
+  versioned DMG, checksum files, and `appcast.xml`; the live latest appcast
+  advertises `0.1.59` as a mandatory update from `0.1.58` with no release notes;
+  `dist/remote-update-evidence/0.1.58-to-0.1.59-remote/` shows installed
+  `plist=0.1.58 cli=0.1.58` moving to `plist=0.1.59 cli=0.1.59`.
+- [x] Prove `0.1.59` steady state after remote update.
+  Evidence: `dist/steady-state-evidence/0.1.59-after-remote-update/` passed 35
+  seconds, 6 probes, runtime health OK, menu bar running, setup ready, and no
+  new runtime SIGTERMs.
 
 ##### 0.1.60 Optional Update UX Proof
 
@@ -585,6 +599,10 @@ Each release in this train must answer four questions:
 - [ ] Add a reusable GUI evidence harness for app/menu/Sparkle windows using
   osascript, accessibility window text, and screenshots; include a fallback path
   when the in-app browser automation control surface is unavailable.
+  Partial evidence: `scripts/prove-remote-sparkle-update.sh` now captures
+  osascript window text plus desktop screenshots for remote update proofs; this
+  item stays open until failed-update and optional-update windows use the same
+  harness.
 - [ ] Redact sensitive paths/content by default while preserving operator-useful
   state.
 - [ ] Prove diagnostics can distinguish healthy, needs setup, needs update,
