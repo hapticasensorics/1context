@@ -1,12 +1,12 @@
 schema_version = "1context.update-policy.v1"
-version = "0.1.59"
-update_class = "mandatory"
+version = "0.1.60"
+update_class = "optional"
 approved_by = "paul"
-reason = "update_policy_control_plane"
-reason_detail = "0.1.59 makes founder-controlled update policy the source of truth for mandatory vs optional behavior, updater copy, release-notes visibility, failure copy, and post-install messaging."
-minimum_autoupdate_version = "0.1.58"
+reason = "optional_update_ux_proof"
+reason_detail = "0.1.60 proves optional updates stay quiet in background, remain visible through the menu, show only concise founder-controlled copy when clicked, and install only after the user chooses Update."
+minimum_autoupdate_version = ""
 minimum_update_version = ""
-critical_update_version = "0.1.59"
+critical_update_version = ""
 
 [ui]
 show_release_notes_in_update_window = false

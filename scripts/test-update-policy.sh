@@ -56,8 +56,40 @@ body = ""
 TOML
 }
 
+write_mandatory_policy() {
+  local path="$1"
+  cat > "$path" <<TOML
+schema_version = "1context.update-policy.v1"
+version = "$VERSION"
+update_class = "mandatory"
+approved_by = "paul"
+reason = "test_mandatory_policy"
+reason_detail = "Fixture policy used by scripts/test-update-policy.sh."
+minimum_autoupdate_version = "0.1.59"
+minimum_update_version = ""
+critical_update_version = "$VERSION"
+
+[ui]
+show_release_notes_in_update_window = false
+
+[ui.optional_prompt]
+title = "Update 1Context?"
+body = "A 1Context update is ready."
+
+[ui.failure_message]
+title = "Update failed."
+body = "Please contact support at paul@haptica.ai."
+
+[ui.post_install_message]
+enabled = false
+title = "1Context Improved!"
+body = ""
+TOML
+}
+
 MANDATORY_OK="$TMP_DIR/mandatory-ok.xml"
 MANDATORY_WITH_NOTES="$TMP_DIR/mandatory-with-notes.xml"
+MANDATORY_POLICY="$TMP_DIR/mandatory-policy.toml"
 OPTIONAL_OK="$TMP_DIR/optional-ok.xml"
 OPTIONAL_WITH_CRITICAL="$TMP_DIR/optional-with-critical.xml"
 OPTIONAL_POLICY="$TMP_DIR/optional-policy.toml"
@@ -66,11 +98,12 @@ write_appcast "$MANDATORY_OK" "      <sparkle:criticalUpdate/>" ""
 write_appcast "$MANDATORY_WITH_NOTES" "      <sparkle:criticalUpdate/>" "      <description>Builder journal notes should not be shown.</description>"
 write_appcast "$OPTIONAL_OK" "" ""
 write_appcast "$OPTIONAL_WITH_CRITICAL" "      <sparkle:criticalUpdate/>" ""
+write_mandatory_policy "$MANDATORY_POLICY"
 write_optional_policy "$OPTIONAL_POLICY"
 
-"$ROOT/scripts/update-policy.py" validate --appcast "$MANDATORY_OK"
+"$ROOT/scripts/update-policy.py" validate --policy "$MANDATORY_POLICY" --appcast "$MANDATORY_OK"
 
-if "$ROOT/scripts/update-policy.py" validate --appcast "$MANDATORY_WITH_NOTES" >/dev/null 2>&1; then
+if "$ROOT/scripts/update-policy.py" validate --policy "$MANDATORY_POLICY" --appcast "$MANDATORY_WITH_NOTES" >/dev/null 2>&1; then
   echo "Mandatory policy should reject appcast descriptions when release notes are hidden." >&2
   exit 1
 fi

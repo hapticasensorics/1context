@@ -1,23 +1,19 @@
-# 1Context v0.1.59 Public Preview
+# 1Context v0.1.60 Public Preview
 
 This release includes:
 
-- Founder-controlled update policy is now committed as release metadata instead
-  of being invented by workflow inputs.
-- Mandatory and optional release behavior, update failure copy, release-notes
-  visibility, optional prompt copy, and rare post-install messaging are all
-  validated from the policy manifest.
-- Sparkle appcasts hide release notes by default unless policy explicitly allows
-  them.
-- Update failures use the simple support message: `Update failed. Please contact
-  support at paul@haptica.ai.`
-- Mandatory update detection no longer stops passive remembering just because an
-  update attempt exists or fails.
-- The menu keeps the normal runtime Start/Stop control separate from the pending
-  update action.
-- The release workflow validates policy, appcast metadata, tag/version agreement,
-  release-note version agreement, and GitHub release assets.
-- `0.1.59` is intended as the mandatory policy-control follow-up to `0.1.58`.
+- `0.1.60` is an optional update proof release.
+- Background optional update discovery should stay quiet: no release notes, no
+  modal, no automatic relaunch.
+- The menu should keep a pending update action visible until the optional update
+  is installed.
+- Manual update confirmation uses the concise policy copy: `A 1Context update is
+  ready.`
+- The update installs only after the user chooses Update.
+- Settings continues to show the currently running app version before and after
+  the optional update.
+- The release manifest marks this release optional so the appcast must not
+  include Sparkle critical-update metadata.
 
 Install:
 
