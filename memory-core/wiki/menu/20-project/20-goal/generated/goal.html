@@ -629,18 +629,48 @@ new runtime SIGTERMs.</li>
 </ul>
 <h5>0.1.60 Optional Update UX Proof</h5>
 <ul>
-<li><input disabled="" type="checkbox"> Publish <code>0.1.60</code> as an optional release through the policy manifest.</li>
-<li><input disabled="" type="checkbox"> Prove background optional update discovery stays silent: no modal, no
-release notes, no automatic relaunch.</li>
-<li><input disabled="" type="checkbox"> Prove the menu bar keeps a pending update action visible until the optional
-update is installed.</li>
-<li><input disabled="" type="checkbox"> Prove clicking the menu update action shows only concise policy copy:
-<code>A 1Context update is ready.</code></li>
-<li><input disabled="" type="checkbox"> Prove the optional update installs and relaunches only after the user
-explicitly clicks Update.</li>
-<li><input disabled="" type="checkbox"> Prove Settings shows the currently running version before and after the
-optional update.</li>
-<li><input disabled="" type="checkbox"> Prove remote Sparkle update into <code>0.1.60</code>.</li>
+<li><input checked="" disabled="" type="checkbox"> Publish <code>0.1.60</code> as an optional release through the policy manifest.
+Evidence: <code>release/update-policy.toml</code> marks <code>0.1.60</code> as <code>optional</code>, the
+signed/notarized GitHub release <code>v0.1.60</code> contains the versioned DMG,
+<code>1Context.dmg</code>, checksums, and <code>appcast.xml</code>, and the live appcast contains no
+<code>sparkle:criticalUpdate</code>, no <code>sparkle:minimumAutoupdateVersion</code>, and no
+<code>&lt;description&gt;</code> release notes.</li>
+<li><input checked="" disabled="" type="checkbox"> Prove background optional update discovery stays silent: no modal, no
+release notes, no automatic relaunch.
+Evidence:
+<code>dist/remote-update-evidence/0.1.59-to-0.1.60-optional-remote-rerun/</code>
+records installed <code>plist=0.1.59 cli=0.1.59</code> through the quiet background
+window before any user confirmation.</li>
+<li><input checked="" disabled="" type="checkbox"> Prove the menu bar keeps a pending update action visible until the optional
+update is installed.
+Evidence:
+<code>dist/remote-update-evidence/0.1.59-to-0.1.60-optional-remote-rerun/menu-after-background-discovery.txt</code>
+shows Settings <code>Version 0.1.59</code> and the pending <code>Please Update</code> action.</li>
+<li><input checked="" disabled="" type="checkbox"> Prove clicking the menu update action shows only concise policy copy:
+<code>A 1Context update is ready.</code>
+Evidence:
+<code>dist/remote-update-evidence/0.1.59-to-0.1.60-optional-remote-rerun/accessibility-optional-prompt.txt</code>
+contains <code>Update 1Context?</code>, <code>A 1Context update is ready.</code>, <code>Later</code>, and
+<code>Update</code>, with no release notes or installer explanation.</li>
+<li><input checked="" disabled="" type="checkbox"> Prove the optional update installs and relaunches only after the user
+explicitly clicks Update.
+Evidence:
+<code>dist/remote-update-evidence/0.1.59-to-0.1.60-optional-remote-rerun/watch.log</code>
+shows the installed bundle and embedded CLI crossing from <code>0.1.59</code> to
+<code>0.1.60</code> after the proof harness clicked Update.</li>
+<li><input checked="" disabled="" type="checkbox"> Prove Settings shows the currently running version before and after the
+optional update.
+Evidence: the optional proof captures Settings <code>Version 0.1.59</code> before
+install; after install, osascript menu capture shows Settings <code>Version 0.1.60</code>
+and the menu returned to <code>Check for Updates</code>.</li>
+<li><input checked="" disabled="" type="checkbox"> Prove remote Sparkle update into <code>0.1.60</code>.
+Evidence:
+<code>dist/remote-update-evidence/0.1.59-to-0.1.60-optional-remote-rerun/result.txt</code>
+is <code>result=passed</code>, with <code>old_version=0.1.59</code> and <code>new_version=0.1.60</code>.</li>
+<li><input checked="" disabled="" type="checkbox"> Prove <code>0.1.60</code> steady state after the optional update.
+Evidence: <code>dist/steady-state-evidence/0.1.60-after-optional-update/</code> passed
+35 seconds, 6 probes, installed <code>version=0.1.60</code>, runtime health, setup
+readiness, menu running state, and local wiki health.</li>
 </ul>
 <h5>0.1.61 Mandatory Immediate Update Proof</h5>
 <ul>

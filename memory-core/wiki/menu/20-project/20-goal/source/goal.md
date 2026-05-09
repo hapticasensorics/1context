@@ -5,7 +5,7 @@ section: project
 access: private
 summary: "The professional app bar for 1Context: permission flows, update discipline, and the behaviors that must feel reliable before broad release."
 status: published
-last_updated: 2026-05-07
+last_updated: 2026-05-09
 toc_enabled: true
 talk_enabled: true
 agent_view_enabled: true
@@ -553,18 +553,48 @@ Each release in this train must answer four questions:
 
 ##### 0.1.60 Optional Update UX Proof
 
-- [ ] Publish `0.1.60` as an optional release through the policy manifest.
-- [ ] Prove background optional update discovery stays silent: no modal, no
+- [x] Publish `0.1.60` as an optional release through the policy manifest.
+  Evidence: `release/update-policy.toml` marks `0.1.60` as `optional`, the
+  signed/notarized GitHub release `v0.1.60` contains the versioned DMG,
+  `1Context.dmg`, checksums, and `appcast.xml`, and the live appcast contains no
+  `sparkle:criticalUpdate`, no `sparkle:minimumAutoupdateVersion`, and no
+  `<description>` release notes.
+- [x] Prove background optional update discovery stays silent: no modal, no
   release notes, no automatic relaunch.
-- [ ] Prove the menu bar keeps a pending update action visible until the optional
+  Evidence:
+  `dist/remote-update-evidence/0.1.59-to-0.1.60-optional-remote-rerun/`
+  records installed `plist=0.1.59 cli=0.1.59` through the quiet background
+  window before any user confirmation.
+- [x] Prove the menu bar keeps a pending update action visible until the optional
   update is installed.
-- [ ] Prove clicking the menu update action shows only concise policy copy:
+  Evidence:
+  `dist/remote-update-evidence/0.1.59-to-0.1.60-optional-remote-rerun/menu-after-background-discovery.txt`
+  shows Settings `Version 0.1.59` and the pending `Please Update` action.
+- [x] Prove clicking the menu update action shows only concise policy copy:
   `A 1Context update is ready.`
-- [ ] Prove the optional update installs and relaunches only after the user
+  Evidence:
+  `dist/remote-update-evidence/0.1.59-to-0.1.60-optional-remote-rerun/accessibility-optional-prompt.txt`
+  contains `Update 1Context?`, `A 1Context update is ready.`, `Later`, and
+  `Update`, with no release notes or installer explanation.
+- [x] Prove the optional update installs and relaunches only after the user
   explicitly clicks Update.
-- [ ] Prove Settings shows the currently running version before and after the
+  Evidence:
+  `dist/remote-update-evidence/0.1.59-to-0.1.60-optional-remote-rerun/watch.log`
+  shows the installed bundle and embedded CLI crossing from `0.1.59` to
+  `0.1.60` after the proof harness clicked Update.
+- [x] Prove Settings shows the currently running version before and after the
   optional update.
-- [ ] Prove remote Sparkle update into `0.1.60`.
+  Evidence: the optional proof captures Settings `Version 0.1.59` before
+  install; after install, osascript menu capture shows Settings `Version 0.1.60`
+  and the menu returned to `Check for Updates`.
+- [x] Prove remote Sparkle update into `0.1.60`.
+  Evidence:
+  `dist/remote-update-evidence/0.1.59-to-0.1.60-optional-remote-rerun/result.txt`
+  is `result=passed`, with `old_version=0.1.59` and `new_version=0.1.60`.
+- [x] Prove `0.1.60` steady state after the optional update.
+  Evidence: `dist/steady-state-evidence/0.1.60-after-optional-update/` passed
+  35 seconds, 6 probes, installed `version=0.1.60`, runtime health, setup
+  readiness, menu running state, and local wiki health.
 
 ##### 0.1.61 Mandatory Immediate Update Proof
 

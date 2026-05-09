@@ -12,6 +12,7 @@ TIMEOUT_SECONDS="${ONECONTEXT_UPDATE_PROOF_TIMEOUT_SECONDS:-360}"
 POLL_SECONDS="${ONECONTEXT_UPDATE_PROOF_POLL_SECONDS:-5}"
 OPTIONAL_DISCOVERY_TIMEOUT_SECONDS="${ONECONTEXT_OPTIONAL_DISCOVERY_TIMEOUT_SECONDS:-120}"
 OPTIONAL_QUIET_SECONDS="${ONECONTEXT_OPTIONAL_QUIET_SECONDS:-20}"
+OPTIONAL_PROMPT_TIMEOUT_SECONDS="${ONECONTEXT_OPTIONAL_PROMPT_TIMEOUT_SECONDS:-15}"
 STAMP="$(date -u +%Y%m%dT%H%M%SZ)"
 
 installed_plist_version() {
@@ -78,6 +79,40 @@ tell application "System Events"
       set end of reportLines to "process=" & procName
       repeat with win in windows of proc
         set end of reportLines to "window=" & (name of win) & tab & (description of win)
+        repeat with elementRef in UI elements of win
+          set lineText to "ui"
+          try
+            set lineText to lineText & tab & "role=" & (role of elementRef as text)
+          end try
+          try
+            set lineText to lineText & tab & "description=" & (description of elementRef as text)
+          end try
+          try
+            set lineText to lineText & tab & "name=" & (name of elementRef as text)
+          end try
+          try
+            set lineText to lineText & tab & "value=" & (value of elementRef as text)
+          end try
+          if lineText is not "ui" then set end of reportLines to lineText
+          try
+            repeat with childRef in UI elements of elementRef
+              set childText to "ui-child"
+              try
+                set childText to childText & tab & "role=" & (role of childRef as text)
+              end try
+              try
+                set childText to childText & tab & "description=" & (description of childRef as text)
+              end try
+              try
+                set childText to childText & tab & "name=" & (name of childRef as text)
+              end try
+              try
+                set childText to childText & tab & "value=" & (value of childRef as text)
+              end try
+              if childText is not "ui-child" then set end of reportLines to childText
+            end repeat
+          end try
+        end repeat
         repeat with elementRef in entire contents of win
           set lineText to ""
           try
@@ -210,6 +245,28 @@ end tell
 APPLESCRIPT
 }
 
+wait_for_optional_prompt() {
+  local deadline=$(( "$(date +%s)" + OPTIONAL_PROMPT_TIMEOUT_SECONDS ))
+  local attempt=0
+  while true; do
+    attempt=$((attempt + 1))
+    capture_windows "$EVIDENCE_DIR/windows-optional-prompt-$attempt.txt"
+    capture_accessibility "$EVIDENCE_DIR/accessibility-optional-prompt-$attempt.txt"
+    capture_screenshot "$EVIDENCE_DIR/desktop-optional-prompt-$attempt.png"
+    cp "$EVIDENCE_DIR/windows-optional-prompt-$attempt.txt" "$EVIDENCE_DIR/windows-optional-prompt.txt"
+    cp "$EVIDENCE_DIR/accessibility-optional-prompt-$attempt.txt" "$EVIDENCE_DIR/accessibility-optional-prompt.txt"
+    cp "$EVIDENCE_DIR/desktop-optional-prompt-$attempt.png" "$EVIDENCE_DIR/desktop-optional-prompt.png"
+    if grep -Fq "Update 1Context?" "$EVIDENCE_DIR/accessibility-optional-prompt.txt" &&
+      grep -Fq "A 1Context update is ready." "$EVIDENCE_DIR/accessibility-optional-prompt.txt"; then
+      return 0
+    fi
+    if (( "$(date +%s)" >= deadline )); then
+      return 1
+    fi
+    sleep 1
+  done
+}
+
 kick_update_check() {
   case "$KICK_MODE" in
     none)
@@ -242,6 +299,7 @@ kick_update_check() {
   echo "kick_mode=$KICK_MODE"
   echo "timeout_seconds=$TIMEOUT_SECONDS"
   echo "poll_seconds=$POLL_SECONDS"
+  echo "optional_prompt_timeout_seconds=$OPTIONAL_PROMPT_TIMEOUT_SECONDS"
   echo "evidence_dir=$EVIDENCE_DIR"
 } > "$EVIDENCE_DIR/environment.txt"
 
@@ -310,16 +368,8 @@ if [[ "$EXPECTED_UPDATE_CLASS" == "optional" ]]; then
 
   log "clicking menu pending update action"
   click_menu_item "Please Update"
-  sleep 2
-  capture_windows "$EVIDENCE_DIR/windows-optional-prompt.txt"
-  capture_accessibility "$EVIDENCE_DIR/accessibility-optional-prompt.txt"
-  capture_screenshot "$EVIDENCE_DIR/desktop-optional-prompt.png"
-  grep -Fq "Update 1Context?" "$EVIDENCE_DIR/accessibility-optional-prompt.txt" || {
+  wait_for_optional_prompt || {
     echo "Optional prompt title was not visible. Evidence: $EVIDENCE_DIR" >&2
-    exit 1
-  }
-  grep -Fq "A 1Context update is ready." "$EVIDENCE_DIR/accessibility-optional-prompt.txt" || {
-    echo "Optional prompt body was not policy copy. Evidence: $EVIDENCE_DIR" >&2
     exit 1
   }
   if grep -Eiq "release notes|verify the signed release|installer|relaunch the app" "$EVIDENCE_DIR/accessibility-optional-prompt.txt"; then
