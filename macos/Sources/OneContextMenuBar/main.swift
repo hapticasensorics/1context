@@ -798,13 +798,8 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
       stateItem.title = stateTitle
       renderedStateTitle = stateTitle
     }
-    if updateState == .mandatoryAvailable, runtimeState != .running {
-      startStopItem.title = "Update"
-      startStopItem.action = #selector(openUpdateFlow)
-    } else {
-      startStopItem.title = runtimeState == .running ? "Stop" : "Start"
-      startStopItem.action = #selector(toggleRuntime)
-    }
+    startStopItem.title = runtimeState == .running ? "Stop" : "Start"
+    startStopItem.action = #selector(toggleRuntime)
     startStopItem.isEnabled = !isRuntimeActionInFlight
     refreshWikiItem.title = isWikiRefreshInFlight ? "Refreshing Wiki..." : "Refresh Wiki"
     refreshWikiItem.isEnabled = !isWikiRefreshInFlight
@@ -830,7 +825,7 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
       updateTitle = "Please Update"
       updateAction = #selector(openUpdateFlow)
     case .mandatoryAvailable:
-      updateTitle = "Mandatory Update"
+      updateTitle = "Please Update"
       updateAction = #selector(openUpdateFlow)
     }
 
@@ -949,10 +944,6 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
     let setupReady = requiredSetupReady ?? refreshRequiredSetupCache()
     guard setupReady else {
       setRuntimeState(.needsSetup)
-      return
-    }
-    guard updateState != .mandatoryAvailable else {
-      pauseRuntimeForMandatoryUpdate()
       return
     }
     guard userInitiated || desiredRuntimeIntent == .running else {
@@ -1121,11 +1112,6 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
 
   @objc private func toggleRuntime() {
     let targetIntent: RuntimeIntent = runtimeState == .running ? .stopped : .running
-    if targetIntent == .running, updateState == .mandatoryAvailable {
-      setRuntimeState(.needsUpdate, forceRender: true)
-      openUpdateFlow()
-      return
-    }
     if targetIntent == .running, !cachedRequiredSetupReady {
       showSetupWindow(forBlockedAction: .startRemembering)
       return
@@ -1667,10 +1653,6 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
   }
 
   private func startRuntimeImmediatelyAfterSetup() {
-    guard updateState != .mandatoryAvailable else {
-      setRuntimeState(.needsUpdate, forceRender: true)
-      return
-    }
     setRuntimeState(.running, forceRender: true)
     startLocalWebEdge(requiredSetupReady: true)
     Task.detached(priority: .userInitiated) {

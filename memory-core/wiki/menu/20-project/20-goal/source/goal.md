@@ -69,16 +69,24 @@ the platform allows.
 The desired behavior:
 
 - check for updates on launch and on a recurring background cadence
-- surface mandatory updates prominently in the menu
+- surface pending updates in the menu until they are installed
 - prefer automatic download, install, and relaunch for mandatory blessed builds
-- stop passive remembering on versions below the minimum blessed version when
-  update is available but not yet applied
-- report update status in diagnostics so support can tell whether a machine is
-  current, stale, blocked, or unable to reach the appcast
+- allow mandatory updates to interrupt active use because 1Context is a passive
+  memory system and cannot reliably infer when it is being used
+- never show release notes, preflight explanation, or confirmation prompts for
+  mandatory updates
+- if an update fails, keep the old app useful whenever possible and show only:
+  `Update failed. Please contact support at paul@haptica.ai.`
+- report detailed update status in diagnostics and logs for support, not in
+  user-facing copy
 
 Daily checks are not enough if they leave users running old builds for days.
 The product standard is: after a blessed mandatory release, there should be no
 long-lived previous-version 1Context process continuing to monitor work.
+
+Optional releases have the opposite attention policy. They may be discovered in
+the background, but they should not interrupt active use, auto-open release
+notes, or relaunch unless the user explicitly chooses the update from the menu.
 
 ## Product Standard
 
@@ -89,8 +97,14 @@ Professional 1Context behavior is direct:
   possible.
 - Start starts remembering or opens the setup and permission flow required to
   start remembering.
-- Please Update means Sparkle can take the user into the signed update flow.
-- Mandatory Update means old passive monitoring should not continue quietly.
+- Check for Updates means the app can manually ask the signed Sparkle feed for
+  current update state.
+- Please Update or the policy-controlled update menu item means a pending update
+  exists and the user can open the concise update flow.
+- Mandatory updates install immediately when detected; the menu still exposes the
+  update action until the installed app has actually moved.
+- Settings always shows the currently running app version so support can confirm
+  what code is alive without asking for terminal commands.
 
 The app can be privacy-respecting and still be assertive. The professional
 shape is explicit consent, immediate repair, visible state, and no silent
@@ -103,11 +117,19 @@ failure.
 - After setup is granted, the original Open Wiki action completes without the
   user needing to rediscover it.
 - A mandatory Sparkle appcast item moves an older installed app to the blessed
-  version through a deterministic update smoke.
+  version through a deterministic update smoke, without release notes or a user
+  confirmation prompt.
+- An optional Sparkle appcast item stays silent in the background, keeps a menu
+  update action visible until installed, and shows only concise policy copy when
+  the user manually opens the update flow.
 - Menu, CLI, and diagnostics agree on update availability, mandatory status,
   installed version, and required setup state.
-- Passive remembering pauses or refuses to start when the installed version is
-  below a declared mandatory minimum.
+- Settings shows the currently running version, and screenshot/AX evidence proves
+  it matches the installed bundle version.
+- Failed update attempts keep the old app usable whenever possible and show the
+  controlled support message instead of raw Sparkle or installer details.
+- A founder-controlled release policy manifest decides mandatory vs optional
+  state and every user-facing update string before the release workflow runs.
 - A repaired healthy `0.1.51` baseline can update through the real remote
   GitHub Sparkle feed to `0.1.53`.
 - A remote `0.1.54` release marked mandatory can move the installed `0.1.53`
@@ -127,9 +149,14 @@ failure.
 - Sparkle release artifacts can be marked mandatory in the release pipeline.
 - The installed app checks aggressively, reports mandatory update state, and
   lets Sparkle automatically download and install eligible updates.
-- Mandatory updates use Sparkle's automatic background install path when
-  possible; UI is reserved for blocked cases where macOS or Sparkle needs the
-  user.
+- Mandatory updates use Sparkle's automatic background install path immediately,
+  even if that interrupts active use.
+- Optional updates stay quiet in the background and require an explicit user
+  click before install/relaunch.
+- User-facing update text is controlled by policy, not generated release notes,
+  Sparkle defaults, or raw error messages.
+- The menu bar shows pending update state until installed, and Settings shows the
+  currently running app version.
 - Every claim above has a deterministic local proof: Swift tests, release-script
   checks, wiki render checks, and live local wiki verification.
 
@@ -339,9 +366,15 @@ Each release in this train must answer four questions:
   surface: blocked action opens setup/permission flow, granted state is noticed
   automatically, and the original action continues when safe.
 - Failed update and stale helper cases leave the old app usable with a clear
-  recovery path.
-- The release docs, `/goal`, GitHub workflow, release notes, and live local wiki
-  all agree on what the current blessed version is.
+  user-facing support message and detailed operator logs.
+- The release docs, `/goal`, GitHub workflow, release policy manifest, public
+  release notes, appcast, and live local wiki all agree on what the current
+  blessed version is and whether it is mandatory or optional.
+- Release notes never appear in the updater window unless the founder-controlled
+  policy explicitly allows it.
+- Menu bar evidence proves `Check for Updates` when current, a pending update
+  action when an update is available, and Settings shows the currently running
+  version number.
 - New findings discovered during closed-loop testing are immediately folded
   back into `/goal` as either checked evidence, an unchecked repair item, or an
   explicit deferred release-train item.
@@ -445,37 +478,107 @@ Each release in this train must answer four questions:
 - [ ] Run uninstall with delete-data in a controlled fixture account or fixture
   path and prove only approved paths are removed.
 - [ ] Reinstall from DMG and prove setup/update still works after residue cleanup.
-- [ ] Prove remote Sparkle update into `0.1.58`.
+- [x] Prove remote Sparkle update into `0.1.58`.
+  Evidence: `dist/remote-update-evidence/0.1.57-to-0.1.58-no-click/` recorded
+  installed `0.1.57` moving to installed `0.1.58` without clicking an update
+  confirmation button.
 
-##### 0.1.59 Failed Update and Recovery Proof
+##### 0.1.59 Update Policy Control Plane
 
-- [ ] Add failed-update rollback smoke for broken appcast, missing asset, bad
-  signature, and interrupted download cases where feasible.
-- [ ] Prove failed update leaves old app launchable and diagnostics clear.
-- [ ] Prove stale local HTTPS helper is detected and repaired after app
-  replacement.
+- [x] Draft `docs/update_policy.html` with the founder-controlled update policy,
+  current prompt screenshot, mandatory/optional behavior, menu bar behavior,
+  failure copy, and default post-install message.
+  Evidence: `docs/update_policy.html` and
+  `docs/assets/update-policy/current-update-prompt.png`.
+- [x] Add a release policy manifest schema that declares version, update class,
+  approved-by, reason, minimum autoupdate version, release-notes visibility,
+  optional prompt copy, failure copy, and post-install message copy.
+  Evidence: `release/update-policy.toml`, `release/update-policy.schema.json`,
+  and `scripts/update-policy.py`.
+- [x] Move release-class control from ad hoc workflow inputs to the committed
+  policy manifest; the workflow may execute policy but must not invent policy.
+  Evidence: `.github/workflows/release.yml` no longer exposes mandatory/optional
+  workflow inputs; `scripts/package-macos-release.sh` exports policy from the
+  committed manifest.
+- [x] Add validation that `VERSION`, tag, manifest, appcast, GitHub release, and
+  generated public release notes agree.
+  Evidence: `scripts/check-version-consistency.sh`, `scripts/check-update-policy.sh`,
+  workflow tag checks, workflow GitHub release asset checks, and appcast policy
+  validation.
+- [x] Remove embedded builder-journal release notes from Sparkle updater UI by
+  default; prove the appcast/update path cannot show release notes unless policy
+  explicitly allows it.
+  Evidence: signed production packaging generated
+  `dist/sparkle-updates/appcast.xml` with no `<description>` and
+  `scripts/test-update-policy.sh` rejects appcast descriptions when release
+  notes are hidden by policy.
+- [x] Replace raw user-facing Sparkle failure text with the controlled message:
+  `Update failed. Please contact support at paul@haptica.ai.`
+  Evidence: `SparkleUpdateController` now uses `UpdateUserFacingPolicy`; the
+  signed bundle `Info.plist` contains `Update failed.` and
+  `Please contact support at paul@haptica.ai.`
+- [ ] Prove failed update attempts keep the old app usable whenever possible and
+  do not stop remembering simply because an update failed.
+  Partial evidence: `MandatoryUpdateRuntimePolicy` no longer pauses passive
+  remembering for mandatory updates and Swift tests cover that behavior. Still
+  needs a real failed-update harness before this is closed.
+- [x] Add policy-controlled post-install message plumbing with default title
+  `1Context Improved!`, disabled by default unless the manifest enables it.
+  Evidence: `UpdateUserFacingPolicy` parses post-install copy from `Info.plist`;
+  signed production packaging proves `OneContextUpdatePostInstallMessageEnabled`
+  is `false` by default.
+- [x] Produce signed/notarized local release artifacts for the policy-control
+  build.
+  Evidence: `scripts/package-macos-production-release.sh` produced
+  `dist/1Context-0.1.58-macos-arm64.dmg`; Apple notarization accepted and
+  stapled both `dist/1Context.app` and the DMG; `codesign --verify`,
+  `xcrun stapler validate`, DMG validation, `scripts/test.sh`, full Swift tests,
+  and `scripts/check-update-policy.sh --appcast dist/sparkle-updates/appcast.xml`
+  passed.
 - [ ] Prove remote Sparkle update into `0.1.59`.
 
-##### 0.1.60 Permission Flywheel Expansion
+##### 0.1.60 Optional Update UX Proof
 
-- [ ] Define the permission readiness model for future Screen Recording and
-  Accessibility surfaces without making the CLI the accidental permission owner.
-- [ ] Add native setup rows for permission-dependent shipped surfaces only.
-- [ ] Prove blocked action opens the relevant permission/setup flow.
-- [ ] Prove granted state is detected automatically without manual Check Again.
+- [ ] Publish `0.1.60` as an optional release through the policy manifest.
+- [ ] Prove background optional update discovery stays silent: no modal, no
+  release notes, no automatic relaunch.
+- [ ] Prove the menu bar keeps a pending update action visible until the optional
+  update is installed.
+- [ ] Prove clicking the menu update action shows only concise policy copy:
+  `A 1Context update is ready.`
+- [ ] Prove the optional update installs and relaunches only after the user
+  explicitly clicks Update.
+- [ ] Prove Settings shows the currently running version before and after the
+  optional update.
 - [ ] Prove remote Sparkle update into `0.1.60`.
 
-##### 0.1.61 Restart and Login Resilience
+##### 0.1.61 Mandatory Immediate Update Proof
 
-- [ ] Prove menu LaunchAgent and runtime LaunchAgent recover after app relaunch.
-- [ ] Prove machine-restart or login-style recovery on this Mac with screenshots
-  and CLI status artifacts.
-- [ ] Prove desired state `running` survives update/restart unless the user
-  explicitly stops remembering.
+- [ ] Publish `0.1.61` as a mandatory release through the policy manifest.
+- [ ] Prove mandatory update detection can interrupt active use and immediately
+  download, install, and relaunch.
+- [ ] Prove no release notes, preflight explanation, or confirmation prompt are
+  shown for the mandatory update.
+- [ ] Prove the menu bar shows a pending update action until the installed app
+  actually moves, then returns to `Check for Updates`.
+- [ ] Prove the default post-install message remains hidden when disabled by
+  policy.
+- [ ] Prove a policy-enabled post-install message can show exactly
+  `1Context Improved!` with founder-provided body copy in a fixture or local
+  appcast proof.
 - [ ] Prove remote Sparkle update into `0.1.61`.
 
-##### 0.1.62 Diagnostics and Supportability
+##### 0.1.62 Failed Update and Supportability Proof
 
+- [ ] Add failed-update smoke for broken appcast, missing asset, bad signature,
+  and interrupted download cases where feasible.
+- [ ] Prove every user-facing failed-update path shows only:
+  `Update failed. Please contact support at paul@haptica.ai.`
+- [ ] Prove internal diagnostics/logs retain the real failure reason for support.
+- [ ] Prove failed update leaves the old app launchable and remembering continues
+  unless the app is already in the short install/relaunch phase.
+- [ ] Prove stale local HTTPS helper is detected and repaired after app
+  replacement.
 - [ ] Add one command or evidence bundle that collects version, appcast, Sparkle
   defaults, LaunchAgent state, helper state, setup state, runtime health, local
   wiki health, and recent logs.
@@ -488,8 +591,13 @@ Each release in this train must answer four questions:
   failed update, and stopped-by-user states.
 - [ ] Prove remote Sparkle update into `0.1.62`.
 
-##### 0.1.63 Clean-Machine Acceptance
+##### 0.1.63 Permission Flywheel and Clean-Machine Acceptance
 
+- [ ] Define the permission readiness model for future Screen Recording and
+  Accessibility surfaces without making the CLI the accidental permission owner.
+- [ ] Add native setup rows for permission-dependent shipped surfaces only.
+- [ ] Prove blocked action opens the relevant permission/setup flow.
+- [ ] Prove granted state is detected automatically without manual Check Again.
 - [ ] Run clean-machine checklist from DMG install through setup, wiki open,
   update, relaunch, and uninstall cleanup.
 - [ ] Capture screenshots and command artifacts for every consent or native UI
@@ -498,12 +606,18 @@ Each release in this train must answer four questions:
   engine.
 - [ ] Prove remote Sparkle update into `0.1.63`.
 
-##### 0.1.64 Release Train Rehearsal
+##### 0.1.64 Restart, Login, and Release Train Rehearsal
 
+- [ ] Prove menu LaunchAgent and runtime LaunchAgent recover after app relaunch.
+- [ ] Prove machine-restart or login-style recovery on this Mac with screenshots
+  and CLI status artifacts.
+- [ ] Prove desired state `running` survives update/restart unless the user
+  explicitly stops remembering.
 - [ ] Run a full release rehearsal where the only accepted proof is installed
   app behavior after remote update.
-- [ ] Validate `/goal`, release docs, release notes, appcast, GitHub release
-  assets, and installed app version all agree.
+- [ ] Validate `/goal`, release docs, release policy manifest, public release
+  notes, appcast, GitHub release assets, and installed app version all agree.
+- [ ] Prove menu bar and Settings screenshots match the policy after rehearsal.
 - [ ] Prove remote Sparkle update into `0.1.64`.
 
 ##### 0.1.65 Blessed Professional App
@@ -512,7 +626,11 @@ Each release in this train must answer four questions:
 - [ ] Mark it mandatory if any previous train version should stop running.
 - [ ] Prove the installed app reaches `0.1.65` through remote Sparkle update.
 - [ ] Prove the final installed app is runtime-steady, setup-ready, wiki-healthy,
-  menu-visible, update-current, and uninstall-verifiable.
+  menu-visible, update-current, policy-current, and uninstall-verifiable.
+- [ ] Prove the final app has founder-controlled update policy end to end:
+  mandatory vs optional, no updater release notes by default, concise optional
+  prompt, simple failed-update support message, optional `1Context Improved!`
+  post-install message, menu update action, and Settings version number.
 - [ ] Close this `/goal` section with evidence paths and any intentionally
   deferred future permissions work.
 

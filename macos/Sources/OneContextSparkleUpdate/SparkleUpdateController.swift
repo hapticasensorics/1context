@@ -26,7 +26,7 @@ public final class SparkleUpdateController: NSObject {
     super.init()
 
     if configuration.isConfigured, appContext.location.canInstallAppUpdates {
-      let userDriver = AppManagedSparkleUserDriver()
+      let userDriver = AppManagedSparkleUserDriver(policy: configuration.userFacingPolicy)
       let updater = SPUUpdater(
         hostBundle: .main,
         applicationBundle: .main,
@@ -309,8 +309,14 @@ struct AppManagedSparkleUserDriverPolicy {
 
 @MainActor
 private final class AppManagedSparkleUserDriver: NSObject, SPUUserDriver {
+  private let policy: UpdateUserFacingPolicy
   private var mode: AppManagedSparkleCheckMode = .automaticMandatory
   private var shouldInstallAndRelaunchWithoutPrompt = false
+
+  init(policy: UpdateUserFacingPolicy) {
+    self.policy = policy
+    super.init()
+  }
 
   func prepareForMandatoryAutomaticCheck() {
     mode = .automaticMandatory
@@ -365,7 +371,9 @@ private final class AppManagedSparkleUserDriver: NSObject, SPUUserDriver {
     }
   }
 
-  func showUpdateReleaseNotes(with downloadData: SPUDownloadData) {}
+  func showUpdateReleaseNotes(with downloadData: SPUDownloadData) {
+    guard policy.showReleaseNotesInUpdateWindow else { return }
+  }
 
   func showUpdateReleaseNotesFailedToDownloadWithError(_ error: Error) {}
 
@@ -377,7 +385,7 @@ private final class AppManagedSparkleUserDriver: NSObject, SPUUserDriver {
 
   func showUpdaterError(_ error: Error) async {
     if mode == .userInitiated || shouldInstallAndRelaunchWithoutPrompt {
-      presentAlert(title: "Update Error", message: error.localizedDescription)
+      presentAlert(title: policy.failureTitle, message: policy.failureBody)
     }
   }
 
@@ -400,7 +408,13 @@ private final class AppManagedSparkleUserDriver: NSObject, SPUUserDriver {
     retryTerminatingApplication: @escaping () -> Void
   ) {}
 
-  func showUpdateInstalledAndRelaunched(_ relaunched: Bool) async {}
+  func showUpdateInstalledAndRelaunched(_ relaunched: Bool) async {
+    guard policy.postInstallMessageEnabled else { return }
+    presentAlert(
+      title: policy.postInstallTitle,
+      message: policy.postInstallBody(displayVersion: oneContextVersion)
+    )
+  }
 
   func dismissUpdateInstallation() {
     shouldInstallAndRelaunchWithoutPrompt = false
@@ -410,8 +424,8 @@ private final class AppManagedSparkleUserDriver: NSObject, SPUUserDriver {
 
   private func confirmInstall(_ appcastItem: SUAppcastItem) -> Bool {
     let alert = NSAlert()
-    alert.messageText = "Update 1Context?"
-    alert.informativeText = "1Context \(appcastItem.displayVersionString) is available. The updater will verify the signed release, install it, and relaunch the app."
+    alert.messageText = policy.optionalPromptTitle
+    alert.informativeText = policy.optionalPromptBody(displayVersion: appcastItem.displayVersionString)
     alert.addButton(withTitle: "Update")
     alert.addButton(withTitle: "Later")
     NSApp.activate(ignoringOtherApps: true)

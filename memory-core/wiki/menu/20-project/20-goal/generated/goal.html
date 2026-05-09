@@ -156,16 +156,23 @@ the platform allows.</p>
 <p>The desired behavior:</p>
 <ul>
 <li>check for updates on launch and on a recurring background cadence</li>
-<li>surface mandatory updates prominently in the menu</li>
+<li>surface pending updates in the menu until they are installed</li>
 <li>prefer automatic download, install, and relaunch for mandatory blessed builds</li>
-<li>stop passive remembering on versions below the minimum blessed version when
-update is available but not yet applied</li>
-<li>report update status in diagnostics so support can tell whether a machine is
-current, stale, blocked, or unable to reach the appcast</li>
+<li>allow mandatory updates to interrupt active use because 1Context is a passive
+memory system and cannot reliably infer when it is being used</li>
+<li>never show release notes, preflight explanation, or confirmation prompts for
+mandatory updates</li>
+<li>if an update fails, keep the old app useful whenever possible and show only:
+<code>Update failed. Please contact support at paul@haptica.ai.</code></li>
+<li>report detailed update status in diagnostics and logs for support, not in
+user-facing copy</li>
 </ul>
 <p>Daily checks are not enough if they leave users running old builds for days.
 The product standard is: after a blessed mandatory release, there should be no
 long-lived previous-version 1Context process continuing to monitor work.</p>
+<p>Optional releases have the opposite attention policy. They may be discovered in
+the background, but they should not interrupt active use, auto-open release
+notes, or relaunch unless the user explicitly chooses the update from the menu.</p>
 <h2 id="Product_Standard">Product Standard</h2>
 <p>Professional 1Context behavior is direct:</p>
 <ul>
@@ -174,8 +181,14 @@ long-lived previous-version 1Context process continuing to monitor work.</p>
 possible.</li>
 <li>Start starts remembering or opens the setup and permission flow required to
 start remembering.</li>
-<li>Please Update means Sparkle can take the user into the signed update flow.</li>
-<li>Mandatory Update means old passive monitoring should not continue quietly.</li>
+<li>Check for Updates means the app can manually ask the signed Sparkle feed for
+current update state.</li>
+<li>Please Update or the policy-controlled update menu item means a pending update
+exists and the user can open the concise update flow.</li>
+<li>Mandatory updates install immediately when detected; the menu still exposes the
+update action until the installed app has actually moved.</li>
+<li>Settings always shows the currently running app version so support can confirm
+what code is alive without asking for terminal commands.</li>
 </ul>
 <p>The app can be privacy-respecting and still be assertive. The professional
 shape is explicit consent, immediate repair, visible state, and no silent
@@ -187,11 +200,19 @@ silently.</li>
 <li>After setup is granted, the original Open Wiki action completes without the
 user needing to rediscover it.</li>
 <li>A mandatory Sparkle appcast item moves an older installed app to the blessed
-version through a deterministic update smoke.</li>
+version through a deterministic update smoke, without release notes or a user
+confirmation prompt.</li>
+<li>An optional Sparkle appcast item stays silent in the background, keeps a menu
+update action visible until installed, and shows only concise policy copy when
+the user manually opens the update flow.</li>
 <li>Menu, CLI, and diagnostics agree on update availability, mandatory status,
 installed version, and required setup state.</li>
-<li>Passive remembering pauses or refuses to start when the installed version is
-below a declared mandatory minimum.</li>
+<li>Settings shows the currently running version, and screenshot/AX evidence proves
+it matches the installed bundle version.</li>
+<li>Failed update attempts keep the old app usable whenever possible and show the
+controlled support message instead of raw Sparkle or installer details.</li>
+<li>A founder-controlled release policy manifest decides mandatory vs optional
+state and every user-facing update string before the release workflow runs.</li>
 <li>A repaired healthy <code>0.1.51</code> baseline can update through the real remote
 GitHub Sparkle feed to <code>0.1.53</code>.</li>
 <li>A remote <code>0.1.54</code> release marked mandatory can move the installed <code>0.1.53</code>
@@ -211,9 +232,14 @@ safe.</li>
 <li>Sparkle release artifacts can be marked mandatory in the release pipeline.</li>
 <li>The installed app checks aggressively, reports mandatory update state, and
 lets Sparkle automatically download and install eligible updates.</li>
-<li>Mandatory updates use Sparkle&#39;s automatic background install path when
-possible; UI is reserved for blocked cases where macOS or Sparkle needs the
-user.</li>
+<li>Mandatory updates use Sparkle&#39;s automatic background install path immediately,
+even if that interrupts active use.</li>
+<li>Optional updates stay quiet in the background and require an explicit user
+click before install/relaunch.</li>
+<li>User-facing update text is controlled by policy, not generated release notes,
+Sparkle defaults, or raw error messages.</li>
+<li>The menu bar shows pending update state until installed, and Settings shows the
+currently running app version.</li>
 <li>Every claim above has a deterministic local proof: Swift tests, release-script
 checks, wiki render checks, and live local wiki verification.</li>
 </ul>
@@ -417,9 +443,15 @@ trusted local CA, managed hooks, logs/cache, and optional data deletion.</li>
 surface: blocked action opens setup/permission flow, granted state is noticed
 automatically, and the original action continues when safe.</li>
 <li>Failed update and stale helper cases leave the old app usable with a clear
-recovery path.</li>
-<li>The release docs, <code>/goal</code>, GitHub workflow, release notes, and live local wiki
-all agree on what the current blessed version is.</li>
+user-facing support message and detailed operator logs.</li>
+<li>The release docs, <code>/goal</code>, GitHub workflow, release policy manifest, public
+release notes, appcast, and live local wiki all agree on what the current
+blessed version is and whether it is mandatory or optional.</li>
+<li>Release notes never appear in the updater window unless the founder-controlled
+policy explicitly allows it.</li>
+<li>Menu bar evidence proves <code>Check for Updates</code> when current, a pending update
+action when an update is available, and Settings shows the currently running
+version number.</li>
 <li>New findings discovered during closed-loop testing are immediately folded
 back into <code>/goal</code> as either checked evidence, an unchecked repair item, or an
 explicit deferred release-train item.</li>
@@ -522,37 +554,107 @@ managed hooks, logs/cache, and optional data deletion.</li>
 <li><input disabled="" type="checkbox"> Run uninstall with delete-data in a controlled fixture account or fixture
 path and prove only approved paths are removed.</li>
 <li><input disabled="" type="checkbox"> Reinstall from DMG and prove setup/update still works after residue cleanup.</li>
-<li><input disabled="" type="checkbox"> Prove remote Sparkle update into <code>0.1.58</code>.</li>
+<li><input checked="" disabled="" type="checkbox"> Prove remote Sparkle update into <code>0.1.58</code>.
+Evidence: <code>dist/remote-update-evidence/0.1.57-to-0.1.58-no-click/</code> recorded
+installed <code>0.1.57</code> moving to installed <code>0.1.58</code> without clicking an update
+confirmation button.</li>
 </ul>
-<h5>0.1.59 Failed Update and Recovery Proof</h5>
+<h5>0.1.59 Update Policy Control Plane</h5>
 <ul>
-<li><input disabled="" type="checkbox"> Add failed-update rollback smoke for broken appcast, missing asset, bad
-signature, and interrupted download cases where feasible.</li>
-<li><input disabled="" type="checkbox"> Prove failed update leaves old app launchable and diagnostics clear.</li>
-<li><input disabled="" type="checkbox"> Prove stale local HTTPS helper is detected and repaired after app
-replacement.</li>
+<li><input checked="" disabled="" type="checkbox"> Draft <code>docs/update_policy.html</code> with the founder-controlled update policy,
+current prompt screenshot, mandatory/optional behavior, menu bar behavior,
+failure copy, and default post-install message.
+Evidence: <code>docs/update_policy.html</code> and
+<code>docs/assets/update-policy/current-update-prompt.png</code>.</li>
+<li><input checked="" disabled="" type="checkbox"> Add a release policy manifest schema that declares version, update class,
+approved-by, reason, minimum autoupdate version, release-notes visibility,
+optional prompt copy, failure copy, and post-install message copy.
+Evidence: <code>release/update-policy.toml</code>, <code>release/update-policy.schema.json</code>,
+and <code>scripts/update-policy.py</code>.</li>
+<li><input checked="" disabled="" type="checkbox"> Move release-class control from ad hoc workflow inputs to the committed
+policy manifest; the workflow may execute policy but must not invent policy.
+Evidence: <code>.github/workflows/release.yml</code> no longer exposes mandatory/optional
+workflow inputs; <code>scripts/package-macos-release.sh</code> exports policy from the
+committed manifest.</li>
+<li><input checked="" disabled="" type="checkbox"> Add validation that <code>VERSION</code>, tag, manifest, appcast, GitHub release, and
+generated public release notes agree.
+Evidence: <code>scripts/check-version-consistency.sh</code>, <code>scripts/check-update-policy.sh</code>,
+workflow tag checks, workflow GitHub release asset checks, and appcast policy
+validation.</li>
+<li><input checked="" disabled="" type="checkbox"> Remove embedded builder-journal release notes from Sparkle updater UI by
+default; prove the appcast/update path cannot show release notes unless policy
+explicitly allows it.
+Evidence: signed production packaging generated
+<code>dist/sparkle-updates/appcast.xml</code> with no <code>&lt;description&gt;</code> and
+<code>scripts/test-update-policy.sh</code> rejects appcast descriptions when release
+notes are hidden by policy.</li>
+<li><input checked="" disabled="" type="checkbox"> Replace raw user-facing Sparkle failure text with the controlled message:
+<code>Update failed. Please contact support at paul@haptica.ai.</code>
+Evidence: <code>SparkleUpdateController</code> now uses <code>UpdateUserFacingPolicy</code>; the
+signed bundle <code>Info.plist</code> contains <code>Update failed.</code> and
+<code>Please contact support at paul@haptica.ai.</code></li>
+<li><input disabled="" type="checkbox"> Prove failed update attempts keep the old app usable whenever possible and
+do not stop remembering simply because an update failed.
+Partial evidence: <code>MandatoryUpdateRuntimePolicy</code> no longer pauses passive
+remembering for mandatory updates and Swift tests cover that behavior. Still
+needs a real failed-update harness before this is closed.</li>
+<li><input checked="" disabled="" type="checkbox"> Add policy-controlled post-install message plumbing with default title
+<code>1Context Improved!</code>, disabled by default unless the manifest enables it.
+Evidence: <code>UpdateUserFacingPolicy</code> parses post-install copy from <code>Info.plist</code>;
+signed production packaging proves <code>OneContextUpdatePostInstallMessageEnabled</code>
+is <code>false</code> by default.</li>
+<li><input checked="" disabled="" type="checkbox"> Produce signed/notarized local release artifacts for the policy-control
+build.
+Evidence: <code>scripts/package-macos-production-release.sh</code> produced
+<code>dist/1Context-0.1.58-macos-arm64.dmg</code>; Apple notarization accepted and
+stapled both <code>dist/1Context.app</code> and the DMG; <code>codesign --verify</code>,
+<code>xcrun stapler validate</code>, DMG validation, <code>scripts/test.sh</code>, full Swift tests,
+and <code>scripts/check-update-policy.sh --appcast dist/sparkle-updates/appcast.xml</code>
+passed.</li>
 <li><input disabled="" type="checkbox"> Prove remote Sparkle update into <code>0.1.59</code>.</li>
 </ul>
-<h5>0.1.60 Permission Flywheel Expansion</h5>
+<h5>0.1.60 Optional Update UX Proof</h5>
 <ul>
-<li><input disabled="" type="checkbox"> Define the permission readiness model for future Screen Recording and
-Accessibility surfaces without making the CLI the accidental permission owner.</li>
-<li><input disabled="" type="checkbox"> Add native setup rows for permission-dependent shipped surfaces only.</li>
-<li><input disabled="" type="checkbox"> Prove blocked action opens the relevant permission/setup flow.</li>
-<li><input disabled="" type="checkbox"> Prove granted state is detected automatically without manual Check Again.</li>
+<li><input disabled="" type="checkbox"> Publish <code>0.1.60</code> as an optional release through the policy manifest.</li>
+<li><input disabled="" type="checkbox"> Prove background optional update discovery stays silent: no modal, no
+release notes, no automatic relaunch.</li>
+<li><input disabled="" type="checkbox"> Prove the menu bar keeps a pending update action visible until the optional
+update is installed.</li>
+<li><input disabled="" type="checkbox"> Prove clicking the menu update action shows only concise policy copy:
+<code>A 1Context update is ready.</code></li>
+<li><input disabled="" type="checkbox"> Prove the optional update installs and relaunches only after the user
+explicitly clicks Update.</li>
+<li><input disabled="" type="checkbox"> Prove Settings shows the currently running version before and after the
+optional update.</li>
 <li><input disabled="" type="checkbox"> Prove remote Sparkle update into <code>0.1.60</code>.</li>
 </ul>
-<h5>0.1.61 Restart and Login Resilience</h5>
+<h5>0.1.61 Mandatory Immediate Update Proof</h5>
 <ul>
-<li><input disabled="" type="checkbox"> Prove menu LaunchAgent and runtime LaunchAgent recover after app relaunch.</li>
-<li><input disabled="" type="checkbox"> Prove machine-restart or login-style recovery on this Mac with screenshots
-and CLI status artifacts.</li>
-<li><input disabled="" type="checkbox"> Prove desired state <code>running</code> survives update/restart unless the user
-explicitly stops remembering.</li>
+<li><input disabled="" type="checkbox"> Publish <code>0.1.61</code> as a mandatory release through the policy manifest.</li>
+<li><input disabled="" type="checkbox"> Prove mandatory update detection can interrupt active use and immediately
+download, install, and relaunch.</li>
+<li><input disabled="" type="checkbox"> Prove no release notes, preflight explanation, or confirmation prompt are
+shown for the mandatory update.</li>
+<li><input disabled="" type="checkbox"> Prove the menu bar shows a pending update action until the installed app
+actually moves, then returns to <code>Check for Updates</code>.</li>
+<li><input disabled="" type="checkbox"> Prove the default post-install message remains hidden when disabled by
+policy.</li>
+<li><input disabled="" type="checkbox"> Prove a policy-enabled post-install message can show exactly
+<code>1Context Improved!</code> with founder-provided body copy in a fixture or local
+appcast proof.</li>
 <li><input disabled="" type="checkbox"> Prove remote Sparkle update into <code>0.1.61</code>.</li>
 </ul>
-<h5>0.1.62 Diagnostics and Supportability</h5>
+<h5>0.1.62 Failed Update and Supportability Proof</h5>
 <ul>
+<li><input disabled="" type="checkbox"> Add failed-update smoke for broken appcast, missing asset, bad signature,
+and interrupted download cases where feasible.</li>
+<li><input disabled="" type="checkbox"> Prove every user-facing failed-update path shows only:
+<code>Update failed. Please contact support at paul@haptica.ai.</code></li>
+<li><input disabled="" type="checkbox"> Prove internal diagnostics/logs retain the real failure reason for support.</li>
+<li><input disabled="" type="checkbox"> Prove failed update leaves the old app launchable and remembering continues
+unless the app is already in the short install/relaunch phase.</li>
+<li><input disabled="" type="checkbox"> Prove stale local HTTPS helper is detected and repaired after app
+replacement.</li>
 <li><input disabled="" type="checkbox"> Add one command or evidence bundle that collects version, appcast, Sparkle
 defaults, LaunchAgent state, helper state, setup state, runtime health, local
 wiki health, and recent logs.</li>
@@ -565,8 +667,13 @@ state.</li>
 failed update, and stopped-by-user states.</li>
 <li><input disabled="" type="checkbox"> Prove remote Sparkle update into <code>0.1.62</code>.</li>
 </ul>
-<h5>0.1.63 Clean-Machine Acceptance</h5>
+<h5>0.1.63 Permission Flywheel and Clean-Machine Acceptance</h5>
 <ul>
+<li><input disabled="" type="checkbox"> Define the permission readiness model for future Screen Recording and
+Accessibility surfaces without making the CLI the accidental permission owner.</li>
+<li><input disabled="" type="checkbox"> Add native setup rows for permission-dependent shipped surfaces only.</li>
+<li><input disabled="" type="checkbox"> Prove blocked action opens the relevant permission/setup flow.</li>
+<li><input disabled="" type="checkbox"> Prove granted state is detected automatically without manual Check Again.</li>
 <li><input disabled="" type="checkbox"> Run clean-machine checklist from DMG install through setup, wiki open,
 update, relaunch, and uninstall cleanup.</li>
 <li><input disabled="" type="checkbox"> Capture screenshots and command artifacts for every consent or native UI
@@ -575,12 +682,18 @@ step.</li>
 engine.</li>
 <li><input disabled="" type="checkbox"> Prove remote Sparkle update into <code>0.1.63</code>.</li>
 </ul>
-<h5>0.1.64 Release Train Rehearsal</h5>
+<h5>0.1.64 Restart, Login, and Release Train Rehearsal</h5>
 <ul>
+<li><input disabled="" type="checkbox"> Prove menu LaunchAgent and runtime LaunchAgent recover after app relaunch.</li>
+<li><input disabled="" type="checkbox"> Prove machine-restart or login-style recovery on this Mac with screenshots
+and CLI status artifacts.</li>
+<li><input disabled="" type="checkbox"> Prove desired state <code>running</code> survives update/restart unless the user
+explicitly stops remembering.</li>
 <li><input disabled="" type="checkbox"> Run a full release rehearsal where the only accepted proof is installed
 app behavior after remote update.</li>
-<li><input disabled="" type="checkbox"> Validate <code>/goal</code>, release docs, release notes, appcast, GitHub release
-assets, and installed app version all agree.</li>
+<li><input disabled="" type="checkbox"> Validate <code>/goal</code>, release docs, release policy manifest, public release
+notes, appcast, GitHub release assets, and installed app version all agree.</li>
+<li><input disabled="" type="checkbox"> Prove menu bar and Settings screenshots match the policy after rehearsal.</li>
 <li><input disabled="" type="checkbox"> Prove remote Sparkle update into <code>0.1.64</code>.</li>
 </ul>
 <h5>0.1.65 Blessed Professional App</h5>
@@ -589,7 +702,11 @@ assets, and installed app version all agree.</li>
 <li><input disabled="" type="checkbox"> Mark it mandatory if any previous train version should stop running.</li>
 <li><input disabled="" type="checkbox"> Prove the installed app reaches <code>0.1.65</code> through remote Sparkle update.</li>
 <li><input disabled="" type="checkbox"> Prove the final installed app is runtime-steady, setup-ready, wiki-healthy,
-menu-visible, update-current, and uninstall-verifiable.</li>
+menu-visible, update-current, policy-current, and uninstall-verifiable.</li>
+<li><input disabled="" type="checkbox"> Prove the final app has founder-controlled update policy end to end:
+mandatory vs optional, no updater release notes by default, concise optional
+prompt, simple failed-update support message, optional <code>1Context Improved!</code>
+post-install message, menu update action, and Settings version number.</li>
 <li><input disabled="" type="checkbox"> Close this <code>/goal</code> section with evidence paths and any intentionally
 deferred future permissions work.</li>
 </ul>

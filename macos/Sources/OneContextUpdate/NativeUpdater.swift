@@ -75,16 +75,11 @@ public protocol NativeUpdater {
 
 public enum MandatoryUpdateRuntimePolicy {
   public static func shouldPausePassiveRemembering(_ snapshot: NativeUpdateSnapshot) -> Bool {
-    snapshot.availability == .available
-      && snapshot.updateAvailable
-      && snapshot.mandatoryUpdateAvailable
+    false
   }
 
   public static func startBlockedMessage(_ snapshot: NativeUpdateSnapshot) -> String {
-    if let latestVersion = snapshot.latestVersion {
-      return "1Context \(latestVersion) is mandatory. Update before starting passive remembering."
-    }
-    return "A mandatory 1Context update is available. Update before starting passive remembering."
+    "1Context will keep remembering while the updater retries."
   }
 }
 
@@ -161,6 +156,7 @@ public struct SparkleUpdaterConfiguration: Codable, Equatable, Sendable {
   public let automaticChecksEnabled: Bool
   public let automaticDownloadsEnabled: Bool
   public let scheduledCheckInterval: TimeInterval?
+  public let userFacingPolicy: UpdateUserFacingPolicy
 
   public var isConfigured: Bool {
     feedURL != nil && trimmedPublicEdKey != nil
@@ -182,13 +178,15 @@ public struct SparkleUpdaterConfiguration: Codable, Equatable, Sendable {
     publicEdKey: String?,
     automaticChecksEnabled: Bool = false,
     automaticDownloadsEnabled: Bool = false,
-    scheduledCheckInterval: TimeInterval? = nil
+    scheduledCheckInterval: TimeInterval? = nil,
+    userFacingPolicy: UpdateUserFacingPolicy = .default
   ) {
     self.feedURL = feedURL
     self.publicEdKey = publicEdKey
     self.automaticChecksEnabled = automaticChecksEnabled
     self.automaticDownloadsEnabled = automaticDownloadsEnabled
     self.scheduledCheckInterval = scheduledCheckInterval
+    self.userFacingPolicy = userFacingPolicy
   }
 
   public init(infoDictionary: [String: Any]) {
@@ -197,7 +195,8 @@ public struct SparkleUpdaterConfiguration: Codable, Equatable, Sendable {
       publicEdKey: infoDictionary[Self.publicEdKeyInfoKey] as? String,
       automaticChecksEnabled: Self.parseBool(infoDictionary[Self.automaticChecksInfoKey]),
       automaticDownloadsEnabled: Self.parseBool(infoDictionary[Self.automaticDownloadsInfoKey]),
-      scheduledCheckInterval: Self.parseTimeInterval(infoDictionary[Self.scheduledCheckIntervalInfoKey])
+      scheduledCheckInterval: Self.parseTimeInterval(infoDictionary[Self.scheduledCheckIntervalInfoKey]),
+      userFacingPolicy: UpdateUserFacingPolicy(infoDictionary: infoDictionary)
     )
   }
 
@@ -257,6 +256,97 @@ public struct SparkleUpdaterConfiguration: Codable, Equatable, Sendable {
       return interval
     }
     return nil
+  }
+}
+
+public struct UpdateUserFacingPolicy: Codable, Equatable, Sendable {
+  public static let optionalPromptTitleInfoKey = "OneContextUpdateOptionalPromptTitle"
+  public static let optionalPromptBodyInfoKey = "OneContextUpdateOptionalPromptBody"
+  public static let failureTitleInfoKey = "OneContextUpdateFailureTitle"
+  public static let failureBodyInfoKey = "OneContextUpdateFailureBody"
+  public static let postInstallMessageEnabledInfoKey = "OneContextUpdatePostInstallMessageEnabled"
+  public static let postInstallTitleInfoKey = "OneContextUpdatePostInstallTitle"
+  public static let postInstallBodyInfoKey = "OneContextUpdatePostInstallBody"
+  public static let showReleaseNotesInUpdateWindowInfoKey = "OneContextUpdateShowReleaseNotesInUpdateWindow"
+
+  public static let `default` = UpdateUserFacingPolicy()
+
+  public let optionalPromptTitle: String
+  public let optionalPromptBody: String
+  public let failureTitle: String
+  public let failureBody: String
+  public let postInstallMessageEnabled: Bool
+  public let postInstallTitle: String
+  public let postInstallBody: String
+  public let showReleaseNotesInUpdateWindow: Bool
+
+  public init(
+    optionalPromptTitle: String = "Update 1Context?",
+    optionalPromptBody: String = "A 1Context update is ready.",
+    failureTitle: String = "Update failed.",
+    failureBody: String = "Please contact support at paul@haptica.ai.",
+    postInstallMessageEnabled: Bool = false,
+    postInstallTitle: String = "1Context Improved!",
+    postInstallBody: String = "",
+    showReleaseNotesInUpdateWindow: Bool = false
+  ) {
+    self.optionalPromptTitle = Self.nonEmpty(optionalPromptTitle, fallback: "Update 1Context?")
+    self.optionalPromptBody = Self.nonEmpty(optionalPromptBody, fallback: "A 1Context update is ready.")
+    self.failureTitle = Self.nonEmpty(failureTitle, fallback: "Update failed.")
+    self.failureBody = Self.nonEmpty(failureBody, fallback: "Please contact support at paul@haptica.ai.")
+    self.postInstallMessageEnabled = postInstallMessageEnabled
+    self.postInstallTitle = Self.nonEmpty(postInstallTitle, fallback: "1Context Improved!")
+    self.postInstallBody = postInstallBody
+    self.showReleaseNotesInUpdateWindow = showReleaseNotesInUpdateWindow
+  }
+
+  public init(infoDictionary: [String: Any]) {
+    self.init(
+      optionalPromptTitle: Self.string(infoDictionary[Self.optionalPromptTitleInfoKey], fallback: "Update 1Context?"),
+      optionalPromptBody: Self.string(infoDictionary[Self.optionalPromptBodyInfoKey], fallback: "A 1Context update is ready."),
+      failureTitle: Self.string(infoDictionary[Self.failureTitleInfoKey], fallback: "Update failed."),
+      failureBody: Self.string(infoDictionary[Self.failureBodyInfoKey], fallback: "Please contact support at paul@haptica.ai."),
+      postInstallMessageEnabled: Self.bool(infoDictionary[Self.postInstallMessageEnabledInfoKey]),
+      postInstallTitle: Self.string(infoDictionary[Self.postInstallTitleInfoKey], fallback: "1Context Improved!"),
+      postInstallBody: Self.string(infoDictionary[Self.postInstallBodyInfoKey], fallback: ""),
+      showReleaseNotesInUpdateWindow: Self.bool(infoDictionary[Self.showReleaseNotesInUpdateWindowInfoKey])
+    )
+  }
+
+  public func optionalPromptBody(displayVersion: String) -> String {
+    optionalPromptBody.replacingOccurrences(of: "{version}", with: displayVersion)
+  }
+
+  public func postInstallBody(displayVersion: String) -> String {
+    postInstallBody.replacingOccurrences(of: "{version}", with: displayVersion)
+  }
+
+  private static func string(_ value: Any?, fallback: String) -> String {
+    guard let string = value as? String else { return fallback }
+    return nonEmpty(string, fallback: fallback)
+  }
+
+  private static func nonEmpty(_ value: String, fallback: String) -> String {
+    let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+    return trimmed.isEmpty ? fallback : trimmed
+  }
+
+  private static func bool(_ value: Any?) -> Bool {
+    if let bool = value as? Bool {
+      return bool
+    }
+    if let number = value as? NSNumber {
+      return number.boolValue
+    }
+    if let string = value as? String {
+      switch string.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
+      case "1", "true", "yes":
+        return true
+      default:
+        return false
+      }
+    }
+    return false
   }
 }
 

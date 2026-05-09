@@ -132,6 +132,8 @@ WIKI_TEST_URL="http://wiki.1context.localhost:$ONECONTEXT_WIKI_PORT"
 WIKI_TEST_API_URL="http://127.0.0.1:$ONECONTEXT_WIKI_API_PORT"
 
 "$ROOT/scripts/check-version-consistency.sh"
+"$ROOT/scripts/check-update-policy.sh"
+"$ROOT/scripts/test-update-policy.sh"
 "$ROOT/scripts/test-menu-lifecycle-deterministic.sh"
 "$BIN_DIR/1context" | grep -q "1Context $VERSION"
 test "$("$BIN_DIR/1context" --version)" = "$VERSION"

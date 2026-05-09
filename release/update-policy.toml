@@ -1,0 +1,25 @@
+schema_version = "1context.update-policy.v1"
+version = "0.1.59"
+update_class = "mandatory"
+approved_by = "paul"
+reason = "update_policy_control_plane"
+reason_detail = "0.1.59 makes founder-controlled update policy the source of truth for mandatory vs optional behavior, updater copy, release-notes visibility, failure copy, and post-install messaging."
+minimum_autoupdate_version = "0.1.58"
+minimum_update_version = ""
+critical_update_version = "0.1.59"
+
+[ui]
+show_release_notes_in_update_window = false
+
+[ui.optional_prompt]
+title = "Update 1Context?"
+body = "A 1Context update is ready."
+
+[ui.failure_message]
+title = "Update failed."
+body = "Please contact support at paul@haptica.ai."
+
+[ui.post_install_message]
+enabled = false
+title = "1Context Improved!"
+body = ""

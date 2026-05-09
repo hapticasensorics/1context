@@ -6,6 +6,10 @@ VERSION="${ONECONTEXT_VERSION:-$(tr -d '[:space:]' < "$ROOT/VERSION")}"
 ARCH="${ONECONTEXT_ARCH:-arm64}"
 DMG="$ROOT/dist/1Context-$VERSION-macos-$ARCH.dmg"
 
+if [[ "${ONECONTEXT_USE_RELEASE_POLICY:-1}" == "1" ]]; then
+  eval "$("$ROOT/scripts/update-policy.py" export-env)"
+fi
+
 if [[ "${NOTARIZE:-1}" != "1" && "${ALLOW_UNNOTARIZED:-0}" != "1" ]]; then
   echo "Release packaging requires notarization. Set ALLOW_UNNOTARIZED=1 for local-only builds." >&2
   exit 1
@@ -38,6 +42,7 @@ fi
 "$ROOT/scripts/validate-macos-dmg.sh" "$DMG"
 if [[ "${GENERATE_SPARKLE_APPCAST:-0}" == "1" ]]; then
   "$ROOT/scripts/generate-sparkle-appcast.sh" "$DMG"
+  "$ROOT/scripts/update-policy.py" validate --appcast "$ROOT/dist/sparkle-updates/appcast.xml"
   cp "$ROOT/dist/sparkle-updates/appcast.xml" "$ROOT/dist/appcast.xml"
 fi
 cp "$DMG" "$ROOT/dist/1Context.dmg"

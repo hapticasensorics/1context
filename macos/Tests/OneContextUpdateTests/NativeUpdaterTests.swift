@@ -19,6 +19,7 @@ final class NativeUpdaterTests: XCTestCase {
     XCTAssertTrue(missingKey.automaticDownloadsEnabled)
     XCTAssertEqual(missingKey.scheduledCheckInterval, 3600)
     XCTAssertEqual(missingKey.missingConfigurationSummary, "SUPublicEDKey")
+    XCTAssertEqual(missingKey.userFacingPolicy, .default)
 
     let configured = SparkleUpdaterConfiguration(infoDictionary: [
       "SUFeedURL": " https://updates.1context.localhost/appcast.xml ",
@@ -33,6 +34,43 @@ final class NativeUpdaterTests: XCTestCase {
     XCTAssertTrue(configured.automaticDownloadsEnabled)
     XCTAssertEqual(configured.scheduledCheckInterval, 1800)
     XCTAssertNil(configured.missingConfigurationSummary)
+  }
+
+  func testSparkleConfigurationReadsUserFacingPolicyFromInfoDictionary() {
+    let configuration = SparkleUpdaterConfiguration(infoDictionary: [
+      "SUFeedURL": "https://updates.1context.localhost/appcast.xml",
+      "SUPublicEDKey": "ed25519-public-key",
+      "OneContextUpdateOptionalPromptTitle": "Install this build?",
+      "OneContextUpdateOptionalPromptBody": "1Context {version} is ready.",
+      "OneContextUpdateFailureTitle": "Update failed.",
+      "OneContextUpdateFailureBody": "Please contact support at paul@haptica.ai.",
+      "OneContextUpdatePostInstallMessageEnabled": true,
+      "OneContextUpdatePostInstallTitle": "1Context Improved!",
+      "OneContextUpdatePostInstallBody": "Installed {version}.",
+      "OneContextUpdateShowReleaseNotesInUpdateWindow": "yes"
+    ])
+
+    XCTAssertEqual(configuration.userFacingPolicy.optionalPromptTitle, "Install this build?")
+    XCTAssertEqual(configuration.userFacingPolicy.optionalPromptBody(displayVersion: "0.1.59"), "1Context 0.1.59 is ready.")
+    XCTAssertEqual(configuration.userFacingPolicy.failureTitle, "Update failed.")
+    XCTAssertEqual(configuration.userFacingPolicy.failureBody, "Please contact support at paul@haptica.ai.")
+    XCTAssertTrue(configuration.userFacingPolicy.postInstallMessageEnabled)
+    XCTAssertEqual(configuration.userFacingPolicy.postInstallTitle, "1Context Improved!")
+    XCTAssertEqual(configuration.userFacingPolicy.postInstallBody(displayVersion: "0.1.59"), "Installed 0.1.59.")
+    XCTAssertTrue(configuration.userFacingPolicy.showReleaseNotesInUpdateWindow)
+  }
+
+  func testSparkleConfigurationUsesSimpleUserFacingPolicyDefaults() {
+    let policy = SparkleUpdaterConfiguration(infoDictionary: [:]).userFacingPolicy
+
+    XCTAssertEqual(policy.optionalPromptTitle, "Update 1Context?")
+    XCTAssertEqual(policy.optionalPromptBody, "A 1Context update is ready.")
+    XCTAssertEqual(policy.failureTitle, "Update failed.")
+    XCTAssertEqual(policy.failureBody, "Please contact support at paul@haptica.ai.")
+    XCTAssertFalse(policy.postInstallMessageEnabled)
+    XCTAssertEqual(policy.postInstallTitle, "1Context Improved!")
+    XCTAssertEqual(policy.postInstallBody, "")
+    XCTAssertFalse(policy.showReleaseNotesInUpdateWindow)
   }
 
   func testSparkleConfigurationRejectsInvalidFeedURL() {
@@ -58,7 +96,9 @@ final class NativeUpdaterTests: XCTestCase {
       "SUPublicEDKey": "ed25519-public-key",
       "SUEnableAutomaticChecks": true,
       "SUAutomaticallyUpdate": true,
-      "SUScheduledCheckInterval": 3600
+      "SUScheduledCheckInterval": 3600,
+      "OneContextUpdateFailureTitle": "Update failed.",
+      "OneContextUpdateFailureBody": "Please contact support at paul@haptica.ai."
     ]
     let data = try PropertyListSerialization.data(fromPropertyList: plist, format: .xml, options: 0)
     try data.write(to: infoPlist)
@@ -74,6 +114,8 @@ final class NativeUpdaterTests: XCTestCase {
     XCTAssertTrue(configuration.automaticChecksEnabled)
     XCTAssertTrue(configuration.automaticDownloadsEnabled)
     XCTAssertEqual(configuration.scheduledCheckInterval, 3600)
+    XCTAssertEqual(configuration.userFacingPolicy.failureTitle, "Update failed.")
+    XCTAssertEqual(configuration.userFacingPolicy.failureBody, "Please contact support at paul@haptica.ai.")
   }
 
   func testAppLocationClassifiesApplicationsBundleAsInstallable() {
@@ -182,7 +224,7 @@ final class NativeUpdaterTests: XCTestCase {
     XCTAssertEqual(snapshot.userFacingStatus, "1Context 0.1.51 is a mandatory update.")
   }
 
-  func testMandatoryUpdateRuntimePolicyOnlyPausesForAvailableMandatoryUpdates() {
+  func testMandatoryUpdateRuntimePolicyKeepsRememberingDuringMandatoryUpdates() {
     let mandatory = NativeUpdateSnapshot(
       implementation: .sparkle,
       availability: .available,
@@ -217,10 +259,10 @@ final class NativeUpdaterTests: XCTestCase {
       nextAction: "Open 1Context from /Applications/1Context.app."
     )
 
-    XCTAssertTrue(MandatoryUpdateRuntimePolicy.shouldPausePassiveRemembering(mandatory))
+    XCTAssertFalse(MandatoryUpdateRuntimePolicy.shouldPausePassiveRemembering(mandatory))
     XCTAssertEqual(
       MandatoryUpdateRuntimePolicy.startBlockedMessage(mandatory),
-      "1Context 0.1.51 is mandatory. Update before starting passive remembering."
+      "1Context will keep remembering while the updater retries."
     )
     XCTAssertFalse(MandatoryUpdateRuntimePolicy.shouldPausePassiveRemembering(normal))
     XCTAssertFalse(MandatoryUpdateRuntimePolicy.shouldPausePassiveRemembering(unavailable))

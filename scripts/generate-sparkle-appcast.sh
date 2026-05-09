@@ -10,6 +10,7 @@ APPCAST_NAME="${SPARKLE_APPCAST_NAME:-appcast.xml}"
 APPCAST="$UPDATES_DIR/$APPCAST_NAME"
 SPARKLE_ACCOUNT="${SPARKLE_KEY_ACCOUNT:-com.haptica.1context.sparkle}"
 GENERATE_APPCAST="$ROOT/macos/.build/artifacts/sparkle/Sparkle/bin/generate_appcast"
+SHOW_RELEASE_NOTES_IN_UPDATE_WINDOW="${ONECONTEXT_SPARKLE_SHOW_RELEASE_NOTES_IN_UPDATE_WINDOW:-0}"
 
 if [[ ! -f "$DMG" ]]; then
   echo "Usage: $0 dist/1Context-$VERSION-macos-$ARCH.dmg [updates-dir]" >&2
@@ -32,11 +33,14 @@ DMG_BASENAME="$(basename "$DMG")"
 UPDATE_DMG="$UPDATES_DIR/$DMG_BASENAME"
 ditto "$DMG" "$UPDATE_DMG"
 
-if [[ -f "$ROOT/RELEASE_NOTES.md" ]]; then
+if [[ "$SHOW_RELEASE_NOTES_IN_UPDATE_WINDOW" == "1" && -f "$ROOT/RELEASE_NOTES.md" ]]; then
   cp "$ROOT/RELEASE_NOTES.md" "$UPDATES_DIR/${DMG_BASENAME%.dmg}.md"
 fi
 
-ARGS=("-o" "$APPCAST" "--embed-release-notes")
+ARGS=("-o" "$APPCAST")
+if [[ "$SHOW_RELEASE_NOTES_IN_UPDATE_WINDOW" == "1" ]]; then
+  ARGS+=("--embed-release-notes")
+fi
 ARGS+=("--account" "$SPARKLE_ACCOUNT")
 if [[ -n "${SPARKLE_DOWNLOAD_URL_PREFIX:-}" ]]; then
   ARGS+=("--download-url-prefix" "$SPARKLE_DOWNLOAD_URL_PREFIX")
@@ -77,6 +81,10 @@ fi
 if ! grep -q 'sparkle:edSignature=' "$APPCAST"; then
   echo "Sparkle appcast is missing EdDSA update signatures." >&2
   echo "Build the DMG with ONECONTEXT_SPARKLE_PUBLIC_ED_KEY and sign the feed with the matching Sparkle EdDSA private key." >&2
+  exit 1
+fi
+if [[ "$SHOW_RELEASE_NOTES_IN_UPDATE_WINDOW" != "1" ]] && grep -q '<description' "$APPCAST"; then
+  echo "Sparkle appcast contains updater release notes, but update policy hides them." >&2
   exit 1
 fi
 

@@ -2,27 +2,6 @@ name: Release
 
 on:
   workflow_dispatch:
-    inputs:
-      mandatory:
-        description: "Mark this release as a mandatory Sparkle update."
-        required: false
-        type: boolean
-        default: false
-      minimum_autoupdate_version:
-        description: "Oldest installed version eligible for automatic Sparkle install."
-        required: false
-        type: string
-        default: ""
-      minimum_update_version:
-        description: "Optional Sparkle minimum update version."
-        required: false
-        type: string
-        default: ""
-      critical_update_version:
-        description: "Optional Sparkle critical update version; defaults to VERSION when mandatory is true."
-        required: false
-        type: string
-        default: ""
 
 permissions:
   contents: write
@@ -54,6 +33,7 @@ jobs:
             exit 1
           fi
           ./scripts/check-version-consistency.sh
+          ./scripts/check-update-policy.sh
       - name: Import Developer ID certificate
         env:
           DEVELOPER_ID_CERTIFICATE_BASE64: ${{ secrets.DEVELOPER_ID_CERTIFICATE_BASE64 }}
@@ -97,15 +77,7 @@ jobs:
           SPARKLE_DOWNLOAD_URL_PREFIX: https://github.com/hapticasensorics/1context/releases/download/${{ github.ref_name }}/
           SPARKLE_RELEASE_NOTES_URL_PREFIX: https://github.com/hapticasensorics/1context/releases/download/${{ github.ref_name }}/
           SPARKLE_LINK_URL: https://github.com/hapticasensorics/1context/releases/tag/${{ github.ref_name }}
-          ONECONTEXT_SPARKLE_MANDATORY: ${{ inputs.mandatory && '1' || '0' }}
-          ONECONTEXT_SPARKLE_MANDATORY_FROM_VERSION: ${{ inputs.critical_update_version }}
-          ONECONTEXT_SPARKLE_MINIMUM_AUTOUPDATE_VERSION: ${{ inputs.minimum_autoupdate_version }}
-          ONECONTEXT_SPARKLE_MINIMUM_UPDATE_VERSION: ${{ inputs.minimum_update_version }}
         run: |
-          if [[ "$ONECONTEXT_SPARKLE_MANDATORY" == "1" && -z "$ONECONTEXT_SPARKLE_MANDATORY_FROM_VERSION" ]]; then
-            critical_update_version="$(tr -d '[:space:]' < VERSION)"
-            export ONECONTEXT_SPARKLE_MANDATORY_FROM_VERSION="$critical_update_version"
-          fi
           ./scripts/package-macos-release.sh
       - name: Collect Sparkle release assets
         run: |
@@ -114,6 +86,7 @@ jobs:
           appcast="dist/sparkle-updates/appcast.xml"
           test -f "$artifact"
           test -f "$appcast"
+          ./scripts/check-update-policy.sh --appcast "$appcast"
           (
             cd dist
             shasum -a 256 "$(basename "$artifact")" > "$(basename "$artifact").sha256"
@@ -138,3 +111,24 @@ jobs:
             dist/1Context.dmg \
             dist/appcast.xml \
             --clobber
+          gh release view "${GITHUB_REF_NAME}" --json tagName,assets > dist/github-release.json
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          version = Path("VERSION").read_text(encoding="utf-8").strip()
+          release = json.loads(Path("dist/github-release.json").read_text(encoding="utf-8"))
+          expected_tag = f"v{version}"
+          if release.get("tagName") != expected_tag:
+            raise SystemExit(f"GitHub release tag {release.get('tagName')!r} does not match {expected_tag!r}.")
+          assets = {asset["name"] for asset in release.get("assets", [])}
+          required = {
+            f"1Context-{version}-macos-arm64.dmg",
+            f"1Context-{version}-macos-arm64.dmg.sha256",
+            "1Context.dmg",
+            "appcast.xml",
+          }
+          missing = sorted(required - assets)
+          if missing:
+            raise SystemExit(f"GitHub release is missing assets: {', '.join(missing)}")
+          PY

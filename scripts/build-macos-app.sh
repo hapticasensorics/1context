@@ -18,6 +18,14 @@ MENU_ICON_SOURCE="$MACOS_DIR/Sources/OneContextMenuBar/Resources/MenuBarIcon.png
 CADDY_SOURCE="${ONECONTEXT_CADDY_PATH:-$(command -v caddy 2>/dev/null || true)}"
 SPARKLE_FEED_URL="${ONECONTEXT_SPARKLE_FEED_URL:-}"
 SPARKLE_PUBLIC_ED_KEY="${ONECONTEXT_SPARKLE_PUBLIC_ED_KEY:-}"
+UPDATE_OPTIONAL_PROMPT_TITLE="${ONECONTEXT_UPDATE_OPTIONAL_PROMPT_TITLE:-Update 1Context?}"
+UPDATE_OPTIONAL_PROMPT_BODY="${ONECONTEXT_UPDATE_OPTIONAL_PROMPT_BODY:-A 1Context update is ready.}"
+UPDATE_FAILURE_TITLE="${ONECONTEXT_UPDATE_FAILURE_TITLE:-Update failed.}"
+UPDATE_FAILURE_BODY="${ONECONTEXT_UPDATE_FAILURE_BODY:-Please contact support at paul@haptica.ai.}"
+UPDATE_POST_INSTALL_MESSAGE_ENABLED="${ONECONTEXT_UPDATE_POST_INSTALL_MESSAGE_ENABLED:-0}"
+UPDATE_POST_INSTALL_TITLE="${ONECONTEXT_UPDATE_POST_INSTALL_TITLE:-1Context Improved!}"
+UPDATE_POST_INSTALL_BODY="${ONECONTEXT_UPDATE_POST_INSTALL_BODY:-}"
+UPDATE_SHOW_RELEASE_NOTES_IN_UPDATE_WINDOW="${ONECONTEXT_SPARKLE_SHOW_RELEASE_NOTES_IN_UPDATE_WINDOW:-0}"
 
 plist_escape() {
   local value="$1"
@@ -135,6 +143,42 @@ PLIST
 )"
 fi
 
+plist_bool() {
+  if [[ "$1" == "1" || "$1" == "true" || "$1" == "yes" ]]; then
+    printf '<true/>'
+  else
+    printf '<false/>'
+  fi
+}
+
+UPDATE_OPTIONAL_PROMPT_TITLE_ESCAPED="$(plist_escape "$UPDATE_OPTIONAL_PROMPT_TITLE")"
+UPDATE_OPTIONAL_PROMPT_BODY_ESCAPED="$(plist_escape "$UPDATE_OPTIONAL_PROMPT_BODY")"
+UPDATE_FAILURE_TITLE_ESCAPED="$(plist_escape "$UPDATE_FAILURE_TITLE")"
+UPDATE_FAILURE_BODY_ESCAPED="$(plist_escape "$UPDATE_FAILURE_BODY")"
+UPDATE_POST_INSTALL_TITLE_ESCAPED="$(plist_escape "$UPDATE_POST_INSTALL_TITLE")"
+UPDATE_POST_INSTALL_BODY_ESCAPED="$(plist_escape "$UPDATE_POST_INSTALL_BODY")"
+UPDATE_POST_INSTALL_MESSAGE_ENABLED_PLIST="$(plist_bool "$UPDATE_POST_INSTALL_MESSAGE_ENABLED")"
+UPDATE_SHOW_RELEASE_NOTES_IN_UPDATE_WINDOW_PLIST="$(plist_bool "$UPDATE_SHOW_RELEASE_NOTES_IN_UPDATE_WINDOW")"
+UPDATE_POLICY_PLIST_KEYS="$(cat <<PLIST
+  <key>OneContextUpdateOptionalPromptTitle</key>
+  <string>$UPDATE_OPTIONAL_PROMPT_TITLE_ESCAPED</string>
+  <key>OneContextUpdateOptionalPromptBody</key>
+  <string>$UPDATE_OPTIONAL_PROMPT_BODY_ESCAPED</string>
+  <key>OneContextUpdateFailureTitle</key>
+  <string>$UPDATE_FAILURE_TITLE_ESCAPED</string>
+  <key>OneContextUpdateFailureBody</key>
+  <string>$UPDATE_FAILURE_BODY_ESCAPED</string>
+  <key>OneContextUpdatePostInstallMessageEnabled</key>
+  $UPDATE_POST_INSTALL_MESSAGE_ENABLED_PLIST
+  <key>OneContextUpdatePostInstallTitle</key>
+  <string>$UPDATE_POST_INSTALL_TITLE_ESCAPED</string>
+  <key>OneContextUpdatePostInstallBody</key>
+  <string>$UPDATE_POST_INSTALL_BODY_ESCAPED</string>
+  <key>OneContextUpdateShowReleaseNotesInUpdateWindow</key>
+  $UPDATE_SHOW_RELEASE_NOTES_IN_UPDATE_WINDOW_PLIST
+PLIST
+)"
+
 SMOKE_PLIST_KEYS=""
 if [[ "${ONECONTEXT_SMOKE_FIXTURE:-0}" == "1" ]]; then
   SMOKE_STATE_DIR_ESCAPED="$(plist_escape "${ONECONTEXT_SMOKE_STATE_DIR:-/tmp/1context-sparkle-smoke}")"
@@ -172,6 +216,7 @@ cat > "$CONTENTS_DIR/Info.plist" <<PLIST
   <string>13.0</string>
   <key>LSUIElement</key>
   <true/>
+$UPDATE_POLICY_PLIST_KEYS
 $SPARKLE_PLIST_KEYS
 $SMOKE_PLIST_KEYS
 </dict>
