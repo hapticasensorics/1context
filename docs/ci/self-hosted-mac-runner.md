@@ -11,6 +11,30 @@ targets a custom runner label, references the protected
 `onecontext-update-runner` environment, and rejects refs outside `main`,
 `release/*`, `rc/*`, or `v*` tags.
 
+## Optional Release Gate
+
+The self-hosted Mac proof is optional by policy. It is not part of every update
+release and should not become a reflexive box to check. Normal releases can ship
+with hosted CI, release asset audit, appcast validation, and any local
+maintainer smoke that matches the change.
+
+Use the real-Mac runner when the update hop itself is high signal:
+
+- Sparkle feed/signature/mandatory-update metadata changed.
+- The install, move-to-Applications, setup readiness, LaunchAgent, local web, or
+  post-update repair path changed.
+- The release is mandatory for privacy, data integrity, updater continuity, or
+  runtime correctness.
+- A previous update had a regression or residue issue and the next release is
+  proving the repair.
+- The release is a milestone, public launch candidate, or first update after a
+  meaningful macOS/runtime change.
+
+Skip it for routine copy, docs, cosmetic UI, release-note-only, or small
+non-updater patches unless the release owner explicitly wants the extra proof.
+Every workflow dispatch requires a `proof_reason`; use that as the approval
+receipt when deciding whether to spend the Mac cycle.
+
 ## What It Runs
 
 `.github/workflows/self-hosted-mac-update-proof.yml` runs on:
@@ -106,8 +130,10 @@ From GitHub UI:
 
 1. Actions -> Self-hosted Mac Update Proof.
 2. Run workflow from `main`, `release/*`, `rc/*`, or a `v*` tag.
-3. Enter old version N, staging appcast URL, expected N+1 version if it differs
-   from `VERSION`, and update class.
+3. Enter a short `proof_reason`, old version N, staging appcast URL, expected
+   N+1 version if it differs from `VERSION`, and update class.
+4. Approve the `onecontext-update-runner` environment only if the reason is
+   release-worthy and the staging appcast URL matches the intended candidate.
 
 From `gh`:
 
@@ -115,6 +141,7 @@ From `gh`:
 gh workflow run self-hosted-mac-update-proof.yml \
   --repo hapticasensorics/1context \
   --ref main \
+  -f proof_reason='mandatory updater policy change' \
   -f old_version=0.1.60 \
   -f new_version=0.1.61 \
   -f staging_appcast_url=https://example.invalid/staging/appcast.xml \
@@ -127,6 +154,7 @@ If the old DMG is not a normal GitHub release asset, pass it explicitly:
 gh workflow run self-hosted-mac-update-proof.yml \
   --repo hapticasensorics/1context \
   --ref rc/0.1.61 \
+  -f proof_reason='staging candidate after Sparkle feed change' \
   -f old_version=0.1.60 \
   -f new_version=0.1.61 \
   -f old_dmg_url=https://example.invalid/releases/1Context-0.1.60-macos-arm64.dmg \

@@ -173,6 +173,27 @@ same versioned DMG and SHA as the GitHub release. Keep the cask marked
 retain an older Caskroom receipt after an in-app update even while
 `/Applications/1Context.app` and the linked `1context` command are current.
 
+The self-hosted Mac update proof is an optional escalation gate, not a required
+step for every release. Use it for important updater/runtime hops: Sparkle
+metadata changes, mandatory updates, install/setup/LaunchAgent/local-web changes,
+repair releases after update residue, and launch-candidate milestones. Routine
+patches can rely on hosted CI, release asset audit, appcast validation, and
+targeted maintainer smoke.
+
+When the release owner decides the Mac proof is warranted, dispatch the protected
+workflow with a concrete reason:
+
+```bash
+gh workflow run self-hosted-mac-update-proof.yml \
+  --repo hapticasensorics/1context \
+  --ref main \
+  -f proof_reason='mandatory updater policy change' \
+  -f old_version=0.1.60 \
+  -f new_version=0.1.61 \
+  -f staging_appcast_url=https://example.invalid/staging/appcast.xml \
+  -f update_class=mandatory
+```
+
 To clear local release outputs before packaging:
 
 ```bash

@@ -3,6 +3,9 @@ name: Self-hosted Mac Update Proof
 on:
   workflow_dispatch:
     inputs:
+      proof_reason:
+        description: "Why this update hop deserves the real-Mac proof runner."
+        required: true
       old_version:
         description: "Installed version N to lay down before proving the staged update."
         required: true
@@ -89,6 +92,7 @@ jobs:
           ONECONTEXT_OLD_TAG: ${{ inputs.old_tag }}
           ONECONTEXT_OLD_DMG_URL: ${{ inputs.old_dmg_url }}
           ONECONTEXT_STAGING_APPCAST_URL: ${{ inputs.staging_appcast_url }}
+          ONECONTEXT_UPDATE_PROOF_REASON: ${{ inputs.proof_reason }}
           ONECONTEXT_EXPECTED_UPDATE_CLASS: ${{ inputs.update_class }}
           ONECONTEXT_UPDATE_PROOF_TIMEOUT_SECONDS: ${{ inputs.update_timeout_seconds }}
           ONECONTEXT_STEADY_STATE_SECONDS: ${{ inputs.steady_state_seconds }}

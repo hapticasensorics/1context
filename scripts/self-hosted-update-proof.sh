@@ -12,6 +12,7 @@ OLD_DMG_URL="${ONECONTEXT_OLD_DMG_URL:-}"
 OLD_DMG_PATH="${ONECONTEXT_OLD_DMG_PATH:-}"
 OLD_DMG_ASSET="${ONECONTEXT_OLD_DMG_ASSET:-}"
 APPCAST_URL="${ONECONTEXT_STAGING_APPCAST_URL:-${ONECONTEXT_REMOTE_APPCAST_URL:-}}"
+PROOF_REASON="${ONECONTEXT_UPDATE_PROOF_REASON:-}"
 UPDATE_CLASS="${ONECONTEXT_EXPECTED_UPDATE_CLASS:-mandatory}"
 TIMEOUT_SECONDS="${ONECONTEXT_UPDATE_PROOF_TIMEOUT_SECONDS:-420}"
 POLL_SECONDS="${ONECONTEXT_UPDATE_PROOF_POLL_SECONDS:-5}"
@@ -216,6 +217,7 @@ collect_host_snapshot() {
     echo "old_version=$OLD_VERSION"
     echo "new_version=$NEW_VERSION"
     echo "update_class=$UPDATE_CLASS"
+    echo "proof_reason=$PROOF_REASON"
     echo "appcast_url=$APPCAST_URL"
     echo "old_tag=${OLD_TAG:-v$OLD_VERSION}"
     echo "old_dmg_url=$OLD_DMG_URL"
@@ -281,6 +283,7 @@ result=passed
 old_version=$OLD_VERSION
 new_version=$NEW_VERSION
 update_class=$UPDATE_CLASS
+proof_reason=$PROOF_REASON
 appcast_url=$APPCAST_URL
 evidence_dir=$EVIDENCE_DIR
 RESULT
