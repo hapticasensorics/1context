@@ -673,19 +673,52 @@ Each release in this train must answer four questions:
   `v0.1.60`, reports version `0.1.60`, points back at
   `https://github.com/hapticasensorics/1context/releases/latest/download/appcast.xml`,
   and reports Health OK, menu running, and setup ready.
-- [ ] Publish `0.1.61` as a mandatory release through the policy manifest.
-- [ ] Prove mandatory update detection can interrupt active use and immediately
+- [x] Publish `0.1.61` as a mandatory release through the policy manifest.
+  Evidence: `release/update-policy.toml` marks `0.1.61` as `mandatory`, sets
+  `minimum_autoupdate_version = "0.1.60"`, disables updater release notes, and
+  the public GitHub release `v0.1.61` contains the notarized versioned DMG,
+  `1Context.dmg`, both checksum files, and `appcast.xml`. The release asset
+  audit passed against `https://github.com/hapticasensorics/1context/releases/tag/v0.1.61`.
+- [x] Prove mandatory update detection can interrupt use and immediately
   download, install, and relaunch.
-- [ ] Prove the public `0.1.61` mandatory release repeats the no-release-notes,
+  Evidence:
+  `dist/remote-update-evidence/0.1.60-to-0.1.61-mandatory-public/watch.log`
+  shows the installed app crossing from `plist=0.1.60 cli=0.1.60` at
+  `2026-05-10T03:03:07Z` to `plist=0.1.61 cli=0.1.61` at
+  `2026-05-10T03:03:18Z` after the harness relaunched the running installed
+  app to trigger the launch update check.
+- [x] Prove the public `0.1.61` mandatory release repeats the no-release-notes,
   no-preflight, no-confirmation behavior through GitHub release assets.
-- [ ] Prove the menu bar shows a pending update action until the installed app
-  actually moves, then returns to `Check for Updates`.
-- [ ] Prove the default post-install message remains hidden when disabled by
+  Evidence: the live GitHub appcast advertises `sparkle:criticalUpdate`,
+  `sparkle:minimumAutoupdateVersion` of `0.1.60`, and `sparkle:version` of
+  `0.1.61`, with no `<description>` release notes. The mandatory public proof's
+  Accessibility captures passed the harness assertion against
+  `Update 1Context?`, `Install Update`, `Install and Relaunch`, release-note
+  text, installer explanation, and relaunch explanation text.
+- [x] Prove the mandatory menu state does not get stuck after the installed app
+  moves.
+  Evidence: because the public mandatory hop installed immediately, there was no
+  durable pre-install pending menu interval to inspect. After install,
+  `dist/remote-update-evidence/0.1.60-to-0.1.61-mandatory-public/menu-after-install.txt`
+  shows Settings `Version 0.1.61` and the top-level menu back at
+  `Check for Updates`.
+- [x] Prove the default post-install message remains hidden when disabled by
   policy.
+  Evidence: `release/update-policy.toml` keeps
+  `ui.post_install_message.enabled = false`, and the public mandatory proof's
+  Accessibility and window captures contain no `1Context Improved!` or update
+  completion message after the app reaches `0.1.61`.
 - [ ] Prove a policy-enabled post-install message can show exactly
   `1Context Improved!` with founder-provided body copy in a fixture or local
   appcast proof.
-- [ ] Prove remote Sparkle update into `0.1.61`.
+- [x] Prove remote Sparkle update into `0.1.61`.
+  Evidence:
+  `dist/remote-update-evidence/0.1.60-to-0.1.61-mandatory-public/result.txt`
+  is `result=passed`, with `old_version=0.1.60` and `new_version=0.1.61`.
+- [x] Prove `0.1.61` steady state after the mandatory update.
+  Evidence: `dist/steady-state-evidence/0.1.61-after-mandatory-public/`
+  passed 60 seconds, 10 probes, installed `version=0.1.61`, runtime health,
+  setup readiness, menu running state, and local wiki health.
 
 ##### 0.1.62 Failed Update and Supportability Proof
 
@@ -745,6 +778,9 @@ Each release in this train must answer four questions:
   explicitly stops remembering.
 - [ ] Run a full release rehearsal where the only accepted proof is installed
   app behavior after remote update.
+- [ ] Configure the release workflow with signing/notarization secrets or move
+  production signing to the self-hosted Mac runner, so future blessed releases
+  do not require a local manual upload fallback.
 - [ ] Validate `/goal`, release docs, release policy manifest, public release
   notes, appcast, GitHub release assets, and installed app version all agree.
 - [ ] Prove menu bar and Settings screenshots match the policy after rehearsal.
