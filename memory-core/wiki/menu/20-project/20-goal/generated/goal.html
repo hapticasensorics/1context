@@ -808,9 +808,35 @@ setup readiness, menu running state, and local wiki health.</li>
 </ul>
 <h5>0.1.62 Failed Update and Supportability Proof</h5>
 <ul>
-<li><input disabled="" type="checkbox"> Add failed-update smoke for broken appcast, missing asset, bad signature,
-and interrupted download cases where feasible.</li>
-<li><input disabled="" type="checkbox"> Prove every user-facing failed-update path shows only:
+<li><input checked="" disabled="" type="checkbox"> Add a missing-asset failed-update smoke for a mandatory Sparkle update.
+Evidence: <code>scripts/smoke-sparkle-local-appcast.sh</code> now supports
+<code>ONECONTEXT_SPARKLE_SMOKE_FAILURE_CASE=missing_asset</code>, removes the advertised
+mandatory DMG after appcast generation, and verifies the failed update leaves
+the old fixture app installed. The proof at
+<code>dist/sparkle-local-smoke/missing-asset-failure-0.1.61/evidence/</code> passed with
+<code>failure_case=missing_asset</code>, <code>attempted_new_version=0.1.61.901</code>, and
+<code>installed_cli_version=0.1.61.900</code>.</li>
+<li><input checked="" disabled="" type="checkbox"> Prove the missing-asset user-facing failed-update path shows only:
+<code>Update failed. Please contact support at paul@haptica.ai.</code>
+Evidence: <code>failure-message.txt</code> records only the controlled support title and
+body, <code>failure-accessibility.txt</code> contains those strings plus <code>OK</code>, and the
+harness fails if the alert exposes technical details such as 404, download,
+signature, Sparkle, installer, or relaunch text.</li>
+<li><input checked="" disabled="" type="checkbox"> Prove the missing-asset failed update retains an internal failure reason
+for support.
+Evidence:
+<code>dist/sparkle-local-smoke/missing-asset-failure-0.1.61/evidence/http-server.log</code>
+preserves the real <code>404</code> for
+<code>1Context-0.1.61.901-macos-arm64.dmg</code>, while the user-facing alert remains
+non-technical.</li>
+<li><input checked="" disabled="" type="checkbox"> Prove the missing-asset failed update leaves the old app launchable.
+Evidence:
+<code>dist/sparkle-local-smoke/missing-asset-failure-0.1.61/evidence/result.txt</code>
+records <code>installed_cli_version=0.1.61.900</code> after the failed mandatory update
+attempt.</li>
+<li><input disabled="" type="checkbox"> Extend failed-update smoke to broken appcast, bad signature, and
+interrupted download cases where feasible.</li>
+<li><input disabled="" type="checkbox"> Prove every remaining user-facing failed-update path shows only:
 <code>Update failed. Please contact support at paul@haptica.ai.</code></li>
 <li><input disabled="" type="checkbox"> Prove internal diagnostics/logs retain the real failure reason for support.</li>
 <li><input disabled="" type="checkbox"> Prove failed update leaves the old app launchable and remembering continues

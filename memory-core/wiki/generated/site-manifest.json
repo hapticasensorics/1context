@@ -163,7 +163,7 @@
       "template_version": "local-private-shell@0.1.0"
     }
   ],
-  "generated_at": "2026-05-10T03:20:42Z",
+  "generated_at": "2026-05-10T03:25:56Z",
   "pages": [
     {
       "excerpt": "# For You This is the working surface 1Context keeps close to the present. It should feel useful even before memory has accumulated: a quiet place to see what the system is ready to preserve, where agents should propose additions, and which durable pages those additions may eventually update. ## How This Page Works For You is a rolling private page. As 1Context observes repeated work, decisions, corrections, and open loops, memory agents should promote concise summaries here ...",
@@ -307,7 +307,7 @@
       ],
       "path": "wiki/menu/20-project/20-goal/generated/goal.md",
       "route": "/goal",
-      "sha256": "2be8c633dd83890bf5d35532d11f1cd599be3f57a29f40a82c5be76ce9285541",
+      "sha256": "01c5be3b04d536215414f96a2de7a2753aabd8f1558c004a609a0b2cd701ee46",
       "slug": "goal",
       "source": "generated_markdown",
       "summary": "The professional app bar for 1Context: permission flows, update discipline, and the behaviors that must feel reliable before broad release.",
@@ -715,7 +715,7 @@
       },
       {
         "archived_talk_entries": 0,
-        "bytes": 233773,
+        "bytes": 238678,
         "generated_files": 5,
         "generated_files_by_extension": {
           ".html": 2,
@@ -758,7 +758,7 @@
         "words": 0
       }
     ],
-    "generated_at": "2026-05-10T03:20:42Z",
+    "generated_at": "2026-05-10T03:25:56Z",
     "generated_files_by_extension": {
       "(none)": 1,
       ".html": 11,
@@ -806,7 +806,7 @@
     },
     "schema_version": "wiki.stats.v1",
     "source_corpus": {
-      "events": 262,
+      "events": 263,
       "sessions": 0
     },
     "story": {
@@ -852,7 +852,7 @@
       },
       "coverage": {
         "days": 0,
-        "events": 262,
+        "events": 263,
         "sessions": 0
       },
       "families": [
@@ -887,7 +887,7 @@
           "words": 0
         }
       ],
-      "headline": "262 events condensed into 6 pages.",
+      "headline": "263 events condensed into 6 pages.",
       "reading": {
         "estimated_reading_minutes": 0,
         "reader_pages": 6,
@@ -899,7 +899,7 @@
     "totals": {
       "archived_talk_entries": 0,
       "broken_internal_links": 0,
-      "bytes": 678307,
+      "bytes": 683212,
       "content_pages": 6,
       "external_links": 0,
       "families": 5,
@@ -914,7 +914,7 @@
       "talk_entries": 5,
       "talk_folders": 5,
       "talk_words": 274,
-      "words": 7414
+      "words": 7601
     }
   },
   "wiki": {

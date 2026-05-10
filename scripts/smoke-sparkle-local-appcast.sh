@@ -19,7 +19,15 @@ POST_INSTALL_BODY="${ONECONTEXT_SPARKLE_SMOKE_POST_INSTALL_BODY:-}"
 if [[ -z "$POST_INSTALL_BODY" ]]; then
   POST_INSTALL_BODY="Installed {version}."
 fi
+FAILURE_CASE="${ONECONTEXT_SPARKLE_SMOKE_FAILURE_CASE:-}"
+FAILURE_TITLE="${ONECONTEXT_SPARKLE_SMOKE_FAILURE_TITLE:-Update failed.}"
+FAILURE_BODY="${ONECONTEXT_SPARKLE_SMOKE_FAILURE_BODY:-Please contact support at paul@haptica.ai.}"
 GENERATE_APPCAST="$ROOT/macos/.build/artifacts/sparkle/Sparkle/bin/generate_appcast"
+
+if [[ -n "$FAILURE_CASE" && "$FAILURE_CASE" != "missing_asset" ]]; then
+  echo "ONECONTEXT_SPARKLE_SMOKE_FAILURE_CASE must be empty or missing_asset." >&2
+  exit 1
+fi
 
 pick_free_port() {
   python3 - <<'PY'
@@ -90,6 +98,9 @@ DOWNLOAD_PREFIX="http://127.0.0.1:$PORT/"
   echo "expect_post_install_message=$EXPECT_POST_INSTALL_MESSAGE"
   echo "post_install_title=$POST_INSTALL_TITLE"
   echo "post_install_body=$POST_INSTALL_BODY"
+  echo "failure_case=$FAILURE_CASE"
+  echo "failure_title=$FAILURE_TITLE"
+  echo "failure_body=$FAILURE_BODY"
   echo "work_dir=$WORK_DIR"
 } > "$EVIDENCE_DIR/environment.txt"
 
@@ -207,6 +218,36 @@ wait_for_post_install_message() {
   done
 }
 
+wait_for_failure_message() {
+  local deadline=$(( "$(date +%s)" + 60 ))
+  local attempt=0
+  while true; do
+    attempt=$((attempt + 1))
+    local accessibility="$EVIDENCE_DIR/failure-accessibility-$attempt.txt"
+    capture_accessibility "$accessibility"
+    capture_screenshot "$EVIDENCE_DIR/failure-desktop-$attempt.png"
+    cp "$accessibility" "$EVIDENCE_DIR/failure-accessibility.txt"
+    cp "$EVIDENCE_DIR/failure-desktop-$attempt.png" "$EVIDENCE_DIR/failure-desktop.png"
+    if grep -Fq "$FAILURE_TITLE" "$accessibility" &&
+      grep -Fq "$FAILURE_BODY" "$accessibility"; then
+      if grep -Eiq '404|not found|download|signature|Sparkle|installer|relaunch' "$accessibility"; then
+        echo "Failure alert exposed technical update details. Evidence: $accessibility" >&2
+        return 1
+      fi
+      echo "title=$FAILURE_TITLE" > "$EVIDENCE_DIR/failure-message.txt"
+      echo "body=$FAILURE_BODY" >> "$EVIDENCE_DIR/failure-message.txt"
+      click_post_install_ok
+      return 0
+    fi
+    if (( "$(date +%s)" >= deadline )); then
+      echo "Timed out waiting for failure message '$FAILURE_TITLE' / '$FAILURE_BODY'." >&2
+      echo "Evidence: $EVIDENCE_DIR" >&2
+      return 1
+    fi
+    sleep 1
+  done
+}
+
 build_fixture_app() {
   local version="$1"
   local output_app="$2"
@@ -222,6 +263,8 @@ build_fixture_app() {
   ONECONTEXT_UPDATE_POST_INSTALL_MESSAGE_ENABLED="$EXPECT_POST_INSTALL_MESSAGE" \
   ONECONTEXT_UPDATE_POST_INSTALL_TITLE="$POST_INSTALL_TITLE" \
   ONECONTEXT_UPDATE_POST_INSTALL_BODY="$POST_INSTALL_BODY" \
+  ONECONTEXT_UPDATE_FAILURE_TITLE="$FAILURE_TITLE" \
+  ONECONTEXT_UPDATE_FAILURE_BODY="$FAILURE_BODY" \
     "$ROOT/scripts/build-macos-app.sh" >/dev/null
 
   rm -rf "$output_app"
@@ -276,6 +319,9 @@ ONECONTEXT_SPARKLE_MINIMUM_AUTOUPDATE_VERSION="$OLD_VERSION" \
 APPCAST="$UPDATES_DIR/appcast.xml"
 grep -q '<sparkle:criticalUpdate' "$APPCAST"
 grep -q '<sparkle:minimumAutoupdateVersion>'"$OLD_VERSION"'</sparkle:minimumAutoupdateVersion>' "$APPCAST"
+if [[ "$FAILURE_CASE" == "missing_asset" ]]; then
+  rm -f "$UPDATES_DIR/$(basename "$NEW_DMG")"
+fi
 plutil -extract SUPublicEDKey raw "$OLD_APP/Contents/Info.plist" | grep -qx "$PUBLIC_KEY"
 plutil -extract SUAutomaticallyUpdate raw "$OLD_APP/Contents/Info.plist" | grep -qx true
 
@@ -296,6 +342,29 @@ log "launching old fixture and waiting for Sparkle update"
 "$INSTALL_APP/Contents/MacOS/1Context" > "$EVIDENCE_DIR/app.log" 2>&1 &
 APP_PID="$!"
 echo "$APP_PID" > "$EVIDENCE_DIR/initial-app.pid"
+
+if [[ "$FAILURE_CASE" == "missing_asset" ]]; then
+  wait_for_failure_message
+  wait_for_version "$OLD_VERSION"
+  FAILED_CLI_VERSION="$("$INSTALL_APP/Contents/MacOS/1context-cli" --version)"
+  echo "$FAILED_CLI_VERSION" > "$EVIDENCE_DIR/failed-cli-version.txt"
+  if [[ "$FAILED_CLI_VERSION" != "$OLD_VERSION" ]]; then
+    echo "Expected failed update to leave CLI version $OLD_VERSION, got $FAILED_CLI_VERSION." >&2
+    exit 1
+  fi
+  {
+    echo "result=passed"
+    echo "failure_case=$FAILURE_CASE"
+    echo "old_version=$OLD_VERSION"
+    echo "attempted_new_version=$NEW_VERSION"
+    echo "feed_url=$FEED_URL"
+    echo "appcast=$APPCAST"
+    echo "installed_cli_version=$FAILED_CLI_VERSION"
+  } > "$EVIDENCE_DIR/result.txt"
+  log "passed missing-asset failure proof; evidence at $EVIDENCE_DIR"
+  cleanup_app
+  exit 0
+fi
 
 wait_for_version "$NEW_VERSION"
 if [[ "$EXPECT_POST_INSTALL_MESSAGE" == "1" ]]; then

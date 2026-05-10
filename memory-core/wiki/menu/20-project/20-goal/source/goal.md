@@ -732,9 +732,35 @@ Each release in this train must answer four questions:
 
 ##### 0.1.62 Failed Update and Supportability Proof
 
-- [ ] Add failed-update smoke for broken appcast, missing asset, bad signature,
-  and interrupted download cases where feasible.
-- [ ] Prove every user-facing failed-update path shows only:
+- [x] Add a missing-asset failed-update smoke for a mandatory Sparkle update.
+  Evidence: `scripts/smoke-sparkle-local-appcast.sh` now supports
+  `ONECONTEXT_SPARKLE_SMOKE_FAILURE_CASE=missing_asset`, removes the advertised
+  mandatory DMG after appcast generation, and verifies the failed update leaves
+  the old fixture app installed. The proof at
+  `dist/sparkle-local-smoke/missing-asset-failure-0.1.61/evidence/` passed with
+  `failure_case=missing_asset`, `attempted_new_version=0.1.61.901`, and
+  `installed_cli_version=0.1.61.900`.
+- [x] Prove the missing-asset user-facing failed-update path shows only:
+  `Update failed. Please contact support at paul@haptica.ai.`
+  Evidence: `failure-message.txt` records only the controlled support title and
+  body, `failure-accessibility.txt` contains those strings plus `OK`, and the
+  harness fails if the alert exposes technical details such as 404, download,
+  signature, Sparkle, installer, or relaunch text.
+- [x] Prove the missing-asset failed update retains an internal failure reason
+  for support.
+  Evidence:
+  `dist/sparkle-local-smoke/missing-asset-failure-0.1.61/evidence/http-server.log`
+  preserves the real `404` for
+  `1Context-0.1.61.901-macos-arm64.dmg`, while the user-facing alert remains
+  non-technical.
+- [x] Prove the missing-asset failed update leaves the old app launchable.
+  Evidence:
+  `dist/sparkle-local-smoke/missing-asset-failure-0.1.61/evidence/result.txt`
+  records `installed_cli_version=0.1.61.900` after the failed mandatory update
+  attempt.
+- [ ] Extend failed-update smoke to broken appcast, bad signature, and
+  interrupted download cases where feasible.
+- [ ] Prove every remaining user-facing failed-update path shows only:
   `Update failed. Please contact support at paul@haptica.ai.`
 - [ ] Prove internal diagnostics/logs retain the real failure reason for support.
 - [ ] Prove failed update leaves the old app launchable and remembering continues
