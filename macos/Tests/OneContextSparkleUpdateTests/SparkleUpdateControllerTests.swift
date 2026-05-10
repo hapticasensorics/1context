@@ -41,4 +41,36 @@ final class SparkleUpdateControllerTests: XCTestCase {
 
     XCTAssertEqual(decision, .dismiss)
   }
+
+  func testNoUpdateErrorsDoNotShowFailureAlert() {
+    let error = NSError(domain: "SUSparkleErrorDomain", code: 1001)
+
+    XCTAssertFalse(AppManagedSparkleUserDriverPolicy.shouldPresentFailure(
+      for: error,
+      mode: .automaticMandatory,
+      attemptedInstall: false
+    ))
+  }
+
+  func testCancelledInstallErrorsDoNotShowFailureAlert() {
+    for code in [4007, 4008] {
+      let error = NSError(domain: "SUSparkleErrorDomain", code: code)
+
+      XCTAssertFalse(AppManagedSparkleUserDriverPolicy.shouldPresentFailure(
+        for: error,
+        mode: .userInitiated,
+        attemptedInstall: true
+      ))
+    }
+  }
+
+  func testRealUpdateErrorsShowControlledFailureAlert() {
+    let error = NSError(domain: "SUSparkleErrorDomain", code: 2001)
+
+    XCTAssertTrue(AppManagedSparkleUserDriverPolicy.shouldPresentFailure(
+      for: error,
+      mode: .automaticMandatory,
+      attemptedInstall: false
+    ))
+  }
 }

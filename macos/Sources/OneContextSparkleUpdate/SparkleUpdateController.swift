@@ -172,6 +172,9 @@ extension SparkleUpdateController: SPUUpdaterDelegate {
     didFinishUpdateCycleFor updateCheck: SPUUpdateCheck,
     error: Error?
   ) {
+    if let error {
+      userDriver?.presentFailureIfAppropriate(for: error)
+    }
     userDriver?.finishUpdateSession()
   }
 
@@ -305,6 +308,30 @@ struct AppManagedSparkleUserDriverPolicy {
       return .askUser
     }
   }
+
+  static func shouldPresentFailure(
+    mode: AppManagedSparkleCheckMode,
+    attemptedInstall: Bool
+  ) -> Bool {
+    mode == .automaticMandatory || mode == .userInitiated || attemptedInstall
+  }
+
+  static func shouldPresentFailure(
+    for error: Error,
+    mode: AppManagedSparkleCheckMode,
+    attemptedInstall: Bool
+  ) -> Bool {
+    let nsError = error as NSError
+    if nsError.domain == SUSparkleErrorDomain {
+      switch nsError.code {
+      case 1001, 4007, 4008:
+        return false
+      default:
+        break
+      }
+    }
+    return shouldPresentFailure(mode: mode, attemptedInstall: attemptedInstall)
+  }
 }
 
 @MainActor
@@ -312,6 +339,7 @@ private final class AppManagedSparkleUserDriver: NSObject, SPUUserDriver {
   private let policy: UpdateUserFacingPolicy
   private var mode: AppManagedSparkleCheckMode = .automaticMandatory
   private var shouldInstallAndRelaunchWithoutPrompt = false
+  private var didPresentFailure = false
 
   init(policy: UpdateUserFacingPolicy) {
     self.policy = policy
@@ -321,16 +349,19 @@ private final class AppManagedSparkleUserDriver: NSObject, SPUUserDriver {
   func prepareForMandatoryAutomaticCheck() {
     mode = .automaticMandatory
     shouldInstallAndRelaunchWithoutPrompt = false
+    didPresentFailure = false
   }
 
   func prepareForUserInitiatedCheck() {
     mode = .userInitiated
     shouldInstallAndRelaunchWithoutPrompt = false
+    didPresentFailure = false
   }
 
   func finishUpdateSession() {
     mode = .automaticMandatory
     shouldInstallAndRelaunchWithoutPrompt = false
+    didPresentFailure = false
   }
 
   func show(
@@ -384,9 +415,7 @@ private final class AppManagedSparkleUserDriver: NSObject, SPUUserDriver {
   }
 
   func showUpdaterError(_ error: Error) async {
-    if mode == .userInitiated || shouldInstallAndRelaunchWithoutPrompt {
-      presentAlert(title: policy.failureTitle, message: policy.failureBody)
-    }
+    presentFailureIfAppropriate(for: error)
   }
 
   func showDownloadInitiated(cancellation: @escaping () -> Void) {}
@@ -421,6 +450,19 @@ private final class AppManagedSparkleUserDriver: NSObject, SPUUserDriver {
   }
 
   func showUpdateInFocus() {}
+
+  func presentFailureIfAppropriate(for error: Error) {
+    guard !didPresentFailure else { return }
+    guard AppManagedSparkleUserDriverPolicy.shouldPresentFailure(
+      for: error,
+      mode: mode,
+      attemptedInstall: shouldInstallAndRelaunchWithoutPrompt
+    ) else {
+      return
+    }
+    didPresentFailure = true
+    presentAlert(title: policy.failureTitle, message: policy.failureBody)
+  }
 
   private func confirmInstall(_ appcastItem: SUAppcastItem) -> Bool {
     let alert = NSAlert()

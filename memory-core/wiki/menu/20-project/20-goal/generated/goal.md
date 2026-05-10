@@ -758,8 +758,33 @@ Each release in this train must answer four questions:
   `dist/sparkle-local-smoke/missing-asset-failure-0.1.61/evidence/result.txt`
   records `installed_cli_version=0.1.61.900` after the failed mandatory update
   attempt.
-- [ ] Extend failed-update smoke to broken appcast, bad signature, and
-  interrupted download cases where feasible.
+- [x] Add a bad-signature failed-update smoke for a mandatory Sparkle update.
+  Evidence: `scripts/smoke-sparkle-local-appcast.sh` supports
+  `ONECONTEXT_SPARKLE_SMOKE_FAILURE_CASE=bad_signature`, corrupts the
+  downloaded DMG after appcast signing, and verifies
+  `SUVerifyUpdateBeforeExtraction` is enabled so the bad archive is rejected
+  before the host app disappears. The proof at
+  `dist/sparkle-local-smoke/bad-signature-failure-0.1.61/evidence/` passed with
+  `failure_case=bad_signature`, `attempted_new_version=0.1.61.901`, and
+  `installed_cli_version=0.1.61.900`.
+- [x] Prove the bad-signature user-facing failed-update path shows only:
+  `Update failed. Please contact support at paul@haptica.ai.`
+  Evidence: `failure-message.txt` records only the controlled support title and
+  body, `failure-accessibility.txt` contains those strings plus `OK`, and the
+  harness fails if the alert exposes technical details such as 404, download,
+  signature, Sparkle, installer, or relaunch text.
+- [x] Prove the bad-signature failed update retains operator evidence without
+  teaching the user update internals.
+  Evidence: `signature-corruption.txt` records the deliberate post-signing DMG
+  SHA-256 change, and `http-server.log` records a successful appcast and DMG
+  fetch while the user-facing alert remains non-technical.
+- [x] Prove release app bundles require Sparkle to verify downloads before
+  extraction.
+  Evidence: `scripts/build-macos-app.sh` writes
+  `SUVerifyUpdateBeforeExtraction = true`; the local Sparkle smoke and package
+  smoke assert the key is present in the built app.
+- [ ] Extend failed-update smoke to broken appcast and interrupted download
+  cases where feasible.
 - [ ] Prove every remaining user-facing failed-update path shows only:
   `Update failed. Please contact support at paul@haptica.ai.`
 - [ ] Prove internal diagnostics/logs retain the real failure reason for support.

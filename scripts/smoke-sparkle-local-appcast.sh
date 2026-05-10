@@ -24,8 +24,8 @@ FAILURE_TITLE="${ONECONTEXT_SPARKLE_SMOKE_FAILURE_TITLE:-Update failed.}"
 FAILURE_BODY="${ONECONTEXT_SPARKLE_SMOKE_FAILURE_BODY:-Please contact support at paul@haptica.ai.}"
 GENERATE_APPCAST="$ROOT/macos/.build/artifacts/sparkle/Sparkle/bin/generate_appcast"
 
-if [[ -n "$FAILURE_CASE" && "$FAILURE_CASE" != "missing_asset" ]]; then
-  echo "ONECONTEXT_SPARKLE_SMOKE_FAILURE_CASE must be empty or missing_asset." >&2
+if [[ -n "$FAILURE_CASE" && "$FAILURE_CASE" != "missing_asset" && "$FAILURE_CASE" != "bad_signature" ]]; then
+  echo "ONECONTEXT_SPARKLE_SMOKE_FAILURE_CASE must be empty, missing_asset, or bad_signature." >&2
   exit 1
 fi
 
@@ -321,9 +321,20 @@ grep -q '<sparkle:criticalUpdate' "$APPCAST"
 grep -q '<sparkle:minimumAutoupdateVersion>'"$OLD_VERSION"'</sparkle:minimumAutoupdateVersion>' "$APPCAST"
 if [[ "$FAILURE_CASE" == "missing_asset" ]]; then
   rm -f "$UPDATES_DIR/$(basename "$NEW_DMG")"
+elif [[ "$FAILURE_CASE" == "bad_signature" ]]; then
+  SIGNED_UPDATE_DMG="$UPDATES_DIR/$(basename "$NEW_DMG")"
+  cp "$SIGNED_UPDATE_DMG" "$EVIDENCE_DIR/dmg-before-signature-corruption.dmg"
+  {
+    echo "corrupted downloaded DMG bytes after appcast signing for bad_signature proof"
+    echo "dmg=$(basename "$SIGNED_UPDATE_DMG")"
+    echo "sha256_before=$(shasum -a 256 "$SIGNED_UPDATE_DMG" | awk '{ print $1 }')"
+  } > "$EVIDENCE_DIR/signature-corruption.txt"
+  printf '\n1context-bad-signature-fixture\n' >> "$SIGNED_UPDATE_DMG"
+  echo "sha256_after=$(shasum -a 256 "$SIGNED_UPDATE_DMG" | awk '{ print $1 }')" >> "$EVIDENCE_DIR/signature-corruption.txt"
 fi
 plutil -extract SUPublicEDKey raw "$OLD_APP/Contents/Info.plist" | grep -qx "$PUBLIC_KEY"
 plutil -extract SUAutomaticallyUpdate raw "$OLD_APP/Contents/Info.plist" | grep -qx true
+plutil -extract SUVerifyUpdateBeforeExtraction raw "$OLD_APP/Contents/Info.plist" | grep -qx true
 
 log "serving local appcast on $FEED_URL"
 python3 -m http.server "$PORT" --bind 127.0.0.1 --directory "$UPDATES_DIR" \
@@ -343,7 +354,7 @@ log "launching old fixture and waiting for Sparkle update"
 APP_PID="$!"
 echo "$APP_PID" > "$EVIDENCE_DIR/initial-app.pid"
 
-if [[ "$FAILURE_CASE" == "missing_asset" ]]; then
+if [[ -n "$FAILURE_CASE" ]]; then
   wait_for_failure_message
   wait_for_version "$OLD_VERSION"
   FAILED_CLI_VERSION="$("$INSTALL_APP/Contents/MacOS/1context-cli" --version)"
@@ -361,7 +372,7 @@ if [[ "$FAILURE_CASE" == "missing_asset" ]]; then
     echo "appcast=$APPCAST"
     echo "installed_cli_version=$FAILED_CLI_VERSION"
   } > "$EVIDENCE_DIR/result.txt"
-  log "passed missing-asset failure proof; evidence at $EVIDENCE_DIR"
+  log "passed $FAILURE_CASE failure proof; evidence at $EVIDENCE_DIR"
   cleanup_app
   exit 0
 fi

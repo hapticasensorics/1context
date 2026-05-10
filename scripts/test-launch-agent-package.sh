@@ -19,6 +19,7 @@ plutil -lint "$DAEMON_PLIST" >/dev/null
 
 test "$(plutil -extract CFBundleShortVersionString raw "$INFO")" = "$VERSION"
 test "$(plutil -extract CFBundleIdentifier raw "$INFO")" = "com.haptica.1context"
+test "$(plutil -extract SUVerifyUpdateBeforeExtraction raw "$INFO")" = "true"
 test "$(plutil -extract Label raw "$DAEMON_PLIST")" = "com.haptica.1context.local-web-proxy"
 test "$(plutil -extract BundleProgram raw "$DAEMON_PLIST")" = "Contents/Resources/1context-local-web-proxy"
 

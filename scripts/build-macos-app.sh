@@ -137,6 +137,8 @@ if [[ -n "$SPARKLE_FEED_URL" || -n "$SPARKLE_PUBLIC_ED_KEY" ]]; then
   <true/>
   <key>SUAllowsAutomaticUpdates</key>
   <true/>
+  <key>SUVerifyUpdateBeforeExtraction</key>
+  <true/>
   <key>SUScheduledCheckInterval</key>
   <integer>3600</integer>
 PLIST
