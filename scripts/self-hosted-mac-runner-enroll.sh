@@ -101,7 +101,7 @@ Run it from the logged-in GUI session:
   ./run.sh
 
 For first proof runs, prefer the foreground runner over svc.sh so AppleScript,
-screencapture, Sparkle prompts, and menu-bar automation share the desktop session.
+Hammerspoon capture, Sparkle prompts, and menu-bar automation share the desktop session.
 EOF
 
 if [[ "${ONECONTEXT_RUNNER_START_NOW:-0}" == "1" ]]; then

@@ -13,7 +13,6 @@ POLL_SECONDS="${ONECONTEXT_UPDATE_PROOF_POLL_SECONDS:-5}"
 OPTIONAL_DISCOVERY_TIMEOUT_SECONDS="${ONECONTEXT_OPTIONAL_DISCOVERY_TIMEOUT_SECONDS:-120}"
 OPTIONAL_QUIET_SECONDS="${ONECONTEXT_OPTIONAL_QUIET_SECONDS:-20}"
 OPTIONAL_PROMPT_TIMEOUT_SECONDS="${ONECONTEXT_OPTIONAL_PROMPT_TIMEOUT_SECONDS:-15}"
-STAMP="$(date -u +%Y%m%dT%H%M%SZ)"
 
 installed_plist_version() {
   plutil -extract CFBundleShortVersionString raw "$APP/Contents/Info.plist" 2>/dev/null || true
@@ -165,9 +164,45 @@ end tell
 APPLESCRIPT
 }
 
+capture_hammerspoon_screenshot() {
+  local output="$1"
+  local endpoint="${ONECONTEXT_HAMMERSPOON_GUI_CAPTURE_URL:-http://127.0.0.1:8742/capture}"
+  python3 - "$endpoint" "$output" > "$output.hammerspoon.json" 2> "$output.hammerspoon.err" <<'PY'
+import json
+import sys
+import urllib.request
+from pathlib import Path
+
+endpoint = sys.argv[1]
+path = sys.argv[2]
+body = json.dumps({"target": "desktop", "path": path}).encode("utf-8")
+request = urllib.request.Request(
+    endpoint,
+    data=body,
+    headers={"Content-Type": "application/json"},
+    method="POST",
+)
+with urllib.request.urlopen(request, timeout=3) as response:
+    payload = json.loads(response.read().decode("utf-8"))
+    print(json.dumps(payload, sort_keys=True))
+    if response.status >= 400 or not payload.get("ok"):
+        raise SystemExit(1)
+
+output = Path(path)
+if not output.exists() or output.stat().st_size == 0:
+    raise SystemExit(1)
+PY
+}
+
 capture_screenshot() {
   local output="$1"
-  screencapture -x "$output" >/dev/null 2>&1 || true
+  local mode="${ONECONTEXT_SCREENSHOT_MODE:-auto}"
+  if [[ "$mode" != "screencapture" ]] && capture_hammerspoon_screenshot "$output"; then
+    return
+  fi
+  if [[ "$mode" != "hammerspoon" ]]; then
+    screencapture -x "$output" >/dev/null 2>&1 || true
+  fi
 }
 
 write_versions() {

@@ -70,8 +70,8 @@ exercise and make update failures harder to read.
 
 Use a dedicated, logged-in macOS user on a dedicated Mac. The first practical
 mode should be a foreground runner inside that GUI session, not a headless
-`svc.sh` service, because the update harness uses AppleScript, `screencapture`,
-menu-bar automation, and Sparkle windows.
+`svc.sh` service, because the update harness uses AppleScript, Hammerspoon
+desktop capture, menu-bar automation, and Sparkle windows.
 
 For the existing `hapticainfra` MacBook Air convention, reuse the same operating
 shape rather than adding a second automation model:
@@ -79,16 +79,22 @@ shape rather than adding a second automation model:
 - keep the Mac awake and reachable over Tailscale;
 - keep surprise macOS updates disabled during release windows;
 - use the visible GUI session for proof screenshots and prompts;
-- use the Hammerspoon/remote GUI bridge as an optional extra capture layer when
-  direct `screencapture` evidence is not enough.
+- treat the Hammerspoon GUI bridge as the preferred screenshot path;
+- use direct `screencapture` only as a local fallback. It can fail from SSH even
+  when Hammerspoon has valid Screen Recording permission in the GUI session.
 
-Before first use, open System Settings and grant the logged-in runner terminal
-or shell host Accessibility and Screen Recording access. Then run one local
-sanity check:
+Before first use, open System Settings and grant Hammerspoon Screen Recording
+access. Grant the logged-in runner terminal Accessibility or Automation access
+if AppleScript prompts. Then run one local sanity check:
 
 ```bash
 osascript -e 'tell application "System Events" to get name of first process'
-screencapture -x /tmp/1context-runner-screen.png
+curl --fail --silent http://127.0.0.1:8742/status
+curl --fail --silent \
+  -X POST http://127.0.0.1:8742/capture \
+  -H 'Content-Type: application/json' \
+  -d '{"target":"desktop","path":"/tmp/1context-runner-screen.png"}'
+test -s /tmp/1context-runner-screen.png
 ```
 
 ## Enroll The Runner
