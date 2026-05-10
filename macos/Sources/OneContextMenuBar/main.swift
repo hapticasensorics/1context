@@ -112,9 +112,9 @@ private func currentExecutableURL() -> URL? {
 
 @MainActor
 private final class AppSetupWindowController: NSWindowController {
-  var onGrantLocalWikiAccess: (() -> Void)?
-  var onOpenWiki: (() -> Void)?
-  var onRefresh: (() -> Void)?
+  var onGrantLocalWikiAccess: (@MainActor () -> Void)?
+  var onOpenWiki: (@MainActor () -> Void)?
+  var onRefresh: (@MainActor () -> Void)?
 
   private let messageLabel = NSTextField(labelWithString: "")
   private let localWikiRow = SetupRequirementRow(title: "Local Wiki Access")
@@ -280,7 +280,7 @@ private final class AppSetupWindowController: NSWindowController {
 private final class SetupRequirementRow: NSView {
   struct Action {
     let title: String
-    let handler: () -> Void
+    let handler: @MainActor () -> Void
   }
 
   enum Status {
@@ -332,7 +332,7 @@ private final class SetupRequirementRow: NSView {
 
   private let titleLabel: NSTextField
   private let actionButton = NSButton(title: "", target: nil, action: nil)
-  private var actionHandler: (() -> Void)?
+  private var actionHandler: (@MainActor () -> Void)?
 
   init(title: String) {
     self.titleLabel = NSTextField(labelWithString: title)
@@ -465,7 +465,7 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
   private lazy var setupWindowController: AppSetupWindowController = {
     let controller = AppSetupWindowController()
     controller.onGrantLocalWikiAccess = { [weak self] in
-      Task { @MainActor in
+      Task { [weak self] in
         _ = await self?.runLocalWebSetupFlow()
       }
     }
