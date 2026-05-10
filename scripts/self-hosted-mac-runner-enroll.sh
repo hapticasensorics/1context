@@ -26,9 +26,11 @@ require_tool() {
 }
 
 require_tool curl
-require_tool gh
 require_tool python3
 require_tool tar
+if [[ -z "${ACTIONS_RUNNER_INPUT_TOKEN:-}" ]]; then
+  require_tool gh
+fi
 
 mkdir -p "$RUNNER_DIR"
 cd "$RUNNER_DIR"

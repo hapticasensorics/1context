@@ -64,7 +64,8 @@ screencapture -x /tmp/1context-runner-screen.png
 The helper downloads the current GitHub runner package and registers it with
 the required custom label. It obtains a registration token through `gh`; if the
 account lacks runner-admin permission, create the token in GitHub Settings and
-pass it as `ACTIONS_RUNNER_INPUT_TOKEN`.
+pass it as `ACTIONS_RUNNER_INPUT_TOKEN`. The target Mac does not need `gh` when
+that token is supplied.
 
 ```bash
 cd /Users/paulhan/dev/1context-public-launch
