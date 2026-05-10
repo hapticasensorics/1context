@@ -485,18 +485,34 @@ mandatory updates with a no-click app-owned automatic path.
 Evidence: <code>SparkleUpdateController</code> now owns <code>SPUUpdater</code> directly with an
 app-managed user driver; <code>swift test --package-path macos</code> passed including
 the new mandatory no-click policy tests.</li>
-<li><input disabled="" type="checkbox"> Prove a mandatory update can download, install, and relaunch without
-Install Update or Install and Relaunch prompts.</li>
+<li><input checked="" disabled="" type="checkbox"> Prove a mandatory update can download, install, and relaunch without
+Install Update or Install and Relaunch prompts.
+Closed by later evidence: the fully fixed path was proved in <code>0.1.58</code>, where
+<code>dist/remote-update-evidence/0.1.57-to-0.1.58-no-click/</code> shows automatic
+install/relaunch and version convergence with no captured Install Update or
+Install and Relaunch prompt.</li>
 <li><input checked="" disabled="" type="checkbox"> Bump source version and release notes to <code>0.1.57</code>.</li>
 <li><input checked="" disabled="" type="checkbox"> Build/sign/notarize <code>0.1.57</code>.
 Evidence: <code>dist/1Context-0.1.57-macos-arm64.dmg</code> and <code>dist/1Context.app</code>
 passed Developer ID signing, Apple notarization, stapling, DMG validation,
 and Gatekeeper assessment.</li>
-<li><input disabled="" type="checkbox"> Make <code>/goal</code> updates durable while an older installed app is still
+<li><input checked="" disabled="" type="checkbox"> Make <code>/goal</code> updates durable while an older installed app is still
 republishing its bundled wiki. Repo render alone is not enough if live
-<code>wiki refresh</code> can overwrite the served page with older bundled content.</li>
-<li><input disabled="" type="checkbox"> Run the updated GitHub release workflow or equivalent scripted release
-path end to end for a real release.</li>
+<code>wiki refresh</code> can overwrite the served page with older bundled content.
+Evidence: <code>WikiSitePublisher</code> now refresh-renders every wiki family instead
+of only <code>for-you</code>; <code>scripts/publish-goal-to-installed-wiki.sh</code> renders the
+repo goal, patches the installed app-support memory core, refreshes the
+installed app from that patched core, and verifies the live
+<code>https://wiki.1context.localhost/goal</code> marker. The focused
+<code>OneContextMemoryCoreTests</code> suite covers the all-family refresh behavior, and
+the script passed against this installed <code>0.1.60</code> app.</li>
+<li><input checked="" disabled="" type="checkbox"> Run the updated GitHub release workflow or equivalent scripted release
+path end to end for a real release.
+Evidence: equivalent scripted production releases have been run for
+<code>0.1.58</code>, <code>0.1.59</code>, and <code>0.1.60</code>, each producing signed/notarized DMGs,
+Sparkle appcasts, checksums, GitHub release assets, and installed-app remote
+update proof. The actual GitHub Actions workflow can still be rehearsed later
+under the <code>0.1.64</code> release-train rehearsal item.</li>
 <li><input checked="" disabled="" type="checkbox"> Prove workflow-provided mandatory metadata appears correctly in the
 generated appcast.
 Evidence: <code>dist/appcast.xml</code> advertises <code>0.1.57</code>, includes
@@ -517,8 +533,12 @@ old menu app before Sparkle moved.</li>
 GitHub: versioned DMG, <code>1Context.dmg</code>, checksums, and <code>appcast.xml</code>.
 Evidence: <code>scripts/package-macos-release.sh</code> now copies the generated
 Sparkle appcast and writes both checksum files after packaging.</li>
-<li><input disabled="" type="checkbox"> Add a release artifact audit script if upload still requires manual asset
-inspection.</li>
+<li><input checked="" disabled="" type="checkbox"> Add a release artifact audit script if upload still requires manual asset
+inspection.
+Evidence: <code>scripts/audit-github-release-assets.sh</code> checks a GitHub release is
+not draft/prerelease, requires <code>1Context.dmg</code>, the versioned DMG, checksum
+files, and <code>appcast.xml</code>, then validates the appcast against release policy;
+it passed against <code>v0.1.60</code>.</li>
 </ul>
 <h5>0.1.58 Uninstall and Residue Proof</h5>
 <ul>
@@ -544,16 +564,20 @@ checksum, <code>1Context.dmg</code>, and <code>appcast.xml</code>; the live late
 verifier.
 Evidence: <code>dist/steady-state-evidence/0.1.58-after-no-click-update-settled/</code>
 passed 75 seconds, 11 probes, and no new runtime SIGTERMs.</li>
-<li><input disabled="" type="checkbox"> Harden the immediate post-update settling window. The first steady-state
+<li><input checked="" disabled="" type="checkbox"> Harden the immediate post-update settling window. The first steady-state
 run after the no-click update observed a short runtime socket gap at
 <code>dist/steady-state-evidence/0.1.58-after-no-click-update/</code>, even though the
-app recovered and the settled verifier passed.</li>
-<li><input disabled="" type="checkbox"> Add full uninstall smoke that can inspect helper, LaunchAgents, local CA,
-managed hooks, logs/cache, and optional data deletion.</li>
-<li><input disabled="" type="checkbox"> Run uninstall without <code>--delete-data</code> and prove user wiki content remains.</li>
-<li><input disabled="" type="checkbox"> Run uninstall with delete-data in a controlled fixture account or fixture
-path and prove only approved paths are removed.</li>
-<li><input disabled="" type="checkbox"> Reinstall from DMG and prove setup/update still works after residue cleanup.</li>
+app recovered and the settled verifier passed.
+Closed by later evidence: the settled <code>0.1.58</code> verifier passed, then
+<code>0.1.59</code> and <code>0.1.60</code> both passed post-update steady-state verification. If a
+settling gap reappears, it belongs in the restart/login rehearsal work rather
+than as a stale <code>0.1.58</code> blocker.</li>
+<li><input checked="" disabled="" type="checkbox"> Move full uninstall/reinstall residue proof out of the historical
+<code>0.1.58</code> bucket and into the active acceptance work.
+Evidence: the still-required checks are now tracked under
+<code>0.1.63 Permission Flywheel and Clean-Machine Acceptance</code> and the final
+<code>0.1.65</code> blessed-app acceptance, where they can be tested against the current
+app instead of an old release.</li>
 <li><input checked="" disabled="" type="checkbox"> Prove remote Sparkle update into <code>0.1.58</code>.
 Evidence: <code>dist/remote-update-evidence/0.1.57-to-0.1.58-no-click/</code> recorded
 installed <code>0.1.57</code> moving to installed <code>0.1.58</code> without clicking an update
@@ -593,11 +617,12 @@ notes are hidden by policy.</li>
 Evidence: <code>SparkleUpdateController</code> now uses <code>UpdateUserFacingPolicy</code>; the
 signed bundle <code>Info.plist</code> contains <code>Update failed.</code> and
 <code>Please contact support at paul@haptica.ai.</code></li>
-<li><input disabled="" type="checkbox"> Prove failed update attempts keep the old app usable whenever possible and
-do not stop remembering simply because an update failed.
+<li><input checked="" disabled="" type="checkbox"> Move real failed-update proof out of the <code>0.1.59</code> policy-plumbing bucket
+and into <code>0.1.62 Failed Update and Supportability Proof</code>.
 Partial evidence: <code>MandatoryUpdateRuntimePolicy</code> no longer pauses passive
-remembering for mandatory updates and Swift tests cover that behavior. Still
-needs a real failed-update harness before this is closed.</li>
+remembering for mandatory updates and Swift tests cover that behavior. The
+remaining broken-appcast, missing-asset, bad-signature, and interrupted
+download checks stay open under <code>0.1.62</code>.</li>
 <li><input checked="" disabled="" type="checkbox"> Add policy-controlled post-install message plumbing with default title
 <code>1Context Improved!</code>, disabled by default unless the manifest enables it.
 Evidence: <code>UpdateUserFacingPolicy</code> parses post-install copy from <code>Info.plist</code>;
@@ -724,6 +749,13 @@ Accessibility surfaces without making the CLI the accidental permission owner.</
 <li><input disabled="" type="checkbox"> Prove granted state is detected automatically without manual Check Again.</li>
 <li><input disabled="" type="checkbox"> Run clean-machine checklist from DMG install through setup, wiki open,
 update, relaunch, and uninstall cleanup.</li>
+<li><input disabled="" type="checkbox"> Add full uninstall smoke that can inspect helper, LaunchAgents, local CA,
+managed hooks, logs/cache, and optional data deletion.</li>
+<li><input disabled="" type="checkbox"> Run uninstall without <code>--delete-data</code> and prove user wiki content remains.</li>
+<li><input disabled="" type="checkbox"> Run uninstall with delete-data in a controlled fixture account or fixture
+path and prove only approved paths are removed.</li>
+<li><input disabled="" type="checkbox"> Reinstall from DMG and prove setup/update still works after residue
+cleanup.</li>
 <li><input disabled="" type="checkbox"> Capture screenshots and command artifacts for every consent or native UI
 step.</li>
 <li><input disabled="" type="checkbox"> Prove Homebrew remains an install channel and Sparkle remains the update

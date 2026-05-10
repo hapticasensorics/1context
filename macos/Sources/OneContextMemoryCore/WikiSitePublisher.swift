@@ -59,7 +59,7 @@ public final class WikiSitePublisher {
     _ = try setup.ensureReady(validateContract: false)
     if refresh || !hasServableWiki() {
       _ = try adapter.run(arguments: ["wiki", "ensure", "--json"])
-      _ = try adapter.run(arguments: ["wiki", "render", "for-you", "--no-evidence", "--json"])
+      _ = try adapter.run(arguments: ["wiki", "render", "--no-evidence", "--json"])
     }
     try exportCurrentSite(to: paths)
     return try publishedResult(current: paths.current)

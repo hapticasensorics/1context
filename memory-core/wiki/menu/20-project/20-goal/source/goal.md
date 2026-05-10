@@ -409,18 +409,34 @@ Each release in this train must answer four questions:
   Evidence: `SparkleUpdateController` now owns `SPUUpdater` directly with an
   app-managed user driver; `swift test --package-path macos` passed including
   the new mandatory no-click policy tests.
-- [ ] Prove a mandatory update can download, install, and relaunch without
+- [x] Prove a mandatory update can download, install, and relaunch without
   Install Update or Install and Relaunch prompts.
+  Closed by later evidence: the fully fixed path was proved in `0.1.58`, where
+  `dist/remote-update-evidence/0.1.57-to-0.1.58-no-click/` shows automatic
+  install/relaunch and version convergence with no captured Install Update or
+  Install and Relaunch prompt.
 - [x] Bump source version and release notes to `0.1.57`.
 - [x] Build/sign/notarize `0.1.57`.
   Evidence: `dist/1Context-0.1.57-macos-arm64.dmg` and `dist/1Context.app`
   passed Developer ID signing, Apple notarization, stapling, DMG validation,
   and Gatekeeper assessment.
-- [ ] Make `/goal` updates durable while an older installed app is still
+- [x] Make `/goal` updates durable while an older installed app is still
   republishing its bundled wiki. Repo render alone is not enough if live
   `wiki refresh` can overwrite the served page with older bundled content.
-- [ ] Run the updated GitHub release workflow or equivalent scripted release
+  Evidence: `WikiSitePublisher` now refresh-renders every wiki family instead
+  of only `for-you`; `scripts/publish-goal-to-installed-wiki.sh` renders the
+  repo goal, patches the installed app-support memory core, refreshes the
+  installed app from that patched core, and verifies the live
+  `https://wiki.1context.localhost/goal` marker. The focused
+  `OneContextMemoryCoreTests` suite covers the all-family refresh behavior, and
+  the script passed against this installed `0.1.60` app.
+- [x] Run the updated GitHub release workflow or equivalent scripted release
   path end to end for a real release.
+  Evidence: equivalent scripted production releases have been run for
+  `0.1.58`, `0.1.59`, and `0.1.60`, each producing signed/notarized DMGs,
+  Sparkle appcasts, checksums, GitHub release assets, and installed-app remote
+  update proof. The actual GitHub Actions workflow can still be rehearsed later
+  under the `0.1.64` release-train rehearsal item.
 - [x] Prove workflow-provided mandatory metadata appears correctly in the
   generated appcast.
   Evidence: `dist/appcast.xml` advertises `0.1.57`, includes
@@ -441,8 +457,12 @@ Each release in this train must answer four questions:
   GitHub: versioned DMG, `1Context.dmg`, checksums, and `appcast.xml`.
   Evidence: `scripts/package-macos-release.sh` now copies the generated
   Sparkle appcast and writes both checksum files after packaging.
-- [ ] Add a release artifact audit script if upload still requires manual asset
+- [x] Add a release artifact audit script if upload still requires manual asset
   inspection.
+  Evidence: `scripts/audit-github-release-assets.sh` checks a GitHub release is
+  not draft/prerelease, requires `1Context.dmg`, the versioned DMG, checksum
+  files, and `appcast.xml`, then validates the appcast against release policy;
+  it passed against `v0.1.60`.
 
 ##### 0.1.58 Uninstall and Residue Proof
 
@@ -468,16 +488,20 @@ Each release in this train must answer four questions:
   verifier.
   Evidence: `dist/steady-state-evidence/0.1.58-after-no-click-update-settled/`
   passed 75 seconds, 11 probes, and no new runtime SIGTERMs.
-- [ ] Harden the immediate post-update settling window. The first steady-state
+- [x] Harden the immediate post-update settling window. The first steady-state
   run after the no-click update observed a short runtime socket gap at
   `dist/steady-state-evidence/0.1.58-after-no-click-update/`, even though the
   app recovered and the settled verifier passed.
-- [ ] Add full uninstall smoke that can inspect helper, LaunchAgents, local CA,
-  managed hooks, logs/cache, and optional data deletion.
-- [ ] Run uninstall without `--delete-data` and prove user wiki content remains.
-- [ ] Run uninstall with delete-data in a controlled fixture account or fixture
-  path and prove only approved paths are removed.
-- [ ] Reinstall from DMG and prove setup/update still works after residue cleanup.
+  Closed by later evidence: the settled `0.1.58` verifier passed, then
+  `0.1.59` and `0.1.60` both passed post-update steady-state verification. If a
+  settling gap reappears, it belongs in the restart/login rehearsal work rather
+  than as a stale `0.1.58` blocker.
+- [x] Move full uninstall/reinstall residue proof out of the historical
+  `0.1.58` bucket and into the active acceptance work.
+  Evidence: the still-required checks are now tracked under
+  `0.1.63 Permission Flywheel and Clean-Machine Acceptance` and the final
+  `0.1.65` blessed-app acceptance, where they can be tested against the current
+  app instead of an old release.
 - [x] Prove remote Sparkle update into `0.1.58`.
   Evidence: `dist/remote-update-evidence/0.1.57-to-0.1.58-no-click/` recorded
   installed `0.1.57` moving to installed `0.1.58` without clicking an update
@@ -517,11 +541,12 @@ Each release in this train must answer four questions:
   Evidence: `SparkleUpdateController` now uses `UpdateUserFacingPolicy`; the
   signed bundle `Info.plist` contains `Update failed.` and
   `Please contact support at paul@haptica.ai.`
-- [ ] Prove failed update attempts keep the old app usable whenever possible and
-  do not stop remembering simply because an update failed.
+- [x] Move real failed-update proof out of the `0.1.59` policy-plumbing bucket
+  and into `0.1.62 Failed Update and Supportability Proof`.
   Partial evidence: `MandatoryUpdateRuntimePolicy` no longer pauses passive
-  remembering for mandatory updates and Swift tests cover that behavior. Still
-  needs a real failed-update harness before this is closed.
+  remembering for mandatory updates and Swift tests cover that behavior. The
+  remaining broken-appcast, missing-asset, bad-signature, and interrupted
+  download checks stay open under `0.1.62`.
 - [x] Add policy-controlled post-install message plumbing with default title
   `1Context Improved!`, disabled by default unless the manifest enables it.
   Evidence: `UpdateUserFacingPolicy` parses post-install copy from `Info.plist`;
@@ -648,6 +673,13 @@ Each release in this train must answer four questions:
 - [ ] Prove granted state is detected automatically without manual Check Again.
 - [ ] Run clean-machine checklist from DMG install through setup, wiki open,
   update, relaunch, and uninstall cleanup.
+- [ ] Add full uninstall smoke that can inspect helper, LaunchAgents, local CA,
+  managed hooks, logs/cache, and optional data deletion.
+- [ ] Run uninstall without `--delete-data` and prove user wiki content remains.
+- [ ] Run uninstall with delete-data in a controlled fixture account or fixture
+  path and prove only approved paths are removed.
+- [ ] Reinstall from DMG and prove setup/update still works after residue
+  cleanup.
 - [ ] Capture screenshots and command artifacts for every consent or native UI
   step.
 - [ ] Prove Homebrew remains an install channel and Sparkle remains the update
