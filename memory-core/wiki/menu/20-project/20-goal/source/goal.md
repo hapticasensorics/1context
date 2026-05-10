@@ -899,7 +899,60 @@ Each release in this train must answer four questions:
   `dist/release-lockdown-evidence/20260510T043434Z/diagnostic-state-summary.txt`
   proves the collector integration reports `diagnostic_state=failed_update`
   when attached to the interrupted-download failed-update evidence.
-- [ ] Prove remote Sparkle update into `0.1.62`.
+- [x] Publish `0.1.62` as a mandatory failed-update supportability release.
+  Evidence: `VERSION`, `Core.swift`, `RELEASE_NOTES.md`, and
+  `release/update-policy.toml` were bumped to `0.1.62`, with
+  `update_class=mandatory`, `minimum_autoupdate_version=0.1.61`, and
+  `critical_update_version=0.1.62`. Local release-machine packaging notarized
+  and stapled both `dist/1Context.app` and
+  `dist/1Context-0.1.62-macos-arm64.dmg`; Gatekeeper accepted the DMG, and
+  `scripts/audit-github-release-assets.sh v0.1.62` passed after uploading the
+  versioned DMG, stable `1Context.dmg`, checksums, and `appcast.xml` to
+  <https://github.com/hapticasensorics/1context/releases/tag/v0.1.62>.
+  The hosted release workflow run `25619995018` failed before packaging because
+  GitHub Actions signing secrets were not configured; that remains tracked by
+  the later release-workflow/secrets checklist item, while the local keychain
+  release path carried this public release.
+- [x] Prove remote Sparkle update into `0.1.62`.
+  Evidence:
+  `dist/remote-update-evidence/0.1.61-to-0.1.62-mandatory-public/result.txt`
+  is `result=passed`, with `old_version=0.1.61` and `new_version=0.1.62`.
+  `watch.log` records the installed app at `plist=0.1.61 cli=0.1.61` at
+  `2026-05-10T04:44:19Z`, then `plist=0.1.62 cli=0.1.62` at
+  `2026-05-10T04:44:29Z`; the proof captured accessibility/window/screenshot
+  evidence and enforced the mandatory no-prompt/no-release-notes policy.
+- [x] Prove `0.1.62` steady state after the mandatory update.
+  Evidence: `dist/steady-state-evidence/0.1.62-after-mandatory-public/`
+  passed 60 seconds, 10 probes, installed `version=0.1.62`, runtime health,
+  setup readiness, menu running state, local wiki health, and unchanged runtime
+  SIGTERM count during the probe.
+- [x] Investigate the remote computer's manual `Check for Updates` failure and
+  repair the runner state.
+  Evidence: the remote self-hosted proof run `25620113831` passed on
+  `pauls-macbook-air-1context-update` after reinstalling public-feed `0.1.61`
+  and updating through the live public appcast to `0.1.62`; its downloaded
+  evidence at `dist/self-hosted-run-25620113831/` records
+  `version-before-runner-reset.txt` with the previous installed `0.1.61` app
+  still pointed at `feed=http://127.0.0.1:8743/appcast.xml`, explaining the
+  manual update failure when that stale local appcast was not running. The same
+  run records `version-final.txt` with `plist=0.1.62`, `cli=0.1.62`, and
+  `feed=https://github.com/hapticasensorics/1context/releases/latest/download/appcast.xml`.
+- [x] Harden the self-hosted update proof so it does not leave a shared remote
+  Mac pointed at a dead local or staging appcast.
+  Evidence: `scripts/self-hosted-update-proof.sh` now writes
+  `final-feed-policy.txt`, treats non-public final feeds as unsafe by default,
+  restores the public GitHub release for the proved version when possible, and
+  requires `ONECONTEXT_UPDATE_RUNNER_ALLOW_NON_PUBLIC_FINAL_FEED=1` for a
+  deliberate staging-only runner. `scripts/test-upgrade-paths.sh` asserts this
+  guard exists, and `docs/ci/self-hosted-mac-runner.md` documents the behavior.
+- [x] Prove manual `Check for Updates` on an already-current public-feed
+  `0.1.62` app does not show the failed-update support popup.
+  Evidence:
+  `dist/current-update-check-evidence/0.1.62-public-feed-no-failure/result.txt`
+  records `result=passed` and `observed=no failure alert during 20 second manual
+  check window`, while `version-before.txt` records `plist=0.1.62`,
+  `cli=0.1.62`, and the public GitHub appcast feed. The captured desktop
+  screenshot shows the normal `1Context is up to date.` alert.
 
 ##### 0.1.63 Permission Flywheel and Clean-Machine Acceptance
 

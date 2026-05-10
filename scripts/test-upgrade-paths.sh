@@ -62,7 +62,9 @@ fi
 grep -q "must be mandatory or optional" "$TMP_DIR/update-class.out"
 
 grep -q "assert_no_unwanted_update_ui" "$ROOT/scripts/prove-remote-sparkle-update.sh"
-grep -q "Installed old app SUFeedURL does not match the proof appcast" "$ROOT/scripts/self-hosted-update-proof.sh"
+grep -q "SUFeedURL does not match the expected proof feed" "$ROOT/scripts/self-hosted-update-proof.sh"
+grep -q "ONECONTEXT_UPDATE_RUNNER_ALLOW_NON_PUBLIC_FINAL_FEED" "$ROOT/scripts/self-hosted-update-proof.sh"
+grep -q "final_feed_action=restored_public_release" "$ROOT/scripts/self-hosted-update-proof.sh"
 grep -q "ONECONTEXT_RELEASE_LOCKDOWN_EVIDENCE_REDACT" "$ROOT/scripts/collect-release-lockdown-evidence.sh"
 "$ROOT/scripts/test-release-lockdown-diagnostics.sh"
 

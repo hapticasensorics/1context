@@ -975,7 +975,59 @@ all five required states, and
 <code>dist/release-lockdown-evidence/20260510T043434Z/diagnostic-state-summary.txt</code>
 proves the collector integration reports <code>diagnostic_state=failed_update</code>
 when attached to the interrupted-download failed-update evidence.</li>
-<li><input disabled="" type="checkbox"> Prove remote Sparkle update into <code>0.1.62</code>.</li>
+<li><input checked="" disabled="" type="checkbox"> Publish <code>0.1.62</code> as a mandatory failed-update supportability release.
+Evidence: <code>VERSION</code>, <code>Core.swift</code>, <code>RELEASE_NOTES.md</code>, and
+<code>release/update-policy.toml</code> were bumped to <code>0.1.62</code>, with
+<code>update_class=mandatory</code>, <code>minimum_autoupdate_version=0.1.61</code>, and
+<code>critical_update_version=0.1.62</code>. Local release-machine packaging notarized
+and stapled both <code>dist/1Context.app</code> and
+<code>dist/1Context-0.1.62-macos-arm64.dmg</code>; Gatekeeper accepted the DMG, and
+<code>scripts/audit-github-release-assets.sh v0.1.62</code> passed after uploading the
+versioned DMG, stable <code>1Context.dmg</code>, checksums, and <code>appcast.xml</code> to
+<a href="https://github.com/hapticasensorics/1context/releases/tag/v0.1.62">https://github.com/hapticasensorics/1context/releases/tag/v0.1.62</a>.
+The hosted release workflow run <code>25619995018</code> failed before packaging because
+GitHub Actions signing secrets were not configured; that remains tracked by
+the later release-workflow/secrets checklist item, while the local keychain
+release path carried this public release.</li>
+<li><input checked="" disabled="" type="checkbox"> Prove remote Sparkle update into <code>0.1.62</code>.
+Evidence:
+<code>dist/remote-update-evidence/0.1.61-to-0.1.62-mandatory-public/result.txt</code>
+is <code>result=passed</code>, with <code>old_version=0.1.61</code> and <code>new_version=0.1.62</code>.
+<code>watch.log</code> records the installed app at <code>plist=0.1.61 cli=0.1.61</code> at
+<code>2026-05-10T04:44:19Z</code>, then <code>plist=0.1.62 cli=0.1.62</code> at
+<code>2026-05-10T04:44:29Z</code>; the proof captured accessibility/window/screenshot
+evidence and enforced the mandatory no-prompt/no-release-notes policy.</li>
+<li><input checked="" disabled="" type="checkbox"> Prove <code>0.1.62</code> steady state after the mandatory update.
+Evidence: <code>dist/steady-state-evidence/0.1.62-after-mandatory-public/</code>
+passed 60 seconds, 10 probes, installed <code>version=0.1.62</code>, runtime health,
+setup readiness, menu running state, local wiki health, and unchanged runtime
+SIGTERM count during the probe.</li>
+<li><input checked="" disabled="" type="checkbox"> Investigate the remote computer&#39;s manual <code>Check for Updates</code> failure and
+repair the runner state.
+Evidence: the remote self-hosted proof run <code>25620113831</code> passed on
+<code>pauls-macbook-air-1context-update</code> after reinstalling public-feed <code>0.1.61</code>
+and updating through the live public appcast to <code>0.1.62</code>; its downloaded
+evidence at <code>dist/self-hosted-run-25620113831/</code> records
+<code>version-before-runner-reset.txt</code> with the previous installed <code>0.1.61</code> app
+still pointed at <code>feed=http://127.0.0.1:8743/appcast.xml</code>, explaining the
+manual update failure when that stale local appcast was not running. The same
+run records <code>version-final.txt</code> with <code>plist=0.1.62</code>, <code>cli=0.1.62</code>, and
+<code>feed=https://github.com/hapticasensorics/1context/releases/latest/download/appcast.xml</code>.</li>
+<li><input checked="" disabled="" type="checkbox"> Harden the self-hosted update proof so it does not leave a shared remote
+Mac pointed at a dead local or staging appcast.
+Evidence: <code>scripts/self-hosted-update-proof.sh</code> now writes
+<code>final-feed-policy.txt</code>, treats non-public final feeds as unsafe by default,
+restores the public GitHub release for the proved version when possible, and
+requires <code>ONECONTEXT_UPDATE_RUNNER_ALLOW_NON_PUBLIC_FINAL_FEED=1</code> for a
+deliberate staging-only runner. <code>scripts/test-upgrade-paths.sh</code> asserts this
+guard exists, and <code>docs/ci/self-hosted-mac-runner.md</code> documents the behavior.</li>
+<li><input checked="" disabled="" type="checkbox"> Prove manual <code>Check for Updates</code> on an already-current public-feed
+<code>0.1.62</code> app does not show the failed-update support popup.
+Evidence:
+<code>dist/current-update-check-evidence/0.1.62-public-feed-no-failure/result.txt</code>
+records <code>result=passed</code> and <code>observed=no failure alert during 20 second manual check window</code>, while <code>version-before.txt</code> records <code>plist=0.1.62</code>,
+<code>cli=0.1.62</code>, and the public GitHub appcast feed. The captured desktop
+screenshot shows the normal <code>1Context is up to date.</code> alert.</li>
 </ul>
 <h5>0.1.63 Permission Flywheel and Clean-Machine Acceptance</h5>
 <ul>

@@ -12,6 +12,7 @@ OLD_DMG_URL="${ONECONTEXT_OLD_DMG_URL:-}"
 OLD_DMG_PATH="${ONECONTEXT_OLD_DMG_PATH:-}"
 OLD_DMG_ASSET="${ONECONTEXT_OLD_DMG_ASSET:-}"
 APPCAST_URL="${ONECONTEXT_STAGING_APPCAST_URL:-${ONECONTEXT_REMOTE_APPCAST_URL:-}}"
+PUBLIC_APPCAST_URL="${ONECONTEXT_PUBLIC_APPCAST_URL:-https://github.com/hapticasensorics/1context/releases/latest/download/appcast.xml}"
 PROOF_REASON="${ONECONTEXT_UPDATE_PROOF_REASON:-}"
 UPDATE_CLASS="${ONECONTEXT_EXPECTED_UPDATE_CLASS:-mandatory}"
 TIMEOUT_SECONDS="${ONECONTEXT_UPDATE_PROOF_TIMEOUT_SECONDS:-420}"
@@ -19,11 +20,14 @@ POLL_SECONDS="${ONECONTEXT_UPDATE_PROOF_POLL_SECONDS:-5}"
 STEADY_STATE_SECONDS="${ONECONTEXT_STEADY_STATE_SECONDS:-120}"
 STEADY_STATE_INTERVAL_SECONDS="${ONECONTEXT_STEADY_STATE_INTERVAL_SECONDS:-5}"
 RUNNER_SETUP_PREFLIGHT="${ONECONTEXT_RUNNER_SETUP_PREFLIGHT:-1}"
+ALLOW_NON_PUBLIC_FINAL_FEED="${ONECONTEXT_UPDATE_RUNNER_ALLOW_NON_PUBLIC_FINAL_FEED:-0}"
+RESTORE_PUBLIC_FINAL_FEED="${ONECONTEXT_UPDATE_RUNNER_RESTORE_PUBLIC_FINAL_FEED:-1}"
 STAMP="$(date -u +%Y%m%dT%H%M%SZ)"
 EVIDENCE_DIR="${ONECONTEXT_SELF_HOSTED_UPDATE_EVIDENCE_DIR:-$ROOT/dist/self-hosted-update-proof/$STAMP}"
 DOWNLOAD_DIR="$EVIDENCE_DIR/downloads"
 MOUNT_POINT=""
 DOWNLOADED_OLD_DMG=""
+DOWNLOADED_RELEASE_DMG=""
 
 fail() {
   echo "self-hosted update proof failed: $*" >&2
@@ -154,20 +158,29 @@ download_old_dmg() {
     log "downloading old DMG from explicit URL"
     curl --fail --location --show-error --silent "$OLD_DMG_URL" --output "$output"
   else
-    require_tool gh
     local tag="${OLD_TAG:-v$OLD_VERSION}"
-    local asset="${OLD_DMG_ASSET:-1Context-$OLD_VERSION-macos-$ARCH.dmg}"
-    log "downloading $REPO@$tag asset $asset"
-    gh release download "$tag" --repo "$REPO" --pattern "$asset" --dir "$DOWNLOAD_DIR" --clobber >/dev/null
-    if [[ ! -f "$DOWNLOAD_DIR/$asset" ]]; then
-      fail "Downloaded release asset was not found: $asset"
-    fi
-    if [[ "$DOWNLOAD_DIR/$asset" != "$output" ]]; then
-      mv "$DOWNLOAD_DIR/$asset" "$output"
-    fi
+    download_release_dmg "$OLD_VERSION" "$tag" "${OLD_DMG_ASSET:-1Context-$OLD_VERSION-macos-$ARCH.dmg}" "$output"
   fi
   shasum -a 256 "$output" | tee "$EVIDENCE_DIR/old-dmg.sha256"
   DOWNLOADED_OLD_DMG="$output"
+}
+
+download_release_dmg() {
+  local version="$1"
+  local tag="$2"
+  local asset="$3"
+  local output="$4"
+  require_tool gh
+  log "downloading $REPO@$tag asset $asset"
+  gh release download "$tag" --repo "$REPO" --pattern "$asset" --dir "$DOWNLOAD_DIR" --clobber >/dev/null
+  if [[ ! -f "$DOWNLOAD_DIR/$asset" ]]; then
+    fail "Downloaded release asset was not found: $asset"
+  fi
+  if [[ "$DOWNLOAD_DIR/$asset" != "$output" ]]; then
+    mv "$DOWNLOAD_DIR/$asset" "$output"
+  fi
+  shasum -a 256 "$output" | tee "$EVIDENCE_DIR/release-$version-dmg.sha256"
+  DOWNLOADED_RELEASE_DMG="$output"
 }
 
 mount_dmg() {
@@ -194,13 +207,16 @@ PY
   log "mounted old DMG at $MOUNT_POINT"
 }
 
-install_old_app() {
+install_app_from_dmg() {
   local dmg="$1"
+  local expected_version="$2"
+  local evidence_name="$3"
+  local expected_feed="${4:-}"
   mount_dmg "$dmg"
   local source="$MOUNT_POINT/1Context.app"
   [[ -d "$source" ]] || fail "DMG does not contain 1Context.app at $source"
 
-  log "installing $OLD_VERSION into $APP"
+  log "installing $expected_version into $APP"
   rm -rf "$APP"
   mkdir -p "$(dirname "$APP")"
   COPYFILE_DISABLE=1 ditto --norsrc --noextattr --noqtn --noacl "$source" "$APP"
@@ -208,13 +224,56 @@ install_old_app() {
   hdiutil detach "$MOUNT_POINT" >/dev/null
   MOUNT_POINT=""
 
-  codesign --verify --deep --strict "$APP" > "$EVIDENCE_DIR/codesign-old-app.txt" 2>&1
-  spctl --assess --type execute --verbose=4 "$APP" > "$EVIDENCE_DIR/spctl-old-app.txt" 2>&1
-  write_versions "$EVIDENCE_DIR/version-after-old-install.txt"
-  [[ "$(installed_plist_version)" == "$OLD_VERSION" ]] || fail "Installed plist version is not $OLD_VERSION."
-  [[ "$(installed_cli_version)" == "$OLD_VERSION" ]] || fail "Installed CLI version is not $OLD_VERSION."
-  if [[ "$(installed_feed_url)" != "$APPCAST_URL" ]]; then
-    fail "Installed old app SUFeedURL does not match the proof appcast. Build/provide the old DMG with ONECONTEXT_SPARKLE_FEED_URL=$APPCAST_URL, or set the proof appcast URL to the installed app feed."
+  codesign --verify --deep --strict "$APP" > "$EVIDENCE_DIR/codesign-$evidence_name-app.txt" 2>&1
+  spctl --assess --type execute --verbose=4 "$APP" > "$EVIDENCE_DIR/spctl-$evidence_name-app.txt" 2>&1
+  write_versions "$EVIDENCE_DIR/version-after-$evidence_name-install.txt"
+  [[ "$(installed_plist_version)" == "$expected_version" ]] || fail "Installed plist version is not $expected_version."
+  [[ "$(installed_cli_version)" == "$expected_version" ]] || fail "Installed CLI version is not $expected_version."
+  if [[ -n "$expected_feed" && "$(installed_feed_url)" != "$expected_feed" ]]; then
+    fail "Installed $evidence_name app SUFeedURL does not match the expected proof feed. Expected: $expected_feed. Actual: $(installed_feed_url)."
+  fi
+}
+
+install_old_app() {
+  install_app_from_dmg "$1" "$OLD_VERSION" "old" "$APPCAST_URL"
+}
+
+ensure_final_app_uses_public_feed() {
+  local final_feed
+  final_feed="$(installed_feed_url)"
+  {
+    echo "final_feed=$final_feed"
+    echo "public_appcast_url=$PUBLIC_APPCAST_URL"
+    echo "allow_non_public_final_feed=$ALLOW_NON_PUBLIC_FINAL_FEED"
+    echo "restore_public_final_feed=$RESTORE_PUBLIC_FINAL_FEED"
+  } > "$EVIDENCE_DIR/final-feed-policy.txt"
+
+  if [[ "$final_feed" == "$PUBLIC_APPCAST_URL" ]]; then
+    echo "final_feed_action=already_public" >> "$EVIDENCE_DIR/final-feed-policy.txt"
+    return
+  fi
+  if [[ "$ALLOW_NON_PUBLIC_FINAL_FEED" == "1" ]]; then
+    echo "final_feed_action=allowed_non_public" >> "$EVIDENCE_DIR/final-feed-policy.txt"
+    log "leaving non-public final feed because ONECONTEXT_UPDATE_RUNNER_ALLOW_NON_PUBLIC_FINAL_FEED=1"
+    return
+  fi
+  if [[ "$RESTORE_PUBLIC_FINAL_FEED" != "1" ]]; then
+    fail "Final app feed is not the public feed ($final_feed), and public-feed restoration is disabled. Set ONECONTEXT_UPDATE_RUNNER_ALLOW_NON_PUBLIC_FINAL_FEED=1 only for a deliberate staging-only runner."
+  fi
+
+  log "final app feed is not public; restoring public $NEW_VERSION release before leaving runner"
+  echo "final_feed_action=restored_public_release" >> "$EVIDENCE_DIR/final-feed-policy.txt"
+  local restore_tag="${ONECONTEXT_PUBLIC_RESTORE_TAG:-v$NEW_VERSION}"
+  local restore_asset="${ONECONTEXT_PUBLIC_RESTORE_DMG_ASSET:-1Context-$NEW_VERSION-macos-$ARCH.dmg}"
+  local restore_dmg="$DOWNLOAD_DIR/public-$restore_asset"
+  download_release_dmg "$NEW_VERSION" "$restore_tag" "$restore_asset" "$restore_dmg"
+  stop_1context
+  install_app_from_dmg "$DOWNLOADED_RELEASE_DMG" "$NEW_VERSION" "public-restore" "$PUBLIC_APPCAST_URL"
+  rm -f "$DOWNLOADED_RELEASE_DMG"
+  open "$APP" || true
+  sleep 5
+  if [[ -x "$APP/Contents/MacOS/1context-cli" ]]; then
+    "$APP/Contents/MacOS/1context-cli" status --debug > "$EVIDENCE_DIR/status-after-public-restore.txt" 2>&1 || true
   fi
 }
 
@@ -232,6 +291,7 @@ collect_host_snapshot() {
     echo "update_class=$UPDATE_CLASS"
     echo "proof_reason=$PROOF_REASON"
     echo "appcast_url=$APPCAST_URL"
+    echo "public_appcast_url=$PUBLIC_APPCAST_URL"
     echo "old_tag=${OLD_TAG:-v$OLD_VERSION}"
     echo "old_dmg_url=$OLD_DMG_URL"
     echo "timeout_seconds=$TIMEOUT_SECONDS"
@@ -239,6 +299,8 @@ collect_host_snapshot() {
     echo "steady_state_seconds=$STEADY_STATE_SECONDS"
     echo "steady_state_interval_seconds=$STEADY_STATE_INTERVAL_SECONDS"
     echo "runner_setup_preflight=$RUNNER_SETUP_PREFLIGHT"
+    echo "allow_non_public_final_feed=$ALLOW_NON_PUBLIC_FINAL_FEED"
+    echo "restore_public_final_feed=$RESTORE_PUBLIC_FINAL_FEED"
     echo "evidence_dir=$EVIDENCE_DIR"
     echo
     sw_vers || true
@@ -314,6 +376,7 @@ ONECONTEXT_STEADY_STATE_INTERVAL_SECONDS="$STEADY_STATE_INTERVAL_SECONDS" \
 ONECONTEXT_STEADY_STATE_EVIDENCE_DIR="$EVIDENCE_DIR/steady-state" \
   "$ROOT/scripts/verify-macos-steady-state.sh"
 
+ensure_final_app_uses_public_feed
 collect_final_logs
 
 cat > "$EVIDENCE_DIR/result.txt" <<RESULT
@@ -323,6 +386,8 @@ new_version=$NEW_VERSION
 update_class=$UPDATE_CLASS
 proof_reason=$PROOF_REASON
 appcast_url=$APPCAST_URL
+public_appcast_url=$PUBLIC_APPCAST_URL
+final_feed=$(installed_feed_url)
 evidence_dir=$EVIDENCE_DIR
 RESULT
 

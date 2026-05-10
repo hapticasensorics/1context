@@ -207,8 +207,21 @@ For a true pre-public staging proof, that explicit old DMG path/URL is usually
 required unless the public version-N app already points at the same staging
 appcast.
 
-The proof leaves `/Applications/1Context.app` at N+1 and healthy. The next run
-will stop it, reinstall N from DMG, clear disposable updater caches, and repeat.
+The proof leaves `/Applications/1Context.app` at N+1 and healthy. By default it
+also requires the final installed app to point back at the public Sparkle feed
+(`https://github.com/hapticasensorics/1context/releases/latest/download/appcast.xml`).
+If a staging proof installs an app whose final `SUFeedURL` is a local or staging
+feed, the script tries to restore the public GitHub release for the same version
+before leaving the runner. This prevents a shared human-visible runner from
+later showing `Update failed.` because it is still pointed at a dead local
+appcast.
+
+For an intentionally staging-only runner, set
+`ONECONTEXT_UPDATE_RUNNER_ALLOW_NON_PUBLIC_FINAL_FEED=1` in the runner command
+or workflow environment and capture that decision in the proof reason.
+
+The next run will stop the app, reinstall N from DMG, clear disposable updater
+caches, and repeat.
 
 ## References
 
