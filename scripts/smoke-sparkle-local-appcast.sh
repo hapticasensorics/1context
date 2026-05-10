@@ -28,8 +28,9 @@ GENERATE_APPCAST="$ROOT/macos/.build/artifacts/sparkle/Sparkle/bin/generate_appc
 if [[ -n "$FAILURE_CASE" &&
   "$FAILURE_CASE" != "missing_asset" &&
   "$FAILURE_CASE" != "bad_signature" &&
-  "$FAILURE_CASE" != "broken_appcast" ]]; then
-  echo "ONECONTEXT_SPARKLE_SMOKE_FAILURE_CASE must be empty, missing_asset, bad_signature, or broken_appcast." >&2
+  "$FAILURE_CASE" != "broken_appcast" &&
+  "$FAILURE_CASE" != "interrupted_download" ]]; then
+  echo "ONECONTEXT_SPARKLE_SMOKE_FAILURE_CASE must be empty, missing_asset, bad_signature, broken_appcast, or interrupted_download." >&2
   exit 1
 fi
 
@@ -345,6 +346,82 @@ cleanup_app() {
   fi
 }
 
+start_update_server() {
+  if [[ "$FAILURE_CASE" == "interrupted_download" ]]; then
+    local interrupted_dmg
+    local interrupted_dmg_path
+    local declared_bytes
+    local sent_bytes
+    interrupted_dmg="$(basename "$NEW_DMG")"
+    interrupted_dmg_path="$UPDATES_DIR/$interrupted_dmg"
+    declared_bytes="$(wc -c < "$interrupted_dmg_path" | tr -d '[:space:]')"
+    sent_bytes="${ONECONTEXT_SPARKLE_SMOKE_INTERRUPTED_BYTES:-65536}"
+    if (( sent_bytes >= declared_bytes )); then
+      sent_bytes=$((declared_bytes / 2))
+    fi
+    if (( sent_bytes < 1 )); then
+      sent_bytes=1
+    fi
+    {
+      echo "interrupted DMG response after appcast signing for interrupted_download proof"
+      echo "dmg=$interrupted_dmg"
+      echo "declared_bytes=$declared_bytes"
+      echo "sent_bytes=$sent_bytes"
+      echo "sha256=$(shasum -a 256 "$interrupted_dmg_path" | awk '{ print $1 }')"
+    } > "$EVIDENCE_DIR/download-interruption.txt"
+    python3 - "$UPDATES_DIR" "$PORT" "$interrupted_dmg" "$sent_bytes" \
+      > "$EVIDENCE_DIR/http-server.log" 2>&1 <<'PY' &
+import functools
+import http.server
+import os
+import socket
+import socketserver
+import sys
+
+updates_dir = sys.argv[1]
+port = int(sys.argv[2])
+interrupted_name = sys.argv[3]
+sent_bytes = int(sys.argv[4])
+
+class InterruptedDownloadHandler(http.server.SimpleHTTPRequestHandler):
+    def do_GET(self):
+        requested = os.path.basename(self.path.split("?", 1)[0])
+        if requested == interrupted_name:
+            target = os.path.join(updates_dir, interrupted_name)
+            declared_bytes = os.path.getsize(target)
+            with open(target, "rb") as file:
+                payload = file.read(min(sent_bytes, declared_bytes))
+            self.send_response(200)
+            self.send_header("Content-Type", "application/x-apple-diskimage")
+            self.send_header("Content-Length", str(declared_bytes))
+            self.send_header("Accept-Ranges", "none")
+            self.end_headers()
+            self.wfile.write(payload)
+            self.wfile.flush()
+            print(
+                f"interrupted_download path={self.path} declared_bytes={declared_bytes} sent_bytes={len(payload)}",
+                flush=True,
+            )
+            try:
+                self.connection.shutdown(socket.SHUT_RDWR)
+            except OSError:
+                pass
+            self.connection.close()
+            return
+        return super().do_GET()
+
+handler = functools.partial(InterruptedDownloadHandler, directory=updates_dir)
+with socketserver.TCPServer(("127.0.0.1", port), handler) as httpd:
+    httpd.serve_forever()
+PY
+    SERVER_PID="$!"
+  else
+    python3 -m http.server "$PORT" --bind 127.0.0.1 --directory "$UPDATES_DIR" \
+      > "$EVIDENCE_DIR/http-server.log" 2>&1 &
+    SERVER_PID="$!"
+  fi
+}
+
 trap 'cleanup_server; cleanup_app' EXIT
 
 OLD_APP="$WORK_DIR/old/1Context.app"
@@ -395,9 +472,7 @@ plutil -extract SUAutomaticallyUpdate raw "$OLD_APP/Contents/Info.plist" | grep 
 plutil -extract SUVerifyUpdateBeforeExtraction raw "$OLD_APP/Contents/Info.plist" | grep -qx true
 
 log "serving local appcast on $FEED_URL"
-python3 -m http.server "$PORT" --bind 127.0.0.1 --directory "$UPDATES_DIR" \
-  > "$EVIDENCE_DIR/http-server.log" 2>&1 &
-SERVER_PID="$!"
+start_update_server
 sleep 1
 curl --fail --silent "$FEED_URL" > "$EVIDENCE_DIR/appcast-served.xml"
 

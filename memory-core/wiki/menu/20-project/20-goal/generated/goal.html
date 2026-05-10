@@ -891,21 +891,32 @@ Evidence: <code>SparkleUpdateController</code> retries the same check mode only 
 consuming a failure-window <code>Try Again</code> request, while
 <code>SparkleUpdateControllerTests.testManualChecksCanAskForNonMandatoryUpdates</code>
 still covers the manual update path and <code>scripts/test.sh</code> passes.</li>
-<li><input disabled="" type="checkbox"> Extend failed-update smoke to an interrupted download case where feasible.</li>
+<li><input checked="" disabled="" type="checkbox"> Extend failed-update smoke to an interrupted download case where feasible.
+Evidence: <code>scripts/smoke-sparkle-local-appcast.sh</code> supports
+<code>ONECONTEXT_SPARKLE_SMOKE_FAILURE_CASE=interrupted_download</code> with a local
+HTTP server that advertises the signed DMG&#39;s real byte length, sends only a
+small prefix, and closes the connection. The proof at
+<code>dist/sparkle-local-smoke/interrupted-download-failure-0.1.61/evidence/result.txt</code>
+passed with <code>failure_case=interrupted_download</code>,
+<code>attempted_new_version=0.1.61.901</code>, and
+<code>installed_cli_version=0.1.61.900</code>.</li>
 <li><input checked="" disabled="" type="checkbox"> Prove every remaining user-facing failed-update path shows only:
 <code>Update failed. Please contact support at paul@haptica.ai.</code>
 Evidence:
 <code>dist/sparkle-local-smoke/missing-asset-failure-0.1.61/evidence/failure-message.txt</code>,
 <code>dist/sparkle-local-smoke/bad-signature-failure-0.1.61/evidence/failure-message.txt</code>,
+<code>dist/sparkle-local-smoke/broken-appcast-retry-0.1.61/evidence/failure-message.txt</code>,
 and
-<code>dist/sparkle-local-smoke/broken-appcast-retry-0.1.61/evidence/failure-message.txt</code>
+<code>dist/sparkle-local-smoke/interrupted-download-failure-0.1.61/evidence/failure-message.txt</code>
 all record the controlled title/body and do not expose Sparkle/download/signature
 details in the user-facing accessibility dump.</li>
 <li><input checked="" disabled="" type="checkbox"> Prove internal diagnostics/logs retain the real failure reason for support.
 Evidence: missing-asset evidence keeps the corrupted appcast and HTTP 404
 server log, bad-signature evidence keeps <code>signature-corruption.txt</code>, and
 broken-appcast evidence keeps <code>appcast-corruption.txt</code>, <code>retry-repair.txt</code>,
-and <code>http-server.log</code>.</li>
+and <code>http-server.log</code>; interrupted-download evidence keeps
+<code>download-interruption.txt</code> and <code>http-server.log</code> with declared/sent byte
+counts.</li>
 <li><input disabled="" type="checkbox"> Prove failed update leaves the old app launchable and remembering continues
 unless the app is already in the short install/relaunch phase.</li>
 <li><input disabled="" type="checkbox"> Prove stale local HTTPS helper is detected and repaired after app

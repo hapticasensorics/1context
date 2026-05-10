@@ -815,21 +815,32 @@ Each release in this train must answer four questions:
   consuming a failure-window `Try Again` request, while
   `SparkleUpdateControllerTests.testManualChecksCanAskForNonMandatoryUpdates`
   still covers the manual update path and `scripts/test.sh` passes.
-- [ ] Extend failed-update smoke to an interrupted download case where feasible.
+- [x] Extend failed-update smoke to an interrupted download case where feasible.
+  Evidence: `scripts/smoke-sparkle-local-appcast.sh` supports
+  `ONECONTEXT_SPARKLE_SMOKE_FAILURE_CASE=interrupted_download` with a local
+  HTTP server that advertises the signed DMG's real byte length, sends only a
+  small prefix, and closes the connection. The proof at
+  `dist/sparkle-local-smoke/interrupted-download-failure-0.1.61/evidence/result.txt`
+  passed with `failure_case=interrupted_download`,
+  `attempted_new_version=0.1.61.901`, and
+  `installed_cli_version=0.1.61.900`.
 - [x] Prove every remaining user-facing failed-update path shows only:
   `Update failed. Please contact support at paul@haptica.ai.`
   Evidence:
   `dist/sparkle-local-smoke/missing-asset-failure-0.1.61/evidence/failure-message.txt`,
   `dist/sparkle-local-smoke/bad-signature-failure-0.1.61/evidence/failure-message.txt`,
+  `dist/sparkle-local-smoke/broken-appcast-retry-0.1.61/evidence/failure-message.txt`,
   and
-  `dist/sparkle-local-smoke/broken-appcast-retry-0.1.61/evidence/failure-message.txt`
+  `dist/sparkle-local-smoke/interrupted-download-failure-0.1.61/evidence/failure-message.txt`
   all record the controlled title/body and do not expose Sparkle/download/signature
   details in the user-facing accessibility dump.
 - [x] Prove internal diagnostics/logs retain the real failure reason for support.
   Evidence: missing-asset evidence keeps the corrupted appcast and HTTP 404
   server log, bad-signature evidence keeps `signature-corruption.txt`, and
   broken-appcast evidence keeps `appcast-corruption.txt`, `retry-repair.txt`,
-  and `http-server.log`.
+  and `http-server.log`; interrupted-download evidence keeps
+  `download-interruption.txt` and `http-server.log` with declared/sent byte
+  counts.
 - [ ] Prove failed update leaves the old app launchable and remembering continues
   unless the app is already in the short install/relaunch phase.
 - [ ] Prove stale local HTTPS helper is detected and repaired after app
