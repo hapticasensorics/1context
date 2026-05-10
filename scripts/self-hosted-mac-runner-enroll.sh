@@ -44,14 +44,14 @@ import sys
 
 arch = sys.argv[1]
 payload = json.loads(os.environ["RUNNER_LATEST_JSON"])
-suffix = f"osx-{arch}.tar.gz"
+needle = f"osx-{arch}-"
 for asset in payload.get("assets", []):
     name = asset.get("name", "")
-    if name.startswith("actions-runner-") and name.endswith(suffix):
+    if name.startswith("actions-runner-") and needle in name and name.endswith(".tar.gz"):
         print(asset["browser_download_url"])
         break
 else:
-    raise SystemExit(f"Could not find actions runner asset for {suffix}.")
+    raise SystemExit(f"Could not find actions runner asset for osx-{arch}.")
 PY
 )"
 asset_name="$(basename "$asset_url")"
