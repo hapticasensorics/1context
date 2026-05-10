@@ -22,10 +22,14 @@ fi
 FAILURE_CASE="${ONECONTEXT_SPARKLE_SMOKE_FAILURE_CASE:-}"
 FAILURE_TITLE="${ONECONTEXT_SPARKLE_SMOKE_FAILURE_TITLE:-Update failed.}"
 FAILURE_BODY="${ONECONTEXT_SPARKLE_SMOKE_FAILURE_BODY:-Please contact support at paul@haptica.ai.}"
+RETRY_AFTER_FAILURE="${ONECONTEXT_SPARKLE_SMOKE_RETRY_AFTER_FAILURE:-0}"
 GENERATE_APPCAST="$ROOT/macos/.build/artifacts/sparkle/Sparkle/bin/generate_appcast"
 
-if [[ -n "$FAILURE_CASE" && "$FAILURE_CASE" != "missing_asset" && "$FAILURE_CASE" != "bad_signature" ]]; then
-  echo "ONECONTEXT_SPARKLE_SMOKE_FAILURE_CASE must be empty, missing_asset, or bad_signature." >&2
+if [[ -n "$FAILURE_CASE" &&
+  "$FAILURE_CASE" != "missing_asset" &&
+  "$FAILURE_CASE" != "bad_signature" &&
+  "$FAILURE_CASE" != "broken_appcast" ]]; then
+  echo "ONECONTEXT_SPARKLE_SMOKE_FAILURE_CASE must be empty, missing_asset, bad_signature, or broken_appcast." >&2
   exit 1
 fi
 
@@ -101,6 +105,7 @@ DOWNLOAD_PREFIX="http://127.0.0.1:$PORT/"
   echo "failure_case=$FAILURE_CASE"
   echo "failure_title=$FAILURE_TITLE"
   echo "failure_body=$FAILURE_BODY"
+  echo "retry_after_failure=$RETRY_AFTER_FAILURE"
   echo "work_dir=$WORK_DIR"
 } > "$EVIDENCE_DIR/environment.txt"
 
@@ -191,6 +196,41 @@ end tell
 APPLESCRIPT
 }
 
+click_failure_try_again() {
+  osascript >/dev/null 2>&1 <<'APPLESCRIPT' || true
+tell application "System Events"
+  repeat with proc in application processes
+    set procName to name of proc
+    if procName contains "1Context" then
+      repeat with win in windows of proc
+        try
+          click button "Try Again" of win
+          return
+        end try
+      end repeat
+    end if
+  end repeat
+end tell
+APPLESCRIPT
+}
+
+repair_failure_for_retry() {
+  case "$FAILURE_CASE" in
+    broken_appcast)
+      cp "$EVIDENCE_DIR/appcast-before-corruption.xml" "$APPCAST"
+      {
+        echo "repaired broken appcast before clicking Try Again"
+        echo "appcast=$APPCAST"
+        echo "sha256_repaired=$(shasum -a 256 "$APPCAST" | awk '{ print $1 }')"
+      } > "$EVIDENCE_DIR/retry-repair.txt"
+      ;;
+    *)
+      echo "Retry repair is not implemented for failure_case=$FAILURE_CASE." >&2
+      return 1
+      ;;
+  esac
+}
+
 wait_for_post_install_message() {
   local expected_body="${POST_INSTALL_BODY//\{version\}/$NEW_VERSION}"
   local deadline=$(( "$(date +%s)" + 45 ))
@@ -230,13 +270,23 @@ wait_for_failure_message() {
     cp "$EVIDENCE_DIR/failure-desktop-$attempt.png" "$EVIDENCE_DIR/failure-desktop.png"
     if grep -Fq "$FAILURE_TITLE" "$accessibility" &&
       grep -Fq "$FAILURE_BODY" "$accessibility"; then
+      grep -Fq "button	Try Again" "$accessibility"
+      grep -Fq "button	OK" "$accessibility"
       if grep -Eiq '404|not found|download|signature|Sparkle|installer|relaunch' "$accessibility"; then
         echo "Failure alert exposed technical update details. Evidence: $accessibility" >&2
         return 1
       fi
       echo "title=$FAILURE_TITLE" > "$EVIDENCE_DIR/failure-message.txt"
       echo "body=$FAILURE_BODY" >> "$EVIDENCE_DIR/failure-message.txt"
-      click_post_install_ok
+      echo "buttons=Try Again, OK" >> "$EVIDENCE_DIR/failure-message.txt"
+      if [[ "$RETRY_AFTER_FAILURE" == "1" ]]; then
+        repair_failure_for_retry
+        echo "action=try_again" >> "$EVIDENCE_DIR/failure-message.txt"
+        click_failure_try_again
+      else
+        echo "action=ok" >> "$EVIDENCE_DIR/failure-message.txt"
+        click_post_install_ok
+      fi
       return 0
     fi
     if (( "$(date +%s)" >= deadline )); then
@@ -331,6 +381,14 @@ elif [[ "$FAILURE_CASE" == "bad_signature" ]]; then
   } > "$EVIDENCE_DIR/signature-corruption.txt"
   printf '\n1context-bad-signature-fixture\n' >> "$SIGNED_UPDATE_DMG"
   echo "sha256_after=$(shasum -a 256 "$SIGNED_UPDATE_DMG" | awk '{ print $1 }')" >> "$EVIDENCE_DIR/signature-corruption.txt"
+elif [[ "$FAILURE_CASE" == "broken_appcast" ]]; then
+  cp "$APPCAST" "$EVIDENCE_DIR/appcast-before-corruption.xml"
+  {
+    echo "corrupted appcast XML after mandatory appcast validation for broken_appcast proof"
+    echo "sha256_before=$(shasum -a 256 "$APPCAST" | awk '{ print $1 }')"
+  } > "$EVIDENCE_DIR/appcast-corruption.txt"
+  printf '%s\n' '<rss><channel><item><title>broken 1Context appcast' > "$APPCAST"
+  echo "sha256_after=$(shasum -a 256 "$APPCAST" | awk '{ print $1 }')" >> "$EVIDENCE_DIR/appcast-corruption.txt"
 fi
 plutil -extract SUPublicEDKey raw "$OLD_APP/Contents/Info.plist" | grep -qx "$PUBLIC_KEY"
 plutil -extract SUAutomaticallyUpdate raw "$OLD_APP/Contents/Info.plist" | grep -qx true
@@ -356,23 +414,44 @@ echo "$APP_PID" > "$EVIDENCE_DIR/initial-app.pid"
 
 if [[ -n "$FAILURE_CASE" ]]; then
   wait_for_failure_message
-  wait_for_version "$OLD_VERSION"
-  FAILED_CLI_VERSION="$("$INSTALL_APP/Contents/MacOS/1context-cli" --version)"
-  echo "$FAILED_CLI_VERSION" > "$EVIDENCE_DIR/failed-cli-version.txt"
-  if [[ "$FAILED_CLI_VERSION" != "$OLD_VERSION" ]]; then
-    echo "Expected failed update to leave CLI version $OLD_VERSION, got $FAILED_CLI_VERSION." >&2
-    exit 1
+  if [[ "$RETRY_AFTER_FAILURE" == "1" ]]; then
+    wait_for_version "$NEW_VERSION"
+    RETRIED_CLI_VERSION="$("$INSTALL_APP/Contents/MacOS/1context-cli" --version)"
+    echo "$RETRIED_CLI_VERSION" > "$EVIDENCE_DIR/retried-cli-version.txt"
+    if [[ "$RETRIED_CLI_VERSION" != "$NEW_VERSION" ]]; then
+      echo "Expected retry to update CLI to $NEW_VERSION, got $RETRIED_CLI_VERSION." >&2
+      exit 1
+    fi
+    {
+      echo "result=passed"
+      echo "failure_case=$FAILURE_CASE"
+      echo "retry_after_failure=1"
+      echo "old_version=$OLD_VERSION"
+      echo "new_version=$NEW_VERSION"
+      echo "feed_url=$FEED_URL"
+      echo "appcast=$APPCAST"
+      echo "retried_cli_version=$RETRIED_CLI_VERSION"
+    } > "$EVIDENCE_DIR/result.txt"
+    log "passed $FAILURE_CASE retry proof; evidence at $EVIDENCE_DIR"
+  else
+    wait_for_version "$OLD_VERSION"
+    FAILED_CLI_VERSION="$("$INSTALL_APP/Contents/MacOS/1context-cli" --version)"
+    echo "$FAILED_CLI_VERSION" > "$EVIDENCE_DIR/failed-cli-version.txt"
+    if [[ "$FAILED_CLI_VERSION" != "$OLD_VERSION" ]]; then
+      echo "Expected failed update to leave CLI version $OLD_VERSION, got $FAILED_CLI_VERSION." >&2
+      exit 1
+    fi
+    {
+      echo "result=passed"
+      echo "failure_case=$FAILURE_CASE"
+      echo "old_version=$OLD_VERSION"
+      echo "attempted_new_version=$NEW_VERSION"
+      echo "feed_url=$FEED_URL"
+      echo "appcast=$APPCAST"
+      echo "installed_cli_version=$FAILED_CLI_VERSION"
+    } > "$EVIDENCE_DIR/result.txt"
+    log "passed $FAILURE_CASE failure proof; evidence at $EVIDENCE_DIR"
   fi
-  {
-    echo "result=passed"
-    echo "failure_case=$FAILURE_CASE"
-    echo "old_version=$OLD_VERSION"
-    echo "attempted_new_version=$NEW_VERSION"
-    echo "feed_url=$FEED_URL"
-    echo "appcast=$APPCAST"
-    echo "installed_cli_version=$FAILED_CLI_VERSION"
-  } > "$EVIDENCE_DIR/result.txt"
-  log "passed $FAILURE_CASE failure proof; evidence at $EVIDENCE_DIR"
   cleanup_app
   exit 0
 fi

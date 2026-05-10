@@ -783,11 +783,53 @@ Each release in this train must answer four questions:
   Evidence: `scripts/build-macos-app.sh` writes
   `SUVerifyUpdateBeforeExtraction = true`; the local Sparkle smoke and package
   smoke assert the key is present in the built app.
-- [ ] Extend failed-update smoke to broken appcast and interrupted download
-  cases where feasible.
-- [ ] Prove every remaining user-facing failed-update path shows only:
+- [x] Add a broken-appcast failed-update retry smoke for a mandatory Sparkle
+  update.
+  Evidence: `scripts/smoke-sparkle-local-appcast.sh` supports
+  `ONECONTEXT_SPARKLE_SMOKE_FAILURE_CASE=broken_appcast`, corrupts the served
+  appcast XML after first generating and validating a mandatory appcast, then
+  can repair the feed while the controlled failure alert is open and click
+  `Try Again`.
+- [x] Prove the broken-appcast user-facing failed-update path stays simple and
+  includes a manual retry button.
+  Evidence:
+  `dist/sparkle-local-smoke/broken-appcast-retry-0.1.61/evidence/failure-message.txt`
+  records `title=Update failed.`, the support body, `buttons=Try Again, OK`,
+  and `action=try_again`; `failure-accessibility.txt` contains only the
+  controlled title/body and those two buttons.
+- [x] Prove clicking `Try Again` after a failed appcast check re-runs the update
+  check after the failed Sparkle cycle and can complete the update.
+  Evidence:
+  `dist/sparkle-local-smoke/broken-appcast-retry-0.1.61/evidence/result.txt`
+  records `retry_after_failure=1` and `retried_cli_version=0.1.61.901` after
+  starting from `old_version=0.1.61.900`.
+- [x] Prove the broken-appcast failed update retains operator evidence without
+  exposing it to the user.
+  Evidence: `appcast-corruption.txt` records the deliberate XML corruption,
+  `retry-repair.txt` records the feed repair before `Try Again`, and
+  `http-server.log` records the failed-cycle appcast fetches followed by the
+  successful retry appcast and DMG fetch.
+- [x] Keep the normal menu `Check for Updates` path separate from failed-update
+  retry behavior.
+  Evidence: `SparkleUpdateController` retries the same check mode only after
+  consuming a failure-window `Try Again` request, while
+  `SparkleUpdateControllerTests.testManualChecksCanAskForNonMandatoryUpdates`
+  still covers the manual update path and `scripts/test.sh` passes.
+- [ ] Extend failed-update smoke to an interrupted download case where feasible.
+- [x] Prove every remaining user-facing failed-update path shows only:
   `Update failed. Please contact support at paul@haptica.ai.`
-- [ ] Prove internal diagnostics/logs retain the real failure reason for support.
+  Evidence:
+  `dist/sparkle-local-smoke/missing-asset-failure-0.1.61/evidence/failure-message.txt`,
+  `dist/sparkle-local-smoke/bad-signature-failure-0.1.61/evidence/failure-message.txt`,
+  and
+  `dist/sparkle-local-smoke/broken-appcast-retry-0.1.61/evidence/failure-message.txt`
+  all record the controlled title/body and do not expose Sparkle/download/signature
+  details in the user-facing accessibility dump.
+- [x] Prove internal diagnostics/logs retain the real failure reason for support.
+  Evidence: missing-asset evidence keeps the corrupted appcast and HTTP 404
+  server log, bad-signature evidence keeps `signature-corruption.txt`, and
+  broken-appcast evidence keeps `appcast-corruption.txt`, `retry-repair.txt`,
+  and `http-server.log`.
 - [ ] Prove failed update leaves the old app launchable and remembering continues
   unless the app is already in the short install/relaunch phase.
 - [ ] Prove stale local HTTPS helper is detected and repaired after app
