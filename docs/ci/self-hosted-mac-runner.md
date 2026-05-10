@@ -54,6 +54,11 @@ The job calls `scripts/self-hosted-update-proof.sh`, which:
 6. Runs `scripts/verify-macos-steady-state.sh`.
 7. Uploads evidence from `dist/self-hosted-update-proof/`.
 
+The self-hosted workflow validates the staged appcast against its dispatch
+inputs. It does not require the checked-out repo's `release/update-policy.toml`
+to already describe the staged N+1 appcast, because the runner can be used
+against pre-release assets before the release commit lands.
+
 The installed version N app must have `SUFeedURL` set to the same appcast URL
 used for the proof. Public release DMGs normally point at the public latest
 GitHub appcast. For a pre-public staging proof, pass `old_dmg_url` or

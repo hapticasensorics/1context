@@ -341,7 +341,11 @@ kick_update_check() {
 log "fetching live appcast"
 curl --fail --location --silent "$APPCAST_URL" > "$EVIDENCE_DIR/live-appcast.xml"
 validate_appcast "$EVIDENCE_DIR/live-appcast.xml"
-"$ROOT/scripts/check-update-policy.sh" --appcast "$EVIDENCE_DIR/live-appcast.xml"
+if [[ "${ONECONTEXT_REMOTE_UPDATE_VALIDATE_REPO_POLICY:-1}" == "1" ]]; then
+  "$ROOT/scripts/check-update-policy.sh" --appcast "$EVIDENCE_DIR/live-appcast.xml"
+else
+  log "skipping repo update-policy validation for staged appcast"
+fi
 
 write_versions "$EVIDENCE_DIR/version-before.txt"
 capture_windows "$EVIDENCE_DIR/windows-before.txt"
