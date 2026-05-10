@@ -733,6 +733,17 @@ is <code>result=passed</code>; <code>update-proof/watch.log</code> crosses from 
 <code>update-proof/accessibility-2.txt</code> passed the no-prompt/no-release-notes
 assertion; <code>steady-state/summary.txt</code> passed 60 seconds and 10 probes after
 install.</li>
+<li><input checked="" disabled="" type="checkbox"> Promote the update-flow lockdown into CI so regressions fail before a
+release cut.
+Evidence: CI run
+<code>https://github.com/hapticasensorics/1context/actions/runs/25617804524</code>
+passed at <code>bdf470f</code>; it runs Swift tests, wiki/app tests,
+<code>scripts/test-upgrade-paths.sh</code>, package creation, and
+<code>scripts/test-launch-agent-package.sh</code>. The new upgrade-path test checks the
+destructive proof guard, update-class validation, mandatory no-UI assertions,
+and the staging-feed match guard. The package smoke checks the signed app
+shape, LaunchDaemon plist, required executables, and bundled generated
+<code>/goal</code> assets.</li>
 <li><input checked="" disabled="" type="checkbox"> Restore this Mac to the current public release after the staged proof.
 Evidence: <code>/Applications/1Context.app</code> was reinstalled from GitHub release
 <code>v0.1.60</code>, reports version <code>0.1.60</code>, points back at

@@ -5,7 +5,7 @@ section: project
 access: private
 summary: "The professional app bar for 1Context: permission flows, update discipline, and the behaviors that must feel reliable before broad release."
 status: published
-last_updated: 2026-05-09
+last_updated: 2026-05-10
 toc_enabled: true
 talk_enabled: true
 agent_view_enabled: true
@@ -657,6 +657,17 @@ Each release in this train must answer four questions:
   `update-proof/accessibility-2.txt` passed the no-prompt/no-release-notes
   assertion; `steady-state/summary.txt` passed 60 seconds and 10 probes after
   install.
+- [x] Promote the update-flow lockdown into CI so regressions fail before a
+  release cut.
+  Evidence: CI run
+  `https://github.com/hapticasensorics/1context/actions/runs/25617804524`
+  passed at `bdf470f`; it runs Swift tests, wiki/app tests,
+  `scripts/test-upgrade-paths.sh`, package creation, and
+  `scripts/test-launch-agent-package.sh`. The new upgrade-path test checks the
+  destructive proof guard, update-class validation, mandatory no-UI assertions,
+  and the staging-feed match guard. The package smoke checks the signed app
+  shape, LaunchDaemon plist, required executables, and bundled generated
+  `/goal` assets.
 - [x] Restore this Mac to the current public release after the staged proof.
   Evidence: `/Applications/1Context.app` was reinstalled from GitHub release
   `v0.1.60`, reports version `0.1.60`, points back at
