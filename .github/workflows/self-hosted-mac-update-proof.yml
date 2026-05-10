@@ -100,7 +100,7 @@ jobs:
 
       - name: Upload update proof artifacts
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: self-hosted-mac-update-proof-${{ inputs.old_version }}-to-${{ steps.versions.outputs.new_version }}
           path: dist/self-hosted-update-proof/**
