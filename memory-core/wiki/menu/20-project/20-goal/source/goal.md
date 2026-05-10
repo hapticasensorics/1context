@@ -861,9 +861,18 @@ Each release in this train must answer four questions:
   the Setup next action. The same test then models setup repair installing the
   new proxy SHA and proves readiness returns to complete with
   `Proxy current: yes`.
-- [ ] Add one command or evidence bundle that collects version, appcast, Sparkle
+- [x] Add one command or evidence bundle that collects version, appcast, Sparkle
   defaults, LaunchAgent state, helper state, setup state, runtime health, local
   wiki health, and recent logs.
+  Evidence: `scripts/collect-release-lockdown-evidence.sh` writes a timestamped
+  bundle under `dist/release-lockdown-evidence/` with `version.txt`,
+  `appcast.xml`, `appcast-summary.txt`, `sparkle-info-plist.txt`,
+  Sparkle defaults files, `status-debug.txt`, `setup-local-web-status.txt`,
+  LaunchAgent/LaunchDaemon captures, `helper-state.txt`,
+  `local-wiki-health.txt`, and `recent-logs.txt`. The proof run at
+  `dist/release-lockdown-evidence/20260510T043210Z/result.txt` records
+  `result=collected`, installed version `0.1.61`, the GitHub appcast URL, and
+  `redaction=1`.
 - [ ] Add a reusable GUI evidence harness for app/menu/Sparkle windows using
   osascript, accessibility window text, and screenshots; include a fallback path
   when the in-app browser automation control surface is unavailable.
@@ -871,8 +880,14 @@ Each release in this train must answer four questions:
   osascript window text plus desktop screenshots for remote update proofs; this
   item stays open until failed-update and optional-update windows use the same
   harness.
-- [ ] Redact sensitive paths/content by default while preserving operator-useful
+- [x] Redact sensitive paths/content by default while preserving operator-useful
   state.
+  Evidence: `scripts/collect-release-lockdown-evidence.sh` defaults
+  `ONECONTEXT_RELEASE_LOCKDOWN_EVIDENCE_REDACT=1`, replaces the home path and
+  username with stable placeholders, and avoids dumping wiki page content. The
+  proof run at `dist/release-lockdown-evidence/20260510T043210Z/` passed
+  `rg -n "/Users/paulhan|paulhan"` with no matches while preserving appcast
+  version, critical-update state, runtime health, helper state, and wiki health.
 - [ ] Prove diagnostics can distinguish healthy, needs setup, needs update,
   failed update, and stopped-by-user states.
 - [ ] Prove remote Sparkle update into `0.1.62`.

@@ -72,7 +72,7 @@
     },
     {
       "archived_talk_entries": 0,
-      "bytes": 257243,
+      "bytes": 260562,
       "generated_files": 5,
       "generated_files_by_extension": {
         ".html": 2,
@@ -115,7 +115,7 @@
       "words": 0
     }
   ],
-  "generated_at": "2026-05-10T04:30:10Z",
+  "generated_at": "2026-05-10T04:32:46Z",
   "generated_files_by_extension": {
     "(none)": 1,
     ".html": 11,
@@ -163,7 +163,7 @@
   },
   "schema_version": "wiki.stats.v1",
   "source_corpus": {
-    "events": 269,
+    "events": 270,
     "sessions": 0
   },
   "story": {
@@ -209,7 +209,7 @@
     },
     "coverage": {
       "days": 0,
-      "events": 269,
+      "events": 270,
       "sessions": 0
     },
     "families": [
@@ -244,7 +244,7 @@
         "words": 0
       }
     ],
-    "headline": "269 events condensed into 6 pages.",
+    "headline": "270 events condensed into 6 pages.",
     "reading": {
       "estimated_reading_minutes": 0,
       "reader_pages": 6,
@@ -256,7 +256,7 @@
   "totals": {
     "archived_talk_entries": 0,
     "broken_internal_links": 0,
-    "bytes": 701777,
+    "bytes": 705096,
     "content_pages": 6,
     "external_links": 0,
     "families": 5,
@@ -271,6 +271,6 @@
     "talk_entries": 5,
     "talk_folders": 5,
     "talk_words": 274,
-    "words": 8298
+    "words": 8412
   }
 }

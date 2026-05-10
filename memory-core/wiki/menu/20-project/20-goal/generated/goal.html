@@ -937,9 +937,18 @@ models an app replacement where the bundled proxy SHA is
 the Setup next action. The same test then models setup repair installing the
 new proxy SHA and proves readiness returns to complete with
 <code>Proxy current: yes</code>.</li>
-<li><input disabled="" type="checkbox"> Add one command or evidence bundle that collects version, appcast, Sparkle
+<li><input checked="" disabled="" type="checkbox"> Add one command or evidence bundle that collects version, appcast, Sparkle
 defaults, LaunchAgent state, helper state, setup state, runtime health, local
-wiki health, and recent logs.</li>
+wiki health, and recent logs.
+Evidence: <code>scripts/collect-release-lockdown-evidence.sh</code> writes a timestamped
+bundle under <code>dist/release-lockdown-evidence/</code> with <code>version.txt</code>,
+<code>appcast.xml</code>, <code>appcast-summary.txt</code>, <code>sparkle-info-plist.txt</code>,
+Sparkle defaults files, <code>status-debug.txt</code>, <code>setup-local-web-status.txt</code>,
+LaunchAgent/LaunchDaemon captures, <code>helper-state.txt</code>,
+<code>local-wiki-health.txt</code>, and <code>recent-logs.txt</code>. The proof run at
+<code>dist/release-lockdown-evidence/20260510T043210Z/result.txt</code> records
+<code>result=collected</code>, installed version <code>0.1.61</code>, the GitHub appcast URL, and
+<code>redaction=1</code>.</li>
 <li><input disabled="" type="checkbox"> Add a reusable GUI evidence harness for app/menu/Sparkle windows using
 osascript, accessibility window text, and screenshots; include a fallback path
 when the in-app browser automation control surface is unavailable.
@@ -947,8 +956,14 @@ Partial evidence: <code>scripts/prove-remote-sparkle-update.sh</code> now captur
 osascript window text plus desktop screenshots for remote update proofs; this
 item stays open until failed-update and optional-update windows use the same
 harness.</li>
-<li><input disabled="" type="checkbox"> Redact sensitive paths/content by default while preserving operator-useful
-state.</li>
+<li><input checked="" disabled="" type="checkbox"> Redact sensitive paths/content by default while preserving operator-useful
+state.
+Evidence: <code>scripts/collect-release-lockdown-evidence.sh</code> defaults
+<code>ONECONTEXT_RELEASE_LOCKDOWN_EVIDENCE_REDACT=1</code>, replaces the home path and
+username with stable placeholders, and avoids dumping wiki page content. The
+proof run at <code>dist/release-lockdown-evidence/20260510T043210Z/</code> passed
+<code>rg -n &quot;/Users/paulhan|paulhan&quot;</code> with no matches while preserving appcast
+version, critical-update state, runtime health, helper state, and wiki health.</li>
 <li><input disabled="" type="checkbox"> Prove diagnostics can distinguish healthy, needs setup, needs update,
 failed update, and stopped-by-user states.</li>
 <li><input disabled="" type="checkbox"> Prove remote Sparkle update into <code>0.1.62</code>.</li>
