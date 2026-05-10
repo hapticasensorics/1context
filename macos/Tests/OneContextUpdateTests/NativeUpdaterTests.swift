@@ -73,6 +73,51 @@ final class NativeUpdaterTests: XCTestCase {
     XCTAssertFalse(policy.showReleaseNotesInUpdateWindow)
   }
 
+  func testPostInstallMessageGateShowsFounderCopyOnceAfterVersionChange() {
+    let policy = UpdateUserFacingPolicy(
+      postInstallMessageEnabled: true,
+      postInstallTitle: "1Context Improved!",
+      postInstallBody: "Founder note for {version}."
+    )
+
+    let message = PostInstallUpdateMessageGate.message(
+      currentVersion: "0.1.62",
+      previousVersion: "0.1.61",
+      lastShownVersion: nil,
+      policy: policy
+    )
+
+    XCTAssertEqual(message?.title, "1Context Improved!")
+    XCTAssertEqual(message?.body, "Founder note for 0.1.62.")
+    XCTAssertNil(PostInstallUpdateMessageGate.message(
+      currentVersion: "0.1.62",
+      previousVersion: "0.1.61",
+      lastShownVersion: "0.1.62",
+      policy: policy
+    ))
+  }
+
+  func testPostInstallMessageGateStaysSilentWhenDisabledOrFirstLaunch() {
+    XCTAssertNil(PostInstallUpdateMessageGate.message(
+      currentVersion: "0.1.62",
+      previousVersion: "0.1.61",
+      lastShownVersion: nil,
+      policy: .default
+    ))
+    XCTAssertNil(PostInstallUpdateMessageGate.message(
+      currentVersion: "0.1.62",
+      previousVersion: nil,
+      lastShownVersion: nil,
+      policy: UpdateUserFacingPolicy(postInstallMessageEnabled: true)
+    ))
+    XCTAssertNil(PostInstallUpdateMessageGate.message(
+      currentVersion: "0.1.62",
+      previousVersion: "0.1.62",
+      lastShownVersion: nil,
+      policy: UpdateUserFacingPolicy(postInstallMessageEnabled: true)
+    ))
+  }
+
   func testSparkleConfigurationRejectsInvalidFeedURL() {
     let configuration = SparkleUpdaterConfiguration(infoDictionary: [
       "SUFeedURL": "updates.xml",

@@ -350,6 +350,33 @@ public struct UpdateUserFacingPolicy: Codable, Equatable, Sendable {
   }
 }
 
+public struct PostInstallUpdateMessage: Equatable, Sendable {
+  public let title: String
+  public let body: String
+}
+
+public enum PostInstallUpdateMessageGate {
+  public static func message(
+    currentVersion: String,
+    previousVersion: String?,
+    lastShownVersion: String?,
+    policy: UpdateUserFacingPolicy
+  ) -> PostInstallUpdateMessage? {
+    guard policy.postInstallMessageEnabled else { return nil }
+    guard let previousVersion,
+      !previousVersion.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+      previousVersion != currentVersion
+    else {
+      return nil
+    }
+    guard lastShownVersion != currentVersion else { return nil }
+    return PostInstallUpdateMessage(
+      title: policy.postInstallTitle,
+      body: policy.postInstallBody(displayVersion: currentVersion)
+    )
+  }
+}
+
 public struct SparkleUpdateDriverSnapshot: Codable, Equatable, Sendable {
   public let availability: NativeUpdaterAvailability
   public let latestVersion: String?

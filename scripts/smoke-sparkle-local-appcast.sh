@@ -13,6 +13,12 @@ UPDATES_DIR="$WORK_DIR/updates"
 EVIDENCE_DIR="$WORK_DIR/evidence"
 INSTALL_APP="${ONECONTEXT_SMOKE_INSTALL_APP:-/Applications/1Context Sparkle Smoke.app}"
 SMOKE_BUNDLE_IDENTIFIER="${ONECONTEXT_SMOKE_BUNDLE_IDENTIFIER:-com.haptica.1context.sparkle-smoke}"
+EXPECT_POST_INSTALL_MESSAGE="${ONECONTEXT_SPARKLE_SMOKE_EXPECT_POST_INSTALL_MESSAGE:-0}"
+POST_INSTALL_TITLE="${ONECONTEXT_SPARKLE_SMOKE_POST_INSTALL_TITLE:-1Context Improved!}"
+POST_INSTALL_BODY="${ONECONTEXT_SPARKLE_SMOKE_POST_INSTALL_BODY:-}"
+if [[ -z "$POST_INSTALL_BODY" ]]; then
+  POST_INSTALL_BODY="Installed {version}."
+fi
 GENERATE_APPCAST="$ROOT/macos/.build/artifacts/sparkle/Sparkle/bin/generate_appcast"
 
 pick_free_port() {
@@ -81,8 +87,125 @@ DOWNLOAD_PREFIX="http://127.0.0.1:$PORT/"
   echo "feed_url=$FEED_URL"
   echo "install_app=$INSTALL_APP"
   echo "bundle_identifier=$SMOKE_BUNDLE_IDENTIFIER"
+  echo "expect_post_install_message=$EXPECT_POST_INSTALL_MESSAGE"
+  echo "post_install_title=$POST_INSTALL_TITLE"
+  echo "post_install_body=$POST_INSTALL_BODY"
   echo "work_dir=$WORK_DIR"
 } > "$EVIDENCE_DIR/environment.txt"
+
+capture_accessibility() {
+  local output="$1"
+  osascript >"$output" 2>&1 <<'APPLESCRIPT' || true
+tell application "System Events"
+  set reportLines to {}
+  repeat with proc in application processes
+    set procName to name of proc
+    if procName contains "1Context" or procName contains "Sparkle" or procName contains "Updater" then
+      set end of reportLines to "process=" & procName
+      repeat with win in windows of proc
+        set end of reportLines to "window=" & (name of win) & tab & (description of win)
+        repeat with textRef in static texts of win
+          try
+            set end of reportLines to "static-text" & tab & (name of textRef as text)
+          end try
+          try
+            set end of reportLines to "static-text-value" & tab & (value of textRef as text)
+          end try
+        end repeat
+        repeat with buttonRef in buttons of win
+          try
+            set end of reportLines to "button" & tab & (name of buttonRef as text)
+          end try
+        end repeat
+        repeat with groupRef in groups of win
+          repeat with textRef in static texts of groupRef
+            try
+              set end of reportLines to "group-static-text" & tab & (name of textRef as text)
+            end try
+            try
+              set end of reportLines to "group-static-text-value" & tab & (value of textRef as text)
+            end try
+          end repeat
+          repeat with buttonRef in buttons of groupRef
+            try
+              set end of reportLines to "group-button" & tab & (name of buttonRef as text)
+            end try
+          end repeat
+        end repeat
+        repeat with elementRef in entire contents of win
+          set lineText to ""
+          try
+            set lineText to lineText & "role=" & (role of elementRef as text)
+          end try
+          try
+            set lineText to lineText & tab & "description=" & (description of elementRef as text)
+          end try
+          try
+            set lineText to lineText & tab & "name=" & (name of elementRef as text)
+          end try
+          try
+            set lineText to lineText & tab & "value=" & (value of elementRef as text)
+          end try
+          if lineText is not "" then set end of reportLines to lineText
+        end repeat
+      end repeat
+    end if
+  end repeat
+  set AppleScript's text item delimiters to linefeed
+  return reportLines as text
+end tell
+APPLESCRIPT
+}
+
+capture_screenshot() {
+  local output="$1"
+  screencapture -x "$output" >/dev/null 2>&1 || true
+}
+
+click_post_install_ok() {
+  osascript >/dev/null 2>&1 <<'APPLESCRIPT' || true
+tell application "System Events"
+  repeat with proc in application processes
+    set procName to name of proc
+    if procName contains "1Context" then
+      repeat with win in windows of proc
+        try
+          click button "OK" of win
+          return
+        end try
+      end repeat
+    end if
+  end repeat
+end tell
+APPLESCRIPT
+}
+
+wait_for_post_install_message() {
+  local expected_body="${POST_INSTALL_BODY//\{version\}/$NEW_VERSION}"
+  local deadline=$(( "$(date +%s)" + 45 ))
+  local attempt=0
+  while true; do
+    attempt=$((attempt + 1))
+    local accessibility="$EVIDENCE_DIR/post-install-accessibility-$attempt.txt"
+    capture_accessibility "$accessibility"
+    capture_screenshot "$EVIDENCE_DIR/post-install-desktop-$attempt.png"
+    cp "$accessibility" "$EVIDENCE_DIR/post-install-accessibility.txt"
+    cp "$EVIDENCE_DIR/post-install-desktop-$attempt.png" "$EVIDENCE_DIR/post-install-desktop.png"
+    if grep -Fq "$POST_INSTALL_TITLE" "$accessibility" &&
+      grep -Fq "$expected_body" "$accessibility"; then
+      echo "title=$POST_INSTALL_TITLE" > "$EVIDENCE_DIR/post-install-message.txt"
+      echo "body=$expected_body" >> "$EVIDENCE_DIR/post-install-message.txt"
+      click_post_install_ok
+      return 0
+    fi
+    if (( "$(date +%s)" >= deadline )); then
+      echo "Timed out waiting for post-install message '$POST_INSTALL_TITLE' / '$expected_body'." >&2
+      echo "Evidence: $EVIDENCE_DIR" >&2
+      return 1
+    fi
+    sleep 1
+  done
+}
 
 build_fixture_app() {
   local version="$1"
@@ -96,6 +219,9 @@ build_fixture_app() {
   ONECONTEXT_SPARKLE_PUBLIC_ED_KEY="$PUBLIC_KEY" \
   ONECONTEXT_SMOKE_FIXTURE=1 \
   ONECONTEXT_SMOKE_STATE_DIR="$STATE_DIR" \
+  ONECONTEXT_UPDATE_POST_INSTALL_MESSAGE_ENABLED="$EXPECT_POST_INSTALL_MESSAGE" \
+  ONECONTEXT_UPDATE_POST_INSTALL_TITLE="$POST_INSTALL_TITLE" \
+  ONECONTEXT_UPDATE_POST_INSTALL_BODY="$POST_INSTALL_BODY" \
     "$ROOT/scripts/build-macos-app.sh" >/dev/null
 
   rm -rf "$output_app"
@@ -172,6 +298,9 @@ APP_PID="$!"
 echo "$APP_PID" > "$EVIDENCE_DIR/initial-app.pid"
 
 wait_for_version "$NEW_VERSION"
+if [[ "$EXPECT_POST_INSTALL_MESSAGE" == "1" ]]; then
+  wait_for_post_install_message
+fi
 UPDATED_CLI_VERSION="$("$INSTALL_APP/Contents/MacOS/1context-cli" --version)"
 echo "$UPDATED_CLI_VERSION" > "$EVIDENCE_DIR/updated-cli-version.txt"
 if [[ "$UPDATED_CLI_VERSION" != "$NEW_VERSION" ]]; then

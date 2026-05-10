@@ -784,9 +784,19 @@ Evidence: <code>release/update-policy.toml</code> keeps
 <code>ui.post_install_message.enabled = false</code>, and the public mandatory proof&#39;s
 Accessibility and window captures contain no <code>1Context Improved!</code> or update
 completion message after the app reaches <code>0.1.61</code>.</li>
-<li><input disabled="" type="checkbox"> Prove a policy-enabled post-install message can show exactly
+<li><input checked="" disabled="" type="checkbox"> Prove a policy-enabled post-install message can show exactly
 <code>1Context Improved!</code> with founder-provided body copy in a fixture or local
-appcast proof.</li>
+appcast proof.
+Evidence: <code>PostInstallUpdateMessageGate</code> now drives a launch-based one-shot
+post-install message when policy enables it and the app detects a version
+change. <code>NativeUpdaterTests</code> cover default-hidden, first-launch-hidden, and
+show-once behavior. The local Sparkle fixture
+<code>dist/sparkle-local-smoke/post-install-message-0.1.61/evidence/</code> passed with
+<code>result=passed</code>; <code>post-install-message.txt</code> records
+<code>title=1Context Improved!</code> and
+<code>body=Founder-controlled fixture body for 0.1.61.901.</code>, while
+<code>post-install-accessibility.txt</code> and <code>post-install-desktop.png</code> prove the
+real macOS alert showed that exact controlled copy.</li>
 <li><input checked="" disabled="" type="checkbox"> Prove remote Sparkle update into <code>0.1.61</code>.
 Evidence:
 <code>dist/remote-update-evidence/0.1.60-to-0.1.61-mandatory-public/result.txt</code>

@@ -8,6 +8,7 @@ import OneContextPermissions
 import OneContextRuntimeSupport
 import OneContextSetup
 import OneContextSparkleUpdate
+import OneContextUpdate
 
 private enum Constants {
   static let appName = "1Context"
@@ -15,6 +16,8 @@ private enum Constants {
   static let localWebStartupRetryDelays: [TimeInterval] = [1, 3, 10]
   static let setupReadinessPollInterval: TimeInterval = 1
   static let setupReadinessPollTimeout: TimeInterval = 120
+  static let lastLaunchedVersionDefaultsKey = "OneContextLastLaunchedVersion"
+  static let lastShownPostInstallVersionDefaultsKey = "OneContextLastShownPostInstallMessageVersion"
 }
 
 private struct ProcessCaptureResult: Sendable {
@@ -718,6 +721,7 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
     configureStatusIcon()
     configureMenu()
     startNativeUpdater()
+    presentPostInstallUpdateMessageIfNeeded()
     refreshMenuItems()
     if !smokeFixture {
       startDesiredStateMonitor()
@@ -745,6 +749,34 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
     } else {
       button.title = "1C"
     }
+  }
+
+  private func presentPostInstallUpdateMessageIfNeeded(
+    defaults: UserDefaults = .standard,
+    currentVersion: String = oneContextVersion,
+    policy: UpdateUserFacingPolicy = SparkleUpdaterConfiguration.current().userFacingPolicy
+  ) {
+    let previousVersion = defaults.string(forKey: Constants.lastLaunchedVersionDefaultsKey)
+    let lastShownVersion = defaults.string(forKey: Constants.lastShownPostInstallVersionDefaultsKey)
+    defaults.set(currentVersion, forKey: Constants.lastLaunchedVersionDefaultsKey)
+
+    guard let message = PostInstallUpdateMessageGate.message(
+      currentVersion: currentVersion,
+      previousVersion: previousVersion,
+      lastShownVersion: lastShownVersion,
+      policy: policy
+    ) else {
+      return
+    }
+
+    let alert = NSAlert()
+    alert.messageText = message.title
+    alert.informativeText = message.body
+    alert.icon = loadFishAlertIcon()
+    alert.addButton(withTitle: "OK")
+    NSApp.activate(ignoringOtherApps: true)
+    alert.runModal()
+    defaults.set(currentVersion, forKey: Constants.lastShownPostInstallVersionDefaultsKey)
   }
 
   private func loadMenuIcon() -> NSImage? {
