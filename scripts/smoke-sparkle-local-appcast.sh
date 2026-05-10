@@ -23,6 +23,7 @@ FAILURE_CASE="${ONECONTEXT_SPARKLE_SMOKE_FAILURE_CASE:-}"
 FAILURE_TITLE="${ONECONTEXT_SPARKLE_SMOKE_FAILURE_TITLE:-Update failed.}"
 FAILURE_BODY="${ONECONTEXT_SPARKLE_SMOKE_FAILURE_BODY:-Please contact support at paul@haptica.ai.}"
 RETRY_AFTER_FAILURE="${ONECONTEXT_SPARKLE_SMOKE_RETRY_AFTER_FAILURE:-0}"
+PROVE_RUNTIME_SURVIVES_FAILURE="${ONECONTEXT_SPARKLE_SMOKE_PROVE_RUNTIME_SURVIVES_FAILURE:-0}"
 GENERATE_APPCAST="$ROOT/macos/.build/artifacts/sparkle/Sparkle/bin/generate_appcast"
 
 if [[ -n "$FAILURE_CASE" &&
@@ -90,6 +91,15 @@ PY
 eval "$KEY_EXPORTS"
 
 PORT="${ONECONTEXT_SPARKLE_SMOKE_PORT:-$(pick_free_port)}"
+RUNTIME_WIKI_PORT="${ONECONTEXT_SPARKLE_SMOKE_WIKI_PORT:-$(pick_free_port)}"
+RUNTIME_WIKI_API_PORT="${ONECONTEXT_SPARKLE_SMOKE_WIKI_API_PORT:-$(pick_free_port)}"
+if [[ "$RUNTIME_WIKI_PORT" == "$PORT" ]]; then
+  RUNTIME_WIKI_PORT="$(pick_free_port)"
+fi
+if [[ "$RUNTIME_WIKI_API_PORT" == "$PORT" || "$RUNTIME_WIKI_API_PORT" == "$RUNTIME_WIKI_PORT" ]]; then
+  RUNTIME_WIKI_API_PORT="$(pick_free_port)"
+fi
+RUNTIME_SOCKET_PATH="${ONECONTEXT_SPARKLE_SMOKE_SOCKET_PATH:-/tmp/1context-sparkle-smoke-$PORT.sock}"
 FEED_URL="http://127.0.0.1:$PORT/appcast.xml"
 DOWNLOAD_PREFIX="http://127.0.0.1:$PORT/"
 
@@ -107,6 +117,10 @@ DOWNLOAD_PREFIX="http://127.0.0.1:$PORT/"
   echo "failure_title=$FAILURE_TITLE"
   echo "failure_body=$FAILURE_BODY"
   echo "retry_after_failure=$RETRY_AFTER_FAILURE"
+  echo "prove_runtime_survives_failure=$PROVE_RUNTIME_SURVIVES_FAILURE"
+  echo "runtime_wiki_port=$RUNTIME_WIKI_PORT"
+  echo "runtime_wiki_api_port=$RUNTIME_WIKI_API_PORT"
+  echo "runtime_socket_path=$RUNTIME_SOCKET_PATH"
   echo "work_dir=$WORK_DIR"
 } > "$EVIDENCE_DIR/environment.txt"
 
@@ -232,6 +246,74 @@ repair_failure_for_retry() {
   esac
 }
 
+run_smoke_cli() {
+  env \
+    ONECONTEXT_APP_SUPPORT_DIR="$STATE_DIR/Application Support/1Context" \
+    ONECONTEXT_USER_CONTENT_DIR="$STATE_DIR/1Context" \
+    ONECONTEXT_LAUNCH_AGENT_DISABLED=1 \
+    ONECONTEXT_LOG_DIR="$STATE_DIR/Logs/1Context" \
+    ONECONTEXT_CACHE_DIR="$STATE_DIR/Caches/1Context" \
+    ONECONTEXT_SOCKET_PATH="$RUNTIME_SOCKET_PATH" \
+    ONECONTEXT_NO_UPDATE_CHECK=1 \
+    ONECONTEXT_WIKI_URL_MODE=high-port-http \
+    ONECONTEXT_WIKI_PORT="$RUNTIME_WIKI_PORT" \
+    ONECONTEXT_WIKI_API_PORT="$RUNTIME_WIKI_API_PORT" \
+    "$INSTALL_APP/Contents/MacOS/1context-cli" "$@"
+}
+
+capture_runtime_survival_status() {
+  local name="$1"
+  run_smoke_cli status --debug > "$EVIDENCE_DIR/runtime-status-$name.txt" 2>&1
+}
+
+wait_for_runtime_survival_status() {
+  local name="$1"
+  local expected_version="$2"
+  local status_file="$EVIDENCE_DIR/runtime-status-$name.txt"
+  for _ in {1..80}; do
+    if capture_runtime_survival_status "$name" &&
+      grep -q "1Context is running." "$status_file" &&
+      grep -q "Version: $expected_version" "$status_file" &&
+      grep -q "Health: OK" "$status_file" &&
+      grep -q "Socket: responding" "$status_file"; then
+      cat "$STATE_DIR/Application Support/1Context/run/1contextd.pid" > "$EVIDENCE_DIR/runtime-pid-$name.txt"
+      return 0
+    fi
+    sleep 0.25
+  done
+  echo "Timed out waiting for smoke runtime $name status $expected_version." >&2
+  echo "Evidence: $status_file" >&2
+  return 1
+}
+
+start_runtime_survival_proof() {
+  log "starting old fixture runtime for failed-update survival proof"
+  run_smoke_cli start --debug > "$EVIDENCE_DIR/runtime-start.txt" 2>&1
+  wait_for_runtime_survival_status before "$OLD_VERSION"
+}
+
+finish_runtime_survival_proof() {
+  wait_for_runtime_survival_status after "$OLD_VERSION"
+  local before_pid
+  local after_pid
+  before_pid="$(tr -d '[:space:]' < "$EVIDENCE_DIR/runtime-pid-before.txt")"
+  after_pid="$(tr -d '[:space:]' < "$EVIDENCE_DIR/runtime-pid-after.txt")"
+  if [[ -z "$before_pid" || "$before_pid" != "$after_pid" ]]; then
+    echo "Expected failed update to leave runtime PID unchanged, before=$before_pid after=$after_pid." >&2
+    return 1
+  fi
+  {
+    echo "runtime_survived=1"
+    echo "runtime_pid_before=$before_pid"
+    echo "runtime_pid_after=$after_pid"
+    echo "runtime_version=$OLD_VERSION"
+    echo "desired_state=$(tr -d '[:space:]' < "$STATE_DIR/Application Support/1Context/desired-state")"
+    echo "socket=$RUNTIME_SOCKET_PATH"
+    echo "status_before=$EVIDENCE_DIR/runtime-status-before.txt"
+    echo "status_after=$EVIDENCE_DIR/runtime-status-after.txt"
+  } > "$EVIDENCE_DIR/runtime-survival.txt"
+}
+
 wait_for_post_install_message() {
   local expected_body="${POST_INSTALL_BODY//\{version\}/$NEW_VERSION}"
   local deadline=$(( "$(date +%s)" + 45 ))
@@ -340,6 +422,10 @@ cleanup_server() {
 }
 
 cleanup_app() {
+  if [[ -x "$INSTALL_APP/Contents/MacOS/1context-cli" ]]; then
+    run_smoke_cli quit >/dev/null 2>&1 || true
+  fi
+  rm -f "$RUNTIME_SOCKET_PATH"
   pkill -f "$INSTALL_APP/Contents/MacOS/1Context" >/dev/null 2>&1 || true
   if [[ "${ONECONTEXT_SPARKLE_SMOKE_KEEP_APP:-0}" != "1" ]]; then
     rm -rf "$INSTALL_APP"
@@ -481,6 +567,9 @@ cleanup_app
 mkdir -p "$(dirname "$INSTALL_APP")"
 COPYFILE_DISABLE=1 ditto --norsrc --noextattr --noqtn --noacl "$OLD_APP" "$INSTALL_APP"
 wait_for_version "$OLD_VERSION"
+if [[ -n "$FAILURE_CASE" && "$PROVE_RUNTIME_SURVIVES_FAILURE" == "1" ]]; then
+  start_runtime_survival_proof
+fi
 
 log "launching old fixture and waiting for Sparkle update"
 "$INSTALL_APP/Contents/MacOS/1Context" > "$EVIDENCE_DIR/app.log" 2>&1 &
@@ -489,6 +578,9 @@ echo "$APP_PID" > "$EVIDENCE_DIR/initial-app.pid"
 
 if [[ -n "$FAILURE_CASE" ]]; then
   wait_for_failure_message
+  if [[ "$PROVE_RUNTIME_SURVIVES_FAILURE" == "1" ]]; then
+    finish_runtime_survival_proof
+  fi
   if [[ "$RETRY_AFTER_FAILURE" == "1" ]]; then
     wait_for_version "$NEW_VERSION"
     RETRIED_CLI_VERSION="$("$INSTALL_APP/Contents/MacOS/1context-cli" --version)"
@@ -506,6 +598,9 @@ if [[ -n "$FAILURE_CASE" ]]; then
       echo "feed_url=$FEED_URL"
       echo "appcast=$APPCAST"
       echo "retried_cli_version=$RETRIED_CLI_VERSION"
+      if [[ "$PROVE_RUNTIME_SURVIVES_FAILURE" == "1" ]]; then
+        cat "$EVIDENCE_DIR/runtime-survival.txt"
+      fi
     } > "$EVIDENCE_DIR/result.txt"
     log "passed $FAILURE_CASE retry proof; evidence at $EVIDENCE_DIR"
   else
@@ -524,6 +619,9 @@ if [[ -n "$FAILURE_CASE" ]]; then
       echo "feed_url=$FEED_URL"
       echo "appcast=$APPCAST"
       echo "installed_cli_version=$FAILED_CLI_VERSION"
+      if [[ "$PROVE_RUNTIME_SURVIVES_FAILURE" == "1" ]]; then
+        cat "$EVIDENCE_DIR/runtime-survival.txt"
+      fi
     } > "$EVIDENCE_DIR/result.txt"
     log "passed $FAILURE_CASE failure proof; evidence at $EVIDENCE_DIR"
   fi

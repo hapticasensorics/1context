@@ -841,8 +841,16 @@ Each release in this train must answer four questions:
   and `http-server.log`; interrupted-download evidence keeps
   `download-interruption.txt` and `http-server.log` with declared/sent byte
   counts.
-- [ ] Prove failed update leaves the old app launchable and remembering continues
+- [x] Prove failed update leaves the old app launchable and remembering continues
   unless the app is already in the short install/relaunch phase.
+  Evidence:
+  `dist/sparkle-local-smoke/runtime-survives-interrupted-download-0.1.61/evidence/result.txt`
+  records `installed_cli_version=0.1.61.900`, `runtime_survived=1`,
+  `runtime_pid_before=64775`, `runtime_pid_after=64775`,
+  `desired_state=running`, and the short smoke socket path after the interrupted
+  mandatory update failed. `runtime-status-before.txt` and
+  `runtime-status-after.txt` both show `1Context is running.`, `Health: OK`,
+  and `Socket: responding` for version `0.1.61.900`.
 - [ ] Prove stale local HTTPS helper is detected and repaired after app
   replacement.
 - [ ] Add one command or evidence bundle that collects version, appcast, Sparkle

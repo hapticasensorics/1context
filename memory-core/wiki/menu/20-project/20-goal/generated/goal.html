@@ -917,8 +917,16 @@ broken-appcast evidence keeps <code>appcast-corruption.txt</code>, <code>retry-r
 and <code>http-server.log</code>; interrupted-download evidence keeps
 <code>download-interruption.txt</code> and <code>http-server.log</code> with declared/sent byte
 counts.</li>
-<li><input disabled="" type="checkbox"> Prove failed update leaves the old app launchable and remembering continues
-unless the app is already in the short install/relaunch phase.</li>
+<li><input checked="" disabled="" type="checkbox"> Prove failed update leaves the old app launchable and remembering continues
+unless the app is already in the short install/relaunch phase.
+Evidence:
+<code>dist/sparkle-local-smoke/runtime-survives-interrupted-download-0.1.61/evidence/result.txt</code>
+records <code>installed_cli_version=0.1.61.900</code>, <code>runtime_survived=1</code>,
+<code>runtime_pid_before=64775</code>, <code>runtime_pid_after=64775</code>,
+<code>desired_state=running</code>, and the short smoke socket path after the interrupted
+mandatory update failed. <code>runtime-status-before.txt</code> and
+<code>runtime-status-after.txt</code> both show <code>1Context is running.</code>, <code>Health: OK</code>,
+and <code>Socket: responding</code> for version <code>0.1.61.900</code>.</li>
 <li><input disabled="" type="checkbox"> Prove stale local HTTPS helper is detected and repaired after app
 replacement.</li>
 <li><input disabled="" type="checkbox"> Add one command or evidence bundle that collects version, appcast, Sparkle
