@@ -1,0 +1,104 @@
+name: Self-hosted Mac Update Proof
+
+on:
+  workflow_dispatch:
+    inputs:
+      old_version:
+        description: "Installed version N to lay down before proving the staged update."
+        required: true
+        default: "0.1.60"
+      new_version:
+        description: "Expected version N+1. Defaults to the checked-out VERSION file."
+        required: false
+      staging_appcast_url:
+        description: "Staging Sparkle appcast URL for N+1."
+        required: true
+      update_class:
+        description: "Expected Sparkle update class."
+        required: true
+        default: "mandatory"
+        type: choice
+        options:
+          - mandatory
+          - optional
+      old_tag:
+        description: "GitHub release tag for N. Defaults to v<old_version>."
+        required: false
+      old_dmg_url:
+        description: "Optional direct DMG URL for N. When blank, the script downloads the release asset with gh."
+        required: false
+      update_timeout_seconds:
+        description: "Max seconds to wait for Sparkle to replace the app."
+        required: true
+        default: "420"
+      steady_state_seconds:
+        description: "Post-update steady-state probe duration."
+        required: true
+        default: "120"
+      artifact_retention_days:
+        description: "Days to keep proof artifacts."
+        required: true
+        default: "21"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: self-hosted-mac-update-proof
+  cancel-in-progress: false
+
+jobs:
+  update-proof:
+    name: Prove staged Sparkle update on real Mac
+    runs-on: [self-hosted, macOS, ARM64, onecontext-update-runner]
+    timeout-minutes: 35
+    environment: onecontext-update-runner
+    steps:
+      - name: Guard trusted refs
+        shell: bash
+        run: |
+          case "$GITHUB_REF" in
+            refs/heads/main|refs/heads/release/*|refs/heads/rc/*|refs/tags/v*)
+              ;;
+            *)
+              echo "Ref $GITHUB_REF is not allowed to use the self-hosted update runner." >&2
+              echo "Use main, release/*, rc/*, or v* tags with the protected onecontext-update-runner environment." >&2
+              exit 1
+              ;;
+          esac
+
+      - uses: actions/checkout@v6
+
+      - name: Resolve expected new version
+        id: versions
+        shell: bash
+        run: |
+          new_version="${{ inputs.new_version }}"
+          if [[ -z "$new_version" ]]; then
+            new_version="$(tr -d '[:space:]' < VERSION)"
+          fi
+          echo "new_version=$new_version" >> "$GITHUB_OUTPUT"
+
+      - name: Prove update
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ONECONTEXT_UPDATE_RUNNER_I_UNDERSTAND_DESTRUCTIVE: "1"
+          ONECONTEXT_OLD_VERSION: ${{ inputs.old_version }}
+          ONECONTEXT_NEW_VERSION: ${{ steps.versions.outputs.new_version }}
+          ONECONTEXT_OLD_TAG: ${{ inputs.old_tag }}
+          ONECONTEXT_OLD_DMG_URL: ${{ inputs.old_dmg_url }}
+          ONECONTEXT_STAGING_APPCAST_URL: ${{ inputs.staging_appcast_url }}
+          ONECONTEXT_EXPECTED_UPDATE_CLASS: ${{ inputs.update_class }}
+          ONECONTEXT_UPDATE_PROOF_TIMEOUT_SECONDS: ${{ inputs.update_timeout_seconds }}
+          ONECONTEXT_STEADY_STATE_SECONDS: ${{ inputs.steady_state_seconds }}
+        run: ./scripts/self-hosted-update-proof.sh
+
+      - name: Upload update proof artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: self-hosted-mac-update-proof-${{ inputs.old_version }}-to-${{ steps.versions.outputs.new_version }}
+          path: dist/self-hosted-update-proof/**
+          if-no-files-found: warn
+          retention-days: ${{ inputs.artifact_retention_days }}
