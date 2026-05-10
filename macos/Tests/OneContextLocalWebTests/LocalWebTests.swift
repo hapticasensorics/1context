@@ -305,6 +305,30 @@ final class LocalWebTests: XCTestCase {
     XCTAssertTrue(snapshot.requirements.first?.details.contains("Proxy current: no") == true)
   }
 
+  func testLocalHTTPSSetupAppReplacementDetectsStaleProxyAndRepairRestoresReadiness() {
+    let staleAfterReplacement = localHTTPSSetupSnapshot(
+      sourceProxySHA256: "NEW_PROXY_FROM_REPLACED_APP",
+      installedProxySHA256: "OLD_PROXY_FROM_PREVIOUS_APP"
+    )
+
+    XCTAssertFalse(staleAfterReplacement.ready)
+    XCTAssertEqual(staleAfterReplacement.blockingSummary, "Local web setup required: Local HTTPS helper")
+    XCTAssertTrue(staleAfterReplacement.requirements.first?.details.contains("Proxy current: no") == true)
+    XCTAssertEqual(
+      staleAfterReplacement.requirements.first?.nextAction,
+      "Open 1Context and choose Settings > Setup... If macOS opens System Settings, allow 1Context."
+    )
+
+    let repairedAfterReplacement = localHTTPSSetupSnapshot(
+      sourceProxySHA256: "NEW_PROXY_FROM_REPLACED_APP",
+      installedProxySHA256: "NEW_PROXY_FROM_REPLACED_APP"
+    )
+
+    XCTAssertTrue(repairedAfterReplacement.ready)
+    XCTAssertEqual(repairedAfterReplacement.blockingSummary, "Local web setup is complete.")
+    XCTAssertTrue(repairedAfterReplacement.requirements.first?.details.contains("Proxy current: yes") == true)
+  }
+
   func testWikiLocalAPISearchesPublishedContentIndex() throws {
     let root = temporaryRoot()
     let paths = testRuntimePaths(root: root)
@@ -381,6 +405,43 @@ final class LocalWebTests: XCTestCase {
       "ONECONTEXT_LOCAL_WEB_SYSTEM_LOG_DIR": root.appendingPathComponent("System/Logs/1Context").path,
       "ONECONTEXT_LOCAL_WEB_LAUNCH_DAEMON_PATH": root.appendingPathComponent("System/LaunchDaemons/com.haptica.1context.local-web-proxy.plist").path
     ]
+  }
+
+  private func localHTTPSSetupSnapshot(
+    sourceProxySHA256: String,
+    installedProxySHA256: String
+  ) -> LocalWebSetupSnapshot {
+    LocalWebSetupSnapshot.localHTTPSPortless(
+      targetURL: LocalWebDefaults.defaultWikiURL,
+      state: LocalWebSetupState(
+        label: LocalWebSetupConstants.proxyLabel,
+        targetHost: LocalWebDefaults.wikiHost,
+        targetURL: LocalWebDefaults.defaultWikiURL,
+        backendHost: LocalWebDefaults.bindHost,
+        backendPort: LocalWebDefaults.wikiPort,
+        privilegedPort: LocalWebSetupConstants.privilegedHTTPSPort,
+        sourceProxyExecutablePath: "/Applications/1Context.app/Contents/Resources/1context-local-web-proxy",
+        sourceProxyExecutableSHA256: sourceProxySHA256,
+        installedProxyExecutableSHA256: installedProxySHA256,
+        userRootCertificatePath: "/tmp/root.crt",
+        userRootCertificateExists: true,
+        userRootCertificateSHA1: "ABC123",
+        userRootCertificateSHA256: "DEF456",
+        systemPaths: LocalWebSetupSystemPaths(environment: [
+          "ONECONTEXT_LOCAL_WEB_SYSTEM_SUPPORT_DIR": "/tmp/1Context/System",
+          "ONECONTEXT_LOCAL_WEB_SYSTEM_LOG_DIR": "/tmp/1Context/Logs",
+          "ONECONTEXT_LOCAL_WEB_LAUNCH_DAEMON_PATH": "/tmp/1Context/LaunchDaemons/proxy.plist"
+        ]),
+        proxyPlistInstalled: true,
+        proxyExecutableInstalled: true,
+        proxyServiceStatus: "enabled",
+        proxyLaunchDaemonLoaded: true,
+        proxyPortReachable: true,
+        trustedRootCertificateInstalled: true,
+        trustedRootSHA1: "ABC123",
+        trustedRootSHA256: "DEF456"
+      )
+    )
   }
 
   private func repoRoot() -> URL {

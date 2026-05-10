@@ -927,8 +927,16 @@ records <code>installed_cli_version=0.1.61.900</code>, <code>runtime_survived=1<
 mandatory update failed. <code>runtime-status-before.txt</code> and
 <code>runtime-status-after.txt</code> both show <code>1Context is running.</code>, <code>Health: OK</code>,
 and <code>Socket: responding</code> for version <code>0.1.61.900</code>.</li>
-<li><input disabled="" type="checkbox"> Prove stale local HTTPS helper is detected and repaired after app
-replacement.</li>
+<li><input checked="" disabled="" type="checkbox"> Prove stale local HTTPS helper is detected and repaired after app
+replacement.
+Evidence:
+<code>LocalWebTests.testLocalHTTPSSetupAppReplacementDetectsStaleProxyAndRepairRestoresReadiness</code>
+models an app replacement where the bundled proxy SHA is
+<code>NEW_PROXY_FROM_REPLACED_APP</code> but the installed helper is still
+<code>OLD_PROXY_FROM_PREVIOUS_APP</code>; readiness blocks with <code>Proxy current: no</code> and
+the Setup next action. The same test then models setup repair installing the
+new proxy SHA and proves readiness returns to complete with
+<code>Proxy current: yes</code>.</li>
 <li><input disabled="" type="checkbox"> Add one command or evidence bundle that collects version, appcast, Sparkle
 defaults, LaunchAgent state, helper state, setup state, runtime health, local
 wiki health, and recent logs.</li>

@@ -851,8 +851,16 @@ Each release in this train must answer four questions:
   mandatory update failed. `runtime-status-before.txt` and
   `runtime-status-after.txt` both show `1Context is running.`, `Health: OK`,
   and `Socket: responding` for version `0.1.61.900`.
-- [ ] Prove stale local HTTPS helper is detected and repaired after app
+- [x] Prove stale local HTTPS helper is detected and repaired after app
   replacement.
+  Evidence:
+  `LocalWebTests.testLocalHTTPSSetupAppReplacementDetectsStaleProxyAndRepairRestoresReadiness`
+  models an app replacement where the bundled proxy SHA is
+  `NEW_PROXY_FROM_REPLACED_APP` but the installed helper is still
+  `OLD_PROXY_FROM_PREVIOUS_APP`; readiness blocks with `Proxy current: no` and
+  the Setup next action. The same test then models setup repair installing the
+  new proxy SHA and proves readiness returns to complete with
+  `Proxy current: yes`.
 - [ ] Add one command or evidence bundle that collects version, appcast, Sparkle
   defaults, LaunchAgent state, helper state, setup state, runtime health, local
   wiki health, and recent logs.
