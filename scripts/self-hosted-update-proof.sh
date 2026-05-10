@@ -18,6 +18,7 @@ TIMEOUT_SECONDS="${ONECONTEXT_UPDATE_PROOF_TIMEOUT_SECONDS:-420}"
 POLL_SECONDS="${ONECONTEXT_UPDATE_PROOF_POLL_SECONDS:-5}"
 STEADY_STATE_SECONDS="${ONECONTEXT_STEADY_STATE_SECONDS:-120}"
 STEADY_STATE_INTERVAL_SECONDS="${ONECONTEXT_STEADY_STATE_INTERVAL_SECONDS:-5}"
+RUNNER_SETUP_PREFLIGHT="${ONECONTEXT_RUNNER_SETUP_PREFLIGHT:-1}"
 STAMP="$(date -u +%Y%m%dT%H%M%SZ)"
 EVIDENCE_DIR="${ONECONTEXT_SELF_HOSTED_UPDATE_EVIDENCE_DIR:-$ROOT/dist/self-hosted-update-proof/$STAMP}"
 DOWNLOAD_DIR="$EVIDENCE_DIR/downloads"
@@ -88,6 +89,10 @@ installed_cli_version() {
 
 installed_feed_url() {
   plutil -extract SUFeedURL raw "$APP/Contents/Info.plist" 2>/dev/null || true
+}
+
+installed_cli() {
+  printf '%s\n' "$APP/Contents/MacOS/1context-cli"
 }
 
 write_versions() {
@@ -233,6 +238,7 @@ collect_host_snapshot() {
     echo "poll_seconds=$POLL_SECONDS"
     echo "steady_state_seconds=$STEADY_STATE_SECONDS"
     echo "steady_state_interval_seconds=$STEADY_STATE_INTERVAL_SECONDS"
+    echo "runner_setup_preflight=$RUNNER_SETUP_PREFLIGHT"
     echo "evidence_dir=$EVIDENCE_DIR"
     echo
     sw_vers || true
@@ -242,6 +248,28 @@ collect_host_snapshot() {
     whoami
     id
   } > "$EVIDENCE_DIR/environment.txt"
+}
+
+preflight_runner_setup() {
+  if [[ "$RUNNER_SETUP_PREFLIGHT" != "1" ]]; then
+    log "skipping runner setup preflight"
+    return
+  fi
+
+  local cli
+  cli="$(installed_cli)"
+  log "checking runner Local Wiki setup readiness"
+  if [[ ! -x "$cli" ]]; then
+    fail "Runner setup preflight requires an existing installed app at $APP. Install 1Context once as the runner user and complete Settings > Setup before update proof, or set ONECONTEXT_RUNNER_SETUP_PREFLIGHT=0 for an intentional first-run setup experiment."
+  fi
+
+  local status_file="$EVIDENCE_DIR/setup-preflight.txt"
+  if ! "$cli" setup local-web status > "$status_file" 2>&1; then
+    fail "Runner setup preflight command failed. See $status_file."
+  fi
+  if ! grep -q "Setup Ready: yes" "$status_file"; then
+    fail "Runner setup preflight failed: Local Wiki setup is not ready for the runner user. Open 1Context as that user, choose Settings > Setup, grant Local Wiki Access, approve the 1Context background item in System Settings, then rerun."
+  fi
 }
 
 collect_final_logs() {
@@ -258,6 +286,7 @@ collect_final_logs() {
 
 collect_host_snapshot
 write_versions "$EVIDENCE_DIR/version-before-runner-reset.txt"
+preflight_runner_setup
 capture_process_state "before"
 download_old_dmg
 old_dmg="$DOWNLOADED_OLD_DMG"

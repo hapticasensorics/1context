@@ -30,11 +30,14 @@ count_runtime_stops() {
 
 capture_once() {
   local name="$1"
-  "$CLI" status --debug > "$EVIDENCE_DIR/status-$name.txt" 2>&1
+  local status_exit=0
+  "$CLI" status --debug > "$EVIDENCE_DIR/status-$name.txt" 2>&1 || status_exit=$?
+  printf '%s\n' "$status_exit" > "$EVIDENCE_DIR/status-$name.exitcode"
   "$CLI" update > "$EVIDENCE_DIR/update-$name.txt" 2>&1 || true
   "$CLI" permissions > "$EVIDENCE_DIR/permissions-$name.txt" 2>&1 || true
   launchctl print "gui/$(id -u)/$LABEL_RUNTIME" > "$EVIDENCE_DIR/launchctl-runtime-$name.txt" 2>&1 || true
   launchctl print "gui/$(id -u)/$LABEL_MENU" > "$EVIDENCE_DIR/launchctl-menu-$name.txt" 2>&1 || true
+  return "$status_exit"
 }
 
 assert_status_healthy() {
@@ -60,7 +63,9 @@ printf '%s\n' "$app_version" > "$EVIDENCE_DIR/version.txt"
 start_stops="$(count_runtime_stops)"
 printf '%s\n' "$start_stops" > "$EVIDENCE_DIR/runtime-sigterm-count-start.txt"
 
-capture_once "start"
+if ! capture_once "start"; then
+  fail "CLI status command failed at start; see status-start.txt"
+fi
 assert_status_healthy "$EVIDENCE_DIR/status-start.txt"
 
 deadline=$((SECONDS + DURATION_SECONDS))
@@ -69,7 +74,9 @@ while (( SECONDS < deadline )); do
   sleep "$INTERVAL_SECONDS"
   iteration=$((iteration + 1))
   name="$(printf 'probe-%03d' "$iteration")"
-  capture_once "$name"
+  if ! capture_once "$name"; then
+    fail "CLI status command failed during $name; see status-$name.txt"
+  fi
   assert_status_healthy "$EVIDENCE_DIR/status-$name.txt"
 done
 

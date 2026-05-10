@@ -102,6 +102,27 @@ curl --fail --silent \
 test -s /tmp/1context-runner-screen.png
 ```
 
+Also complete 1Context Local Wiki setup once as the runner user before the first
+update proof. This is a bench prerequisite, not part of the update test:
+
+1. Open `/Applications/1Context.app` in the runner user's logged-in GUI session.
+2. Choose `Settings` -> `Setup` and grant `Local Wiki Access`.
+3. Approve the certificate trust prompt.
+4. In System Settings -> General -> Login Items & Extensions, allow `1Context`
+   under App Background Activity if macOS asks.
+5. Verify the bench is ready:
+
+```bash
+/Applications/1Context.app/Contents/MacOS/1context-cli setup local-web status
+/Applications/1Context.app/Contents/MacOS/1context-cli start
+/Applications/1Context.app/Contents/MacOS/1context-cli status --debug
+```
+
+The self-hosted proof preflights this condition and fails before replacing
+`/Applications/1Context.app` if `Setup Ready: yes` is missing. Set
+`ONECONTEXT_RUNNER_SETUP_PREFLIGHT=0` only for an intentional first-run setup
+experiment.
+
 ## Enroll The Runner
 
 The helper downloads the current GitHub runner package and registers it with
