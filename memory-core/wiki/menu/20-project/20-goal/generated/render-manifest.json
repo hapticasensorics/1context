@@ -88,11 +88,11 @@
       "sha256": "a75fe0cb5e3d19978ecd8dfabef35a3aac58fe1e457bdb38ac244e2f733c2684"
     },
     {
-      "bytes": 52894,
+      "bytes": 53472,
       "content_type": "text/markdown",
       "path": "wiki/menu/20-project/20-goal/source/goal.md",
       "role": "source_canonical_private",
-      "sha256": "7b72e63fb4b8a0a7f0ba57f392452bcff3c4cbff4a3045fb0996803f66e0e47c"
+      "sha256": "82ab5b4deb012a96597afb39480dad1fb56e321fa006c76815988f8003a242bc"
     },
     {
       "bytes": 556,
@@ -134,7 +134,7 @@
     {
       "input_path": "wiki/menu/20-project/20-goal/source/goal.md",
       "stderr": "",
-      "stdout": "\u2713 goal: 104890 bytes \u2192 /Users/paulhan/dev/1context-public-launch/memory-core/wiki/menu/20-project/20-goal/generated/goal.html"
+      "stdout": "\u2713 goal: 105582 bytes \u2192 /Users/paulhan/dev/1context-public-launch/memory-core/wiki/menu/20-project/20-goal/generated/goal.html"
     },
     {
       "input_path": "wiki/menu/20-project/20-goal/talk/goal.talk",
@@ -146,19 +146,19 @@
   "outputs": [
     {
       "audience_tier": "public",
-      "bytes": 104910,
+      "bytes": 105602,
       "content_type": "text/html",
       "path": "wiki/menu/20-project/20-goal/generated/goal.html",
       "role": "generated_output",
-      "sha256": "17b106cd24b22eefdf14991570500085036ba55fe225671eb6166eacba2f7479"
+      "sha256": "3dfb38a5ac635e6209efa3d52c89413f97ef4b3ee373ee187c8b8a37a4542c96"
     },
     {
       "audience_tier": "public",
-      "bytes": 52894,
+      "bytes": 53472,
       "content_type": "text/markdown",
       "path": "wiki/menu/20-project/20-goal/generated/goal.md",
       "role": "generated_output",
-      "sha256": "7b72e63fb4b8a0a7f0ba57f392452bcff3c4cbff4a3045fb0996803f66e0e47c"
+      "sha256": "82ab5b4deb012a96597afb39480dad1fb56e321fa006c76815988f8003a242bc"
     },
     {
       "audience_tier": "public",
@@ -177,7 +177,7 @@
       "sha256": "70850f095a7e5ea45babaedadc97d1b037bba720394835f4cb8f0d43cf674de3"
     }
   ],
-  "rendered_at": "2026-05-10T04:32:46Z",
+  "rendered_at": "2026-05-10T04:35:12Z",
   "routes": [
     {
       "kind": "latest_family_html",
@@ -216,7 +216,7 @@
           "exists": true,
           "path": "wiki/menu/20-project/20-goal/source/goal.md",
           "selected_for_render": true,
-          "sha256": "7b72e63fb4b8a0a7f0ba57f392452bcff3c4cbff4a3045fb0996803f66e0e47c"
+          "sha256": "82ab5b4deb012a96597afb39480dad1fb56e321fa006c76815988f8003a242bc"
         },
         "public": {
           "exists": false,

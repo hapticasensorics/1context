@@ -8,6 +8,7 @@ CLI="${ONECONTEXT_EVIDENCE_CLI:-$APP/Contents/MacOS/1context-cli}"
 OUT_DIR="${ONECONTEXT_RELEASE_LOCKDOWN_EVIDENCE_DIR:-$ROOT/dist/release-lockdown-evidence/$STAMP}"
 REDACT="${ONECONTEXT_RELEASE_LOCKDOWN_EVIDENCE_REDACT:-1}"
 APPCAST_URL="${ONECONTEXT_RELEASE_LOCKDOWN_APPCAST_URL:-}"
+FAILED_UPDATE_EVIDENCE_DIR="${ONECONTEXT_RELEASE_LOCKDOWN_FAILED_UPDATE_EVIDENCE_DIR:-}"
 
 mkdir -p "$OUT_DIR"
 
@@ -223,6 +224,19 @@ do
     echo missing
   fi
 done"
+
+if [[ -n "$FAILED_UPDATE_EVIDENCE_DIR" ]]; then
+  capture_command \
+    "diagnostic-state-summary.txt" \
+    python3 "$ROOT/scripts/classify-release-lockdown-diagnostics.py" \
+    --evidence-dir "$OUT_DIR" \
+    --failed-update-dir "$FAILED_UPDATE_EVIDENCE_DIR"
+else
+  capture_command \
+    "diagnostic-state-summary.txt" \
+    python3 "$ROOT/scripts/classify-release-lockdown-diagnostics.py" \
+    --evidence-dir "$OUT_DIR"
+fi
 
 write_text "result.txt" \
   "result=collected" \

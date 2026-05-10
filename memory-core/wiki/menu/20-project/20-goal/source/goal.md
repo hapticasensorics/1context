@@ -869,7 +869,8 @@ Each release in this train must answer four questions:
   `appcast.xml`, `appcast-summary.txt`, `sparkle-info-plist.txt`,
   Sparkle defaults files, `status-debug.txt`, `setup-local-web-status.txt`,
   LaunchAgent/LaunchDaemon captures, `helper-state.txt`,
-  `local-wiki-health.txt`, and `recent-logs.txt`. The proof run at
+  `local-wiki-health.txt`, `recent-logs.txt`, and
+  `diagnostic-state-summary.txt`. The proof run at
   `dist/release-lockdown-evidence/20260510T043210Z/result.txt` records
   `result=collected`, installed version `0.1.61`, the GitHub appcast URL, and
   `redaction=1`.
@@ -888,8 +889,16 @@ Each release in this train must answer four questions:
   proof run at `dist/release-lockdown-evidence/20260510T043210Z/` passed
   `rg -n "/Users/paulhan|paulhan"` with no matches while preserving appcast
   version, critical-update state, runtime health, helper state, and wiki health.
-- [ ] Prove diagnostics can distinguish healthy, needs setup, needs update,
+- [x] Prove diagnostics can distinguish healthy, needs setup, needs update,
   failed update, and stopped-by-user states.
+  Evidence: `scripts/classify-release-lockdown-diagnostics.py` classifies a
+  release-lockdown evidence bundle into `healthy`, `needs_setup`,
+  `needs_update`, `failed_update`, `stopped_by_user`, or `unknown`.
+  `scripts/test-release-lockdown-diagnostics.sh` passed fixture coverage for
+  all five required states, and
+  `dist/release-lockdown-evidence/20260510T043434Z/diagnostic-state-summary.txt`
+  proves the collector integration reports `diagnostic_state=failed_update`
+  when attached to the interrupted-download failed-update evidence.
 - [ ] Prove remote Sparkle update into `0.1.62`.
 
 ##### 0.1.63 Permission Flywheel and Clean-Machine Acceptance

@@ -945,7 +945,8 @@ bundle under <code>dist/release-lockdown-evidence/</code> with <code>version.txt
 <code>appcast.xml</code>, <code>appcast-summary.txt</code>, <code>sparkle-info-plist.txt</code>,
 Sparkle defaults files, <code>status-debug.txt</code>, <code>setup-local-web-status.txt</code>,
 LaunchAgent/LaunchDaemon captures, <code>helper-state.txt</code>,
-<code>local-wiki-health.txt</code>, and <code>recent-logs.txt</code>. The proof run at
+<code>local-wiki-health.txt</code>, <code>recent-logs.txt</code>, and
+<code>diagnostic-state-summary.txt</code>. The proof run at
 <code>dist/release-lockdown-evidence/20260510T043210Z/result.txt</code> records
 <code>result=collected</code>, installed version <code>0.1.61</code>, the GitHub appcast URL, and
 <code>redaction=1</code>.</li>
@@ -964,8 +965,16 @@ username with stable placeholders, and avoids dumping wiki page content. The
 proof run at <code>dist/release-lockdown-evidence/20260510T043210Z/</code> passed
 <code>rg -n &quot;/Users/paulhan|paulhan&quot;</code> with no matches while preserving appcast
 version, critical-update state, runtime health, helper state, and wiki health.</li>
-<li><input disabled="" type="checkbox"> Prove diagnostics can distinguish healthy, needs setup, needs update,
-failed update, and stopped-by-user states.</li>
+<li><input checked="" disabled="" type="checkbox"> Prove diagnostics can distinguish healthy, needs setup, needs update,
+failed update, and stopped-by-user states.
+Evidence: <code>scripts/classify-release-lockdown-diagnostics.py</code> classifies a
+release-lockdown evidence bundle into <code>healthy</code>, <code>needs_setup</code>,
+<code>needs_update</code>, <code>failed_update</code>, <code>stopped_by_user</code>, or <code>unknown</code>.
+<code>scripts/test-release-lockdown-diagnostics.sh</code> passed fixture coverage for
+all five required states, and
+<code>dist/release-lockdown-evidence/20260510T043434Z/diagnostic-state-summary.txt</code>
+proves the collector integration reports <code>diagnostic_state=failed_update</code>
+when attached to the interrupted-download failed-update evidence.</li>
 <li><input disabled="" type="checkbox"> Prove remote Sparkle update into <code>0.1.62</code>.</li>
 </ul>
 <h5>0.1.63 Permission Flywheel and Clean-Machine Acceptance</h5>
