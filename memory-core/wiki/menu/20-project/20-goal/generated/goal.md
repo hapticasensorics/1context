@@ -623,6 +623,15 @@ Each release in this train must answer four questions:
 
 ##### 0.1.61 Mandatory Immediate Update Proof
 
+- [x] Add an optional self-hosted Mac update CI gate for release-worthy update
+  hops.
+  Evidence: `.github/workflows/self-hosted-mac-update-proof.yml` is
+  dispatch-only, runs only on the `onecontext-update-runner` self-hosted Mac
+  label, requires the protected `onecontext-update-runner` environment, rejects
+  untrusted refs, installs version N, proves the staged Sparkle update to N+1,
+  runs steady-state verification, and uploads evidence. The runner docs and
+  scripts require the installed N app's `SUFeedURL` to match the proof appcast
+  so staging proofs cannot accidentally exercise the public latest feed.
 - [ ] Publish `0.1.61` as a mandatory release through the policy manifest.
 - [ ] Prove mandatory update detection can interrupt active use and immediately
   download, install, and relaunch.

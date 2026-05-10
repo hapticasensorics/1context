@@ -86,11 +86,16 @@ installed_cli_version() {
   fi
 }
 
+installed_feed_url() {
+  plutil -extract SUFeedURL raw "$APP/Contents/Info.plist" 2>/dev/null || true
+}
+
 write_versions() {
   local output="$1"
   {
     echo "plist=$(installed_plist_version)"
     echo "cli=$(installed_cli_version)"
+    echo "feed=$(installed_feed_url)"
   } > "$output"
 }
 
@@ -203,6 +208,9 @@ install_old_app() {
   write_versions "$EVIDENCE_DIR/version-after-old-install.txt"
   [[ "$(installed_plist_version)" == "$OLD_VERSION" ]] || fail "Installed plist version is not $OLD_VERSION."
   [[ "$(installed_cli_version)" == "$OLD_VERSION" ]] || fail "Installed CLI version is not $OLD_VERSION."
+  if [[ "$(installed_feed_url)" != "$APPCAST_URL" ]]; then
+    fail "Installed old app SUFeedURL does not match the proof appcast. Build/provide the old DMG with ONECONTEXT_SPARKLE_FEED_URL=$APPCAST_URL, or set the proof appcast URL to the installed app feed."
+  fi
 }
 
 collect_host_snapshot() {

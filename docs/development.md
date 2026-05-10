@@ -181,7 +181,12 @@ patches can rely on hosted CI, release asset audit, appcast validation, and
 targeted maintainer smoke.
 
 When the release owner decides the Mac proof is warranted, dispatch the protected
-workflow with a concrete reason:
+workflow with a concrete reason. The version-N app installed by the proof must
+already have `SUFeedURL` set to the same appcast URL you pass here. For a
+pre-public staging proof, use `old_dmg_url` for a version-N baseline DMG built
+with `ONECONTEXT_SPARKLE_FEED_URL=<staging_appcast_url>`; otherwise the old app
+may check the public latest feed instead of the staging candidate, and the proof
+script will fail.
 
 ```bash
 gh workflow run self-hosted-mac-update-proof.yml \

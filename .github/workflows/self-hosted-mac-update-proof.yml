@@ -14,7 +14,7 @@ on:
         description: "Expected version N+1. Defaults to the checked-out VERSION file."
         required: false
       staging_appcast_url:
-        description: "Staging Sparkle appcast URL for N+1."
+        description: "Sparkle appcast URL that the installed N app is built to use."
         required: true
       update_class:
         description: "Expected Sparkle update class."
@@ -28,7 +28,7 @@ on:
         description: "GitHub release tag for N. Defaults to v<old_version>."
         required: false
       old_dmg_url:
-        description: "Optional direct DMG URL for N. When blank, the script downloads the release asset with gh."
+        description: "Optional direct DMG URL for N. Use a staging-feed N build for pre-public proofs."
         required: false
       update_timeout_seconds:
         description: "Max seconds to wait for Sparkle to replace the app."

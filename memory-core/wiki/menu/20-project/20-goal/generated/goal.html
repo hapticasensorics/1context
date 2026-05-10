@@ -699,6 +699,15 @@ readiness, menu running state, and local wiki health.</li>
 </ul>
 <h5>0.1.61 Mandatory Immediate Update Proof</h5>
 <ul>
+<li><input checked="" disabled="" type="checkbox"> Add an optional self-hosted Mac update CI gate for release-worthy update
+hops.
+Evidence: <code>.github/workflows/self-hosted-mac-update-proof.yml</code> is
+dispatch-only, runs only on the <code>onecontext-update-runner</code> self-hosted Mac
+label, requires the protected <code>onecontext-update-runner</code> environment, rejects
+untrusted refs, installs version N, proves the staged Sparkle update to N+1,
+runs steady-state verification, and uploads evidence. The runner docs and
+scripts require the installed N app&#39;s <code>SUFeedURL</code> to match the proof appcast
+so staging proofs cannot accidentally exercise the public latest feed.</li>
 <li><input disabled="" type="checkbox"> Publish <code>0.1.61</code> as a mandatory release through the policy manifest.</li>
 <li><input disabled="" type="checkbox"> Prove mandatory update detection can interrupt active use and immediately
 download, install, and relaunch.</li>

@@ -54,6 +54,14 @@ The job calls `scripts/self-hosted-update-proof.sh`, which:
 6. Runs `scripts/verify-macos-steady-state.sh`.
 7. Uploads evidence from `dist/self-hosted-update-proof/`.
 
+The installed version N app must have `SUFeedURL` set to the same appcast URL
+used for the proof. Public release DMGs normally point at the public latest
+GitHub appcast. For a pre-public staging proof, pass `old_dmg_url` or
+`ONECONTEXT_OLD_DMG_PATH` for a version-N baseline DMG built with
+`ONECONTEXT_SPARKLE_FEED_URL=<staging_appcast_url>`. The script fails if the
+installed app feed does not match the requested proof feed, because otherwise it
+could accidentally prove production latest instead of the staging candidate.
+
 That preservation is intentional. This is update CI, not clean-account setup CI:
 destroying app support would turn the proof into a Local Wiki Access permission
 exercise and make update failures harder to read.
@@ -133,7 +141,8 @@ From GitHub UI:
 3. Enter a short `proof_reason`, old version N, staging appcast URL, expected
    N+1 version if it differs from `VERSION`, and update class.
 4. Approve the `onecontext-update-runner` environment only if the reason is
-   release-worthy and the staging appcast URL matches the intended candidate.
+   release-worthy, the staging appcast URL matches the intended candidate, and
+   the version-N DMG being installed is built to use that appcast URL.
 
 From `gh`:
 
@@ -161,6 +170,10 @@ gh workflow run self-hosted-mac-update-proof.yml \
   -f staging_appcast_url=https://example.invalid/staging/appcast.xml \
   -f update_class=mandatory
 ```
+
+For a true pre-public staging proof, that explicit old DMG path/URL is usually
+required unless the public version-N app already points at the same staging
+appcast.
 
 The proof leaves `/Applications/1Context.app` at N+1 and healthy. The next run
 will stop it, reinstall N from DMG, clear disposable updater caches, and repeat.
