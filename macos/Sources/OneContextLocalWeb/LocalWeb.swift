@@ -921,12 +921,7 @@ public final class CaddyManager: @unchecked Sendable {
 
   private func copyBundledSeedWikiIfAvailable(to siteRoot: URL) throws -> Bool {
     guard let core = bundledMemoryCoreDirectory() else { return false }
-    let seedGeneratedDirectories = [
-      core.appendingPathComponent("wiki/menu/10-for-you/10-for-you/generated", isDirectory: true),
-      core.appendingPathComponent("wiki/menu/10-for-you/20-your-context/generated", isDirectory: true),
-      core.appendingPathComponent("wiki/menu/20-project/10-projects/generated", isDirectory: true),
-      core.appendingPathComponent("wiki/menu/30-topics/10-topics/generated", isDirectory: true)
-    ]
+    let seedGeneratedDirectories = bundledSeedGeneratedDirectories(in: core)
     guard seedGeneratedDirectories.contains(where: { fileManager.fileExists(atPath: $0.appendingPathComponent("your-context.html").path) }) else {
       return false
     }
@@ -949,6 +944,23 @@ public final class CaddyManager: @unchecked Sendable {
     }
     try writeString(staticJSON(["status": "ok", "service": "1context-local-web", "seed": true]), to: siteRoot.appendingPathComponent("__1context/health"))
     return fileManager.fileExists(atPath: siteRoot.appendingPathComponent("index.html").path)
+  }
+
+  private func bundledSeedGeneratedDirectories(in core: URL) -> [URL] {
+    let menu = core.appendingPathComponent("wiki/menu", isDirectory: true)
+    guard let enumerator = fileManager.enumerator(at: menu, includingPropertiesForKeys: [.isRegularFileKey]) else {
+      return []
+    }
+    return enumerator.compactMap { item -> URL? in
+      guard let url = item as? URL,
+        url.lastPathComponent == "family.toml",
+        (try? url.resourceValues(forKeys: [.isRegularFileKey]).isRegularFile) == true
+      else {
+        return nil
+      }
+      let generated = url.deletingLastPathComponent().appendingPathComponent("generated", isDirectory: true)
+      return fileManager.fileExists(atPath: generated.path) ? generated : nil
+    }.sorted { $0.path < $1.path }
   }
 
   private func forYouSeedHTML(in siteRoot: URL) -> URL? {
@@ -1034,6 +1046,13 @@ public final class CaddyManager: @unchecked Sendable {
   }
 
   private func bundledMemoryCoreDirectory() -> URL? {
+    if let override = environment["ONECONTEXT_MEMORY_CORE_BUNDLE_DIR"], !override.isEmpty {
+      let core = URL(fileURLWithPath: override, isDirectory: true)
+      if fileManager.fileExists(atPath: core.appendingPathComponent("wiki-engine/theme/css/theme.css").path) {
+        return core
+      }
+    }
+
     if let executableDirectory = currentExecutableURL()?.deletingLastPathComponent() {
       let releaseCore = executableDirectory
         .deletingLastPathComponent()

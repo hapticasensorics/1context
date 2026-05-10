@@ -203,6 +203,26 @@ final class LocalWebTests: XCTestCase {
     }
   }
 
+  func testPlaceholderSiteSeedsAllBundledWikiFamilies() throws {
+    let root = temporaryRoot()
+    let paths = testRuntimePaths(root: root)
+    let web = LocalWebPaths(runtimePaths: paths)
+    let manager = CaddyManager(runtimePaths: paths, environment: [
+      "ONECONTEXT_WIKI_URL_MODE": "high-port-http",
+      "ONECONTEXT_MEMORY_CORE_BUNDLE_DIR": repoRoot().appendingPathComponent("memory-core", isDirectory: true).path
+    ])
+
+    try manager.ensurePlaceholderSite()
+
+    let goal = web.wikiCurrent.appendingPathComponent("goal.html")
+    XCTAssertTrue(FileManager.default.fileExists(atPath: web.wikiCurrent.appendingPathComponent("your-context.html").path))
+    XCTAssertTrue(FileManager.default.fileExists(atPath: web.wikiCurrent.appendingPathComponent("for-you.html").path))
+    XCTAssertTrue(FileManager.default.fileExists(atPath: web.wikiCurrent.appendingPathComponent("projects.html").path))
+    XCTAssertTrue(FileManager.default.fileExists(atPath: web.wikiCurrent.appendingPathComponent("topics.html").path))
+    XCTAssertTrue(FileManager.default.fileExists(atPath: goal.path))
+    XCTAssertTrue(try String(contentsOf: goal, encoding: .utf8).contains("Permission Doctrine"))
+  }
+
   func testLocalHTTPSSetupSnapshotReflectsInstalledProxyAndTrust() {
     let systemPaths = LocalWebSetupSystemPaths(environment: [
       "ONECONTEXT_LOCAL_WEB_SYSTEM_SUPPORT_DIR": "/tmp/1Context/System",
@@ -361,6 +381,14 @@ final class LocalWebTests: XCTestCase {
       "ONECONTEXT_LOCAL_WEB_SYSTEM_LOG_DIR": root.appendingPathComponent("System/Logs/1Context").path,
       "ONECONTEXT_LOCAL_WEB_LAUNCH_DAEMON_PATH": root.appendingPathComponent("System/LaunchDaemons/com.haptica.1context.local-web-proxy.plist").path
     ]
+  }
+
+  private func repoRoot() -> URL {
+    URL(fileURLWithPath: #filePath)
+      .deletingLastPathComponent()
+      .deletingLastPathComponent()
+      .deletingLastPathComponent()
+      .deletingLastPathComponent()
   }
 
   private func writeJSON(_ payload: [String: Any], to url: URL) throws {
