@@ -92,8 +92,13 @@ jobs:
             shasum -a 256 "$(basename "$artifact")" > "$(basename "$artifact").sha256"
           )
           cp "$artifact" dist/1Context.dmg
+          (
+            cd dist
+            shasum -a 256 1Context.dmg > 1Context.dmg.sha256
+          )
           cp "$appcast" dist/appcast.xml
           cat "$artifact.sha256"
+          cat dist/1Context.dmg.sha256
       - name: Upload GitHub release artifacts
         if: startsWith(github.ref, 'refs/tags/')
         env:
@@ -109,6 +114,7 @@ jobs:
             "$artifact" \
             "$artifact.sha256" \
             dist/1Context.dmg \
+            dist/1Context.dmg.sha256 \
             dist/appcast.xml \
             --clobber
           gh release view "${GITHUB_REF_NAME}" --json tagName,assets > dist/github-release.json
@@ -126,6 +132,7 @@ jobs:
             f"1Context-{version}-macos-arm64.dmg",
             f"1Context-{version}-macos-arm64.dmg.sha256",
             "1Context.dmg",
+            "1Context.dmg.sha256",
             "appcast.xml",
           }
           missing = sorted(required - assets)
