@@ -17,7 +17,8 @@ fi
 VERSION="${BASH_REMATCH[1]}"
 ARCH="${BASH_REMATCH[2]}"
 
-if [[ -f "$ROOT/VERSION" ]] && [[ "$(tr -d '[:space:]' < "$ROOT/VERSION")" != "$VERSION" ]]; then
+EXPECTED_VERSION="${ONECONTEXT_VERSION:-$(tr -d '[:space:]' < "$ROOT/VERSION" 2>/dev/null || true)}"
+if [[ -n "$EXPECTED_VERSION" && "$EXPECTED_VERSION" != "$VERSION" ]]; then
   echo "DMG version does not match VERSION." >&2
   exit 1
 fi
