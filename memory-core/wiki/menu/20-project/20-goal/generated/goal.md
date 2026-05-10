@@ -632,11 +632,41 @@ Each release in this train must answer four questions:
   runs steady-state verification, and uploads evidence. The runner docs and
   scripts require the installed N app's `SUFeedURL` to match the proof appcast
   so staging proofs cannot accidentally exercise the public latest feed.
+- [x] Prove the self-hosted runner can execute a staged mandatory update hop.
+  Evidence: GitHub Actions run
+  `https://github.com/hapticasensorics/1context/actions/runs/25617081477`
+  passed at `1c985c9`, artifact
+  `self-hosted-mac-update-proof-0.1.60-to-0.1.61` shows `0.1.60 -> 0.1.61`
+  through a mandatory staged appcast, `sparkle:criticalUpdate`, matching
+  `minimumAutoupdateVersion=0.1.60`, and 120 seconds of steady-state probes
+  after install.
+- [x] Harden the remote update proof harness so mandatory proofs fail if a
+  user-facing update prompt, installer explanation, or release-note text appears
+  during the automatic update window.
+  Evidence: `scripts/prove-remote-sparkle-update.sh` now captures
+  Accessibility text during mandatory watch iterations and optional background
+  discovery, then fails on `Update 1Context?`, `Install Update`,
+  `Install and Relaunch`, release notes, installer explanation, or relaunch
+  explanation text before the version hop is accepted.
+- [x] Prove the hardened harness locally on this Mac against the staged
+  mandatory `0.1.60 -> 0.1.61` assets.
+  Evidence:
+  `dist/self-hosted-update-proof/local-0.1.60-to-0.1.61-strict-20260510T021556Z/result.txt`
+  is `result=passed`; `update-proof/watch.log` crosses from `0.1.60` to
+  `0.1.61`; `update-proof/accessibility-1.txt` and
+  `update-proof/accessibility-2.txt` passed the no-prompt/no-release-notes
+  assertion; `steady-state/summary.txt` passed 60 seconds and 10 probes after
+  install.
+- [x] Restore this Mac to the current public release after the staged proof.
+  Evidence: `/Applications/1Context.app` was reinstalled from GitHub release
+  `v0.1.60`, reports version `0.1.60`, points back at
+  `https://github.com/hapticasensorics/1context/releases/latest/download/appcast.xml`,
+  and reports Health OK, menu running, and setup ready.
 - [ ] Publish `0.1.61` as a mandatory release through the policy manifest.
 - [ ] Prove mandatory update detection can interrupt active use and immediately
   download, install, and relaunch.
-- [ ] Prove no release notes, preflight explanation, or confirmation prompt are
-  shown for the mandatory update.
+- [ ] Prove the public `0.1.61` mandatory release repeats the no-release-notes,
+  no-preflight, no-confirmation behavior through GitHub release assets.
 - [ ] Prove the menu bar shows a pending update action until the installed app
   actually moves, then returns to `Check for Updates`.
 - [ ] Prove the default post-install message remains hidden when disabled by

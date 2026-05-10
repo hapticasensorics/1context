@@ -251,6 +251,20 @@ if enclosure is None or not enclosure.attrib.get("{http://www.andymatuschak.org/
 PY
 }
 
+assert_no_unwanted_update_ui() {
+  local evidence_file="$1"
+  local phase="$2"
+  if [[ ! -s "$evidence_file" ]]; then
+    return
+  fi
+  if grep -Eiq \
+    'Update 1Context\?|Install Update|Install and Relaunch|release notes|verify the signed release|installer|relaunch the app' \
+    "$evidence_file"; then
+    echo "Unexpected user-facing update UI during $phase. Evidence: $evidence_file" >&2
+    exit 1
+  fi
+}
+
 click_menu_item() {
   local menu_item="$1"
   osascript <<APPLESCRIPT
@@ -378,6 +392,8 @@ if [[ "$EXPECTED_UPDATE_CLASS" == "optional" ]]; then
     cli_version="$(installed_cli_version)"
     capture_menu "$EVIDENCE_DIR/menu-discovery-$discovery_iteration.txt"
     capture_windows "$EVIDENCE_DIR/windows-discovery-$discovery_iteration.txt"
+    capture_accessibility "$EVIDENCE_DIR/accessibility-discovery-$discovery_iteration.txt"
+    assert_no_unwanted_update_ui "$EVIDENCE_DIR/accessibility-discovery-$discovery_iteration.txt" "optional background discovery"
     echo "$now plist=$plist_version cli=$cli_version" | tee -a "$EVIDENCE_DIR/discovery-watch.log"
     if [[ "$plist_version" != "$EXPECTED_OLD_VERSION" || "$cli_version" != "$EXPECTED_OLD_VERSION" ]]; then
       echo "Optional update installed before user confirmation. Evidence: $EVIDENCE_DIR" >&2
@@ -399,6 +415,7 @@ if [[ "$EXPECTED_UPDATE_CLASS" == "optional" ]]; then
   sleep "$OPTIONAL_QUIET_SECONDS"
   write_versions "$EVIDENCE_DIR/version-after-quiet-background.txt"
   capture_accessibility "$EVIDENCE_DIR/accessibility-after-quiet-background.txt"
+  assert_no_unwanted_update_ui "$EVIDENCE_DIR/accessibility-after-quiet-background.txt" "optional quiet background window"
   capture_screenshot "$EVIDENCE_DIR/desktop-after-quiet-background.png"
   if [[ "$(installed_plist_version)" != "$EXPECTED_OLD_VERSION" || "$(installed_cli_version)" != "$EXPECTED_OLD_VERSION" ]]; then
     echo "Optional update installed during quiet window. Evidence: $EVIDENCE_DIR" >&2
@@ -430,6 +447,10 @@ while true; do
   cli_version="$(installed_cli_version)"
   echo "$now plist=$plist_version cli=$cli_version" | tee -a "$EVIDENCE_DIR/watch.log"
   capture_windows "$EVIDENCE_DIR/windows-$iteration.txt"
+  if [[ "$EXPECTED_UPDATE_CLASS" == "mandatory" ]]; then
+    capture_accessibility "$EVIDENCE_DIR/accessibility-$iteration.txt"
+    assert_no_unwanted_update_ui "$EVIDENCE_DIR/accessibility-$iteration.txt" "mandatory automatic update"
+  fi
 
   if [[ "$plist_version" == "$EXPECTED_NEW_VERSION" && "$cli_version" == "$EXPECTED_NEW_VERSION" ]]; then
     echo "updated at iteration $iteration" >> "$EVIDENCE_DIR/watch.log"

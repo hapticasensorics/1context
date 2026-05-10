@@ -708,11 +708,41 @@ untrusted refs, installs version N, proves the staged Sparkle update to N+1,
 runs steady-state verification, and uploads evidence. The runner docs and
 scripts require the installed N app&#39;s <code>SUFeedURL</code> to match the proof appcast
 so staging proofs cannot accidentally exercise the public latest feed.</li>
+<li><input checked="" disabled="" type="checkbox"> Prove the self-hosted runner can execute a staged mandatory update hop.
+Evidence: GitHub Actions run
+<code>https://github.com/hapticasensorics/1context/actions/runs/25617081477</code>
+passed at <code>1c985c9</code>, artifact
+<code>self-hosted-mac-update-proof-0.1.60-to-0.1.61</code> shows <code>0.1.60 -&gt; 0.1.61</code>
+through a mandatory staged appcast, <code>sparkle:criticalUpdate</code>, matching
+<code>minimumAutoupdateVersion=0.1.60</code>, and 120 seconds of steady-state probes
+after install.</li>
+<li><input checked="" disabled="" type="checkbox"> Harden the remote update proof harness so mandatory proofs fail if a
+user-facing update prompt, installer explanation, or release-note text appears
+during the automatic update window.
+Evidence: <code>scripts/prove-remote-sparkle-update.sh</code> now captures
+Accessibility text during mandatory watch iterations and optional background
+discovery, then fails on <code>Update 1Context?</code>, <code>Install Update</code>,
+<code>Install and Relaunch</code>, release notes, installer explanation, or relaunch
+explanation text before the version hop is accepted.</li>
+<li><input checked="" disabled="" type="checkbox"> Prove the hardened harness locally on this Mac against the staged
+mandatory <code>0.1.60 -&gt; 0.1.61</code> assets.
+Evidence:
+<code>dist/self-hosted-update-proof/local-0.1.60-to-0.1.61-strict-20260510T021556Z/result.txt</code>
+is <code>result=passed</code>; <code>update-proof/watch.log</code> crosses from <code>0.1.60</code> to
+<code>0.1.61</code>; <code>update-proof/accessibility-1.txt</code> and
+<code>update-proof/accessibility-2.txt</code> passed the no-prompt/no-release-notes
+assertion; <code>steady-state/summary.txt</code> passed 60 seconds and 10 probes after
+install.</li>
+<li><input checked="" disabled="" type="checkbox"> Restore this Mac to the current public release after the staged proof.
+Evidence: <code>/Applications/1Context.app</code> was reinstalled from GitHub release
+<code>v0.1.60</code>, reports version <code>0.1.60</code>, points back at
+<code>https://github.com/hapticasensorics/1context/releases/latest/download/appcast.xml</code>,
+and reports Health OK, menu running, and setup ready.</li>
 <li><input disabled="" type="checkbox"> Publish <code>0.1.61</code> as a mandatory release through the policy manifest.</li>
 <li><input disabled="" type="checkbox"> Prove mandatory update detection can interrupt active use and immediately
 download, install, and relaunch.</li>
-<li><input disabled="" type="checkbox"> Prove no release notes, preflight explanation, or confirmation prompt are
-shown for the mandatory update.</li>
+<li><input disabled="" type="checkbox"> Prove the public <code>0.1.61</code> mandatory release repeats the no-release-notes,
+no-preflight, no-confirmation behavior through GitHub release assets.</li>
 <li><input disabled="" type="checkbox"> Prove the menu bar shows a pending update action until the installed app
 actually moves, then returns to <code>Check for Updates</code>.</li>
 <li><input disabled="" type="checkbox"> Prove the default post-install message remains hidden when disabled by
