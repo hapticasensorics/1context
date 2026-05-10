@@ -1,19 +1,18 @@
-# 1Context v0.1.61 Public Preview
+# 1Context v0.1.62 Public Preview
 
 This release includes:
 
-- `0.1.61` is a mandatory update proof release.
-- Mandatory update verification now fails if updater prompts, installer
-  explanations, relaunch copy, or release notes appear during the automatic
-  update window.
-- CI now runs upgrade-path checks that cover the destructive proof guard,
-  update-class validation, mandatory no-UI assertions, and staging-feed safety.
-- Packaged release smoke checks now verify the app bundle shape, local web
-  helper plist, required executables, and bundled generated `/goal` assets.
-- Fresh local web placeholders now seed every bundled wiki family, including
-  `/goal`.
-- Setup callbacks are isolated on the main actor so the Swift test suite passes
-  under strict concurrency checking.
+- `0.1.62` is a mandatory failed-update supportability release.
+- Failed updates now show simple support copy instead of technical updater
+  details.
+- The failed-update window includes `Try Again` while keeping normal
+  `Check for Updates` behavior separate.
+- Mandatory failed-update smokes now cover missing assets, bad signatures,
+  broken appcasts, interrupted downloads, and runtime survival.
+- Release-lockdown diagnostics now classify healthy, needs setup, needs update,
+  failed update, and stopped-by-user states.
+- The release evidence bundle captures version, appcast, Sparkle state,
+  LaunchAgents, helper readiness, runtime health, wiki health, and recent logs.
 
 Install:
 
