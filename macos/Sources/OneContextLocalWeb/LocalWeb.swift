@@ -119,36 +119,14 @@ public enum LocalWebDefaults {
 }
 
 public enum LocalWebURLMode: String, Codable, Sendable {
-  case highPortHTTP = "high-port-http"
   case localHTTPSPortless = "local-https-portless"
 
-  public init(environmentValue: String?) {
-    switch environmentValue {
-    case Self.highPortHTTP.rawValue:
-      self = .highPortHTTP
-    case Self.localHTTPSPortless.rawValue:
-      self = .localHTTPSPortless
-    default:
-      self = .localHTTPSPortless
-    }
-  }
-
   public var trustMode: String {
-    switch self {
-    case .highPortHTTP:
-      return "none"
-    case .localHTTPSPortless:
-      return "local-ca-required"
-    }
+    "local-ca-required"
   }
 
   public var privilegedBindRequired: Bool {
-    switch self {
-    case .highPortHTTP:
-      return false
-    case .localHTTPSPortless:
-      return true
-    }
+    true
   }
 }
 
@@ -180,27 +158,6 @@ public struct LocalWebSetupSnapshot: Codable, Equatable, Sendable {
     let needed = requirements.filter { $0.status == .needed }.map(\.title)
     guard !needed.isEmpty else { return "Local web setup is complete." }
     return "Local web setup required: \(needed.joined(separator: ", "))"
-  }
-
-  public static func highPortHTTP(targetURL: String) -> LocalWebSetupSnapshot {
-    return LocalWebSetupSnapshot(
-      urlMode: LocalWebURLMode.highPortHTTP.rawValue,
-      targetURL: targetURL,
-      ready: true,
-      requirements: [
-        LocalWebSetupRequirement(
-          id: "local-web.high-port",
-          title: "High-port localhost web",
-          status: .satisfied,
-          owner: "1Context.app",
-          userConsentRequired: false,
-          adminAuthorizationRequired: false,
-          reversibleByUninstall: true,
-          details: "Uses a high localhost port and does not require privileged bind or local certificate trust.",
-          nextAction: "No setup required."
-        )
-      ]
-    )
   }
 
   public static func localHTTPSPortless(targetURL: String, state: LocalWebSetupState) -> LocalWebSetupSnapshot {
@@ -311,7 +268,7 @@ public struct CaddyConfig: Equatable, Sendable {
   public var apiPort: Int
 
   public init(
-    mode: LocalWebURLMode = .highPortHTTP,
+    mode: LocalWebURLMode = .localHTTPSPortless,
     siteRoot: URL,
     logFile: URL,
     host: String = LocalWebDefaults.wikiHost,
@@ -331,75 +288,15 @@ public struct CaddyConfig: Equatable, Sendable {
   }
 
   public var url: String {
-    switch mode {
-    case .highPortHTTP:
-      return "http://\(host):\(port)\(LocalWebDefaults.wikiRoute)"
-    case .localHTTPSPortless:
-      return "https://\(host)\(LocalWebDefaults.wikiRoute)"
-    }
+    "https://\(host)\(LocalWebDefaults.wikiRoute)"
   }
 
   public var healthURL: URL {
-    switch mode {
-    case .highPortHTTP:
-      return URL(string: "http://\(bindHost):\(port)/__1context/health")!
-    case .localHTTPSPortless:
-      return URL(string: "https://\(host)/__1context/health")!
-    }
+    URL(string: "https://\(host)/__1context/health")!
   }
 
   public func caddyfileText() -> String {
-    switch mode {
-    case .highPortHTTP:
-      return highPortHTTPCaddyfileText()
-    case .localHTTPSPortless:
-      return localHTTPSPortlessCaddyfileText()
-    }
-  }
-
-  private func highPortHTTPCaddyfileText() -> String {
-    """
-    {
-      admin off
-      auto_https off
-    }
-
-    http://\(host):\(port), http://\(bindHost):\(port) {
-      bind \(bindHost)
-      root * "\(escape(siteRoot.path))"
-
-      log {
-        output file "\(escape(logFile.path))" {
-          roll_size 1MiB
-          roll_keep 2
-        }
-      }
-
-      encode zstd gzip
-
-      header {
-        X-Content-Type-Options nosniff
-        Referrer-Policy no-referrer
-        Cache-Control no-store
-      }
-
-      route {
-        @wikiStaticApi path /api/wiki/site /api/wiki/pages /api/wiki/stats
-        handle @wikiStaticApi {
-          rewrite * {path}.json
-          file_server
-        }
-
-        @wikiDynamicApi path /api/wiki/*
-        handle @wikiDynamicApi {
-          reverse_proxy \(apiBindHost):\(apiPort)
-        }
-
-        try_files {path} {path}.html {path}/index.html
-        file_server
-      }
-    }
-    """
+    localHTTPSPortlessCaddyfileText()
   }
 
   private func localHTTPSPortlessCaddyfileText() -> String {
@@ -494,7 +391,7 @@ public final class CaddyManager: @unchecked Sendable {
     self.paths = LocalWebPaths(runtimePaths: runtimePaths)
     self.environment = environment
     self.fileManager = fileManager
-    self.urlMode = LocalWebURLMode(environmentValue: environment["ONECONTEXT_WIKI_URL_MODE"])
+    self.urlMode = .localHTTPSPortless
     self.host = environment["ONECONTEXT_WIKI_HOST"] ?? LocalWebDefaults.wikiHost
     self.port = Int(environment["ONECONTEXT_WIKI_PORT"] ?? "") ?? LocalWebDefaults.wikiPort
     self.apiBindHost = environment["ONECONTEXT_WIKI_API_BIND_HOST"] ?? LocalWebDefaults.bindHost
@@ -738,12 +635,7 @@ public final class CaddyManager: @unchecked Sendable {
 
   private func localWebSetupSnapshot() -> LocalWebSetupSnapshot {
     let targetURL = caddyConfig().url
-    switch urlMode {
-    case .highPortHTTP:
-      return .highPortHTTP(targetURL: targetURL)
-    case .localHTTPSPortless:
-      return .localHTTPSPortless(targetURL: targetURL, state: localWebSetupState())
-    }
+    return .localHTTPSPortless(targetURL: targetURL, state: localWebSetupState())
   }
 
   private func prepareCaddyDirectories() throws {

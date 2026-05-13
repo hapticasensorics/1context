@@ -59,7 +59,7 @@ final class AppSetupTests: XCTestCase {
   func testReadinessNeedsAttentionWhenCaddyIsMissingAfterSetup() {
     let readiness = OneContextAppReadiness.snapshot(
       localWebDiagnostics: diagnostics(
-        setup: LocalWebSetupSnapshot.highPortHTTP(targetURL: "http://127.0.0.1:39191/your-context"),
+        setup: localHTTPSSetup(ready: true),
         caddyExecutableExists: false,
         caddyExecutableIsExecutable: false
       )
@@ -73,7 +73,7 @@ final class AppSetupTests: XCTestCase {
   func testReadinessReadyWhenSetupAndCaddyAreReady() {
     let readiness = OneContextAppReadiness.snapshot(
       localWebDiagnostics: diagnostics(
-        setup: LocalWebSetupSnapshot.highPortHTTP(targetURL: "http://127.0.0.1:39191/your-context"),
+        setup: localHTTPSSetup(ready: true),
         caddyExecutableExists: true,
         caddyExecutableIsExecutable: true
       )
@@ -86,7 +86,7 @@ final class AppSetupTests: XCTestCase {
 
   func testSetupDiagnosticsContainOnlyCurrentSetupRequirements() {
     let setup = OneContextAppSetup.snapshot(
-      localWikiAccess: LocalWebSetupSnapshot.highPortHTTP(targetURL: "http://127.0.0.1:39191/your-context")
+      localWikiAccess: localHTTPSSetup(ready: true)
     )
 
     let text = OneContextAppSetupDiagnostics.render(setup).joined(separator: "\n")

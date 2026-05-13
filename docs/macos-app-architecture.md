@@ -54,4 +54,7 @@ The required launch gate is Local Wiki Access because the app's primary wiki URL
 
 ## Smoke Policy
 
-The deterministic release smoke test keeps using high-port HTTP because it must run in CI without modifying the machine. Product HTTPS gets a separate opt-in smoke test because it intentionally touches macOS user trust and background item approval.
+The deterministic smoke tests no longer use a developer-port local-web mode.
+They prove runtime policy and diagnostics without pretending setup is complete;
+real local HTTPS behavior belongs to setup tests and the self-hosted release
+proof.

@@ -439,10 +439,8 @@ public struct LocalWebSetupInstaller {
     environment: [String: String] = ProcessInfo.processInfo.environment,
     fileManager: FileManager = .default
   ) {
-    var localHTTPSEnvironment = environment
-    localHTTPSEnvironment["ONECONTEXT_WIKI_URL_MODE"] = LocalWebURLMode.localHTTPSPortless.rawValue
-    self.manager = manager ?? CaddyManager(environment: localHTTPSEnvironment, fileManager: fileManager)
-    self.environment = localHTTPSEnvironment
+    self.manager = manager ?? CaddyManager(environment: environment, fileManager: fileManager)
+    self.environment = environment
     self.fileManager = fileManager
   }
 

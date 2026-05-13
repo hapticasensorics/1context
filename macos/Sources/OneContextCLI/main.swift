@@ -289,12 +289,7 @@ struct OneContextCLI {
   }
 
   static func ensureRequiredSetupForUse() throws {
-    let ready: Bool
-    if LocalWebURLMode(environmentValue: ProcessInfo.processInfo.environment["ONECONTEXT_WIKI_URL_MODE"]) == .highPortHTTP {
-      ready = OneContextAppReadiness.current().requiredSetupReady
-    } else {
-      ready = OneContextAppSetup.current().requiredReady
-    }
+    let ready = OneContextAppSetup.current().requiredReady
     guard ready else {
       throw CLIError.commandFailed("""
       Local wiki access is not set up.

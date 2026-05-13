@@ -3,41 +3,6 @@ import XCTest
 import OneContextPlatform
 
 final class LocalWebTests: XCTestCase {
-  func testCaddyConfigIsOpinionatedLocalWebEdge() {
-    let config = CaddyConfig(
-      mode: .highPortHTTP,
-      siteRoot: URL(fileURLWithPath: "/tmp/1Context Wiki/current", isDirectory: true),
-      logFile: URL(fileURLWithPath: "/tmp/1Context Logs/caddy.log")
-    )
-
-    let text = config.caddyfileText()
-    XCTAssertTrue(text.contains("admin off"))
-    XCTAssertTrue(text.contains("auto_https off"))
-    XCTAssertTrue(text.contains("http://wiki.1context.localhost:39191, http://127.0.0.1:39191"))
-    XCTAssertTrue(text.contains("bind 127.0.0.1"))
-    XCTAssertTrue(text.contains("root * \"/tmp/1Context Wiki/current\""))
-    XCTAssertTrue(text.contains("route {"))
-    XCTAssertTrue(text.contains("@wikiStaticApi path /api/wiki/site /api/wiki/pages /api/wiki/stats"))
-    XCTAssertTrue(text.contains("rewrite * {path}.json"))
-    XCTAssertTrue(text.contains("@wikiDynamicApi path /api/wiki/*"))
-    XCTAssertLessThan(
-      try XCTUnwrap(text.range(of: "@wikiStaticApi path")?.lowerBound),
-      try XCTUnwrap(text.range(of: "@wikiDynamicApi path")?.lowerBound)
-    )
-    XCTAssertLessThan(
-      try XCTUnwrap(text.range(of: "@wikiDynamicApi path")?.lowerBound),
-      try XCTUnwrap(text.range(of: "try_files {path}")?.lowerBound)
-    )
-    XCTAssertTrue(text.contains("try_files {path} {path}.html {path}/index.html"))
-    XCTAssertFalse(text.contains("try_files {path} {path}.html {path}/index.html /index.html"))
-    XCTAssertTrue(text.contains("file_server"))
-    XCTAssertTrue(text.contains("reverse_proxy 127.0.0.1:39192"))
-    XCTAssertFalse(text.contains("rewrite /api/wiki/search /api/wiki/search.json"))
-    XCTAssertFalse(text.contains("respond `"))
-    XCTAssertEqual(config.url, "http://wiki.1context.localhost:39191/your-context")
-    XCTAssertEqual(config.healthURL.absoluteString, "http://127.0.0.1:39191/__1context/health")
-  }
-
   func testCaddyConfigSupportsProfessionalLocalHTTPSMode() {
     let config = CaddyConfig(
       mode: .localHTTPSPortless,
@@ -59,7 +24,7 @@ final class LocalWebTests: XCTestCase {
   }
 
   func testDefaultURLModeRequiresProfessionalLocalHTTPSSetup() {
-    let mode = LocalWebURLMode(environmentValue: nil)
+    let mode = LocalWebURLMode.localHTTPSPortless
     let config = CaddyConfig(
       mode: mode,
       siteRoot: URL(fileURLWithPath: "/tmp/1Context Wiki/current", isDirectory: true),
@@ -121,14 +86,13 @@ final class LocalWebTests: XCTestCase {
       "ONECONTEXT_CACHE_DIR": root.appendingPathComponent("Caches/1Context").path
     ])
     let manager = CaddyManager(runtimePaths: paths, environment: [
-      "ONECONTEXT_CADDY_PATH": caddy.path,
-      "ONECONTEXT_WIKI_URL_MODE": "high-port-http"
+      "ONECONTEXT_CADDY_PATH": caddy.path
     ])
     let diagnostics = manager.diagnostics()
 
-    XCTAssertEqual(diagnostics.urlMode, "high-port-http")
-    XCTAssertEqual(diagnostics.trustMode, "none")
-    XCTAssertFalse(diagnostics.privilegedBindRequired)
+    XCTAssertEqual(diagnostics.urlMode, "local-https-portless")
+    XCTAssertEqual(diagnostics.trustMode, "local-ca-required")
+    XCTAssertTrue(diagnostics.privilegedBindRequired)
     XCTAssertEqual(diagnostics.caddyExecutable, caddy.path)
     XCTAssertTrue(diagnostics.caddyExecutableExists)
     XCTAssertTrue(diagnostics.caddyExecutableIsExecutable)
@@ -153,8 +117,7 @@ final class LocalWebTests: XCTestCase {
       "ONECONTEXT_CACHE_DIR": root.appendingPathComponent("Caches/1Context").path
     ])
     let manager = CaddyManager(runtimePaths: paths, environment: [
-      "ONECONTEXT_CADDY_PATH": caddy.path,
-      "ONECONTEXT_WIKI_URL_MODE": "local-https-portless"
+      "ONECONTEXT_CADDY_PATH": caddy.path
     ].merging(localWebSetupTestEnvironment(root: root)) { _, new in new })
 
     let diagnostics = manager.diagnostics()
@@ -178,9 +141,7 @@ final class LocalWebTests: XCTestCase {
       "started_at": "2026-04-30T00:00:00Z"
     ], to: web.stateFile)
 
-    let manager = CaddyManager(runtimePaths: paths, environment: [
-      "ONECONTEXT_WIKI_URL_MODE": "local-https-portless"
-    ].merging(localWebSetupTestEnvironment(root: root)) { _, new in new })
+    let manager = CaddyManager(runtimePaths: paths, environment: localWebSetupTestEnvironment(root: root))
     let snapshot = manager.status()
 
     XCTAssertFalse(snapshot.running)
@@ -192,9 +153,7 @@ final class LocalWebTests: XCTestCase {
   func testStartRequiresSetupBeforeProfessionalLocalHTTPSModeRuns() throws {
     let root = temporaryRoot()
     let paths = testRuntimePaths(root: root)
-    let manager = CaddyManager(runtimePaths: paths, environment: [
-      "ONECONTEXT_WIKI_URL_MODE": "local-https-portless"
-    ].merging(localWebSetupTestEnvironment(root: root)) { _, new in new })
+    let manager = CaddyManager(runtimePaths: paths, environment: localWebSetupTestEnvironment(root: root))
 
     XCTAssertThrowsError(try manager.start()) { error in
       XCTAssertEqual(
@@ -208,9 +167,7 @@ final class LocalWebTests: XCTestCase {
     let root = temporaryRoot()
     let paths = testRuntimePaths(root: root)
     let web = LocalWebPaths(runtimePaths: paths)
-    let manager = CaddyManager(runtimePaths: paths, environment: [
-      "ONECONTEXT_WIKI_URL_MODE": "high-port-http"
-    ])
+    let manager = CaddyManager(runtimePaths: paths, environment: [:])
 
     try manager.ensurePlaceholderSite()
 

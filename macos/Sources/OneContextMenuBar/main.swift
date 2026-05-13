@@ -1395,9 +1395,6 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
   }
 
   private func scheduleLocalWebSetupRepairPrompt() {
-    guard ProcessInfo.processInfo.environment["ONECONTEXT_WIKI_URL_MODE"] != LocalWebURLMode.highPortHTTP.rawValue else {
-      return
-    }
     DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
       guard let self else { return }
       Task { @MainActor in

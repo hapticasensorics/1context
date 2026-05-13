@@ -120,8 +120,9 @@ Measurement:
   shipped memory-core packaging, public debug/permissions surfaces, install
   env hooks, the runtime-support shim, structural grep tests, the dead chat API
   shell, old GUI harnesses, stale policy docs/assets, and Sparkle retry env
-  hooks: 17 files and 8,299 nonblank lines, a
-  53,010-line / 86.46%
+  hooks, and the old developer-port local-web mode: 17 files and 8,191
+  nonblank lines, a
+  53,118-line / 86.64%
   reduction from the baseline.
   This passes the 24,523-line 60% reduction target.
 
@@ -287,9 +288,9 @@ pure reducer tests rather than a smoke-harness process variable. Proof:
 
 ### 6. Local Web And Permissions Cleanup
 
-- [ ] Delete high-port HTTP as a shipped product mode. Public 1Context should
+- [x] Delete high-port HTTP as a shipped product mode. Public 1Context should
   have one local-web mode: portless local HTTPS.
-- [ ] Remove setup readiness bypasses tied to high-port HTTP.
+- [x] Remove setup readiness bypasses tied to high-port HTTP.
 - [x] Remove future sensitive permission scaffolding from shipped setup until
   the corresponding capture feature is actually shipping.
 - [x] Remove `permissions --all` behavior if it exposes unshipped permissions.
@@ -300,6 +301,13 @@ Evidence, 2026-05-13: deleted the `OneContextPermissions` target and tests,
 removed future Screen Recording/Accessibility rows from setup, and removed the
 public `permissions` CLI command entirely. Current Local Wiki Access status is
 reported through setup and redacted `diagnose`.
+
+Evidence, 2026-05-13: deleted `high-port-http` / `LocalWebURLMode.highPortHTTP`
+from shipped local-web code and tests. The CLI smoke now proves that start and
+wiki commands require Local Wiki Access setup instead of bypassing setup with a
+developer port. Proof: `swift test --package-path macos`, `./scripts/test.sh`,
+and negative `rg` for `high-port-http`, `highPortHTTP`, and
+`ONECONTEXT_WIKI_URL_MODE` in active code/scripts/docs.
 
 ### 7. First-Party Agent Integration Deletion
 
@@ -400,9 +408,9 @@ passed. `scripts/measure-shipped-app-lines.sh` reports 8,796 nonblank
 shipped-app lines, an 85.65% reduction from baseline.
 
 Evidence, 2026-05-13: after the public CLI/env-hook, chat/API, dead-helper,
-old harness, stale policy-doc, and Sparkle retry-env cleanup,
-`scripts/measure-shipped-app-lines.sh` reports 8,299 nonblank shipped-app
-lines, an 86.46% reduction from baseline.
+old harness, stale policy-doc, Sparkle retry-env, and developer-port local-web
+cleanup, `scripts/measure-shipped-app-lines.sh` reports 8,191 nonblank
+shipped-app lines, an 86.64% reduction from baseline.
 
 ### 11. Dead Code, Assets, And Docs
 
