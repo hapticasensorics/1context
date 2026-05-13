@@ -4,6 +4,8 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 TMP_DIR="$(mktemp -d /tmp/1ctx-release-proof-request-XXXXXX)"
 trap 'rm -rf "$TMP_DIR"' EXIT
+EXPECTED_NEW_VERSION="$(tr -d '[:space:]' < "$ROOT/VERSION")"
+EXPECTED_OLD_VERSION="$(awk -F'"' '/^minimum_autoupdate_version[[:space:]]*=/ { print $2; exit }' "$ROOT/release/update-policy.toml")"
 
 assert_contains() {
   local needle="$1"
@@ -19,8 +21,8 @@ bash -n "$ROOT/scripts/request-release-proof.sh"
 
 "$ROOT/scripts/request-release-proof.sh" --dry-run > "$TMP_DIR/dry-run.out"
 assert_contains "mode: dry-run" "$TMP_DIR/dry-run.out"
-assert_contains "old_version: 0.1.62" "$TMP_DIR/dry-run.out"
-assert_contains "new_version: 0.1.63" "$TMP_DIR/dry-run.out"
+assert_contains "old_version: $EXPECTED_OLD_VERSION" "$TMP_DIR/dry-run.out"
+assert_contains "new_version: $EXPECTED_NEW_VERSION" "$TMP_DIR/dry-run.out"
 assert_contains "update_class: mandatory" "$TMP_DIR/dry-run.out"
 assert_contains "staging_appcast_url=https://github.com/hapticasensorics/1context/releases/latest/download/appcast.xml" "$TMP_DIR/dry-run.out"
 
@@ -92,8 +94,8 @@ assert_contains "mode: dispatch" "$TMP_DIR/dispatch.out"
 assert_contains "dispatched=1" "$TMP_DIR/dispatch.out"
 assert_contains "workflow run self-hosted-mac-update-proof.yml" "$TMP_DIR/gh-args.log"
 assert_contains "proof_reason=fixture\\ proof" "$TMP_DIR/gh-args.log"
-assert_contains "old_version=0.1.62" "$TMP_DIR/gh-args.log"
-assert_contains "new_version=0.1.63" "$TMP_DIR/gh-args.log"
+assert_contains "old_version=$EXPECTED_OLD_VERSION" "$TMP_DIR/gh-args.log"
+assert_contains "new_version=$EXPECTED_NEW_VERSION" "$TMP_DIR/gh-args.log"
 assert_contains "staging_appcast_url=https://updates.example.test/appcast.xml" "$TMP_DIR/gh-args.log"
 assert_contains "update_class=mandatory" "$TMP_DIR/gh-args.log"
 
