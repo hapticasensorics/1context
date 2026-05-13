@@ -48,13 +48,8 @@ Product mode requires local wiki access setup. The app opens the setup window
 on launch, repair, and from `Settings > Setup...`. Setup registers the bundled
 ServiceManagement helper for `127.0.0.1:443` and trusts the local Caddy CA in
 the user's login keychain so browsers can open the canonical URL without a port.
-The CLI remains a support path:
-
-```bash
-1context setup local-web status
-1context setup local-web install
-1context setup local-web uninstall
-```
+The CLI is intentionally not a setup or lifecycle control plane; setup stays in
+the app UI and redacted setup state is visible through `1context diagnose`.
 
 The menu bar owns Caddy lifetime. The daemon owns the local `/api/wiki/*`
 adapter and prepares the small placeholder wiki shell. Browser code should call
@@ -75,9 +70,8 @@ swift test --package-path macos
 ```
 
 For updater work, keep tests on update policy, appcast configuration, the
-Sparkle controller, and the release feed. `1context update`, menu update, and
-diagnostics should all report the same app-owned update state without involving
-setup readiness.
+Sparkle controller, the menu update path, redacted diagnostics, and the release
+feed. Public update controls live in the app, not in the CLI.
 
 ## Release Packaging
 

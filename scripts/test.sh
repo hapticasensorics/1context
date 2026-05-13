@@ -18,21 +18,31 @@ trap cleanup EXIT
 "$ROOT/scripts/test-release-train.sh"
 "$BIN_DIR/1context" | grep -q "1Context $VERSION"
 test "$("$BIN_DIR/1context" --version)" = "$VERSION"
-"$BIN_DIR/1context" --help | grep -q "1context status"
-"$BIN_DIR/1context" --help | grep -q "1context quit"
-"$BIN_DIR/1context" --help | grep -q "1context logs"
-"$BIN_DIR/1context" --help | grep -q "1context setup local-web"
-"$BIN_DIR/1context" --help | grep -q "1context wiki <local-url|refresh>"
+"$BIN_DIR/1context" --help > "$STATE_DIR/help.out"
+grep -q "1context diagnose" "$STATE_DIR/help.out"
+grep -q "1context uninstall" "$STATE_DIR/help.out"
+grep -q "1context wiki local-url" "$STATE_DIR/help.out"
+for old_help in \
+  "1context start" \
+  "1context stop" \
+  "1context quit" \
+  "1context restart" \
+  "1context status" \
+  "1context logs" \
+  "1context update" \
+  "1context setup local-web" \
+  "wiki <local-url|refresh>"
+do
+  if grep -q "$old_help" "$STATE_DIR/help.out"; then
+    echo "old CLI help surface is still present: $old_help" >&2
+    exit 1
+  fi
+done
 if "$BIN_DIR/1context" wiki status >"$STATE_DIR/wiki-old-status.out" 2>&1; then
   echo "old wiki status command should fail" >&2
   exit 1
 fi
 grep -q "Unknown wiki subcommand: status" "$STATE_DIR/wiki-old-status.out"
-if "$BIN_DIR/1context" status --wat >"$STATE_DIR/unknown-arg.out" 2>&1; then
-  echo "unknown arguments should fail" >&2
-  exit 1
-fi
-grep -q "Unknown argument: --wat" "$STATE_DIR/unknown-arg.out"
 "$BIN_DIR/1context" diagnose | grep -q "1Context Diagnose"
 "$BIN_DIR/1context" diagnose | grep -q "~/"
 "$BIN_DIR/1context" diagnose | grep -q "Local Web"
@@ -53,15 +63,25 @@ if "$BIN_DIR/1context" permissions >"$STATE_DIR/permissions.out" 2>&1; then
   exit 1
 fi
 grep -q "Unknown command: permissions" "$STATE_DIR/permissions.out"
+for old_command in start stop quit restart status logs update setup; do
+  if "$BIN_DIR/1context" "$old_command" >"$STATE_DIR/old-$old_command.out" 2>&1; then
+    echo "$old_command should not be public CLI surface" >&2
+    exit 1
+  fi
+  grep -q "Unknown command: $old_command" "$STATE_DIR/old-$old_command.out"
+done
 if "$BIN_DIR/1context" status --debug >"$STATE_DIR/status-debug.out" 2>&1; then
   echo "status --debug should not be public CLI surface" >&2
   exit 1
 fi
-grep -q "Unknown argument: --debug" "$STATE_DIR/status-debug.out"
-"$BIN_DIR/1context" setup local-web status | grep -q "1Context Local HTTPS Setup"
+grep -q "Unknown command: status" "$STATE_DIR/status-debug.out"
+if "$BIN_DIR/1context" wiki refresh >"$STATE_DIR/wiki-refresh.out" 2>&1; then
+  echo "wiki refresh should not be public CLI surface" >&2
+  exit 1
+fi
+grep -q "Unknown wiki subcommand: refresh" "$STATE_DIR/wiki-refresh.out"
 "$BIN_DIR/1context" diagnose | grep -q "Local Web"
 "$BIN_DIR/1context" diagnose | grep -q "URL Mode: local-https-portless"
 "$BIN_DIR/1context" diagnose | grep -q "Privileged Bind Required: yes"
-"$BIN_DIR/1context" logs | grep -q "1Context Logs"
 
 echo "1Context smoke tests passed."

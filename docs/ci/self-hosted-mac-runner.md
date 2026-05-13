@@ -112,8 +112,6 @@ update proof. This is a bench prerequisite, not part of the update test:
 5. Verify the bench is ready:
 
 ```bash
-/Applications/1Context.app/Contents/MacOS/1context-cli setup local-web status
-/Applications/1Context.app/Contents/MacOS/1context-cli start
 /Applications/1Context.app/Contents/MacOS/1context-cli diagnose
 ```
 

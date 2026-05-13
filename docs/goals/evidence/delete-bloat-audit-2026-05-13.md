@@ -1,6 +1,6 @@
 # 1Context Delete Bloat Audit - 2026-05-13
 
-Generated at: `2026-05-13T21:33:00Z`
+Generated at: `2026-05-13T21:52:00Z`
 
 Comparison base: `dd5ccd2` (`Close 0.1.65 release lockdown goal`)
 
@@ -56,6 +56,10 @@ Comparison base: `dd5ccd2` (`Close 0.1.65 release lockdown goal`)
 - Deleted the remaining shipped `ONECONTEXT_*` product env hooks from
   `macos/Sources`; release/build scripts keep explicit operator env vars, but
   product code no longer uses them as hidden behavior switches.
+- Deleted obsolete public CLI control-plane commands: `start`, `stop`, `quit`,
+  `restart`, `status`, `logs`, `update`, `setup local-web`, and `wiki refresh`.
+  The shipped CLI now exposes only version/help, redacted `diagnose`,
+  `uninstall`, and `wiki local-url`.
 - Deleted unshipped local wiki chat/provider API routes and placeholder JSON.
 - Deleted old ad hoc GUI harnesses that preserved product test hooks:
   `scripts/smoke-sparkle-local-appcast.sh`,
@@ -117,6 +121,7 @@ Comparison base: `dd5ccd2` (`Close 0.1.65 release lockdown goal`)
   `ONECONTEXT_MENU_PERF_LOG`,
   `perfStart`,
   `perfLog`,
+  public CLI lifecycle/setup/update functions,
   `1context-menu-perf`,
   `docs/update_policy.html`,
   `current-update-prompt.png`, or
@@ -128,6 +133,8 @@ Comparison base: `dd5ccd2` (`Close 0.1.65 release lockdown goal`)
   bundled `memory-core`, generated local goal/wiki source, or dead chat/provider
   API strings.
 - `rg -n "ONECONTEXT_[A-Z0-9_]+" macos/Sources` returns no matches.
+- `rg` for the deleted CLI switch cases and functions in
+  `macos/Sources/OneContextCLI/main.swift` returns no matches.
 
 ## Proof Commands
 
@@ -140,7 +147,7 @@ Passed on 2026-05-13:
 - `./scripts/test-launch-agent-package.sh`
 - `cd memory-core && uv run --with pytest pytest`
 - `actionlint .github/workflows/ci.yml .github/workflows/release.yml .github/workflows/self-hosted-mac-update-proof.yml`
-- `bash -n scripts/release-train.sh scripts/release/internal/self-hosted-update-proof.sh scripts/test-release-train.sh scripts/build-macos-app.sh scripts/test.sh scripts/package-macos-smoke.sh`
+- `bash -n scripts/release-train.sh scripts/release/internal/self-hosted-update-proof.sh scripts/test-release-train.sh scripts/build-macos-app.sh scripts/test.sh scripts/package-macos-smoke.sh scripts/test-release-app-product-https.sh`
 - `git diff --check`
 - `./scripts/measure-shipped-app-lines.sh`
 
@@ -149,7 +156,7 @@ Passed on 2026-05-13:
 `scripts/measure-shipped-app-lines.sh` reports:
 
 - Baseline: 61,309 nonblank shipped-app lines.
-- Current: 8,014 nonblank shipped-app lines.
-- Removed: 53,295 lines.
-- Reduction: 86.93%.
+- Current: 7,724 nonblank shipped-app lines.
+- Removed: 53,585 lines.
+- Reduction: 87.4%.
 - Target: at most 24,523 lines for the 60% reduction goal.

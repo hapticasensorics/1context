@@ -450,7 +450,7 @@ Each release in this train must answer four questions:
   and Gatekeeper assessment.
 - [x] Make `/goal` updates durable while an older installed app is still
   republishing its bundled wiki. Repo render alone is not enough if live
-  `wiki refresh` can overwrite the served page with older bundled content.
+  refresh paths can overwrite the served page with older bundled content.
   Historical evidence: this was the previous operator path for keeping the live
   development checklist visible. It is now retired because the development goal
   does not belong in the installed user wiki. The current product rule is that
@@ -1424,10 +1424,10 @@ Ramanujan maximal shipped-surface plan:
   `publish-manifest.json` contains only relative public files and no `/goal`,
   generated markdown, render manifest, `/Users`, or repo paths.
 - [x] Redact local-web setup diagnostics everywhere they render, including
-  `diagnose` and `setup local-web status/install/repair/uninstall`.
+  `diagnose` and the app setup surface.
   Evidence: `LocalWebTests.testLocalHTTPSSetupDiagnosticsRedactEmbeddedPaths`
   passed, `LocalWebSetupDiagnostics.render` now accepts a redactor, and the CLI
-  applies it to diagnose, permissions/setup, and setup local-web commands.
+  applies it to diagnose.
 - [x] Change default `1context permissions` output to shipped setup rows only;
   keep future Screen Recording/Accessibility details behind `diagnose` or
   explicit `permissions --all`.

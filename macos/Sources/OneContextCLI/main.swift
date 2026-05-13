@@ -4,7 +4,6 @@ import OneContextInstall
 import OneContextLocalWeb
 import OneContextCore
 import OneContextPlatform
-import OneContextProtocol
 import OneContextSetup
 import OneContextSupervisor
 import OneContextUpdate
@@ -23,35 +22,12 @@ struct OneContextCLI {
         printHelp()
       case nil:
         await printMain()
-      case "start":
-        try rejectUnknownArguments()
-        try await start()
-      case "stop":
-        try rejectUnknownArguments()
-        try await stop()
-      case "quit":
-        try rejectUnknownArguments()
-        try await quit()
-      case "restart":
-        try rejectUnknownArguments()
-        try await restart()
-      case "status":
-        try rejectUnknownArguments()
-        await status()
       case "diagnose":
         try rejectUnknownArguments()
         await diagnose()
-      case "logs":
-        try rejectUnknownArguments(allowed: ["--follow"])
-        try logs()
-      case "update":
-        try rejectUnknownArguments()
-        try await update()
       case "uninstall":
         try rejectUnknownArguments(allowed: ["--delete-data", "--keep-app", "--menu-process"])
         try await uninstall()
-      case "setup":
-        try setup()
       case "wiki":
         try await wiki()
       default:
@@ -81,17 +57,9 @@ struct OneContextCLI {
       1context
       1context --version
       1context --help
-      1context start
-      1context stop
-      1context quit
-      1context restart
-      1context status
       1context diagnose
-      1context logs [--follow]
-      1context update
       1context uninstall [--delete-data] [--keep-app]
-      1context setup local-web <status|install|repair|uninstall>
-      1context wiki <local-url|refresh>
+      1context wiki local-url
     """)
   }
 
@@ -99,95 +67,6 @@ struct OneContextCLI {
     let unknown = args.dropFirst().filter { !allowed.contains($0) }
     if let first = unknown.first {
       throw CLIError.unknownArgument(first)
-    }
-  }
-
-  static func start() async throws {
-    let controller = RuntimeController()
-    try ensureRequiredSetupForUse()
-    try await controller.requestStart()
-    recordWikiURL(LocalWebDefaults.defaultWikiURL)
-    print("1Context Remembering.")
-  }
-
-  static func stop() async throws {
-    let controller = RuntimeController()
-    try await controller.requestStop()
-    print("1Context Stopped.")
-  }
-
-  static func quit() async throws {
-    let controller = RuntimeController()
-    _ = try await controller.quit()
-    CaddyManager().stop()
-    print("1Context quit.")
-  }
-
-  static func restart() async throws {
-    let controller = RuntimeController()
-    try ensureRequiredSetupForUse()
-    _ = try await controller.restart()
-    recordCurrentWikiURL()
-    print("1Context is running.")
-  }
-
-  static func update() async throws {
-    let snapshot = await appUpdateSnapshot(currentVersion: oneContextVersion)
-    for line in AppUpdateDiagnostics.render(snapshot) {
-      print(line.trimmingCharacters(in: .whitespaces))
-    }
-    guard snapshot.availability == .available else {
-      throw CLIError.commandFailed(snapshot.nextAction)
-    }
-    print(snapshot.userFacingStatus)
-  }
-
-  static func status() async {
-    let controller = RuntimeController()
-    switch controller.status() {
-    case .success(let health):
-      let menuStatus = launchAgentSummary(label: LaunchAgentManager.menuLabel)
-      guard health.version == oneContextVersion else {
-        FileHandle.standardError.write(Data("""
-        1Context needs attention.
-
-        Runtime version \(health.version) does not match CLI version \(oneContextVersion).
-        Restart it with:
-          1context restart
-        """.utf8))
-        Foundation.exit(1)
-      }
-      let setupReady = health.requiredSetupReady ?? true
-      print("""
-      1Context is running.
-
-      Version: \(health.version)
-      Health: \(setupReady ? "OK" : "Needs Setup")
-      Menu Bar: \(menuStatus.userFacingStatus)
-      """)
-      if !setupReady {
-        print("""
-
-        Required Setup: \(health.requiredSetupSummary ?? "1Context setup is incomplete")
-        Open 1Context and choose Settings > Setup...
-        """)
-      }
-      recordCurrentWikiURL()
-      if !menuStatus.running {
-        print("""
-
-        Start the menu bar with:
-          1context start
-        """)
-      }
-    case .failure:
-      FileHandle.standardError.write(Data("""
-      1Context is not running.
-
-      Start it with:
-        1context start
-      """.utf8))
-      Foundation.exit(1)
     }
   }
 
@@ -254,7 +133,6 @@ struct OneContextCLI {
   static func printLocalWebDiagnostics(redact: Bool) {
     let diagnostics = CaddyManager().diagnostics()
     let snapshot = diagnostics.snapshot
-    recordWikiURL(snapshot.url)
 
     print("\nLocal Web:")
     print("  Health: \(snapshot.running ? "OK" : snapshot.health)")
@@ -286,101 +164,6 @@ struct OneContextCLI {
     print("  Next Site: \(displayPath(diagnostics.nextSitePath, redact: redact))")
     print("  Current Has Index: \(yesNo(diagnostics.currentSiteHasIndex))")
     print("  Current Has Health: \(yesNo(diagnostics.currentSiteHasHealth))")
-  }
-
-  static func ensureRequiredSetupForUse() throws {
-    let ready = OneContextAppSetup.current().requiredReady
-    guard ready else {
-      throw CLIError.commandFailed("""
-      Local wiki access is not set up.
-
-      Open 1Context and choose Settings > Setup..., or run:
-        1context setup local-web install
-      """)
-    }
-  }
-
-  @discardableResult
-  static func recordCurrentWikiURL() -> String {
-    let url = CaddyManager().status().url
-    recordWikiURL(url)
-    return url
-  }
-
-  static func recordWikiURL(_ url: String) {
-  }
-
-  static func logs() throws {
-    let paths = RuntimePaths.current()
-    let runtimeLog = paths.logPath
-    let menuLog = paths.logDirectory.appendingPathComponent("menu.log").path
-
-    if args.contains("--follow") {
-      try runProcess("/usr/bin/tail", ["-n", "80", "-F", runtimeLog, menuLog])
-      return
-    }
-
-    print("1Context Logs\n")
-    printLogTail(title: "Runtime", path: runtimeLog, lineCount: 80)
-    printLogTail(title: "Menu", path: menuLog, lineCount: 80)
-  }
-
-  static func setup() throws {
-    guard args.count >= 3 else {
-      throw CLIError.commandFailed("Usage: 1context setup local-web <status|install|repair|uninstall>")
-    }
-
-    switch args[1] {
-    case "local-web":
-      try localWebSetup()
-    default:
-      throw CLIError.commandFailed("Unknown setup domain: \(args[1])")
-    }
-  }
-
-  static func localWebSetup() throws {
-    guard args.count == 3 else {
-      throw CLIError.commandFailed("Usage: 1context setup local-web <status|install|repair|uninstall>")
-    }
-    let installer = LocalWebSetupInstaller()
-    switch args[2] {
-    case "status":
-      print("1Context Local HTTPS Setup\n")
-      for line in LocalWebSetupDiagnostics.render(installer.status(), redact: { displayPath($0, redact: true) }) {
-        print(line.trimmingCharacters(in: .whitespaces))
-      }
-    case "install":
-      print("Preparing 1Context local HTTPS setup...")
-      print("macOS may ask you to grant 1Context network permissions.")
-      let result = try installer.install()
-      print("\nLocal HTTPS setup complete.")
-      for line in LocalWebSetupDiagnostics.render(result.setup, redact: { displayPath($0, redact: true) }) {
-        print(line.trimmingCharacters(in: .whitespaces))
-      }
-      if let localWeb = result.localWeb {
-        print("URL: \(localWeb.url)")
-      }
-    case "repair":
-      print("Repairing 1Context local HTTPS setup...")
-      print("macOS may ask you to grant 1Context network permissions.")
-      let result = try installer.install()
-      print("\nLocal HTTPS setup repaired.")
-      for line in LocalWebSetupDiagnostics.render(result.setup, redact: { displayPath($0, redact: true) }) {
-        print(line.trimmingCharacters(in: .whitespaces))
-      }
-      if let localWeb = result.localWeb {
-        print("URL: \(localWeb.url)")
-      }
-    case "uninstall":
-      print("Removing 1Context local HTTPS setup...")
-      let result = try installer.uninstall()
-      print("\nLocal HTTPS setup removed.")
-      for line in LocalWebSetupDiagnostics.render(result.setup, redact: { displayPath($0, redact: true) }) {
-        print(line.trimmingCharacters(in: .whitespaces))
-      }
-    default:
-      throw CLIError.commandFailed("Unknown local-web setup command: \(args[2])")
-    }
   }
 
   static func uninstall() async throws {
@@ -452,67 +235,18 @@ struct OneContextCLI {
     switch args[1] {
     case "local-url":
       try rejectUnknownWikiArguments(allowed: [])
-      try ensureRequiredSetupForUse()
-      _ = try await RuntimeController().start()
-      let snapshot = try ensureLocalWebEdgeForCLIWiki()
-      print(snapshot.url)
-    case "refresh":
-      try rejectUnknownWikiArguments(allowed: [])
-      try ensureRequiredSetupForUse()
-      _ = try await RuntimeController().start()
-      _ = try ensureLocalWebEdgeForCLIWiki()
-      _ = try await wikiRPC("wiki.refresh", timeout: 5)
-      let snapshot = try await waitForWikiRunning(timeout: 240)
-      print("Refreshed 1Context wiki.")
-      print("URL: \(snapshot.url)")
+      let diagnostics = CaddyManager().diagnostics()
+      guard diagnostics.setup.ready else {
+        throw CLIError.commandFailed("""
+        Local wiki access is not set up.
+
+        Open 1Context and choose Settings > Setup...
+        """)
+      }
+      print(diagnostics.snapshot.url)
     default:
       throw CLIError.commandFailed("Unknown wiki subcommand: \(args[1])")
     }
-  }
-
-  static func ensureLocalWebEdgeForCLIWiki() throws -> LocalWebSnapshot {
-    let manager = CaddyManager()
-    let current = manager.status()
-    let snapshot = current.running ? current : try manager.start()
-    return snapshot
-  }
-
-  static func waitForWikiRunning(timeout: TimeInterval) async throws -> LocalWebSnapshot {
-    let deadline = Date().addingTimeInterval(timeout)
-    var last = LocalWebSnapshot(running: false, health: "starting")
-    repeat {
-      last = try await wikiRPC("wiki.status", timeout: 5)
-      if last.running { return last }
-      try await Task.sleep(nanoseconds: 500_000_000)
-    } while Date() < deadline
-    throw CLIError.commandFailed("Timed out preparing local wiki. Last state: \(last.health)")
-  }
-
-  static func wikiRPC(_ method: String, timeout: TimeInterval = 60) async throws -> LocalWebSnapshot {
-    let deadline = Date().addingTimeInterval(timeout)
-    var lastError: Error?
-    let clientTimeout = Int32(max(2_000, min(120_000, Int(timeout * 1_000))))
-    repeat {
-      do {
-        let result = try UnixJSONRPCClient(timeoutMilliseconds: clientTimeout).call(method: method)
-        return wikiSnapshot(from: result)
-      } catch {
-        lastError = error
-        try await Task.sleep(nanoseconds: 250_000_000)
-      }
-    } while Date() < deadline
-    throw lastError ?? CLIError.commandFailed(method)
-  }
-
-  static func wikiSnapshot(from payload: [String: Any]) -> LocalWebSnapshot {
-    LocalWebSnapshot(
-      running: payload["running"] as? Bool ?? false,
-      url: payload["url"] as? String ?? LocalWebDefaults.defaultWikiURL,
-      pid: (payload["pid"] as? NSNumber)?.int32Value,
-      route: payload["route"] as? String ?? LocalWebDefaults.wikiRoute,
-      health: payload["health"] as? String ?? "unknown",
-      lastError: payload["lastError"] as? String
-    )
   }
 
   static func rejectUnknownWikiArguments(allowed: Set<String>) throws {
@@ -539,36 +273,6 @@ struct OneContextCLI {
     print("    Minimum Runtime: \(loadedFields["minimum runtime"] ?? "missing")")
     print("    Last Exit Code: \(loadedFields["last exit code"] ?? "missing")")
     print("    Last Signal: \(loadedFields["last terminating signal"] ?? "missing")")
-  }
-
-  static func launchAgentSummary(label: String) -> (loaded: Bool, running: Bool, userFacingStatus: String) {
-    let fallbackProgram = label == LaunchAgentManager.menuLabel
-      ? "/Applications/1Context.app/Contents/MacOS/1Context"
-      : nil
-    guard let output = launchctlPrint(label: label) else {
-      if let fallbackProgram, processIsRunning(executablePath: fallbackProgram) {
-        return (false, true, "running")
-      }
-      return (false, false, "not loaded")
-    }
-    let fields = launchctlFields(output)
-    if let pid = fields["pid"], !pid.isEmpty {
-      return (true, true, "running")
-    }
-    if let program = fields["program"], processIsRunning(executablePath: program) {
-      return (true, true, "running")
-    }
-    if let fallbackProgram, processIsRunning(executablePath: fallbackProgram) {
-      return (true, true, "running")
-    }
-    let state = fields["state"] ?? "loaded"
-    return (true, false, "\(state), no process")
-  }
-
-  static func processIsRunning(executablePath: String) -> Bool {
-    guard !executablePath.isEmpty, executablePath != "missing" else { return false }
-    let pattern = "^\(NSRegularExpression.escapedPattern(for: executablePath))($| )"
-    return runCapture("/usr/bin/pgrep", ["-f", pattern]).status == 0
   }
 
   static func launchctlPrint(label: String) -> String? {
@@ -639,11 +343,6 @@ struct OneContextCLI {
   static func readTrimmed(_ path: String) -> String? {
     try? String(contentsOfFile: path, encoding: .utf8)
       .trimmingCharacters(in: .whitespacesAndNewlines)
-  }
-
-  static func readJSON(paths path: URL) -> [String: Any]? {
-    guard let data = try? Data(contentsOf: path) else { return nil }
-    return try? JSONSerialization.jsonObject(with: data) as? [String: Any]
   }
 
   static func appUpdateSnapshot(currentVersion: String) async -> AppUpdateSnapshot {
@@ -781,32 +480,16 @@ struct OneContextCLI {
     )
   }
 
-  static func runProcess(_ executable: String, _ arguments: [String]) throws {
-    let process = Process()
-    process.executableURL = URL(fileURLWithPath: executable)
-    process.arguments = arguments
-    process.standardInput = FileHandle.standardInput
-    process.standardOutput = FileHandle.standardOutput
-    process.standardError = FileHandle.standardError
-    try process.run()
-    process.waitUntilExit()
-    guard process.terminationStatus == 0 else {
-      throw CLIError.commandFailed(([executable] + arguments).joined(separator: " "))
-    }
-  }
 }
 
 enum CLIError: Error, LocalizedError {
   case commandFailed(String)
-  case runtimeStopped
   case unknownArgument(String)
 
   var errorDescription: String? {
     switch self {
     case .commandFailed(let command):
       return "Command failed: \(command)"
-    case .runtimeStopped:
-      return "1Context is stopped"
     case .unknownArgument(let argument):
       return "Unknown argument: \(argument)"
     }

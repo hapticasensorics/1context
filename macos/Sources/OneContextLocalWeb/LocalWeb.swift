@@ -188,7 +188,7 @@ public struct LocalWebSetupSnapshot: Codable, Equatable, Sendable {
           adminAuthorizationRequired: false,
           reversibleByUninstall: true,
           details: "The setup flow trusts the 1Context local Caddy CA in the user's login keychain for SSL, then records the installed fingerprint at \(state.systemPaths.trustedRootSHA256).",
-          nextAction: state.localCATrustReady ? "No action required." : "Open 1Context and choose Settings > Setup..., or run 1context setup local-web install for support automation."
+          nextAction: state.localCATrustReady ? "No action required." : "Open 1Context and choose Settings > Setup..."
         )
       ]
     )

@@ -119,9 +119,8 @@ capture_process_state() {
 
 stop_1context() {
   log "stopping existing 1Context processes"
-  if [[ -x "$APP/Contents/MacOS/1context-cli" ]]; then
-    "$APP/Contents/MacOS/1context-cli" quit >/dev/null 2>&1 || true
-  fi
+  osascript -e 'tell application id "com.haptica.1context" to quit' >/dev/null 2>&1 || true
+  osascript -e 'tell application id "com.haptica.1context.menu" to quit' >/dev/null 2>&1 || true
   launchctl bootout "gui/$(id -u)/com.haptica.1context" >/dev/null 2>&1 || true
   launchctl bootout "gui/$(id -u)/com.haptica.1context.menu" >/dev/null 2>&1 || true
   pkill -f "$APP/Contents/MacOS/1Context" >/dev/null 2>&1 || true
@@ -325,9 +324,9 @@ preflight_runner_setup() {
     fail "Runner setup preflight requires an existing installed app at $APP. Install 1Context once as the runner user and complete Settings > Setup before update proof, or set ONECONTEXT_RUNNER_SETUP_PREFLIGHT=0 for an intentional first-run setup experiment."
   fi
 
-  local status_file="$EVIDENCE_DIR/setup-preflight.txt"
-  if ! "$cli" setup local-web status > "$status_file" 2>&1; then
-    fail "Runner setup preflight command failed. See $status_file."
+  local status_file="$EVIDENCE_DIR/setup-preflight-diagnose.txt"
+  if ! "$cli" diagnose > "$status_file" 2>&1; then
+    fail "Runner setup preflight diagnose failed. See $status_file."
   fi
   if ! grep -q "Setup Ready: yes" "$status_file"; then
     fail "Runner setup preflight failed: Local Wiki setup is not ready for the runner user. Open 1Context as that user, choose Settings > Setup, grant Local Wiki Access, approve the 1Context background item in System Settings, then rerun."

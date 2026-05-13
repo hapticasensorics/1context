@@ -11,6 +11,8 @@ Product HTTPS smoke is interactive because it validates real macOS setup:
   - ServiceManagement background helper approval
   - portless HTTPS at https://wiki.1context.localhost
 
+Complete Settings > Setup in the app once before running this smoke.
+
 Re-run intentionally with:
   ONECONTEXT_PRODUCT_HTTPS_SMOKE_INTERACTIVE=1 ./scripts/test-release-app-product-https.sh
 EOF
@@ -47,10 +49,16 @@ assert_url_contains() {
 export no_proxy="wiki.1context.localhost,localhost,127.0.0.1,::1"
 export NO_PROXY="$no_proxy"
 
-open -na "$APP"
+DIAGNOSE_OUTPUT="$(mktemp /tmp/1context-product-https-diagnose.XXXXXX)"
+trap 'rm -f "$DIAGNOSE_OUTPUT"' EXIT
+"$CLI" diagnose > "$DIAGNOSE_OUTPUT"
+if ! grep -q "Setup Ready: yes" "$DIAGNOSE_OUTPUT"; then
+  cat "$DIAGNOSE_OUTPUT" >&2
+  echo "Local Wiki Access is not ready. Open 1Context and choose Settings > Setup..., then rerun." >&2
+  exit 1
+fi
 
-"$CLI" setup local-web install
-"$CLI" start >/dev/null
+open -na "$APP"
 
 for _ in {1..80}; do
   if assert_url_contains "https://wiki.1context.localhost/your-context" "Your Context"; then

@@ -122,10 +122,11 @@ Measurement:
   shell, old GUI harnesses, stale policy docs/assets, Sparkle retry env hooks,
   the old developer-port local-web mode, runtime path env overrides, detached
   LaunchAgent bypasses, fixture uninstall/RPC stress harnesses, local-web setup
-  path env overrides, menu perf env logging, and the remaining shipped
-  `ONECONTEXT_*` product env hooks: 17 files and 8,014
+  path env overrides, menu perf env logging, the remaining shipped
+  `ONECONTEXT_*` product env hooks, and the obsolete public lifecycle/setup
+  CLI: 17 files and 7,724
   nonblank lines, a
-  53,295-line / 86.93%
+  53,585-line / 87.4%
   reduction from the baseline.
   This passes the 24,523-line 60% reduction target.
 
@@ -381,15 +382,15 @@ negative `rg` over shipped app/test/script/docs surfaces for `OneContextAgent`,
 
 ### 8. CLI Collapse
 
-- [ ] Collapse the public CLI to only the commands the product truly needs:
+- [x] Collapse the public CLI to only the commands the product truly needs:
   `version`, redacted `diagnose`, `uninstall`, and possibly `wiki local-url`.
-- [ ] Delete public lifecycle commands if they duplicate menu or launch-agent
+- [x] Delete public lifecycle commands if they duplicate menu or launch-agent
   behavior: `start`, `stop`, `restart`, `quit`, and `logs`.
 - [x] Delete public debug commands, especially raw debug paths and
   `debug --no-redact`.
 - [x] Delete public `permissions`, `agent`, and `memory-core` command surfaces
   unless they are part of the current product contract.
-- [ ] Move any necessary operator-only behavior into release/proof tooling, not
+- [x] Move any necessary operator-only behavior into release/proof tooling, not
   the shipped app CLI.
 
 Evidence, 2026-05-13: removed the standalone `debug` command, removed
@@ -397,6 +398,19 @@ Evidence, 2026-05-13: removed the standalone `debug` command, removed
 removed `permissions`, and previously removed `agent` and `memory-core`.
 Operator evidence scripts now call redacted `diagnose` instead of public debug
 flags. Proof: `scripts/test.sh` negative checks and negative `rg`.
+
+Evidence, 2026-05-13: removed public `start`, `stop`, `quit`, `restart`,
+`status`, `logs`, `update`, `setup local-web`, and `wiki refresh` from the
+shipped CLI. The CLI help now exposes only `version`, redacted `diagnose`,
+`uninstall`, and `wiki local-url`. The self-hosted update proof no longer calls
+public `quit` or `setup local-web status`; it stops app processes through
+operator script internals and preflights Local Wiki setup with redacted
+`diagnose`. Proof: `swift build --package-path macos`,
+`swift test --package-path macos`, `./scripts/test.sh`, `bash -n
+scripts/test.sh scripts/test-release-app-product-https.sh
+scripts/release/internal/self-hosted-update-proof.sh`, negative `rg` over the
+deleted CLI functions, and `scripts/measure-shipped-app-lines.sh` reporting
+7,724 shipped-app nonblank lines.
 
 ### 9. Wiki Chat And Provider Deletion
 
@@ -471,6 +485,10 @@ LaunchAgent bypass, and obsolete fixture uninstall/RPC stress harnesses,
 lines after the remaining shipped `ONECONTEXT_*` product env hooks were removed,
 an 86.93% reduction from
 baseline.
+
+Evidence, 2026-05-13: after collapsing the public CLI to support-only commands,
+`scripts/measure-shipped-app-lines.sh` reports 7,724 nonblank shipped-app lines,
+a 53,585-line / 87.4% reduction from baseline.
 
 ### 11. Dead Code, Assets, And Docs
 
@@ -550,7 +568,7 @@ validate`, `cd memory-core && uv run --with pytest pytest`, `actionlint`,
 Evidence, 2026-05-13: captured the deletion audit artifact at
 `docs/goals/evidence/delete-bloat-audit-2026-05-13.md`, including removed file
 families, negative checks for deleted public surfaces, proof commands, and the
-current 86.83% shipped-app line reduction result.
+current 87.4% shipped-app line reduction result.
 
 Evidence, 2026-05-13: product path override deletion tranche passed with
 `swift test --package-path macos`, `./scripts/test.sh`,
