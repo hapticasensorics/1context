@@ -36,6 +36,18 @@ jobs:
 
       - uses: actions/checkout@v6
 
+      - name: Use Python with tomllib
+        shell: bash
+        run: |
+          if python3 -c 'import tomllib' >/dev/null 2>&1; then
+            python3 --version
+            exit 0
+          fi
+          brew install python
+          echo "$(brew --prefix python)/libexec/bin" >> "$GITHUB_PATH"
+          "$(brew --prefix python)/libexec/bin/python3" --version
+          "$(brew --prefix python)/libexec/bin/python3" -c 'import tomllib'
+
       - name: Resolve release manifest
         id: manifest
         shell: bash
