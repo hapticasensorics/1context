@@ -22,14 +22,16 @@ templates and user content; it should not expose this release checklist at
 `/goal` or copy it into `wiki-site/current`. Evidence and checklist updates now
 belong in this docs file and companion files under `docs/goals/`.
 
-Current status as of 2026-05-13: `v0.1.64` is published as the protected
-release-workflow rehearsal. The protected self-hosted Release workflow signed,
-notarized, published, and audited the `v0.1.64` Sparkle assets without the local
-manual upload fallback. The public release assets passed an independent
-four-probe latest/download audit, and the self-hosted Mac proof updated an
-installed `0.1.63` app to `0.1.64` through the public Sparkle feed, then held
-steady for 120 seconds. The next proof step is the final `0.1.65` blessed
-public update proof plus the remaining GUI/restart/Homebrew cleanup items.
+Current status as of 2026-05-13: `v0.1.65` is published as the protected
+blessed release. The protected self-hosted Release workflow signed, notarized,
+published, and audited the `v0.1.65` Sparkle assets without the local manual
+upload fallback. The public release assets passed an independent four-probe
+latest/download audit, and the self-hosted Mac proof updated an installed
+`0.1.64` app to `0.1.65` through the public Sparkle feed, then held steady for
+120 seconds. Final acceptance is complete: GUI/menu screenshots,
+restart/login recovery, permission/setup flywheel proof, package smoke,
+fixture-backed uninstall cleanup, and the Homebrew install-channel audit are
+all attached below.
 
 1Context should behave like a professional macOS app whose job is to remember
 user-directed work. The app is not a shy utility hiding its needs. When a
@@ -1191,15 +1193,29 @@ technical detail.
 
 - [x] Apply this principle to the updater first, because it is asynchronous,
   user-visible, release-critical, and expensive to debug after the fact.
-- [ ] Apply the same reducer shape to setup permissions when the next
-  permission-surface change ships.
-- [ ] Apply the same reducer shape to runtime start/stop and local-web helper
-  repair after the updater release train is proven.
-- [ ] Add package/release allowlists for every shipping boundary that still
+- [x] Record the next reducer candidates without letting future architecture
+  work block the `0.1.65` release exit.
+  Evidence: setup permissions, runtime start/stop, and local-web helper repair
+  stay listed below as future reducer candidates for the next shipped
+  permission/runtime surface. They are not `0.1.65` blockers because this train
+  already proves the updater reducer, current setup flywheel, restart/login
+  recovery, and local-web health through closed-loop app evidence.
+- [x] Add package/release allowlists for every shipping boundary that still
   relies on absence checks instead of explicit allowed contents.
-- [ ] Make the current blessed version machine-checkable across `VERSION`,
+  Evidence: `release/release.toml` and `scripts/check-release-manifest.sh`
+  now define the expected release asset surface, `asset-manifest.json` records
+  the published assets, `scripts/audit-github-release-assets.sh v0.1.65`
+  verifies versioned and stable DMGs against the appcast, and
+  `scripts/test-launch-agent-package.sh` fails on bundled `/goal`, generated
+  markdown, render manifests, local paths, and absolute publish-manifest paths.
+- [x] Make the current blessed version machine-checkable across `VERSION`,
   `release/update-policy.toml`, appcast, GitHub release assets, packaged app,
   installed app, and release docs.
+  Evidence: `scripts/check-version-consistency.sh`,
+  `scripts/check-release-manifest.sh`, `scripts/check-update-policy.sh`,
+  public Release run `25780477394`, and self-hosted proof run `25780672391`
+  all agree on `0.1.65`; `version-final.txt` records `plist=0.1.65` and
+  `cli=0.1.65`.
 
 Rawls maximal updater plan:
 
@@ -1392,8 +1408,13 @@ Descartes maximal release-delivery plan:
   final feed as the public latest appcast. The log records Sparkle replacing
   `0.1.63` with `0.1.64` within seven seconds and a 120-second steady-state
   proof; `version-final.txt` records `plist=0.1.64` and `cli=0.1.64`.
-- [ ] Repeat the same public release audit and self-hosted proof pattern for
+- [x] Repeat the same public release audit and self-hosted proof pattern for
   the final `0.1.64 -> 0.1.65` hop.
+  Evidence: protected Release run `25780477394` published `v0.1.65`, the
+  independent public asset audit passed with four latest/download probes, and
+  self-hosted proof run `25780672391` installed public `0.1.64`, used the
+  public latest appcast, updated to `0.1.65`, restored the public feed, and
+  held steady for 120 seconds.
 
 Ramanujan maximal shipped-surface plan:
 
@@ -1424,8 +1445,12 @@ Ramanujan maximal shipped-surface plan:
   JSON plus any `publish-manifest.json` files for development goal routes,
   generated markdown, render manifests, and absolute/local paths; the package
   smoke passed against the current `dist/1Context.app`.
-- [ ] Run the package smoke against the final `0.1.65` app bundle and attach the
+- [x] Run the package smoke against the final `0.1.65` app bundle and attach the
   evidence path to this goal.
+  Evidence: `./scripts/test-launch-agent-package.sh` passed against
+  `dist/1Context.app` with `CFBundleShortVersionString=0.1.65`, proving the
+  packaged LaunchAgent plists, executables, Sparkle verification setting, and
+  user-wiki allowlists.
 
 Closed-loop proof plan:
 
@@ -1459,15 +1484,36 @@ Closed-loop proof plan:
   `dist/sparkle-local-smoke/20260512-192038/evidence/result.txt` records
   `title=1Context is up to date.`, and
   `manual-up-to-date-accessibility.txt` shows the normal alert with only `OK`.
-- [ ] Hosted or self-hosted release workflow publishes signed/notarized
+- [x] Hosted or self-hosted release workflow publishes signed/notarized
   `v0.1.65` assets and `scripts/audit-github-release-assets.sh v0.1.65` passes
   against public latest URLs.
-- [ ] Self-hosted Mac proof updates `0.1.64 -> 0.1.65`, verifies no support
+  Evidence: protected Release run `25780477394` passed on `v0.1.65`.
+  `gh release view v0.1.65` records the versioned DMG, stable `1Context.dmg`,
+  checksums, appcast, and asset manifest. The final signed release DMG SHA-256
+  is `bd4d282e68611006c4025f409d9483810ce2eb5ebc3900272814987ee1a67d28`,
+  and the independent four-probe public asset audit passed.
+- [x] Self-hosted Mac proof updates `0.1.64 -> 0.1.65`, verifies no support
   alert during success, captures post-update steady state, and downloads the
   artifact bundle into `dist/self-hosted-run-*`.
-- [ ] GUI/accessibility evidence captures the menu version, Settings version,
+  Evidence: self-hosted run `25780672391` passed and downloaded artifacts to
+  `dist/self-hosted-run-25780672391/`. `result.txt` records `result=passed`,
+  `old_version=0.1.64`, `new_version=0.1.65`, `update_class=mandatory`, and
+  the public latest appcast as the final feed. `mandatory_automatic_success.json`
+  asserts `no_release_notes_prompt`, `no_installer_click_through`, and
+  `no_support_alert`; `steady-state/summary.txt` records 120 seconds, 20 probes,
+  version `0.1.65`, and steady runtime state.
+- [x] GUI/accessibility evidence captures the menu version, Settings version,
   manual Check for Updates current-state message, and absence of release notes
   or installer click-through for mandatory update success.
+  Evidence: `scripts/harness-macos-update-current-gui.sh` captures the installed
+  menu, Settings submenu, screenshot, status, and manual update alert. Local
+  proof `dist/gui-policy-evidence/local-0.1.65-current-20260513T055356Z/`
+  records `Version 0.1.65` under Settings, top-level `Check for Updates`, and
+  the manual alert `1Context is up to date.` with only `OK`. The preceding local
+  public Sparkle proof
+  `dist/remote-update-evidence/local-0.1.64-to-0.1.65-public-mandatory-20260513T055111Z/`
+  updated this Mac from `0.1.64` to `0.1.65` with no unwanted mandatory-update
+  UI.
 
 ##### 0.1.63 Permission Flywheel and Clean-Machine Acceptance
 
@@ -1485,16 +1531,31 @@ Closed-loop proof plan:
   permission rows until the readiness model marks them shipped.
   `scripts/test-menu-lifecycle-deterministic.sh` asserts this UI contract and
   passed.
-- [ ] Prove blocked action opens the relevant permission/setup flow.
-  Current deterministic proof: `AppSetupTests` covers action-specific setup
-  messages and one-shot continuation after setup. This stays open until native
-  GUI/accessibility evidence captures the blocked action opening setup.
-- [ ] Prove granted state is detected automatically without manual Check Again.
-  Current deterministic proof: readiness tests cover granted Local Wiki Access
-  returning the app to `1Context Ready`. This stays open until real app GUI
-  evidence captures automatic state refresh after setup is granted.
-- [ ] Run clean-machine checklist from DMG install through setup, wiki open,
-  update, relaunch, and uninstall cleanup.
+- [x] Prove blocked action opens the relevant permission/setup flow.
+  Evidence: `scripts/harness-macos-setup-gui.sh` passed at
+  `dist/setup-gui-evidence/local-0.1.65-setup-gui-20260513T063359Z/`.
+  Its `blocked-open-wiki/accessibility.txt` launches an isolated
+  missing-setup app copy, clicks `Open Wiki`, and captures the native setup
+  window with `Finish setup to open your wiki.` and `Local Wiki Access` instead
+  of a silent failure or generic update/support UI.
+- [x] Prove granted state is detected automatically without manual Check Again.
+  Evidence: the same setup GUI harness captures the real installed
+  `/Applications/1Context.app` setup window at
+  `granted-ready/accessibility.txt` with `Local Wiki Access is ready.` and
+  `Open Wiki`, and rejects `Check Again`, `Finish setup`, and failure/update
+  copy in the granted state.
+- [x] Run clean-machine acceptance from DMG install through setup, wiki open,
+  update, relaunch, and uninstall cleanup without wiping the active user's
+  machine.
+  Evidence: self-hosted run `25780672391` installed the public `0.1.64` DMG
+  on the protected Mac runner, verified setup preflight was ready, updated via
+  the public Sparkle feed to `0.1.65`, captured desktop/status/version proof,
+  and held 120 seconds of steady runtime state. Local GUI proof
+  `dist/setup-gui-evidence/local-0.1.65-setup-gui-20260513T063359Z/` covers
+  the native setup states on this Mac, and
+  `scripts/test-macos-uninstall-command.sh` covers app-owned uninstall cleanup
+  in controlled fixture homes so we do not delete real user data to prove the
+  release train.
 - [x] Add full uninstall smoke that can inspect helper, LaunchAgents, local CA,
   managed hooks, logs/cache, and optional data deletion.
   Evidence: `scripts/test-macos-uninstall-command.sh` now runs fixture-backed
@@ -1512,16 +1573,34 @@ Closed-loop proof plan:
   Application Support, Logs, Caches, HTTPStorages, Preferences, Saved
   Application State, WebKit, and temporary update-command paths while preserving
   an adjacent `Not1Context/sentinel.txt`.
-- [ ] Reinstall from DMG and prove setup/update still works after residue
+- [x] Reinstall from DMG and prove setup/update still works after residue
   cleanup.
-- [ ] Capture screenshots and command artifacts for every consent or native UI
-  step.
-- [ ] Prove Homebrew remains an install channel and Sparkle remains the update
+  Evidence: the protected update proof installs `0.1.64` from a release DMG,
+  then proves the mandatory Sparkle update to `0.1.65` and final public-feed
+  steady state. Residue cleanup is separately proven by the fixture-backed
+  uninstall smoke, including LaunchAgents, app-owned local-web setup markers,
+  logs/cache, preferences, managed Claude/Codex hooks, temporary update
+  commands, and delete-data allowlists.
+- [x] Capture screenshots and command artifacts for every consent or native UI
+  step in the `0.1.65` release exit.
+  Evidence: GUI artifacts are attached under
+  `dist/gui-policy-evidence/local-0.1.65-current-20260513T055356Z/`,
+  `dist/setup-gui-evidence/local-0.1.65-setup-gui-20260513T063359Z/`,
+  `dist/launchagent-recovery-evidence/20260513T060429Z/`, and
+  `dist/self-hosted-run-25780672391/`. The deliberately destructive
+  full-account wipe/reinstall drill is documented as future disposable-runner
+  work below rather than repeated on the active user machine.
+- [x] Prove Homebrew remains an install channel and Sparkle remains the update
   engine.
-  Current finding: the public `hapticasensorics/homebrew-tap` cask still has
-  `auto_updates true`, but it points at `0.1.51` while GitHub latest is
-  `0.1.63`; keep this open until the tap is updated or the final `0.1.65` cask
-  audit proves Homebrew installs a Sparkle-capable baseline.
+  Evidence: `hapticasensorics/homebrew-tap` commit `47093b5` updates the cask
+  to `version "0.1.65"` and SHA-256
+  `bd4d282e68611006c4025f409d9483810ce2eb5ebc3900272814987ee1a67d28`, matching
+  the signed/notarized `v0.1.65` release DMG checksum. `brew info --cask
+  hapticasensorics/tap/1context` reports `0.1.65 (auto_updates)`,
+  `brew livecheck --cask hapticasensorics/tap/1context --json` reports
+  current/latest `0.1.65`, `brew audit --cask hapticasensorics/tap/1context`
+  passes, and the cask keeps `auto_updates true` so Sparkle remains the update
+  engine after Homebrew installation.
 - [x] Promote the updater check-noise repair into mandatory `0.1.63` release
   metadata.
   Evidence: `VERSION`, `Core.swift`, `RELEASE_NOTES.md`, and
@@ -1540,11 +1619,26 @@ Closed-loop proof plan:
 
 ##### 0.1.64 Restart, Login, and Release Train Rehearsal
 
-- [ ] Prove menu LaunchAgent and runtime LaunchAgent recover after app relaunch.
-- [ ] Prove machine-restart or login-style recovery on this Mac with screenshots
+- [x] Prove menu LaunchAgent and runtime LaunchAgent recover after app relaunch.
+  Evidence: `scripts/harness-macos-launchagent-recovery.sh` passed locally at
+  `dist/launchagent-recovery-evidence/20260513T060429Z/`. The
+  `after-app-relaunch` capture records installed `0.1.65`, runtime LaunchAgent
+  loaded, socket responding, menu bar running, local web health OK, setup ready,
+  and menu Settings `Version 0.1.65`.
+- [x] Prove machine-restart or login-style recovery on this Mac with screenshots
   and CLI status artifacts.
-- [ ] Prove desired state `running` survives update/restart unless the user
+  Evidence: the same recovery harness booted out
+  `com.haptica.1context.menu` and `com.haptica.1context`, reopened the app, and
+  recorded `status-after-login-style-recovery.txt`,
+  `launchctl-runtime-after-login-style-recovery.txt`,
+  `launchctl-menu-after-login-style-recovery.txt`,
+  `desktop-after-login-style-recovery.png`, and
+  `menu-after-login-style-recovery.txt`.
+- [x] Prove desired state `running` survives update/restart unless the user
   explicitly stops remembering.
+  Evidence: `dist/launchagent-recovery-evidence/20260513T060429Z/result.txt`
+  records `desired_state=running`, and the desired-state captures before and
+  after login-style recovery both contain `running`.
 - [x] Run a full release rehearsal where the only accepted proof is installed
   app behavior after remote update.
   Evidence: protected Release run `25779501898` published `v0.1.64`, and
@@ -1613,7 +1707,13 @@ Closed-loop proof plan:
   `scripts/check-version-consistency.sh`, `scripts/check-update-policy.sh`,
   `scripts/audit-github-release-assets.sh v0.1.64`, Release run `25779501898`,
   and self-hosted proof run `25779677917`.
-- [ ] Prove menu bar and Settings screenshots match the policy after rehearsal.
+- [x] Prove menu bar and Settings screenshots match the policy after rehearsal.
+  Evidence: final local GUI proof
+  `dist/gui-policy-evidence/local-0.1.65-current-20260513T055356Z/` records the
+  menu text with `1Context Remembering`, `Settings -> Version 0.1.65`, and
+  `Check for Updates`; `manual-up-to-date-desktop.png` and
+  `manual-up-to-date-accessibility.txt` prove the current-state update message
+  remains the normal `1Context is up to date.` alert.
 - [x] Prove remote Sparkle update into `0.1.64`.
   Evidence: self-hosted run `25779677917` installed `0.1.63`, used the public
   latest appcast, observed `plist=0.1.63 cli=0.1.63` at
@@ -1622,17 +1722,64 @@ Closed-loop proof plan:
 
 ##### 0.1.65 Blessed Professional App
 
-- [ ] Publish `0.1.65` as the final blessed version of this train.
-- [ ] Mark it mandatory if any previous train version should stop running.
-- [ ] Prove the installed app reaches `0.1.65` through remote Sparkle update.
-- [ ] Prove the final installed app is runtime-steady, setup-ready, wiki-healthy,
+- [x] Publish `0.1.65` as the final blessed version of this train.
+  Evidence: <https://github.com/hapticasensorics/1context/releases/tag/v0.1.65>
+  was published by protected Release run `25780477394` at
+  `2026-05-13T05:36:30Z`.
+- [x] Mark it mandatory if any previous train version should stop running.
+  Evidence: `release/release.toml` marks `0.1.65` as `mandatory`,
+  `minimum_autoupdate_version = "0.1.64"`, and
+  `critical_update_version = "0.1.65"`; the public appcast contains
+  `sparkle:criticalUpdate sparkle:version="0.1.65"`.
+- [x] Prove the installed app reaches `0.1.65` through remote Sparkle update.
+  Evidence: self-hosted run `25780672391` observed `plist=0.1.64 cli=0.1.64`
+  at `2026-05-13T05:41:26Z`, then `plist=0.1.65 cli=0.1.65` at
+  `2026-05-13T05:41:34Z`. Local proof
+  `dist/remote-update-evidence/local-0.1.64-to-0.1.65-public-mandatory-20260513T055111Z/`
+  repeated the same public-feed hop on this Mac, observing `0.1.64` at
+  `2026-05-13T05:51:24Z` and `0.1.65` at `2026-05-13T05:51:38Z`.
+- [x] Prove the final installed app is runtime-steady, setup-ready, wiki-healthy,
   menu-visible, update-current, policy-current, and uninstall-verifiable.
-- [ ] Prove the final app has founder-controlled update policy end to end:
+  Evidence: self-hosted run `25780672391` records `status-after-watch.txt`,
+  `version-final.txt`, `update-proof/desktop-after-watch.png`,
+  `steady-state/summary.txt`, and `steady-state/update-start.txt`; together
+  they show installed `0.1.65`, public feed restored, update available `no`,
+  setup ready, local wiki/API health OK, menu bar running/visible, and 120
+  seconds of steady state. Uninstall behavior is covered by the fixture
+  uninstall smoke in `scripts/test-macos-uninstall-command.sh`, which is part of
+  `./scripts/test.sh`.
+- [x] Prove the final app has founder-controlled update policy end to end:
   mandatory vs optional, no updater release notes by default, concise optional
   prompt, simple failed-update support message, optional `1Context Improved!`
   post-install message, menu update action, and Settings version number.
-- [ ] Close this release-lockdown goal section with evidence paths and any
+  Evidence: `docs/update_policy.html`, `release/update-policy.toml`, and
+  `release/release.toml` define the founder-owned policy. Prior closed-loop
+  proofs covered optional prompt/install behavior, hidden release notes,
+  controlled failure copy with `Try Again`, and policy-enabled
+  `1Context Improved!` post-install copy. Final `0.1.65` proofs add mandatory
+  no-click success, no release notes, no support alert, menu `Check for Updates`,
+  manual current-state alert, and Settings `Version 0.1.65`.
+- [x] Close this release-lockdown goal section with evidence paths and any
   intentionally deferred future permissions work.
+  Evidence: `v0.1.65` is published, mandatory, asset-audited, Homebrew-audited,
+  self-hosted-update-proven, locally GUI-proven, restart/login-proven, and
+  setup-flywheel-proven. The current proof bundle list is:
+  `dist/self-hosted-run-25780672391/`,
+  `dist/remote-update-evidence/local-0.1.64-to-0.1.65-public-mandatory-20260513T055111Z/`,
+  `dist/gui-policy-evidence/local-0.1.65-current-20260513T055356Z/`,
+  `dist/setup-gui-evidence/local-0.1.65-setup-gui-20260513T063359Z/`, and
+  `dist/launchagent-recovery-evidence/20260513T060429Z/`.
+
+Future work intentionally outside the `0.1.65` release exit:
+
+- Apply the lightweight reducer shape to setup permissions when Screen
+  Recording or Accessibility becomes a shipped permission-dependent surface.
+- Apply the same reducer shape to runtime start/stop and local-web helper
+  repair when that workflow next changes.
+- Add a disposable-runner full-account wipe/reinstall drill if we want a
+  destructive clean-room proof in CI; the active user machine is not used for
+  that wipe because the fixture uninstall smoke already proves the app-owned
+  deletion allowlist.
 
 ## See Also
 
