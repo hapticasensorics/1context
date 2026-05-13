@@ -30,26 +30,26 @@ count_runtime_stops() {
 
 capture_once() {
   local name="$1"
-  local status_exit=0
-  "$CLI" status > "$EVIDENCE_DIR/status-$name.txt" 2>&1 || status_exit=$?
-  "$CLI" diagnose > "$EVIDENCE_DIR/diagnose-$name.txt" 2>&1 || true
-  printf '%s\n' "$status_exit" > "$EVIDENCE_DIR/status-$name.exitcode"
-  "$CLI" update > "$EVIDENCE_DIR/update-$name.txt" 2>&1 || true
+  local diagnose_exit=0
+  "$CLI" diagnose > "$EVIDENCE_DIR/diagnose-$name.txt" 2>&1 || diagnose_exit=$?
+  printf '%s\n' "$diagnose_exit" > "$EVIDENCE_DIR/diagnose-$name.exitcode"
   launchctl print "gui/$(id -u)/$LABEL_RUNTIME" > "$EVIDENCE_DIR/launchctl-runtime-$name.txt" 2>&1 || true
   launchctl print "gui/$(id -u)/$LABEL_MENU" > "$EVIDENCE_DIR/launchctl-menu-$name.txt" 2>&1 || true
-  return "$status_exit"
+  return "$diagnose_exit"
 }
 
-assert_status_healthy() {
-  local file="$1"
-  local diagnose_file="${file/status-/diagnose-}"
-  grep -q "1Context is running." "$file" || fail "CLI did not report running in $(basename "$file")"
-  grep -q "Health: OK" "$file" || fail "runtime health was not OK in $(basename "$file")"
-  grep -q "Menu Bar: running" "$file" || fail "menu bar was not running in $(basename "$file")"
+assert_diagnose_healthy() {
+  local name="$1"
+  local diagnose_file="$EVIDENCE_DIR/diagnose-$name.txt"
+  local runtime_launchctl="$EVIDENCE_DIR/launchctl-runtime-$name.txt"
+  local menu_launchctl="$EVIDENCE_DIR/launchctl-menu-$name.txt"
   grep -q "Runtime:" "$diagnose_file" || fail "runtime diagnostics missing in $(basename "$diagnose_file")"
+  grep -q "  Health: OK" "$diagnose_file" || fail "runtime health was not OK in $(basename "$diagnose_file")"
   grep -q "Local Web:" "$diagnose_file" || fail "local web block missing in $(basename "$diagnose_file")"
   grep -q "  Health: OK" "$diagnose_file" || fail "local web health was not OK in $(basename "$diagnose_file")"
   grep -q "  Setup Ready: yes" "$diagnose_file" || fail "setup was not ready in $(basename "$diagnose_file")"
+  grep -Eq "state = running|pid = [0-9]+" "$runtime_launchctl" || fail "runtime launch agent was not running in $(basename "$runtime_launchctl")"
+  grep -Eq "state = running|pid = [0-9]+" "$menu_launchctl" || fail "menu launch agent was not running in $(basename "$menu_launchctl")"
 }
 
 [[ -x "$CLI" ]] || fail "missing CLI at $CLI"
@@ -64,9 +64,9 @@ start_stops="$(count_runtime_stops)"
 printf '%s\n' "$start_stops" > "$EVIDENCE_DIR/runtime-sigterm-count-start.txt"
 
 if ! capture_once "start"; then
-  fail "CLI status command failed at start; see status-start.txt"
+  fail "CLI diagnose command failed at start; see diagnose-start.txt"
 fi
-assert_status_healthy "$EVIDENCE_DIR/status-start.txt"
+assert_diagnose_healthy "start"
 
 deadline=$((SECONDS + DURATION_SECONDS))
 iteration=0
@@ -75,9 +75,9 @@ while (( SECONDS < deadline )); do
   iteration=$((iteration + 1))
   name="$(printf 'probe-%03d' "$iteration")"
   if ! capture_once "$name"; then
-    fail "CLI status command failed during $name; see status-$name.txt"
+    fail "CLI diagnose command failed during $name; see diagnose-$name.txt"
   fi
-  assert_status_healthy "$EVIDENCE_DIR/status-$name.txt"
+  assert_diagnose_healthy "$name"
 done
 
 end_stops="$(count_runtime_stops)"

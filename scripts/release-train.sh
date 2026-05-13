@@ -118,6 +118,19 @@ output.write_text(json.dumps({
 PY
 }
 
+collect_downloaded_proof_results() {
+  local artifact_dir="$1"
+  local list_file="$EVIDENCE_DIR/downloaded-proof-results.txt"
+  mkdir -p "$PROOF_RESULTS_DIR"
+  find "$artifact_dir" -path "*/proof-results/*.json" -type f | sort > "$list_file"
+  if [[ ! -s "$list_file" ]]; then
+    fail "Downloaded self-hosted proof artifacts did not contain proof-results/*.json under $artifact_dir."
+  fi
+  while IFS= read -r proof_json; do
+    cp "$proof_json" "$PROOF_RESULTS_DIR/$(basename "$proof_json")"
+  done < "$list_file"
+}
+
 audit_public_release_assets() (
   set -euo pipefail
 
@@ -562,6 +575,7 @@ PY
   mkdir -p "$artifact_dir"
   gh run download "$run_id" --repo "$repo" --dir "$artifact_dir" | tee -a "$transcript"
   echo "artifact_dir=$artifact_dir" | tee -a "$transcript"
+  collect_downloaded_proof_results "$artifact_dir"
   write_release_evidence "prove"
   "$ROOT/scripts/redact-evidence.sh" "$EVIDENCE_DIR"
   "$ROOT/scripts/audit-evidence-redaction.sh" "$EVIDENCE_DIR"

@@ -163,6 +163,15 @@ if grep -q "run: ./scripts/self-hosted-update-proof.sh" "$ROOT/.github/workflows
   echo "self-hosted workflow must enter proof execution through release-train.sh." >&2
   exit 1
 fi
+if rg -n '\b1context-cli (start|stop|quit|restart|status|logs|update|setup)\b|"\$CLI" (start|stop|quit|restart|status|logs|update|setup)\b|\$CLI (start|stop|quit|restart|status|logs|update|setup)\b' \
+  "$ROOT/scripts/release" \
+  "$ROOT/scripts/prove-remote-sparkle-update.sh" \
+  "$ROOT/scripts/verify-macos-steady-state.sh" > "$TMP_DIR/deleted-cli-script-uses.out"
+then
+  cat "$TMP_DIR/deleted-cli-script-uses.out" >&2
+  echo "release proof scripts must not depend on deleted public CLI control-plane commands." >&2
+  exit 1
+fi
 
 ONECONTEXT_RELEASE_EVIDENCE_DIR="$TMP_DIR/proof-evidence" \
   "$ROOT/scripts/release-train.sh" prove --dry-run --ref main --proof-reason "fixture proof" \

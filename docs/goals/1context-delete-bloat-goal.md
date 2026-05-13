@@ -613,6 +613,20 @@ validated artifacts: `dist/1Context-0.1.66-macos-arm64.dmg`,
 `./scripts/release-train.sh prove --dry-run` from the clean tag and packaged
 `1context-cli --version` reporting `0.1.66`.
 
+Evidence, 2026-05-13: fixed the post-cleanup proof wiring that would have
+failed on the self-hosted runner after the CLI collapse. The steady-state proof
+now uses redacted `diagnose` plus LaunchAgent state instead of deleted
+`status`/`update` commands. The self-hosted proof now performs the
+already-current manual `Check for Updates` assertion, emits normalized proof
+JSON for the real-Mac cases it exercises (`mandatory_automatic_success`,
+`already_current_manual_check`, `old_app_with_new_appcast`,
+`app_relaunch_recovery`, and `stale_sparkle_defaults`), and
+`release-train.sh prove` copies downloaded runner proof JSON into the release
+evidence directory before redaction/audit. Proof: `bash -n`, `./scripts/test.sh`,
+`./scripts/test-release-train.sh`, `swift test --package-path macos`,
+`./scripts/release-train.sh prove --dry-run`, `git diff --check`, and a
+negative release-script scan for deleted public CLI control-plane commands.
+
 ### 13. Exit
 
 - [x] No documented production release path exists except
@@ -636,6 +650,6 @@ validated artifacts: `dist/1Context-0.1.66-macos-arm64.dmg`,
 
 ## Immediate Next Step
 
-Push/publish the `v0.1.66` release when approved, then run the remaining
-greenfield release train stages from the clean tag: `publish`, `prove`, `audit`,
-and `bless`.
+Refresh the local `v0.1.66` tag to the latest proof-wiring commit, push/publish
+the release when approved, then run the remaining greenfield release train
+stages from the clean tag: `publish`, `prove`, `audit`, and `bless`.

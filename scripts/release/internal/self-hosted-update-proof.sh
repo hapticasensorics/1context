@@ -2,6 +2,8 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
+# shellcheck disable=SC1091
+source "$ROOT/scripts/lib-gui-evidence.sh"
 APP="${ONECONTEXT_INSTALLED_APP:-/Applications/1Context.app}"
 ARCH="${ONECONTEXT_ARCH:-arm64}"
 REPO="${ONECONTEXT_GITHUB_REPO:-hapticasensorics/1context}"
@@ -345,44 +347,149 @@ collect_final_logs() {
   capture_process_state "final"
 }
 
+prove_already_current_manual_check() {
+  log "proving manual Check for Updates reports current state"
+  local manual_dir="$EVIDENCE_DIR/already-current-manual-check"
+  mkdir -p "$manual_dir"
+  write_versions "$manual_dir/version-before.txt"
+  click_menu_item "Check for Updates"
+  local deadline=$(( "$(date +%s)" + 60 ))
+  local attempt=0
+  while true; do
+    attempt=$((attempt + 1))
+    capture_windows "$manual_dir/windows-$attempt.txt"
+    capture_accessibility "$manual_dir/accessibility-$attempt.txt"
+    capture_screenshot "$manual_dir/desktop-$attempt.png"
+    cp "$manual_dir/windows-$attempt.txt" "$manual_dir/windows-final.txt"
+    cp "$manual_dir/accessibility-$attempt.txt" "$manual_dir/accessibility-final.txt"
+    cp "$manual_dir/desktop-$attempt.png" "$manual_dir/desktop-final.png"
+    if grep -Fq "1Context is up to date." "$manual_dir/accessibility-final.txt"; then
+      click_window_button "OK" >/dev/null 2>&1 || true
+      write_versions "$manual_dir/version-after.txt"
+      return
+    fi
+    if grep -Eiq 'Update failed|Please contact support|Update 1Context\?|Install Update|Install and Relaunch|release notes|installer' "$manual_dir/accessibility-final.txt"; then
+      fail "Manual already-current check showed unexpected update UI. Evidence: $manual_dir"
+    fi
+    if (( "$(date +%s)" >= deadline )); then
+      fail "Timed out waiting for manual already-current update message. Evidence: $manual_dir"
+    fi
+    sleep 1
+  done
+}
+
 write_proof_result() {
   mkdir -p "$EVIDENCE_DIR/proof-results"
-  python3 - "$EVIDENCE_DIR/proof-results/mandatory_automatic_success.json" "$OLD_VERSION" "$NEW_VERSION" "$UPDATE_CLASS" <<'PY'
+  python3 - "$EVIDENCE_DIR/proof-results" "$OLD_VERSION" "$NEW_VERSION" "$UPDATE_CLASS" <<'PY'
 import datetime as dt
 import json
 import sys
 from pathlib import Path
 
-output = Path(sys.argv[1])
+proof_dir = Path(sys.argv[1])
 old_version = sys.argv[2]
 new_version = sys.argv[3]
 update_class = sys.argv[4]
-output.write_text(json.dumps({
-  "case": "mandatory_automatic_success",
+now = dt.datetime.now(dt.timezone.utc).isoformat()
+
+base = {
   "expected_version": new_version,
   "actual_version": new_version,
   "old_version": old_version,
   "update_class": update_class,
   "status": "passed",
-  "ui_assertions": [
-    "no_release_notes_prompt",
-    "no_installer_click_through",
-    "no_support_alert"
-  ],
-  "runtime_assertions": [
-    "no_runtime_pause",
-    "final_installed_version_matches_expected",
-    "public_feed_restored"
-  ],
   "redaction_status": "pending",
-  "artifact_paths": [
-    "update-proof",
-    "steady-state",
-    "version-final.txt",
-    "self-hosted-update-proof.log"
-  ],
-  "generated_at": dt.datetime.now(dt.timezone.utc).isoformat(),
-}, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+  "generated_at": now,
+}
+
+results = [
+  {
+    **base,
+    "case": "mandatory_automatic_success",
+    "ui_assertions": [
+      "no_release_notes_prompt",
+      "no_installer_click_through",
+      "no_support_alert",
+    ],
+    "runtime_assertions": [
+      "no_runtime_pause",
+      "final_installed_version_matches_expected",
+      "public_feed_restored",
+    ],
+    "artifact_paths": [
+      "update-proof",
+      "steady-state",
+      "version-final.txt",
+      "self-hosted-update-proof.log",
+    ],
+  },
+  {
+    **base,
+    "case": "already_current_manual_check",
+    "ui_assertions": [
+      "manual_check_reports_up_to_date",
+      "no_release_notes_prompt",
+      "no_support_alert",
+    ],
+    "runtime_assertions": [
+      "installed_version_remains_current",
+    ],
+    "artifact_paths": [
+      "already-current-manual-check",
+    ],
+  },
+  {
+    **base,
+    "case": "old_app_with_new_appcast",
+    "ui_assertions": [
+      "previous_public_build_used_public_appcast",
+    ],
+    "runtime_assertions": [
+      "old_version_installed_before_update",
+      "final_installed_version_matches_expected",
+    ],
+    "artifact_paths": [
+      "version-after-old-install.txt",
+      "update-proof/live-appcast.xml",
+      "update-proof/watch.log",
+    ],
+  },
+  {
+    **base,
+    "case": "app_relaunch_recovery",
+    "ui_assertions": [
+      "app_relaunched_after_update",
+    ],
+    "runtime_assertions": [
+      "steady_state_passed",
+      "runtime_kept_running",
+      "local_web_ready_after_relaunch",
+    ],
+    "artifact_paths": [
+      "steady-state",
+      "version-final.txt",
+    ],
+  },
+  {
+    **base,
+    "case": "stale_sparkle_defaults",
+    "ui_assertions": [
+      "no_support_alert",
+    ],
+    "runtime_assertions": [
+      "sparkle_state_cleared_before_proof",
+      "public_feed_restored",
+    ],
+    "artifact_paths": [
+      "final-feed-policy.txt",
+      "version-final.txt",
+    ],
+  },
+]
+
+for result in results:
+  output = proof_dir / f"{result['case']}.json"
+  output.write_text(json.dumps(result, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 PY
 }
 
@@ -418,6 +525,7 @@ ONECONTEXT_STEADY_STATE_EVIDENCE_DIR="$EVIDENCE_DIR/steady-state" \
   "$ROOT/scripts/verify-macos-steady-state.sh"
 
 ensure_final_app_uses_public_feed
+prove_already_current_manual_check
 collect_final_logs
 write_proof_result
 
