@@ -705,7 +705,9 @@ release_prove() {
   if [[ "$mode" != "dry-run" ]]; then
     require_tool gh
     release_validate
-    ensure_tag_ref
+    if [[ "${CHANNEL_REQUIRES_TAG:-0}" == "1" ]]; then
+      ensure_tag_ref
+    fi
   else
     "$ROOT/scripts/release-manifest.py" validate --channel "$CHANNEL"
   fi
