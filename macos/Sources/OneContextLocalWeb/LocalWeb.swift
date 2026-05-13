@@ -33,6 +33,12 @@ public struct LocalWebDiagnostics: Codable, Equatable, Sendable {
   public var trustMode: String
   public var privilegedBindRequired: Bool
   public var setup: LocalWebSetupSnapshot
+  public var readinessProbeURL: String
+  public var readinessProbeHealth: String
+  public var privilegedProxyProbeURL: String
+  public var privilegedProxyProbeHealth: String
+  public var brandedProbeURL: String
+  public var brandedProbeHealth: String
   public var apiURL: String
   public var apiHealth: String
   public var apiPort: Int
@@ -60,6 +66,12 @@ public struct LocalWebDiagnostics: Codable, Equatable, Sendable {
     trustMode: String,
     privilegedBindRequired: Bool,
     setup: LocalWebSetupSnapshot,
+    readinessProbeURL: String,
+    readinessProbeHealth: String,
+    privilegedProxyProbeURL: String,
+    privilegedProxyProbeHealth: String,
+    brandedProbeURL: String,
+    brandedProbeHealth: String,
     apiURL: String,
     apiHealth: String,
     apiPort: Int,
@@ -86,6 +98,12 @@ public struct LocalWebDiagnostics: Codable, Equatable, Sendable {
     self.trustMode = trustMode
     self.privilegedBindRequired = privilegedBindRequired
     self.setup = setup
+    self.readinessProbeURL = readinessProbeURL
+    self.readinessProbeHealth = readinessProbeHealth
+    self.privilegedProxyProbeURL = privilegedProxyProbeURL
+    self.privilegedProxyProbeHealth = privilegedProxyProbeHealth
+    self.brandedProbeURL = brandedProbeURL
+    self.brandedProbeHealth = brandedProbeHealth
     self.apiURL = apiURL
     self.apiHealth = apiHealth
     self.apiPort = apiPort
@@ -111,11 +129,17 @@ public struct LocalWebDiagnostics: Codable, Equatable, Sendable {
 
 public enum LocalWebDefaults {
   public static let wikiHost = "wiki.1context.localhost"
+  public static let browserHost = "localhost"
   public static let bindHost = "127.0.0.1"
+  // Keep app-internal readiness on literal loopback. The browser URL uses
+  // localhost because multi-label .localhost handling varies by macOS client.
+  public static let healthHost = bindHost
+  public static let privilegedProxyHealthHost = browserHost
   public static let wikiPort = 39191
   public static let wikiAPIPort = 39192
   public static let wikiRoute = "/your-context"
-  public static let defaultWikiURL = "https://\(wikiHost)\(wikiRoute)"
+  public static let defaultWikiURL = "https://\(browserHost)\(wikiRoute)"
+  public static let brandedWikiURL = "https://\(wikiHost)\(wikiRoute)"
 }
 
 public enum LocalWebURLMode: String, Codable, Sendable {
@@ -288,10 +312,18 @@ public struct CaddyConfig: Equatable, Sendable {
   }
 
   public var url: String {
-    "https://\(host)\(LocalWebDefaults.wikiRoute)"
+    LocalWebDefaults.defaultWikiURL
   }
 
   public var healthURL: URL {
+    URL(string: "https://\(LocalWebDefaults.healthHost):\(port)/__1context/health")!
+  }
+
+  public var privilegedProxyHealthURL: URL {
+    URL(string: "https://\(LocalWebDefaults.privilegedProxyHealthHost)/__1context/health")!
+  }
+
+  public var brandedHealthURL: URL {
     URL(string: "https://\(host)/__1context/health")!
   }
 
@@ -307,7 +339,7 @@ public struct CaddyConfig: Equatable, Sendable {
       auto_https disable_redirects
     }
 
-    https://\(host):\(port) {
+    \(siteAddresses()) {
       bind \(bindHost)
       root * "\(escape(siteRoot.path))"
 
@@ -351,6 +383,15 @@ public struct CaddyConfig: Equatable, Sendable {
     value
       .replacingOccurrences(of: "\\", with: "\\\\")
       .replacingOccurrences(of: "\"", with: "\\\"")
+  }
+
+  private func siteAddresses() -> String {
+    let addresses = [
+      "https://\(host):\(port)",
+      "https://\(LocalWebDefaults.healthHost):\(port)",
+      "https://\(LocalWebDefaults.privilegedProxyHealthHost):\(port)"
+    ]
+    return Array(Set(addresses)).sorted().joined(separator: ", ")
   }
 }
 
@@ -465,7 +506,7 @@ public final class CaddyManager: @unchecked Sendable {
       rootCertificateSHA256: fingerprints.sha256,
       backendHost: LocalWebDefaults.bindHost,
       backendPort: port,
-      publicHost: host,
+      publicHost: LocalWebDefaults.browserHost,
       publicPort: LocalWebSetupConstants.privilegedHTTPSPort
     )
   }
@@ -473,12 +514,23 @@ public final class CaddyManager: @unchecked Sendable {
   public func diagnostics() -> LocalWebDiagnostics {
     let caddy = (try? caddyExecutable()) ?? URL(fileURLWithPath: "")
     let bundled = bundledCaddyURL()
+    let config = caddyConfig()
+    let setup = localWebSetupSnapshot()
+    let readinessProbeHealth = setup.ready ? probeHealth(config.healthURL) : "setup required"
+    let privilegedProxyProbeHealth = setup.ready ? probeHealth(config.privilegedProxyHealthURL) : "setup required"
+    let brandedProbeHealth = setup.ready ? probeHealth(config.brandedHealthURL) : "setup required"
     return LocalWebDiagnostics(
       snapshot: status(),
       urlMode: urlMode.rawValue,
       trustMode: urlMode.trustMode,
       privilegedBindRequired: urlMode.privilegedBindRequired,
-      setup: localWebSetupSnapshot(),
+      setup: setup,
+      readinessProbeURL: config.healthURL.absoluteString,
+      readinessProbeHealth: readinessProbeHealth,
+      privilegedProxyProbeURL: config.privilegedProxyHealthURL.absoluteString,
+      privilegedProxyProbeHealth: privilegedProxyProbeHealth,
+      brandedProbeURL: config.brandedHealthURL.absoluteString,
+      brandedProbeHealth: brandedProbeHealth,
       apiURL: apiConfig().healthURL.absoluteString,
       apiHealth: WikiLocalAPIProbe.health(config: apiConfig()),
       apiPort: apiConfig().port,
@@ -745,25 +797,59 @@ public final class CaddyManager: @unchecked Sendable {
   }
 
   private func healthOK(_ url: URL) -> Bool {
+    probeHealth(url) == "OK"
+  }
+
+  private func probeHealth(_ url: URL) -> String {
     var request = URLRequest(url: url)
     request.timeoutInterval = 0.75
     let semaphore = DispatchSemaphore(value: 0)
-    nonisolated(unsafe) var ok = false
-    let task = URLSession.shared.dataTask(with: request) { data, _, _ in
+    nonisolated(unsafe) var health = "no response"
+    let task = URLSession.shared.dataTask(with: request) { data, _, error in
       defer { semaphore.signal() }
+      if let error {
+        health = Self.describeProbeError(error)
+        return
+      }
       guard let data,
         let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
       else {
+        health = "invalid response"
         return
       }
-      ok = object["status"] as? String == "ok"
+      health = object["status"] as? String == "ok" ? "OK" : "unhealthy response"
     }
     task.resume()
     if semaphore.wait(timeout: .now() + 1) == .timedOut {
       task.cancel()
-      return false
+      return "timeout"
     }
-    return ok
+    return health
+  }
+
+  private static func describeProbeError(_ error: Error) -> String {
+    let nsError = error as NSError
+    guard nsError.domain == NSURLErrorDomain else {
+      return error.localizedDescription
+    }
+    switch nsError.code {
+    case NSURLErrorCannotFindHost, NSURLErrorDNSLookupFailed:
+      return "dns failed"
+    case NSURLErrorCannotConnectToHost:
+      return "connection failed"
+    case NSURLErrorTimedOut:
+      return "timeout"
+    case NSURLErrorSecureConnectionFailed,
+      NSURLErrorServerCertificateHasBadDate,
+      NSURLErrorServerCertificateUntrusted,
+      NSURLErrorServerCertificateHasUnknownRoot,
+      NSURLErrorServerCertificateNotYetValid,
+      NSURLErrorClientCertificateRejected,
+      NSURLErrorClientCertificateRequired:
+      return "tls failed"
+    default:
+      return "url error \(nsError.code)"
+    }
   }
 
   private func readState() -> CaddyState? {

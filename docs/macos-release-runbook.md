@@ -14,7 +14,8 @@ This is the current operating doc for shipping the 1Context macOS app.
   train. Prototype, private, and official `.app`/DMG builds must bundle their
   runtime inputs instead of resolving tools from Homebrew or host `PATH`.
 - Update engine: Sparkle from the installed `/Applications/1Context.app`.
-- Canonical wiki URL: `https://wiki.1context.localhost/your-context`.
+- Default wiki URL: `https://localhost/your-context`.
+- Branded local alias: `https://wiki.1context.localhost/your-context`.
 - Required first setup: Local Wiki Access through native app setup.
 - User content root: `~/1Context`.
 - App machinery root: `~/Library/Application Support/1Context`.

@@ -8,6 +8,31 @@ VERSION="$(tr -d '[:space:]' < "$ROOT/VERSION")"
 eval "$("$ROOT/scripts/release-manifest.py" export-env)"
 PREVIOUS_VERSION="$ONECONTEXT_RELEASE_PREVIOUS_VERSION"
 
+scan_text() {
+  local exclude=""
+  if [[ "${1:-}" == "--exclude" ]]; then
+    exclude="$2"
+    shift 2
+  fi
+  local pattern="$1"
+  shift
+
+  if command -v rg >/dev/null 2>&1; then
+    local args=(-n)
+    if [[ -n "$exclude" ]]; then
+      args+=(--glob "!$exclude")
+    fi
+    rg "${args[@]}" "$pattern" "$@"
+    return
+  fi
+
+  local args=(-R -n -I -E)
+  if [[ -n "$exclude" ]]; then
+    args+=(--exclude "$exclude")
+  fi
+  grep "${args[@]}" "$pattern" "$@"
+}
+
 write_appcast() {
   local path="$1"
   local critical="$2"
@@ -208,7 +233,7 @@ grep -q "./scripts/release-train.sh prove --runner-execute" "$ROOT/.github/workf
 grep -q "proof_reason:" "$ROOT/.github/workflows/self-hosted-mac-update-proof.yml"
 grep -q "./scripts/release-train.sh prove --channel private --runner-execute" "$ROOT/.github/workflows/self-hosted-mac-private-update-proof.yml"
 grep -q "proof_reason:" "$ROOT/.github/workflows/self-hosted-mac-private-update-proof.yml"
-if rg -n '^\s+(old_version|new_version|staging_appcast_url|update_class|old_tag|old_dmg_url|update_timeout_seconds|steady_state_seconds|artifact_retention_days):' \
+if scan_text '^[[:space:]]+(old_version|new_version|staging_appcast_url|update_class|old_tag|old_dmg_url|update_timeout_seconds|steady_state_seconds|artifact_retention_days):' \
   "$ROOT/.github/workflows/self-hosted-mac-update-proof.yml" \
   "$ROOT/.github/workflows/self-hosted-mac-private-update-proof.yml" > "$TMP_DIR/proof-workflow-release-inputs.out"
 then
@@ -228,7 +253,7 @@ grep -q "./scripts/release-train.sh build --channel official" "$ROOT/.github/wor
 grep -q "ONECONTEXT_REMOTE_APPCAST_GITHUB_REPO" "$ROOT/scripts/release-train.sh"
 grep -q "ONECONTEXT_REMOTE_APPCAST_GITHUB_REPO" "$ROOT/scripts/release/internal/prove-remote-sparkle-update.sh"
 grep -q -- "--pattern asset-manifest.json" "$ROOT/scripts/release-train.sh"
-if rg -n --glob '!test-release-train.sh' 'release-train\.sh package|ONECONTEXT_RUNTIME_ROOT|ONECONTEXT_REMOTE_UPDATE_VALIDATE_REPO_POLICY|dev-runtime-env|with-dev-runtime|release/update-policy' \
+if scan_text --exclude 'test-release-train.sh' 'release-train\.sh package|ONECONTEXT_RUNTIME_ROOT|ONECONTEXT_REMOTE_UPDATE_VALIDATE_REPO_POLICY|dev-runtime-env|with-dev-runtime|release/update-policy' \
   "$ROOT/.github" "$ROOT/scripts" "$ROOT/docs/README.md" "$ROOT/docs/development.md" "$ROOT/docs/macos-release-runbook.md" "$ROOT/docs/ci/self-hosted-mac-runner.md" "$ROOT/release" \
   > "$TMP_DIR/no-shim-scan.out"
 then
@@ -236,7 +261,7 @@ then
   echo "active release surfaces must not mention deleted shims, old package commands, or old update-policy files." >&2
   exit 1
 fi
-if rg -n '\bbrew (install|--prefix)\b|command -v caddy' \
+if scan_text '(^|[^[:alnum:]_])brew (install|--prefix)([^[:alnum:]_]|$)|command -v caddy' \
   "$ROOT/.github/workflows/ci.yml" \
   "$ROOT/.github/workflows/release.yml" \
   "$ROOT/.github/workflows/self-hosted-mac-update-proof.yml" \
@@ -247,14 +272,14 @@ then
   echo "release app/DMG builds must not depend on Homebrew installs, Homebrew prefixes, or host caddy discovery." >&2
   exit 1
 fi
-if rg -n 'ONECONTEXT_(SPARKLE_FEED_URL|UPDATE_OPTIONAL_PROMPT_TITLE|UPDATE_OPTIONAL_PROMPT_BODY|UPDATE_FAILURE_TITLE|UPDATE_FAILURE_BODY|UPDATE_POST_INSTALL_MESSAGE_ENABLED|UPDATE_POST_INSTALL_TITLE|UPDATE_POST_INSTALL_BODY|SPARKLE_SHOW_RELEASE_NOTES_IN_UPDATE_WINDOW):-' \
+if scan_text 'ONECONTEXT_(SPARKLE_FEED_URL|UPDATE_OPTIONAL_PROMPT_TITLE|UPDATE_OPTIONAL_PROMPT_BODY|UPDATE_FAILURE_TITLE|UPDATE_FAILURE_BODY|UPDATE_POST_INSTALL_MESSAGE_ENABLED|UPDATE_POST_INSTALL_TITLE|UPDATE_POST_INSTALL_BODY|SPARKLE_SHOW_RELEASE_NOTES_IN_UPDATE_WINDOW):-' \
   "$ROOT/scripts/build-macos-app.sh" > "$TMP_DIR/build-update-env-overrides.out"
 then
   cat "$TMP_DIR/build-update-env-overrides.out" >&2
   echo "build-macos-app.sh must read updater UI policy from release/release.toml, not caller env defaults." >&2
   exit 1
 fi
-if rg -n '\b1context-cli (start|stop|quit|restart|status|logs|update|setup)\b|"\$CLI" (start|stop|quit|restart|status|logs|update|setup)\b|\$CLI (start|stop|quit|restart|status|logs|update|setup)\b' \
+if scan_text '(^|[^[:alnum:]_])1context-cli (start|stop|quit|restart|status|logs|update|setup)([^[:alnum:]_]|$)|"\$CLI" (start|stop|quit|restart|status|logs|update|setup)([^[:alnum:]_]|$)|\$CLI (start|stop|quit|restart|status|logs|update|setup)([^[:alnum:]_]|$)' \
   "$ROOT/scripts/release" \
   "$ROOT/scripts/release/internal/prove-remote-sparkle-update.sh" \
   "$ROOT/scripts/release/internal/verify-macos-steady-state.sh" > "$TMP_DIR/deleted-cli-script-uses.out"
@@ -387,7 +412,7 @@ mkdir "$dirty_repo"
 git -C "$dirty_repo" init -q
 printf 'clean\n' > "$dirty_repo/tracked.txt"
 git -C "$dirty_repo" add tracked.txt
-git -C "$dirty_repo" -c user.name=Test -c user.email=test@example.com commit -qm init
+git -C "$dirty_repo" -c user.name=Test -c user.email=test@example.com -c commit.gpgsign=false commit -qm init
 printf 'dirty\n' > "$dirty_repo/untracked.txt"
 if "$ROOT/scripts/release-manifest.py" check-clean-tree --root "$dirty_repo" > "$TMP_DIR/dirty-tree.out" 2>&1; then
   echo "clean-tree gate should fail on untracked release files." >&2
@@ -407,7 +432,7 @@ git -C "$helper_repo" init -q
 } > "$helper_repo/scripts/main.sh"
 chmod +x "$helper_repo/scripts/main.sh"
 git -C "$helper_repo" add scripts/main.sh
-git -C "$helper_repo" -c user.name=Test -c user.email=test@example.com commit -qm init
+git -C "$helper_repo" -c user.name=Test -c user.email=test@example.com -c commit.gpgsign=false commit -qm init
 printf '# helper\n' > "$helper_repo/scripts/helper.sh"
 if "$ROOT/scripts/release-manifest.py" check-sourced-helpers --root "$helper_repo" > "$TMP_DIR/helper.out" 2>&1; then
   echo "sourced-helper gate should fail when a sourced helper is untracked." >&2

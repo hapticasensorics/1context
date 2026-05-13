@@ -139,6 +139,12 @@ struct OneContextCLI {
     print("  URL Mode: \(diagnostics.urlMode)")
     print("  Trust Mode: \(diagnostics.trustMode)")
     print("  Privileged Bind Required: \(yesNo(diagnostics.privilegedBindRequired))")
+    print("  Readiness Probe URL: \(diagnostics.readinessProbeURL)")
+    print("  Readiness Probe Health: \(diagnostics.readinessProbeHealth)")
+    print("  Privileged Proxy Probe URL: \(diagnostics.privilegedProxyProbeURL)")
+    print("  Privileged Proxy Probe Health: \(diagnostics.privilegedProxyProbeHealth)")
+    print("  Branded Host Probe URL: \(diagnostics.brandedProbeURL)")
+    print("  Branded Host Probe Health: \(diagnostics.brandedProbeHealth)")
     for line in LocalWebSetupDiagnostics.render(diagnostics.setup, redact: { displayPath($0, redact: redact) }) {
       print(line)
     }

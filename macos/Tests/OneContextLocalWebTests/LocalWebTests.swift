@@ -14,13 +14,17 @@ final class LocalWebTests: XCTestCase {
     XCTAssertTrue(text.contains("admin off"))
     XCTAssertTrue(text.contains("skip_install_trust"))
     XCTAssertTrue(text.contains("auto_https disable_redirects"))
-    XCTAssertTrue(text.contains("https://wiki.1context.localhost:39191 {"))
+    XCTAssertTrue(text.contains("https://127.0.0.1:39191"))
+    XCTAssertTrue(text.contains("https://localhost:39191"))
+    XCTAssertTrue(text.contains("https://wiki.1context.localhost:39191"))
     XCTAssertTrue(text.contains("bind 127.0.0.1"))
     XCTAssertTrue(text.contains("tls internal"))
     XCTAssertFalse(text.contains("auto_https off"))
     XCTAssertTrue(text.contains(":39191"))
-    XCTAssertEqual(config.url, "https://wiki.1context.localhost/your-context")
-    XCTAssertEqual(config.healthURL.absoluteString, "https://wiki.1context.localhost/__1context/health")
+    XCTAssertEqual(config.url, "https://localhost/your-context")
+    XCTAssertEqual(config.healthURL.absoluteString, "https://127.0.0.1:39191/__1context/health")
+    XCTAssertEqual(config.privilegedProxyHealthURL.absoluteString, "https://localhost/__1context/health")
+    XCTAssertEqual(config.brandedHealthURL.absoluteString, "https://wiki.1context.localhost/__1context/health")
   }
 
   func testDefaultURLModeRequiresProfessionalLocalHTTPSSetup() {
@@ -32,7 +36,8 @@ final class LocalWebTests: XCTestCase {
     )
 
     XCTAssertEqual(mode, .localHTTPSPortless)
-    XCTAssertEqual(LocalWebDefaults.defaultWikiURL, "https://wiki.1context.localhost/your-context")
+    XCTAssertEqual(LocalWebDefaults.defaultWikiURL, "https://localhost/your-context")
+    XCTAssertEqual(LocalWebDefaults.brandedWikiURL, "https://wiki.1context.localhost/your-context")
     XCTAssertEqual(config.url, LocalWebDefaults.defaultWikiURL)
   }
 
@@ -94,6 +99,12 @@ final class LocalWebTests: XCTestCase {
     XCTAssertTrue(diagnostics.caddyfilePath.hasSuffix("Application Support/1Context/local-web/caddy/Caddyfile"))
     XCTAssertEqual(diagnostics.apiPort, LocalWebDefaults.wikiAPIPort)
     XCTAssertTrue(diagnostics.apiStatePath.hasSuffix("Application Support/1Context/local-web/wiki-browser-state.json"))
+    XCTAssertEqual(diagnostics.readinessProbeURL, "https://127.0.0.1:39191/__1context/health")
+    XCTAssertEqual(diagnostics.readinessProbeHealth, "setup required")
+    XCTAssertEqual(diagnostics.privilegedProxyProbeURL, "https://localhost/__1context/health")
+    XCTAssertEqual(diagnostics.privilegedProxyProbeHealth, "setup required")
+    XCTAssertEqual(diagnostics.brandedProbeURL, "https://wiki.1context.localhost/__1context/health")
+    XCTAssertEqual(diagnostics.brandedProbeHealth, "setup required")
   }
 
   func testDiagnosticsReportsLocalHTTPSURLMode() throws {
@@ -113,7 +124,7 @@ final class LocalWebTests: XCTestCase {
 
     let diagnostics = manager.diagnostics()
 
-    XCTAssertEqual(diagnostics.snapshot.url, "https://wiki.1context.localhost/your-context")
+    XCTAssertEqual(diagnostics.snapshot.url, "https://localhost/your-context")
     XCTAssertEqual(diagnostics.urlMode, "local-https-portless")
     XCTAssertEqual(diagnostics.trustMode, "local-ca-required")
     XCTAssertTrue(diagnostics.privilegedBindRequired)
@@ -137,7 +148,7 @@ final class LocalWebTests: XCTestCase {
 
     XCTAssertFalse(snapshot.running)
     XCTAssertEqual(snapshot.health, "setup required")
-    XCTAssertEqual(snapshot.url, "https://wiki.1context.localhost/your-context")
+    XCTAssertEqual(snapshot.url, "https://localhost/your-context")
     XCTAssertEqual(snapshot.lastError, "Local web setup required: Local HTTPS helper, Local certificate trust")
   }
 
