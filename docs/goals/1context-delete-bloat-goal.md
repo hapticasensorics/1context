@@ -327,8 +327,8 @@ scripts still use explicit release env vars as operator tooling. Proof:
 - [x] Remove future sensitive permission scaffolding from shipped setup until
   the corresponding capture feature is actually shipping.
 - [x] Remove `permissions --all` behavior if it exposes unshipped permissions.
-- [ ] Delete updater release-notes and post-install-popup branches if the final
-  product policy remains "no release notes, no post-update popup by default."
+- [x] Keep updater release notes hidden by policy and keep post-install popup
+  disabled by default, with founder-controlled manifest copy for rare use.
 
 Evidence, 2026-05-13: deleted the `OneContextPermissions` target and tests,
 removed future Screen Recording/Accessibility rows from setup, and removed the
@@ -353,6 +353,14 @@ app and the user's standard 1Context folders instead of
 `./scripts/test-release-train.sh`,
 `cd memory-core && uv run --with pytest pytest`, `git diff --check`, and
 negative `rg` for the deleted local-web setup path env names.
+
+Evidence, 2026-05-13: release notes are intentionally hidden from the Sparkle
+update window by `release/release.toml` (`show_in_update_window = false`), and
+the rare post-install popup remains founder-controlled but disabled by default
+(`enabled = false`, title default `1Context Improved!`). The manifest validator
+enforces both policies and rejects appcasts that include a description while
+release notes are hidden. Proof: `./scripts/test-release-train.sh` and
+`./scripts/release-manifest.py validate`.
 
 ### 7. First-Party Agent Integration Deletion
 
