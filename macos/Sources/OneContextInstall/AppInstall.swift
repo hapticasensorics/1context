@@ -2,11 +2,6 @@ import Foundation
 import CryptoKit
 import OneContextCore
 
-public enum AppInstallEnvironment {
-  public static let skipPromptKey = "ONECONTEXT_SKIP_APP_INSTALL_PROMPT"
-  public static let destinationKey = "ONECONTEXT_APP_INSTALL_DESTINATION"
-}
-
 public enum ExistingInstallRelation: String, Sendable {
   case none
   case sameVersion
@@ -70,14 +65,14 @@ public enum AppInstallRecommendation: Sendable, Equatable {
 }
 
 public struct AppInstallPlanner {
-  public let environment: [String: String]
+  public let destinationBundleURL: URL
   public let fileManager: FileManager
 
   public init(
-    environment: [String: String] = ProcessInfo.processInfo.environment,
+    destinationBundleURL: URL = AppInstallPlanner.defaultDestinationBundleURL,
     fileManager: FileManager = .default
   ) {
-    self.environment = environment
+    self.destinationBundleURL = destinationBundleURL
     self.fileManager = fileManager
   }
 
@@ -86,11 +81,7 @@ public struct AppInstallPlanner {
     currentVersion: String,
     existingVersionReader: (URL) -> String? = AppInstallPlanner.bundleVersion
   ) -> AppInstallRecommendation {
-    if environment[AppInstallEnvironment.skipPromptKey] == "1" {
-      return .continueInPlace("Install prompt disabled by environment.")
-    }
-
-    let destination = Self.destinationBundleURL(environment: environment)
+    let destination = destinationBundleURL
     if sameFileSystemLocation(currentBundleURL, destination) {
       return .continueInPlace("1Context is already running from Applications.")
     }
@@ -145,21 +136,14 @@ public struct AppInstallPlanner {
     return plist
   }
 
-  public static func destinationBundleURL(
-    environment: [String: String] = ProcessInfo.processInfo.environment
-  ) -> URL {
-    if let path = environment[AppInstallEnvironment.destinationKey], !path.isEmpty {
-      return URL(fileURLWithPath: path, isDirectory: true)
-    }
-    return URL(fileURLWithPath: "/Applications/1Context.app", isDirectory: true)
-  }
+  public static let defaultDestinationBundleURL = URL(fileURLWithPath: "/Applications/1Context.app", isDirectory: true)
 
   private func existingRelation(
     currentVersion: String,
     existingVersion: String?
   ) -> ExistingInstallRelation {
     guard let existingVersion, !existingVersion.isEmpty else {
-      return fileManager.fileExists(atPath: Self.destinationBundleURL(environment: environment).path)
+      return fileManager.fileExists(atPath: destinationBundleURL.path)
         ? .unknownVersion
         : .none
     }
@@ -280,11 +264,6 @@ public struct AppInstallMover {
   }
 }
 
-public enum AppBundleTrashEnvironment {
-  public static let allowNonApplicationsKey = "ONECONTEXT_ALLOW_NON_APPLICATIONS_APP_TRASH"
-  public static let trashDestinationKey = "ONECONTEXT_APP_TRASH_DESTINATION"
-}
-
 public enum AppBundleTrashError: Error, LocalizedError, Sendable, Equatable {
   case notAppBundle(String)
   case wrongBundleIdentifier(String?)
@@ -303,14 +282,17 @@ public enum AppBundleTrashError: Error, LocalizedError, Sendable, Equatable {
 }
 
 public struct AppBundleTrasher {
-  public let environment: [String: String]
+  public let allowsNonApplicationsBundle: Bool
+  public let trashDestination: URL?
   public let fileManager: FileManager
 
   public init(
-    environment: [String: String] = ProcessInfo.processInfo.environment,
+    allowsNonApplicationsBundle: Bool = false,
+    trashDestination: URL? = nil,
     fileManager: FileManager = .default
   ) {
-    self.environment = environment
+    self.allowsNonApplicationsBundle = allowsNonApplicationsBundle
+    self.trashDestination = trashDestination
     self.fileManager = fileManager
   }
 
@@ -320,8 +302,8 @@ public struct AppBundleTrasher {
     guard fileManager.fileExists(atPath: bundle.path) else { return nil }
     try validate(bundle)
 
-    if let destination = environment[AppBundleTrashEnvironment.trashDestinationKey], !destination.isEmpty {
-      return try moveToTrashDirectory(bundle, destination: URL(fileURLWithPath: destination, isDirectory: true))
+    if let trashDestination {
+      return try moveToTrashDirectory(bundle, destination: trashDestination)
     }
 
     var resultingURL: NSURL?
@@ -336,8 +318,7 @@ public struct AppBundleTrasher {
     guard AppInstallPlanner.bundleIdentifier(at: bundle) == "com.haptica.1context" else {
       throw AppBundleTrashError.wrongBundleIdentifier(AppInstallPlanner.bundleIdentifier(at: bundle))
     }
-    guard environment[AppBundleTrashEnvironment.allowNonApplicationsKey] == "1"
-      || bundle.deletingLastPathComponent().path == "/Applications"
+    guard allowsNonApplicationsBundle || bundle.deletingLastPathComponent().path == "/Applications"
     else {
       throw AppBundleTrashError.unsafeApplicationPath(bundle.path)
     }

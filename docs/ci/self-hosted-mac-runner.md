@@ -43,7 +43,7 @@ receipt when deciding whether to spend the Mac cycle.
 runs-on: [self-hosted, macOS, ARM64, onecontext-update-runner]
 ```
 
-The job calls `scripts/self-hosted-update-proof.sh`, which:
+The release train dispatches the self-hosted proof job, which:
 
 1. Stops any existing 1Context processes.
 2. Clears disposable Sparkle/WebKit update caches while preserving
@@ -55,9 +55,8 @@ The job calls `scripts/self-hosted-update-proof.sh`, which:
 7. Uploads evidence from `dist/self-hosted-update-proof/`.
 
 The self-hosted workflow validates the staged appcast against its dispatch
-inputs. It does not require the checked-out repo's `release/update-policy.toml`
-to already describe the staged N+1 appcast, because the runner can be used
-against pre-release assets before the release commit lands.
+inputs and the release manifest when it is running as part of the protected
+release train.
 
 The installed version N app must have `SUFeedURL` set to the same appcast URL
 used for the proof. Public release DMGs normally point at the public latest
@@ -115,7 +114,7 @@ update proof. This is a bench prerequisite, not part of the update test:
 ```bash
 /Applications/1Context.app/Contents/MacOS/1context-cli setup local-web status
 /Applications/1Context.app/Contents/MacOS/1context-cli start
-/Applications/1Context.app/Contents/MacOS/1context-cli status --debug
+/Applications/1Context.app/Contents/MacOS/1context-cli diagnose
 ```
 
 The self-hosted proof preflights this condition and fails before replacing
@@ -208,30 +207,25 @@ Configure these before treating a green run as release proof:
 
 ## Trigger A Proof Run
 
-Prefer the repo wrapper so release proof becomes muscle memory instead of a
-hand-filled form. It reads `VERSION` and `release/update-policy.toml`, infers the
-mandatory old-version baseline from `minimum_autoupdate_version`, validates the
-trusted ref shape, and prints the exact `gh workflow run` command before doing
-anything:
+Prefer the release train so release proof becomes muscle memory instead of a
+hand-filled form. It reads `release/release.toml`, infers the mandatory
+old-version baseline from `minimum_autoupdate_version`, validates the trusted
+ref shape, and owns dispatch, watch, artifact download, redaction, and audit:
 
 ```bash
-./scripts/request-release-proof.sh --dry-run
+./scripts/release-train.sh prove --dry-run
+./scripts/release-train.sh prove
 ```
 
 After the release assets and appcast are uploaded, dispatch and watch the proof:
 
 ```bash
-./scripts/request-release-proof.sh \
-  --dispatch \
-  --watch \
-  --download-artifacts \
-  --ref v$(cat VERSION) \
-  --proof-reason "routine mandatory release proof for $(cat VERSION)"
+./scripts/release-train.sh prove
 ```
 
-For optional releases, or any policy without `minimum_autoupdate_version`, pass
-`--old-version` explicitly. For staging feeds, pass `--appcast-url` and usually
-`--old-dmg-url` for a version-N app built to use that same feed.
+For optional releases or staging feeds, update `release/release.toml` first so
+the release train owns the version, update class, appcast URL, and old-version
+baseline.
 
 From GitHub UI:
 

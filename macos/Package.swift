@@ -42,20 +42,8 @@ let package = Package(
       dependencies: ["OneContextCore"]
     ),
     .target(
-      name: "OneContextPermissions",
-      dependencies: ["OneContextCore", "OneContextPlatform"]
-    ),
-    .target(
       name: "OneContextSetup",
-      dependencies: ["OneContextLocalWeb", "OneContextPermissions"]
-    ),
-    .target(
-      name: "OneContextAgent",
-      dependencies: ["OneContextCore", "OneContextPlatform", "OneContextProtocol"]
-    ),
-    .target(
-      name: "OneContextMemoryCore",
-      dependencies: ["OneContextCore", "OneContextPlatform"]
+      dependencies: ["OneContextLocalWeb"]
     ),
     .target(
       name: "OneContextLocalWeb",
@@ -65,30 +53,20 @@ let package = Package(
       name: "OneContextSupervisor",
       dependencies: ["OneContextCore", "OneContextPlatform", "OneContextProtocol"]
     ),
-    .target(
-      name: "OneContextRuntimeSupport",
-      dependencies: [
-        "OneContextCore",
-        "OneContextPlatform",
-        "OneContextProtocol",
-        "OneContextPermissions",
-        "OneContextSupervisor"
-      ]
-    ),
     .executableTarget(
       name: "OneContextCLI",
-      dependencies: ["OneContextRuntimeSupport", "OneContextAgent", "OneContextInstall", "OneContextLocalWeb", "OneContextMemoryCore", "OneContextSetup", "OneContextUpdate"]
+      dependencies: ["OneContextCore", "OneContextPlatform", "OneContextProtocol", "OneContextSupervisor", "OneContextInstall", "OneContextLocalWeb", "OneContextSetup", "OneContextUpdate"]
     ),
     .executableTarget(
       name: "OneContextDaemon",
-      dependencies: ["OneContextRuntimeSupport", "OneContextAgent", "OneContextLocalWeb", "OneContextMemoryCore", "OneContextSetup"]
+      dependencies: ["OneContextCore", "OneContextPlatform", "OneContextProtocol", "OneContextLocalWeb", "OneContextSetup"]
     ),
     .executableTarget(
       name: "OneContextLocalWebProxy"
     ),
     .executableTarget(
       name: "OneContextMenuBar",
-      dependencies: ["OneContextRuntimeSupport", "OneContextAgent", "OneContextInstall", "OneContextLocalWeb", "OneContextPermissions", "OneContextSetup", "OneContextUpdate", "OneContextSparkleUpdate"],
+      dependencies: ["OneContextCore", "OneContextPlatform", "OneContextProtocol", "OneContextSupervisor", "OneContextInstall", "OneContextLocalWeb", "OneContextSetup", "OneContextUpdate", "OneContextSparkleUpdate"],
       exclude: ["Resources"],
       linkerSettings: [
         .unsafeFlags(["-Xlinker", "-rpath", "-Xlinker", "@executable_path/../Frameworks"])
@@ -119,20 +97,8 @@ let package = Package(
       dependencies: ["OneContextInstall"]
     ),
     .testTarget(
-      name: "OneContextPermissionsTests",
-      dependencies: ["OneContextPermissions"]
-    ),
-    .testTarget(
       name: "OneContextSetupTests",
       dependencies: ["OneContextSetup"]
-    ),
-    .testTarget(
-      name: "OneContextAgentTests",
-      dependencies: ["OneContextAgent"]
-    ),
-    .testTarget(
-      name: "OneContextMemoryCoreTests",
-      dependencies: ["OneContextMemoryCore"]
     ),
     .testTarget(
       name: "OneContextLocalWebTests",

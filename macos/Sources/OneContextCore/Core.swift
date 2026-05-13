@@ -5,7 +5,6 @@ public let oneContextGitHubURL = URL(string: "https://github.com/hapticasensoric
 
 public enum OneContextVersion {
   public static let fallback = "0.1.65"
-  public static let overrideEnvironmentKey = "ONECONTEXT_VERSION_OVERRIDE"
 
   public static func current(
     environment: [String: String] = ProcessInfo.processInfo.environment,
@@ -26,9 +25,6 @@ public enum OneContextVersion {
     executableURL: URL?,
     appBundleVersion: (URL) -> String?
   ) -> String {
-    if let override = nonEmptyVersion(environment[overrideEnvironmentKey]) {
-      return override
-    }
     if let bundleVersion = nonEmptyVersion(bundleVersion) {
       return bundleVersion
     }

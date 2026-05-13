@@ -56,7 +56,7 @@ fi
 } > "$EVIDENCE_DIR/environment.txt"
 
 printf '%s\n' "$installed_version" > "$EVIDENCE_DIR/version.txt"
-"$CLI" status --debug > "$EVIDENCE_DIR/status-debug.txt" 2>&1 || true
+"$CLI" status > "$EVIDENCE_DIR/status.txt" 2>&1 || true
 capture_menu "$EVIDENCE_DIR/menu.txt"
 
 osascript > "$EVIDENCE_DIR/open-menu.applescript.txt" 2>&1 <<'APPLESCRIPT' || true
@@ -102,9 +102,9 @@ while true; do
   sleep 1
 done
 
-require_text "Version: $EXPECTED_VERSION" "$EVIDENCE_DIR/status-debug.txt" "status debug"
-require_text "Health: OK" "$EVIDENCE_DIR/status-debug.txt" "status debug"
-require_text "Menu Bar: running" "$EVIDENCE_DIR/status-debug.txt" "status debug"
+require_text "Version: $EXPECTED_VERSION" "$EVIDENCE_DIR/status.txt" "status"
+require_text "Health: OK" "$EVIDENCE_DIR/status.txt" "status"
+require_text "Menu Bar: running" "$EVIDENCE_DIR/status.txt" "status"
 
 {
   echo "result=passed"

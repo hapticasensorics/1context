@@ -179,7 +179,7 @@ run_smoke_cli() {
 
 capture_runtime_survival_status() {
   local name="$1"
-  run_smoke_cli status --debug > "$EVIDENCE_DIR/runtime-status-$name.txt" 2>&1
+  run_smoke_cli diagnose > "$EVIDENCE_DIR/runtime-status-$name.txt" 2>&1
 }
 
 wait_for_runtime_survival_status() {
@@ -188,10 +188,8 @@ wait_for_runtime_survival_status() {
   local status_file="$EVIDENCE_DIR/runtime-status-$name.txt"
   for _ in {1..80}; do
     if capture_runtime_survival_status "$name" &&
-      grep -q "1Context is running." "$status_file" &&
-      grep -q "Version: $expected_version" "$status_file" &&
-      grep -q "Health: OK" "$status_file" &&
-      grep -q "Socket: responding" "$status_file"; then
+      grep -q "Runtime Version: $expected_version" "$status_file" &&
+      grep -q "Health: OK" "$status_file"; then
       cat "$STATE_DIR/Application Support/1Context/run/1contextd.pid" > "$EVIDENCE_DIR/runtime-pid-$name.txt"
       return 0
     fi
@@ -204,7 +202,7 @@ wait_for_runtime_survival_status() {
 
 start_runtime_survival_proof() {
   log "starting old fixture runtime for failed-update survival proof"
-  run_smoke_cli start --debug > "$EVIDENCE_DIR/runtime-start.txt" 2>&1
+  run_smoke_cli start > "$EVIDENCE_DIR/runtime-start.txt" 2>&1
   wait_for_runtime_survival_status before "$OLD_VERSION"
 }
 

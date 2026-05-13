@@ -3,7 +3,11 @@ version = "0.1.65"
 previous_version = "0.1.64"
 tag = "v0.1.65"
 update_class = "mandatory"
+approved_by = "paul"
+reason = "blessed_professional_update_train"
+reason_detail = "0.1.65 is the blessed professional-app release for the Sparkle update and permissions setup flywheel. It proves the manifest-driven protected release train, signed/notarized publication, redacted evidence, and public-feed automatic update from 0.1.64."
 minimum_autoupdate_version = "0.1.64"
+minimum_update_version = ""
 critical_update_version = "0.1.65"
 public_appcast_url = "https://github.com/hapticasensorics/1context/releases/latest/download/appcast.xml"
 stable_dmg_name = "1Context.dmg"
@@ -11,7 +15,7 @@ required_proofs = [
   "clean_tree",
   "release_manifest",
   "version_consistency",
-  "update_policy",
+  "release_policy",
   "full_tests",
   "package_smoke",
   "asset_audit",
@@ -30,6 +34,19 @@ required_runner_labels = [
 [release_notes_policy]
 show_in_update_window = false
 public_notes_file = "RELEASE_NOTES.md"
+
+[update_ui.optional_prompt]
+title = "Update 1Context?"
+body = "A 1Context update is ready."
+
+[update_ui.failure_message]
+title = "Update failed."
+body = "Please contact support at paul@haptica.ai."
+
+[update_ui.post_install_message]
+enabled = false
+title = "1Context Improved!"
+body = ""
 
 [evidence_redaction_policy]
 require_redaction = true

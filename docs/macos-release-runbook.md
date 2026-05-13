@@ -23,32 +23,26 @@ The app is the user-facing product surface. The CLI is support and automation.
 
 - `OneContextInstall` owns app placement and relaunch into `/Applications`.
 - `OneContextSetup` owns required setup readiness.
-- `OneContextPermissions` owns future sensitive permission snapshots without
-  making the CLI the TCC permission owner.
 - `OneContextLocalWeb` owns Caddy, local HTTPS, helper registration, and wiki
   health.
 - `OneContextUpdate` owns update policy, appcast configuration, and diagnostics;
   `OneContextSparkleUpdate` owns the actual Sparkle framework controller.
-- `OneContextMemoryCore` is reached through a bounded subprocess contract.
 
-See [macos-app-architecture.md](macos-app-architecture.md),
-[local-web-contract.md](local-web-contract.md), and
-[memory-core-contract.md](memory-core-contract.md) for the detailed contracts.
+See [macos-app-architecture.md](macos-app-architecture.md) and
+[local-web-contract.md](local-web-contract.md) for the detailed contracts.
 
 ## Release Package
 
 Local ad-hoc package:
 
 ```bash
-ALLOW_UNNOTARIZED=1 NOTARIZE=0 ./scripts/package-macos-release.sh
+./scripts/package-macos-smoke.sh
 ```
 
 Production package:
 
 ```bash
-ONECONTEXT_SPARKLE_FEED_URL="https://github.com/hapticasensorics/1context/releases/latest/download/appcast.xml" \
-SPARKLE_DOWNLOAD_URL_PREFIX="https://github.com/hapticasensorics/1context/releases/download/v$(cat VERSION)/" \
-./scripts/package-macos-production-release.sh
+./scripts/release-train.sh package
 ```
 
 The production path signs and notarizes the app and DMG, staples both, validates
@@ -61,32 +55,24 @@ Run these before treating a release candidate as locally proved:
 
 ```bash
 ./scripts/check-version-consistency.sh
-./scripts/check-update-policy.sh
+./scripts/release-train.sh validate
 swift test --package-path macos
 ./scripts/test.sh
-./scripts/test-upgrade-paths.sh
-ALLOW_UNNOTARIZED=1 NOTARIZE=0 ./scripts/package-macos-release.sh
+./scripts/package-macos-smoke.sh
 ./scripts/test-launch-agent-package.sh
-```
-
-For memory-core changes:
-
-```bash
-cd memory-core
-uv run --with pytest pytest
 ```
 
 For release/update policy changes, also validate the generated appcast and
 release assets:
 
 ```bash
-./scripts/audit-github-release-assets.sh v$(cat VERSION)
+./scripts/release-train.sh audit
 ```
 
 ## Update Policy
 
-Founder-controlled policy lives in [update_policy.html](update_policy.html) and
-`release/update-policy.toml`.
+Founder-controlled policy lives in [update_policy.html](update_policy.html) for
+human review and `release/release.toml` for machine release truth.
 
 Mandatory releases may interrupt active use and should auto-install/relaunch as
 soon as Sparkle can safely do so. Optional releases should stay quiet until the
@@ -112,18 +98,12 @@ See [ci/self-hosted-mac-runner.md](ci/self-hosted-mac-runner.md).
 Routine request:
 
 ```bash
-./scripts/request-release-proof.sh --dry-run
-./scripts/request-release-proof.sh \
-  --dispatch \
-  --watch \
-  --download-artifacts \
-  --ref v$(cat VERSION) \
-  --proof-reason "routine mandatory release proof for $(cat VERSION)"
+./scripts/release-train.sh prove --dry-run
+./scripts/release-train.sh prove
 ```
 
 The wrapper resolves the new version, update class, public appcast URL, and
-mandatory old-version baseline from `VERSION` and `release/update-policy.toml`.
-Pass `--old-version` for optional releases.
+mandatory old-version baseline from `release/release.toml`.
 
 ## Clean-machine Acceptance
 
@@ -142,9 +122,7 @@ Useful local harnesses:
 
 ```bash
 ./scripts/harness-macos-clean-machine-checklist.sh
-./scripts/harness-macos-install-prompt.sh
 ./scripts/harness-macos-setup-flow.sh
-./scripts/test-macos-install-move-local.sh
 ./scripts/test-macos-uninstall-command.sh
 ```
 

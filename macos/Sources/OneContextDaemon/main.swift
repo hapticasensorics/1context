@@ -1,9 +1,9 @@
 import Foundation
 import Darwin
-import OneContextAgent
+import OneContextCore
 import OneContextLocalWeb
-import OneContextMemoryCore
-import OneContextRuntimeSupport
+import OneContextPlatform
+import OneContextProtocol
 import OneContextSetup
 
 nonisolated(unsafe) private var signalSocketPath: UnsafeMutablePointer<CChar>?
@@ -71,7 +71,6 @@ final class OneContextDaemon: @unchecked Sendable {
   private var listenFD: Int32 = -1
   private lazy var logger = Logger(path: paths.logPath)
   private lazy var localWeb = CaddyManager(runtimePaths: paths)
-  private lazy var wikiPublisher = WikiSitePublisher()
   private lazy var wikiAPI = WikiLocalAPIServer(
     config: WikiLocalAPIConfig(environment: ProcessInfo.processInfo.environment),
     handler: WikiLocalAPIHandler(paths: LocalWebPaths(runtimePaths: paths), renderState: { [weak self] in
@@ -277,14 +276,12 @@ final class OneContextDaemon: @unchecked Sendable {
       return encode(result: ["version": oneContextVersion], id: id)
     case "wiki.status":
       let snapshot = wikiStatus()
-      recordAgentWikiURL(snapshot)
       return encode(result: wikiPayload(snapshot), id: id)
     case "wiki.start":
       logger.write("wiki.start requested")
       let current = wikiStatus()
       if current.running {
         logger.write("wiki.start already running")
-        recordAgentWikiURL(current)
         return encode(result: wikiPayload(current), id: id)
       }
       publishWikiInBackground(refresh: false)
@@ -378,20 +375,11 @@ final class OneContextDaemon: @unchecked Sendable {
         wikiStateLock.unlock()
       }
       do {
-        let webPaths = LocalWebPaths(runtimePaths: paths)
-        _ = try wikiPublisher.publish(
-          paths: WikiSitePublishPaths(
-            current: webPaths.wikiCurrent,
-            next: webPaths.wikiNext,
-            previous: webPaths.wikiPrevious
-          ),
-          refresh: refresh
-        )
+        try localWeb.ensurePlaceholderSite()
         let snapshot = localWeb.status()
-        recordAgentWikiURL(snapshot)
-        logger.write("wiki published refresh=\(refresh) url=\(snapshot.url)")
+        logger.write("wiki site ready refresh=\(refresh) url=\(snapshot.url)")
       } catch {
-        logger.write("wiki publish failed refresh=\(refresh): \(error.localizedDescription)")
+        logger.write("wiki site prepare failed refresh=\(refresh): \(error.localizedDescription)")
       }
     }
   }
@@ -426,18 +414,6 @@ final class OneContextDaemon: @unchecked Sendable {
       payload["lastError"] = lastError
     }
     return payload
-  }
-
-  private func writeAgentWikiURL(_ url: String) throws {
-    try AgentConfigStore.writeWikiURL(url, paths: AgentPaths.current())
-  }
-
-  private func recordAgentWikiURL(_ snapshot: LocalWebSnapshot) {
-    do {
-      try writeAgentWikiURL(snapshot.url)
-    } catch {
-      logger.write("agent wiki URL update failed: \(error.localizedDescription)")
-    }
   }
 
   private func encode(result: [String: Any], id: Any) -> Data {

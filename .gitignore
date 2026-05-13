@@ -9,5 +9,7 @@ memory-core/.venv/
 memory-core/.pytest_cache/
 memory-core/**/__pycache__/
 memory-core/memory/runtime/
+memory-core/wiki/generated/
+memory-core/wiki/menu/**/generated/
 memory-core/storage/lakestore/*.lance/
 memory-core/wiki-engine/node_modules/

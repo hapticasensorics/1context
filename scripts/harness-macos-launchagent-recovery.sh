@@ -24,7 +24,8 @@ fail() {
 
 capture_status() {
   local name="$1"
-  "$CLI" status --debug > "$EVIDENCE_DIR/status-$name.txt" 2>&1 || true
+  "$CLI" status > "$EVIDENCE_DIR/status-$name.txt" 2>&1 || true
+  "$CLI" diagnose > "$EVIDENCE_DIR/diagnose-$name.txt" 2>&1 || true
   launchctl print "gui/$(id -u)/$LABEL_RUNTIME" > "$EVIDENCE_DIR/launchctl-runtime-$name.txt" 2>&1 || true
   launchctl print "gui/$(id -u)/$LABEL_MENU" > "$EVIDENCE_DIR/launchctl-menu-$name.txt" 2>&1 || true
   capture_menu "$EVIDENCE_DIR/menu-$name.txt"
@@ -39,14 +40,15 @@ capture_status() {
 assert_healthy() {
   local name="$1"
   local status="$EVIDENCE_DIR/status-$name.txt"
+  local diagnose="$EVIDENCE_DIR/diagnose-$name.txt"
   grep -q "1Context is running." "$status" || fail "$name did not report running"
   grep -q "Version: $EXPECTED_VERSION" "$status" || fail "$name did not report version $EXPECTED_VERSION"
   grep -q "Health: OK" "$status" || fail "$name health was not OK"
   grep -q "Menu Bar: running" "$status" || fail "$name menu bar was not running"
-  grep -q "LaunchAgent: loaded" "$status" || fail "$name runtime LaunchAgent was not loaded"
-  grep -q "Socket: responding" "$status" || fail "$name runtime socket was not responding"
-  grep -q "  Health: OK" "$status" || fail "$name local web health was not OK"
-  grep -q "  Setup Ready: yes" "$status" || fail "$name setup was not ready"
+  grep -q "LaunchAgents:" "$diagnose" || fail "$name launch agent diagnostics were missing"
+  grep -q "Runtime Version: $EXPECTED_VERSION" "$diagnose" || fail "$name runtime diagnostics did not report version $EXPECTED_VERSION"
+  grep -q "  Health: OK" "$diagnose" || fail "$name local web health was not OK"
+  grep -q "  Setup Ready: yes" "$diagnose" || fail "$name setup was not ready"
   grep -Fq "Version $EXPECTED_VERSION" "$EVIDENCE_DIR/menu-$name.txt" || fail "$name menu did not expose Settings version"
   grep -Fq "Check for Updates" "$EVIDENCE_DIR/menu-$name.txt" || fail "$name menu did not expose Check for Updates"
 }
@@ -57,15 +59,17 @@ wait_for_healthy() {
   local attempt=0
   while true; do
     attempt=$((attempt + 1))
-    "$CLI" status --debug > "$EVIDENCE_DIR/status-$name-attempt-$attempt.txt" 2>&1 || true
+    "$CLI" status > "$EVIDENCE_DIR/status-$name-attempt-$attempt.txt" 2>&1 || true
+    "$CLI" diagnose > "$EVIDENCE_DIR/diagnose-$name-attempt-$attempt.txt" 2>&1 || true
     if grep -q "1Context is running." "$EVIDENCE_DIR/status-$name-attempt-$attempt.txt" &&
       grep -q "Version: $EXPECTED_VERSION" "$EVIDENCE_DIR/status-$name-attempt-$attempt.txt" &&
       grep -q "Health: OK" "$EVIDENCE_DIR/status-$name-attempt-$attempt.txt" &&
       grep -q "Menu Bar: running" "$EVIDENCE_DIR/status-$name-attempt-$attempt.txt" &&
-      grep -q "Socket: responding" "$EVIDENCE_DIR/status-$name-attempt-$attempt.txt" &&
-      grep -q "  Health: OK" "$EVIDENCE_DIR/status-$name-attempt-$attempt.txt" &&
-      grep -q "  Setup Ready: yes" "$EVIDENCE_DIR/status-$name-attempt-$attempt.txt"; then
+      grep -q "Runtime Version: $EXPECTED_VERSION" "$EVIDENCE_DIR/diagnose-$name-attempt-$attempt.txt" &&
+      grep -q "  Health: OK" "$EVIDENCE_DIR/diagnose-$name-attempt-$attempt.txt" &&
+      grep -q "  Setup Ready: yes" "$EVIDENCE_DIR/diagnose-$name-attempt-$attempt.txt"; then
       cp "$EVIDENCE_DIR/status-$name-attempt-$attempt.txt" "$EVIDENCE_DIR/status-$name.txt"
+      cp "$EVIDENCE_DIR/diagnose-$name-attempt-$attempt.txt" "$EVIDENCE_DIR/diagnose-$name.txt"
       capture_status "$name"
       assert_healthy "$name"
       return

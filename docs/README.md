@@ -6,10 +6,13 @@ that operators and contributors should use.
 
 ## Start Here
 
+- [Delete Bloat Goal](goals/1context-delete-bloat-goal.md): active priority for
+  deleting old release paths, compatibility shims, stale docs, generated state,
+  and product test hooks before adding more release machinery.
 - [macOS Release Runbook](macos-release-runbook.md): current release packaging,
   local proof, update policy, and self-hosted Mac proof guidance.
 - [Development And Release Notes](development.md): maintainer details for local
-  files, hooks, memory-core adapter, local web, tests, and packaging.
+  files, local web, tests, and packaging.
 - [Update Policy](update_policy.html): founder-controlled policy for mandatory
   and optional updates, updater copy, failure copy, menu behavior, and rare
   post-install messages.
@@ -21,19 +24,11 @@ that operators and contributors should use.
   permissions, update, install, and local-web boundaries.
 - [Local Web Contract](local-web-contract.md): local HTTPS, Caddy, static wiki
   publication, daemon API, cloud compatibility, and user-wiki boundaries.
-- [Memory Core Contract](memory-core-contract.md): bounded JSON subprocess
-  bridge between the public Swift shell and the Python memory engine.
+- [Wiki Productionization Spec](wiki-productionization.md): where wiki source,
+  default templates, generated files, and served local-web artifacts live in the
+  repo and on an installed Mac.
 - [Permissions](../PERMISSIONS.md): ownership, consent, storage, privacy, and
   diagnostic invariants.
-
-## Subsystems
-
-- [Memory Core](../memory-core/README.md): Python memory engine boundary and
-  public Swift adapter entry point.
-- [Wiki Workspace](../memory-core/wiki/README.md): file layout, publication
-  boundary, and user-wiki policy.
-- [Wiki Engine](../memory-core/wiki-engine/README.md): Node renderer, theme,
-  manifests, and future package boundary.
 
 ## CI And Proof
 

@@ -5,25 +5,171 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 TMP_DIR="$(mktemp -d /tmp/1ctx-release-train-XXXXXX)"
 trap 'rm -rf "$TMP_DIR"' EXIT
 VERSION="$(tr -d '[:space:]' < "$ROOT/VERSION")"
+eval "$("$ROOT/scripts/release-manifest.py" export-env)"
+PREVIOUS_VERSION="$ONECONTEXT_RELEASE_PREVIOUS_VERSION"
+
+write_appcast() {
+  local path="$1"
+  local critical="$2"
+  local description="$3"
+  local minimum_autoupdate="${4:-}"
+  local enclosure_url="https://github.com/hapticasensorics/1context/releases/download/v$VERSION/1Context-$VERSION-macos-arm64.dmg"
+  local enclosure_length="12345"
+  local ed_signature="fixture-signature"
+  local minimum_autoupdate_xml=""
+  local length_attr=""
+  local signature_attr=""
+  local enclosure_xml=""
+  if [[ $# -ge 5 ]]; then
+    enclosure_url="$5"
+  fi
+  if [[ $# -ge 6 ]]; then
+    enclosure_length="$6"
+  fi
+  if [[ $# -ge 7 ]]; then
+    ed_signature="$7"
+  fi
+  if [[ -n "$minimum_autoupdate" ]]; then
+    minimum_autoupdate_xml="      <sparkle:minimumAutoupdateVersion>$minimum_autoupdate</sparkle:minimumAutoupdateVersion>"
+  fi
+  if [[ -n "$enclosure_length" ]]; then
+    length_attr=" length=\"$enclosure_length\""
+  fi
+  if [[ -n "$ed_signature" ]]; then
+    signature_attr=" sparkle:edSignature=\"$ed_signature\""
+  fi
+  if [[ "$enclosure_url" != "__none__" ]]; then
+    enclosure_xml="      <enclosure url=\"$enclosure_url\"$length_attr type=\"application/octet-stream\"$signature_attr/>"
+  fi
+  cat > "$path" <<XML
+<?xml version="1.0" encoding="utf-8"?>
+<rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">
+  <channel>
+    <item>
+      <title>1Context $VERSION</title>
+      <sparkle:version>$VERSION</sparkle:version>
+$minimum_autoupdate_xml
+$critical
+$description
+$enclosure_xml
+    </item>
+  </channel>
+</rss>
+XML
+}
+
+write_optional_manifest() {
+  local path="$1"
+  cp "$ROOT/release/release.toml" "$path"
+  python3 - "$path" "$VERSION" "$PREVIOUS_VERSION" <<'PY'
+import sys
+from pathlib import Path
+
+path = Path(sys.argv[1])
+version = sys.argv[2]
+previous = sys.argv[3]
+text = path.read_text(encoding="utf-8")
+text = text.replace('update_class = "mandatory"', 'update_class = "optional"', 1)
+text = text.replace(f'minimum_autoupdate_version = "{previous}"', 'minimum_autoupdate_version = ""', 1)
+text = text.replace(f'critical_update_version = "{version}"', 'critical_update_version = ""', 1)
+path.write_text(text, encoding="utf-8")
+PY
+}
 
 bash -n \
   "$ROOT/scripts/check-release-manifest.sh" \
   "$ROOT/scripts/release-train.sh" \
   "$ROOT/scripts/redact-evidence.sh" \
   "$ROOT/scripts/audit-evidence-redaction.sh" \
+  "$ROOT/scripts/lib-gui-evidence.sh" \
   "$ROOT/scripts/write-runner-attestation.sh" \
-  "$ROOT/scripts/package-macos-production-release.sh"
+  "$ROOT/scripts/package-macos-smoke.sh"
 python3 -m py_compile "$ROOT/scripts/release-manifest.py"
 
 "$ROOT/scripts/check-release-manifest.sh"
 test "$("$ROOT/scripts/release-manifest.py" matrix-cases | wc -l | tr -d '[:space:]')" = "13"
 "$ROOT/scripts/release-manifest.py" matrix-cases | grep -q "^login_restart_recovery$"
 
-if "$ROOT/scripts/package-macos-production-release.sh" > "$TMP_DIR/package-guard.out" 2>&1; then
-  echo "production package script should require release-train.sh." >&2
+MANDATORY_OK="$TMP_DIR/mandatory-ok.xml"
+MANDATORY_WITH_NOTES="$TMP_DIR/mandatory-with-notes.xml"
+MANDATORY_WRONG_CRITICAL="$TMP_DIR/mandatory-wrong-critical.xml"
+MANDATORY_FOREIGN_URL="$TMP_DIR/mandatory-foreign-url.xml"
+MANDATORY_MISSING_SIGNATURE="$TMP_DIR/mandatory-missing-signature.xml"
+MANDATORY_MISSING_ENCLOSURE="$TMP_DIR/mandatory-missing-enclosure.xml"
+MANDATORY_MISSING_LENGTH="$TMP_DIR/mandatory-missing-length.xml"
+MANDATORY_STALE_MINIMUM="$TMP_DIR/mandatory-stale-minimum.xml"
+OPTIONAL_OK="$TMP_DIR/optional-ok.xml"
+OPTIONAL_WITH_CRITICAL="$TMP_DIR/optional-with-critical.xml"
+OPTIONAL_MANIFEST="$TMP_DIR/optional-release.toml"
+
+write_appcast "$MANDATORY_OK" "      <sparkle:criticalUpdate sparkle:version=\"$VERSION\"/>" "" "$PREVIOUS_VERSION"
+write_appcast "$MANDATORY_WITH_NOTES" "      <sparkle:criticalUpdate sparkle:version=\"$VERSION\"/>" "      <description>Builder journal notes should not be shown.</description>" "$PREVIOUS_VERSION"
+write_appcast "$MANDATORY_WRONG_CRITICAL" "      <sparkle:criticalUpdate sparkle:version=\"0.1.99\"/>" "" "$PREVIOUS_VERSION"
+write_appcast "$MANDATORY_FOREIGN_URL" "      <sparkle:criticalUpdate sparkle:version=\"$VERSION\"/>" "" "$PREVIOUS_VERSION" "https://example.test/1Context-$VERSION-macos-arm64.dmg"
+write_appcast "$MANDATORY_MISSING_SIGNATURE" "      <sparkle:criticalUpdate sparkle:version=\"$VERSION\"/>" "" "$PREVIOUS_VERSION" "https://github.com/hapticasensorics/1context/releases/download/v$VERSION/1Context-$VERSION-macos-arm64.dmg" "12345" ""
+write_appcast "$MANDATORY_MISSING_ENCLOSURE" "      <sparkle:criticalUpdate sparkle:version=\"$VERSION\"/>" "" "$PREVIOUS_VERSION" "__none__"
+write_appcast "$MANDATORY_MISSING_LENGTH" "      <sparkle:criticalUpdate sparkle:version=\"$VERSION\"/>" "" "$PREVIOUS_VERSION" "https://github.com/hapticasensorics/1context/releases/download/v$VERSION/1Context-$VERSION-macos-arm64.dmg" "" "fixture-signature"
+write_appcast "$MANDATORY_STALE_MINIMUM" "      <sparkle:criticalUpdate sparkle:version=\"$VERSION\"/>" "" "0.1.58"
+write_appcast "$OPTIONAL_OK" "" ""
+write_appcast "$OPTIONAL_WITH_CRITICAL" "      <sparkle:criticalUpdate sparkle:version=\"$VERSION\"/>" ""
+write_optional_manifest "$OPTIONAL_MANIFEST"
+
+"$ROOT/scripts/release-manifest.py" validate --appcast "$MANDATORY_OK"
+
+if "$ROOT/scripts/release-manifest.py" validate --appcast "$MANDATORY_WITH_NOTES" >/dev/null 2>&1; then
+  echo "Mandatory release policy should reject appcast descriptions when release notes are hidden." >&2
   exit 1
 fi
-grep -q "release-train.sh package" "$TMP_DIR/package-guard.out"
+if "$ROOT/scripts/release-manifest.py" validate --appcast "$MANDATORY_WRONG_CRITICAL" >/dev/null 2>&1; then
+  echo "Mandatory release policy should reject wrong critical update versions." >&2
+  exit 1
+fi
+if "$ROOT/scripts/release-manifest.py" validate --appcast "$MANDATORY_FOREIGN_URL" >/dev/null 2>&1; then
+  echo "Mandatory release policy should reject foreign enclosure URLs." >&2
+  exit 1
+fi
+if "$ROOT/scripts/release-manifest.py" validate --appcast "$MANDATORY_MISSING_SIGNATURE" >/dev/null 2>&1; then
+  echo "Mandatory release policy should reject missing EdDSA signatures." >&2
+  exit 1
+fi
+if "$ROOT/scripts/release-manifest.py" validate --appcast "$MANDATORY_MISSING_ENCLOSURE" >/dev/null 2>&1; then
+  echo "Mandatory release policy should reject missing enclosures." >&2
+  exit 1
+fi
+if "$ROOT/scripts/release-manifest.py" validate --appcast "$MANDATORY_MISSING_LENGTH" >/dev/null 2>&1; then
+  echo "Mandatory release policy should reject missing enclosure lengths." >&2
+  exit 1
+fi
+if "$ROOT/scripts/release-manifest.py" validate --appcast "$MANDATORY_STALE_MINIMUM" >/dev/null 2>&1; then
+  echo "Mandatory release policy should reject stale minimum autoupdate versions." >&2
+  exit 1
+fi
+
+"$ROOT/scripts/release-manifest.py" validate --manifest "$OPTIONAL_MANIFEST" --appcast "$OPTIONAL_OK"
+
+if "$ROOT/scripts/release-manifest.py" validate --manifest "$OPTIONAL_MANIFEST" --appcast "$OPTIONAL_WITH_CRITICAL" >/dev/null 2>&1; then
+  echo "Optional release policy should reject critical update metadata." >&2
+  exit 1
+fi
+
+test ! -e "$ROOT/scripts/package-macos-production-release.sh"
+test ! -e "$ROOT/scripts/package-macos-release.sh"
+
+ONECONTEXT_RELEASE_EVIDENCE_DIR="$TMP_DIR/proof-evidence" \
+  "$ROOT/scripts/release-train.sh" prove --dry-run --ref main --proof-reason "fixture proof" \
+  > "$TMP_DIR/prove-dry-run.out"
+grep -q "mode: dry-run" "$TMP_DIR/prove-dry-run.out"
+grep -q "old_version: $PREVIOUS_VERSION" "$TMP_DIR/prove-dry-run.out"
+grep -q "new_version: $VERSION" "$TMP_DIR/prove-dry-run.out"
+grep -q "workflow run self-hosted-mac-update-proof.yml" "$TMP_DIR/prove-dry-run.out"
+grep -q "proof_reason=fixture\\\\ proof" "$TMP_DIR/prove-dry-run.out"
+
+if ONECONTEXT_RELEASE_EVIDENCE_DIR="$TMP_DIR/proof-evidence-bad-ref" \
+  "$ROOT/scripts/release-train.sh" prove --dry-run --ref feature/nope > "$TMP_DIR/prove-bad-ref.out" 2>&1; then
+  echo "release train proof dry-run should reject untrusted refs" >&2
+  exit 1
+fi
+grep -q "not allowed for the self-hosted runner" "$TMP_DIR/prove-bad-ref.out"
 
 bad_manifest="$TMP_DIR/release-bad-version.toml"
 cp "$ROOT/release/release.toml" "$bad_manifest"
@@ -131,6 +277,6 @@ if grep -q "/Users/paulhan" "$evidence_dir/raw.txt"; then
   exit 1
 fi
 grep -q '"status": "passed"' "$evidence_dir/redaction-report.json"
-grep -q '"redaction_status": "passed"' "$evidence_dir/proof-results/case.json"
+grep -q '"redaction_status": "pending"' "$evidence_dir/proof-results/case.json"
 
 echo "1Context release train checks passed."

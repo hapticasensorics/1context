@@ -204,41 +204,20 @@ final class LocalWebTests: XCTestCase {
     }
   }
 
-  func testPlaceholderSiteSeedsUserFacingBundledWikiFamilies() throws {
+  func testPlaceholderSiteUsesPlaceholderPagesInsteadOfGeneratedSourceWiki() throws {
     let root = temporaryRoot()
     let paths = testRuntimePaths(root: root)
     let web = LocalWebPaths(runtimePaths: paths)
     let manager = CaddyManager(runtimePaths: paths, environment: [
-      "ONECONTEXT_WIKI_URL_MODE": "high-port-http",
-      "ONECONTEXT_MEMORY_CORE_BUNDLE_DIR": repoRoot().appendingPathComponent("memory-core", isDirectory: true).path
+      "ONECONTEXT_WIKI_URL_MODE": "high-port-http"
     ])
 
     try manager.ensurePlaceholderSite()
 
     XCTAssertTrue(FileManager.default.fileExists(atPath: web.wikiCurrent.appendingPathComponent("your-context.html").path))
     XCTAssertTrue(FileManager.default.fileExists(atPath: web.wikiCurrent.appendingPathComponent("for-you.html").path))
-    XCTAssertTrue(FileManager.default.fileExists(atPath: web.wikiCurrent.appendingPathComponent("projects.html").path))
-    XCTAssertTrue(FileManager.default.fileExists(atPath: web.wikiCurrent.appendingPathComponent("topics.html").path))
-    XCTAssertFalse(FileManager.default.fileExists(atPath: web.wikiCurrent.appendingPathComponent("goal.html").path))
-    XCTAssertFalse(FileManager.default.fileExists(atPath: web.wikiCurrent.appendingPathComponent("goal.md").path))
-    XCTAssertFalse(FileManager.default.fileExists(atPath: web.wikiCurrent.appendingPathComponent("your-context.md").path))
-    XCTAssertFalse(FileManager.default.fileExists(atPath: web.wikiCurrent.appendingPathComponent("render-manifest.json").path))
-  }
-
-  func testPlaceholderSiteSkipsOperatorPolicySeedFamilies() throws {
-    let root = temporaryRoot()
-    let bundle = try writeSeedBundleWithOperatorGoal(root: root)
-    let paths = testRuntimePaths(root: root)
-    let web = LocalWebPaths(runtimePaths: paths)
-    let manager = CaddyManager(runtimePaths: paths, environment: [
-      "ONECONTEXT_WIKI_URL_MODE": "high-port-http",
-      "ONECONTEXT_MEMORY_CORE_BUNDLE_DIR": bundle.path
-    ])
-
-    try manager.ensurePlaceholderSite()
-
-    XCTAssertTrue(FileManager.default.fileExists(atPath: web.wikiCurrent.appendingPathComponent("your-context.html").path))
-    XCTAssertTrue(FileManager.default.fileExists(atPath: web.wikiCurrent.appendingPathComponent("for-you.html").path))
+    XCTAssertFalse(FileManager.default.fileExists(atPath: web.wikiCurrent.appendingPathComponent("projects.html").path))
+    XCTAssertFalse(FileManager.default.fileExists(atPath: web.wikiCurrent.appendingPathComponent("topics.html").path))
     XCTAssertFalse(FileManager.default.fileExists(atPath: web.wikiCurrent.appendingPathComponent("goal.html").path))
     XCTAssertFalse(FileManager.default.fileExists(atPath: web.wikiCurrent.appendingPathComponent("goal.md").path))
     XCTAssertFalse(FileManager.default.fileExists(atPath: web.wikiCurrent.appendingPathComponent("your-context.md").path))
@@ -410,17 +389,15 @@ final class LocalWebTests: XCTestCase {
     XCTAssertEqual(rejected.statusCode, 413)
   }
 
-  func testWikiLocalAPIChatConfigIsGracefulUnavailableShell() throws {
+  func testWikiLocalAPIRejectsUnshippedChatRoutes() throws {
     let web = LocalWebPaths(runtimePaths: testRuntimePaths(root: temporaryRoot()))
     let handler = WikiLocalAPIHandler(paths: web)
 
-    let config = try XCTUnwrap(json(handler.handle(WikiLocalAPIRequest(method: "GET", path: "/api/wiki/chat/config"))))
-    let chat = try XCTUnwrap(json(handler.handle(WikiLocalAPIRequest(method: "POST", path: "/api/wiki/chat", body: Data(#"{"message":"hello"}"#.utf8)))))
+    let config = handler.handle(WikiLocalAPIRequest(method: "GET", path: "/api/wiki/chat/config"))
+    let chat = handler.handle(WikiLocalAPIRequest(method: "POST", path: "/api/wiki/chat", body: Data(#"{"message":"hello"}"#.utf8)))
 
-    XCTAssertEqual(config["enabled"] as? Bool, false)
-    XCTAssertEqual(config["chat_available"] as? Bool, false)
-    XCTAssertEqual(chat["enabled"] as? Bool, false)
-    XCTAssertTrue((chat["text"] as? String ?? "").contains("not enabled"))
+    XCTAssertEqual(config.statusCode, 404)
+    XCTAssertEqual(chat.statusCode, 404)
   }
 
   private func temporaryRoot() -> URL {
@@ -479,43 +456,6 @@ final class LocalWebTests: XCTestCase {
         trustedRootSHA256: "DEF456"
       )
     )
-  }
-
-  private func repoRoot() -> URL {
-    URL(fileURLWithPath: #filePath)
-      .deletingLastPathComponent()
-      .deletingLastPathComponent()
-      .deletingLastPathComponent()
-      .deletingLastPathComponent()
-  }
-
-  private func writeSeedBundleWithOperatorGoal(root: URL) throws -> URL {
-    let bundle = root.appendingPathComponent("bundle-memory-core", isDirectory: true)
-    let forYou = bundle.appendingPathComponent("wiki/menu/10-for-you/10-for-you", isDirectory: true)
-    let goal = bundle.appendingPathComponent("wiki/menu/99-operator/10-goal", isDirectory: true)
-    try FileManager.default.createDirectory(at: forYou.appendingPathComponent("generated", isDirectory: true), withIntermediateDirectories: true)
-    try FileManager.default.createDirectory(at: goal.appendingPathComponent("generated", isDirectory: true), withIntermediateDirectories: true)
-    try FileManager.default.createDirectory(at: bundle.appendingPathComponent("wiki-engine/theme/css", isDirectory: true), withIntermediateDirectories: true)
-    try FileManager.default.createDirectory(at: bundle.appendingPathComponent("wiki-engine/theme/js", isDirectory: true), withIntermediateDirectories: true)
-    try "body {}\n".write(to: bundle.appendingPathComponent("wiki-engine/theme/css/theme.css"), atomically: true, encoding: .utf8)
-    try "window.__onecontext = true;\n".write(to: bundle.appendingPathComponent("wiki-engine/theme/js/enhance.js"), atomically: true, encoding: .utf8)
-    try "id = \"for-you\"\n".write(to: forYou.appendingPathComponent("family.toml"), atomically: true, encoding: .utf8)
-    try """
-    id = "goal"
-    label = "Goal"
-    route = "/goal"
-
-    [policies]
-    publish_to_user_wiki = false
-    audience = "operator"
-    """.write(to: goal.appendingPathComponent("family.toml"), atomically: true, encoding: .utf8)
-    try "<html>Your Context</html>\n".write(to: forYou.appendingPathComponent("generated/your-context.html"), atomically: true, encoding: .utf8)
-    try "# Your Context\n".write(to: forYou.appendingPathComponent("generated/your-context.md"), atomically: true, encoding: .utf8)
-    try "{\"source\":\"/Users/paulhan/dev/1context-public-launch\"}\n".write(to: forYou.appendingPathComponent("generated/render-manifest.json"), atomically: true, encoding: .utf8)
-    try "<html>For You</html>\n".write(to: forYou.appendingPathComponent("generated/for-you-2026-05-10.html"), atomically: true, encoding: .utf8)
-    try "<html>Goal</html>\n".write(to: goal.appendingPathComponent("generated/goal.html"), atomically: true, encoding: .utf8)
-    try "# Goal\n".write(to: goal.appendingPathComponent("generated/goal.md"), atomically: true, encoding: .utf8)
-    return bundle
   }
 
   private func writeJSON(_ payload: [String: Any], to url: URL) throws {

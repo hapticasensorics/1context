@@ -60,7 +60,7 @@ PY
 
 log "downloading appcast.xml"
 gh release download "$TAG" --repo "$REPO" --pattern appcast.xml --dir "$WORK_DIR" --clobber >/dev/null
-"$ROOT/scripts/check-update-policy.sh" --appcast "$WORK_DIR/appcast.xml"
+"$ROOT/scripts/release-manifest.py" validate --appcast "$WORK_DIR/appcast.xml"
 
 if ! [[ "$PROBES" =~ ^[0-9]+$ ]] || (( PROBES < 1 )); then
   echo "ONECONTEXT_RELEASE_AUDIT_PROBES must be a positive integer." >&2
@@ -78,7 +78,7 @@ for ((probe = 1; probe <= PROBES; probe++)); do
     sleep "$PROBE_INTERVAL_SECONDS"
   fi
   if curl --fail --location --silent --show-error "$LATEST_APPCAST_URL" --output "$WORK_DIR/latest-appcast.xml" &&
-    "$ROOT/scripts/check-update-policy.sh" --appcast "$WORK_DIR/latest-appcast.xml" &&
+    "$ROOT/scripts/release-manifest.py" validate --appcast "$WORK_DIR/latest-appcast.xml" &&
     cmp -s "$WORK_DIR/appcast.xml" "$WORK_DIR/latest-appcast.xml"; then
     latest_ok=1
     log "latest/download appcast probe $probe/$PROBES passed"

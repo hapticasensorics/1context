@@ -1,10 +1,8 @@
 import Foundation
 import OneContextLocalWeb
-import OneContextPermissions
 
 public struct OneContextAppSetupSnapshot: Codable, Equatable, Sendable {
   public let localWikiAccess: LocalWebSetupSnapshot
-  public let sensitivePermissions: [PermissionSnapshot]
 
   public var requiredReady: Bool {
     localWikiAccess.ready
@@ -18,16 +16,8 @@ public struct OneContextAppSetupSnapshot: Codable, Equatable, Sendable {
     localWikiAccess.ready ? "1Context setup is complete." : localWikiAccess.blockingSummary
   }
 
-  public var shippedPermissionRows: [PermissionSnapshot] {
-    PermissionReadinessModel.shippedSetupSnapshots(from: sensitivePermissions)
-  }
-
-  public init(
-    localWikiAccess: LocalWebSetupSnapshot,
-    sensitivePermissions: [PermissionSnapshot]
-  ) {
+  public init(localWikiAccess: LocalWebSetupSnapshot) {
     self.localWikiAccess = localWikiAccess
-    self.sensitivePermissions = sensitivePermissions
   }
 }
 
@@ -73,46 +63,24 @@ public struct OneContextAppReadinessSnapshot: Codable, Equatable, Sendable {
 }
 
 public enum OneContextAppSetup {
-  public static func current(checkSensitivePermissionsInCurrentProcess: Bool = false) -> OneContextAppSetupSnapshot {
-    snapshot(
-      localWikiAccess: LocalWebSetupInstaller().status(),
-      checkSensitivePermissionsInCurrentProcess: checkSensitivePermissionsInCurrentProcess
-    )
+  public static func current() -> OneContextAppSetupSnapshot {
+    snapshot(localWikiAccess: LocalWebSetupInstaller().status())
   }
 
-  public static func snapshot(
-    localWikiAccess: LocalWebSetupSnapshot,
-    checkSensitivePermissionsInCurrentProcess: Bool = false
-  ) -> OneContextAppSetupSnapshot {
-    let permissions = PermissionReporter(
-      checker: MacOSPermissionChecker(checkCurrentProcess: checkSensitivePermissionsInCurrentProcess)
-    ).snapshots()
-    return OneContextAppSetupSnapshot(
-      localWikiAccess: localWikiAccess,
-      sensitivePermissions: permissions
-    )
+  public static func snapshot(localWikiAccess: LocalWebSetupSnapshot) -> OneContextAppSetupSnapshot {
+    OneContextAppSetupSnapshot(localWikiAccess: localWikiAccess)
   }
 }
 
 public enum OneContextAppReadiness {
   public static func current(
-    localWeb: CaddyManager = CaddyManager(),
-    checkSensitivePermissionsInCurrentProcess: Bool = false
+    localWeb: CaddyManager = CaddyManager()
   ) -> OneContextAppReadinessSnapshot {
-    snapshot(
-      localWebDiagnostics: localWeb.diagnostics(),
-      checkSensitivePermissionsInCurrentProcess: checkSensitivePermissionsInCurrentProcess
-    )
+    snapshot(localWebDiagnostics: localWeb.diagnostics())
   }
 
-  public static func snapshot(
-    localWebDiagnostics: LocalWebDiagnostics,
-    checkSensitivePermissionsInCurrentProcess: Bool = false
-  ) -> OneContextAppReadinessSnapshot {
-    let setup = OneContextAppSetup.snapshot(
-      localWikiAccess: localWebDiagnostics.setup,
-      checkSensitivePermissionsInCurrentProcess: checkSensitivePermissionsInCurrentProcess
-    )
+  public static func snapshot(localWebDiagnostics: LocalWebDiagnostics) -> OneContextAppReadinessSnapshot {
+    let setup = OneContextAppSetup.snapshot(localWikiAccess: localWebDiagnostics.setup)
     let state: OneContextAppReadinessState
     if !setup.requiredReady {
       state = .needsSetup
@@ -132,7 +100,6 @@ public enum OneContextAppReadiness {
 public enum OneContextAppSetupDiagnostics {
   public static func render(
     _ snapshot: OneContextAppSetupSnapshot,
-    includeFutureSensitivePermissions: Bool = false,
     redact: (String) -> String = { $0 }
   ) -> [String] {
     var lines = [
@@ -140,17 +107,6 @@ public enum OneContextAppSetupDiagnostics {
       "Local Wiki URL: \(snapshot.localWikiAccess.targetURL)"
     ]
     lines.append(contentsOf: LocalWebSetupDiagnostics.render(snapshot.localWikiAccess, redact: redact).map {
-      $0.trimmingCharacters(in: .whitespaces)
-    })
-    let permissionRows = includeFutureSensitivePermissions
-      ? snapshot.sensitivePermissions
-      : snapshot.shippedPermissionRows
-    guard !permissionRows.isEmpty else {
-      return lines
-    }
-    lines.append("")
-    lines.append("Sensitive Permissions:")
-    lines.append(contentsOf: PermissionDiagnostics.render(permissionRows).map {
       $0.trimmingCharacters(in: .whitespaces)
     })
     return lines

@@ -66,12 +66,6 @@ public final class LaunchAgentManager {
     }
   }
 
-  public func registerMenu(appPath: String) throws {
-    guard !isDisabled else { return }
-    try ensureNormalUserLifecycle()
-    try installMenu(appPath: appPath)
-  }
-
   public func restart(daemonPath: String) async throws {
     try ensureNormalUserLifecycle()
     try install(daemonPath: daemonPath)

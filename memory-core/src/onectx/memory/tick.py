@@ -1318,53 +1318,6 @@ def terminal_state_for_status(status: str) -> str:
     }.get(status, "failed")
 
 
-def find_transition_contract(
-    system: MemorySystem,
-    *,
-    machine_id: str,
-    scope: str,
-    source_state: str,
-    event_name: str,
-    target_state: str,
-) -> dict[str, Any]:
-    machine = compile_system_map(system)["state_machines"].get(machine_id)
-    if not isinstance(machine, dict):
-        raise MemoryTickError(f"state-machine {machine_id!r} is not available")
-
-    for index, transition in enumerate(machine.get("transitions", []), start=1):
-        if not isinstance(transition, dict):
-            continue
-        source = transition.get("source") if isinstance(transition.get("source"), dict) else {}
-        target_payload = transition.get("target") if isinstance(transition.get("target"), dict) else {}
-        event_payload = transition.get("event") if isinstance(transition.get("event"), dict) else {}
-        if (
-            source.get("scope") == scope
-            and source.get("state") == source_state
-            and target_payload.get("scope") == scope
-            and target_payload.get("state") == target_state
-            and event_payload.get("name") == event_name
-        ):
-            collected = collect_contract_actions(transition.get("actions", []))
-            transition_id = f"{machine_id}.{scope}.{source_state}--{event_name}--{target_state}"
-            return {
-                "machine": machine_id,
-                "scope": scope,
-                "transition": transition_id,
-                "transition_index": index,
-                "event": event_name,
-                "source": {"scope": scope, "state": source_state},
-                "target": {"scope": scope, "state": target_state},
-                "steps": collected["steps"],
-                "expects": collected["expects"],
-                "emits": collected["emits"],
-            }
-
-    raise MemoryTickError(
-        "reader-surface IR contract transition not found: "
-        f"{machine_id}.{scope}.{source_state} --{event_name}--> {target_state}"
-    )
-
-
 def collect_contract_actions(actions: Any) -> dict[str, list[str]]:
     collected: dict[str, list[str]] = {"steps": [], "expects": [], "emits": []}
     if not isinstance(actions, list):

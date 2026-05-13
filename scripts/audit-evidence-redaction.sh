@@ -70,12 +70,5 @@ report_path.write_text(json.dumps({
 }, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 if findings:
   raise SystemExit(f"redaction audit failed with {len(findings)} file(s) containing forbidden evidence")
-for proof in sorted((target / "proof-results").glob("*.json")):
-  try:
-    data = json.loads(proof.read_text(encoding="utf-8"))
-  except (OSError, json.JSONDecodeError):
-    continue
-  data["redaction_status"] = "passed"
-  proof.write_text(json.dumps(data, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 print(f"redaction audit passed: {target}")
 PY

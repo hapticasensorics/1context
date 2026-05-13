@@ -1,10 +1,10 @@
 # 1Context Wiki Web Contract
 
-This contract keeps the public Swift shell protected from the experimental
-memory core while still letting the wiki improve quickly. It is intentionally a
-local-first version of the cloud web contract: the browser sees portable static
-artifacts and stable `/api/wiki/*` routes, while the host adapter can be local
-Swift/Caddy today or cloud CDN/API infrastructure later.
+This contract keeps the public Swift shell small while still letting the wiki
+improve quickly. It is intentionally a local-first version of the cloud web
+contract: the browser sees portable static artifacts and stable `/api/wiki/*`
+routes, while the host adapter can be local Swift/Caddy today or cloud CDN/API
+infrastructure later.
 
 ## Ownership
 
@@ -13,8 +13,7 @@ Swift owns local web infrastructure:
 - starts and stops the packaged Caddy process
 - chooses and reports the canonical local URL
 - writes Caddy config, pid, state, and logs under 1Context app paths
-- publishes the last successful wiki render into `wiki-site/current`
-- keeps `wiki-site/previous` and `wiki-site/next` for atomic publish safety
+- prepares the private local wiki shell in `wiki-site/current`
 - installs or repairs the required local HTTPS setup through an explicit admin
   authorization flow
 
@@ -48,20 +47,17 @@ The Swift daemon owns the local dynamic wiki API:
 - `GET /api/wiki/search?q=...`
 - `GET /api/wiki/bookmarks`
 - `GET`, `PATCH`, and `POST /api/wiki/state`
-- `GET /api/wiki/chat/config`
-- `POST /api/wiki/chat`, `/api/wiki/chat/provider`, and `/api/wiki/chat/reset`
 
 These routes are product contract, not Caddy contract. Browser code should only
 call relative `/api/wiki/*` paths so the same static site can run behind local
 Caddy or a future cloud host.
 
-The Python memory core owns rendering:
+Future memory publication must enter through explicit app-owned artifacts:
 
-- creates or updates wiki source scaffolds
-- renders markdown into themed static HTML and local static JSON artifacts
-- ships only user-facing template/system wiki pages in public release builds
-- never starts a long-lived web server in public release
-- never owns the canonical local URL
+- no bundled source checkout in the signed app
+- no generated developer pages in the installed user wiki
+- no long-lived Python web server in public release
+- no alternate owner for the canonical local URL
 
 Development and operator planning documents belong under `docs/`, not in the
 installed user's wiki. In particular, the release-lockdown checklist that used
@@ -96,35 +92,28 @@ should report the missing requirement instead of starting a fallback web edge.
 Quitting 1Context stops Caddy; uninstall removes the ServiceManagement helper and
 trusted local CA.
 
-The daemon owns remembering work: screen capture, importers, memory jobs, and
-agentic memory orchestration. It also owns the local wiki API adapter because
-search state and future librarian chat belong with memory/runtime state.
-Stopping the daemon must not tear down Caddy; static pages should still load,
-with dynamic API calls degrading cleanly.
+The daemon owns runtime state and the local wiki API adapter. In the current
+public app it prepares a small local wiki shell; future memory publication can
+extend the same static site and `/api/wiki/*` contract without changing the
+local HTTPS edge. Stopping the daemon must not tear down Caddy; static pages
+should still load, with dynamic API calls degrading cleanly.
 
 ## Cloud Compatibility
 
 The local adapter must not leak into the web contract:
 
 - no browser-visible socket paths or loopback-only URLs
-- no Caddy-specific behavior required by `enhance.js`
+- no Caddy-specific behavior required by browser JavaScript
 - no render-on-request behavior from API routes
 - local-only capabilities must be explicit in API capability responses
 - cloud can replace the host adapter with object storage/CDN plus cloud APIs
   without changing page routes or browser API paths
 
-## Agent Hooks
-
-Claude and Codex hooks should read the wiki URL from 1Context-managed config or
-daemon RPC. They should not hardcode ports or start web servers themselves.
-
-Message and context improvements should ship through 1Context updates and
-daemon state, not through separate hook plugin releases.
-
 ## Boundary Rules
 
 - No Python HTTP server in public release.
-- No direct serving from memory-core generated directories.
+- No bundled memory-core source checkout in the app release.
+- No direct serving from generated source directories.
 - No development/operator goal pages in the installed user wiki.
 - No user-installed Caddy dependency; release artifacts bundle Caddy.
 - No port fallback for the canonical product URL.

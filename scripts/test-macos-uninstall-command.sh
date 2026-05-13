@@ -5,9 +5,6 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 OUT_DIR="${TMPDIR:-/tmp}/1context-uninstall-command-test-$$"
 FIXTURE_HOME="$OUT_DIR/home"
 APP="$OUT_DIR/Applications/1Context.app"
-TRASH="$OUT_DIR/Trash"
-CLAUDE_SETTINGS="$OUT_DIR/claude/settings.json"
-CODEX_CONFIG="$OUT_DIR/codex/config.toml"
 TEMP_COMMAND="${TMPDIR:-/tmp}/1context-uninstall-smoke-$$.command"
 
 cleanup() {
@@ -58,7 +55,7 @@ PLIST
 }
 
 seed_fixture_state() {
-  rm -rf "$FIXTURE_HOME" "$TRASH" "$OUT_DIR/system"
+  rm -rf "$FIXTURE_HOME" "$OUT_DIR/system"
   mkdir -p \
     "$FIXTURE_HOME/1Context" \
     "$FIXTURE_HOME/Library/Application Support/1Context/local-web/setup" \
@@ -72,9 +69,7 @@ seed_fixture_state() {
     "$FIXTURE_HOME/Library/Preferences" \
     "$FIXTURE_HOME/Library/Saved Application State/com.haptica.1context.savedState" \
     "$FIXTURE_HOME/Library/WebKit/com.haptica.1context" \
-    "$FIXTURE_HOME/Not1Context" \
-    "$(dirname "$CLAUDE_SETTINGS")" \
-    "$(dirname "$CODEX_CONFIG")"
+    "$FIXTURE_HOME/Not1Context"
   printf 'human wiki content\n' > "$FIXTURE_HOME/1Context/human-wiki-content.md"
   printf 'support state\n' > "$FIXTURE_HOME/Library/Application Support/1Context/config.json"
   printf 'log\n' > "$FIXTURE_HOME/Library/Logs/1Context/1contextd.log"
@@ -95,10 +90,6 @@ seed_fixture_state() {
 
 run_fixture_cli() {
   env \
-    ONECONTEXT_APP_BUNDLE_PATH="$APP" \
-    ONECONTEXT_TEST_APP_BUNDLE_PATH="$APP" \
-    ONECONTEXT_ALLOW_NON_APPLICATIONS_APP_TRASH=1 \
-    ONECONTEXT_APP_TRASH_DESTINATION="$TRASH" \
     ONECONTEXT_UNINSTALL_HOME_DIR="$FIXTURE_HOME" \
     ONECONTEXT_ALLOW_UNINSTALL_HOME_OVERRIDE=1 \
     ONECONTEXT_APP_SUPPORT_DIR="$FIXTURE_HOME/Library/Application Support/1Context" \
@@ -109,9 +100,6 @@ run_fixture_cli() {
     ONECONTEXT_SOCKET_PATH="$FIXTURE_HOME/Library/Application Support/1Context/run/1context.sock" \
     ONECONTEXT_LAUNCH_AGENT_DISABLED=1 \
     ONECONTEXT_PERSIST_ENV_PATH_OVERRIDES=1 \
-    ONECONTEXT_AGENT_ALLOW_ENV_OVERRIDES=1 \
-    ONECONTEXT_CLAUDE_SETTINGS_PATH="$CLAUDE_SETTINGS" \
-    ONECONTEXT_CODEX_CONFIG_PATH="$CODEX_CONFIG" \
     ONECONTEXT_LOCAL_WEB_SYSTEM_SUPPORT_DIR="$FIXTURE_HOME/Library/Application Support/1Context/local-web/setup" \
     ONECONTEXT_LOCAL_WEB_SYSTEM_LOG_DIR="$FIXTURE_HOME/Library/Logs/1Context" \
     ONECONTEXT_LOCAL_WEB_SKIP_SERVICE_MANAGEMENT=1 \
@@ -150,9 +138,6 @@ grep -q "Unknown argument: --definitely-not-real" "$OUT_DIR/uninstall-unknown.ou
 
 write_fake_app
 seed_fixture_state
-run_fixture_cli agent integrations install >"$OUT_DIR/agent-install.out"
-grep -q "ONECONTEXT_MANAGED_HOOK=1" "$CLAUDE_SETTINGS"
-grep -q "ONECONTEXT_MANAGED_HOOK=1" "$CODEX_CONFIG"
 run_fixture_cli uninstall --keep-app >"$OUT_DIR/uninstall-preserve.out"
 grep -q "Preserved user data" "$OUT_DIR/uninstall-preserve.out"
 grep -q "Preserved application bundle" "$OUT_DIR/uninstall-preserve.out"
@@ -164,14 +149,6 @@ assert_missing "$FIXTURE_HOME/Library/Application Support/1Context/local-web/set
 assert_missing "$FIXTURE_HOME/Library/Application Support/1Context/local-web/setup/local-web-root.sha1"
 assert_missing "$FIXTURE_HOME/Library/Application Support/1Context/local-web/setup/local-web-root.sha256"
 assert_missing "$FIXTURE_HOME/Library/Application Support/1Context/local-web/setup/local-web-setup.json"
-if grep -q "ONECONTEXT_MANAGED_HOOK=1" "$CLAUDE_SETTINGS"; then
-  echo "uninstall should remove managed Claude hooks" >&2
-  exit 1
-fi
-if grep -q "ONECONTEXT_MANAGED_HOOK=1" "$CODEX_CONFIG"; then
-  echo "uninstall should remove managed Codex hooks" >&2
-  exit 1
-fi
 
 seed_fixture_state
 run_fixture_cli uninstall --delete-data --keep-app >"$OUT_DIR/uninstall-delete-data.out"
@@ -188,12 +165,5 @@ assert_missing "$FIXTURE_HOME/Library/WebKit/com.haptica.1context"
 assert_missing "$TEMP_COMMAND"
 assert_exists "$FIXTURE_HOME/Not1Context/sentinel.txt"
 assert_exists "$APP/Contents/Info.plist"
-
-write_fake_app
-seed_fixture_state
-run_fixture_cli uninstall >"$OUT_DIR/uninstall-trash-app.out"
-grep -q "Removed: Application bundle" "$OUT_DIR/uninstall-trash-app.out"
-assert_missing "$APP"
-assert_exists "$TRASH/1Context.app/Contents/Info.plist"
 
 echo "macOS uninstall command smoke passed."

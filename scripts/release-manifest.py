@@ -10,39 +10,21 @@ import re
 import shlex
 import subprocess
 import sys
+import tomllib
 import xml.etree.ElementTree as ET
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
 
-try:
-  import tomllib  # type: ignore[import-not-found]
-except ModuleNotFoundError:
-  class _SimpleTOMLDecodeError(ValueError):
-    pass
-
-  class _SimpleTOML:
-    TOMLDecodeError = _SimpleTOMLDecodeError
-
-    @staticmethod
-    def load(handle: Any) -> dict[str, Any]:
-      text = handle.read().decode("utf-8")
-      return _parse_simple_toml(text)
-
-  tomllib = _SimpleTOML()
-
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_MANIFEST = ROOT / "release" / "release.toml"
 DEFAULT_VERSION_FILE = ROOT / "VERSION"
-DEFAULT_UPDATE_POLICY = ROOT / "release" / "update-policy.toml"
 DEFAULT_CORE = ROOT / "macos" / "Sources" / "OneContextCore" / "Core.swift"
 DEFAULT_RELEASE_NOTES = ROOT / "RELEASE_NOTES.md"
 DEFAULT_RELEASE_WORKFLOW = ROOT / ".github" / "workflows" / "release.yml"
 DEFAULT_PROOF_WORKFLOW = ROOT / ".github" / "workflows" / "self-hosted-mac-update-proof.yml"
-DEFAULT_GOAL_DOC = ROOT / "docs" / "goals" / "1context-release-lockdown-goal.md"
 SCHEMA_VERSION = "1context.release.v1"
-UPDATE_POLICY_SCHEMA_VERSION = "1context.update-policy.v1"
 VERSION_RE = re.compile(r"^\d+\.\d+\.\d+$")
 CORE_FALLBACK_RE = re.compile(r"fallback\s*=\s*\"([^\"]+)\"")
 SPARKLE_NS = "http://www.andymatuschak.org/xml-namespaces/sparkle"
@@ -50,7 +32,7 @@ REQUIRED_PROOFS = {
   "clean_tree",
   "release_manifest",
   "version_consistency",
-  "update_policy",
+  "release_policy",
   "full_tests",
   "package_smoke",
   "asset_audit",
@@ -91,80 +73,6 @@ REQUIRED_MATRIX_CASES = {
 
 class ManifestError(Exception):
   pass
-
-
-def _parse_simple_toml(text: str) -> dict[str, Any]:
-  data: dict[str, Any] = {}
-  section: dict[str, Any] = data
-  lines = text.splitlines()
-  index = 0
-  while index < len(lines):
-    raw_line = lines[index]
-    line = raw_line.strip()
-    index += 1
-    if not line or line.startswith("#"):
-      continue
-    if line.startswith("[[") and line.endswith("]]"):
-      section_name = line[2:-2].strip()
-      if not section_name:
-        raise _SimpleTOMLDecodeError(f"empty array table at line {index}")
-      parent = data
-      parts = section_name.split(".")
-      for part in parts[:-1]:
-        parent = parent.setdefault(part, {})
-        if not isinstance(parent, dict):
-          raise _SimpleTOMLDecodeError(f"array table conflict at line {index}")
-      table_list = parent.setdefault(parts[-1], [])
-      if not isinstance(table_list, list):
-        raise _SimpleTOMLDecodeError(f"array table conflict at line {index}")
-      section = {}
-      table_list.append(section)
-      continue
-    if line.startswith("[") and line.endswith("]"):
-      section_name = line[1:-1].strip()
-      if not section_name:
-        raise _SimpleTOMLDecodeError(f"empty section at line {index}")
-      section = data
-      for part in section_name.split("."):
-        section = section.setdefault(part, {})
-        if not isinstance(section, dict):
-          raise _SimpleTOMLDecodeError(f"section conflict at line {index}")
-      continue
-    if "=" not in line:
-      raise _SimpleTOMLDecodeError(f"invalid TOML line {index}")
-    key, value = line.split("=", 1)
-    key = key.strip()
-    value = value.strip()
-    if not key:
-      raise _SimpleTOMLDecodeError(f"empty key at line {index}")
-    if value.startswith("[") and not value.endswith("]"):
-      collected = [value]
-      while index < len(lines):
-        continuation = lines[index].strip()
-        index += 1
-        collected.append(continuation)
-        if continuation.endswith("]"):
-          break
-      value = "\n".join(collected)
-    section[key] = _parse_simple_value(value, index)
-  return data
-
-
-def _parse_simple_value(value: str, line_number: int) -> Any:
-  if value in {"true", "false"}:
-    return value == "true"
-  if value.startswith('"') and value.endswith('"'):
-    return json.loads(value)
-  if value.startswith("[") and value.endswith("]"):
-    jsonish = re.sub(r",\s*]", "]", value, flags=re.S)
-    try:
-      parsed = json.loads(jsonish)
-    except json.JSONDecodeError as exc:
-      raise _SimpleTOMLDecodeError(f"unsupported array at line {line_number}") from exc
-    if not isinstance(parsed, list):
-      raise _SimpleTOMLDecodeError(f"array did not parse as a list at line {line_number}")
-    return parsed
-  raise _SimpleTOMLDecodeError(f"unsupported value at line {line_number}")
 
 
 def run_git(root: Path, args: list[str], *, check: bool = True) -> subprocess.CompletedProcess[str]:
@@ -245,11 +153,17 @@ def validate_manifest_shape(manifest: dict[str, Any]) -> None:
   previous_version = string_value(manifest, "previous_version")
   tag = string_value(manifest, "tag")
   update_class = string_value(manifest, "update_class")
+  approved_by = string_value(manifest, "approved_by")
+  reason = string_value(manifest, "reason")
+  reason_detail = string_value(manifest, "reason_detail")
   minimum_autoupdate_version = string_value(manifest, "minimum_autoupdate_version", required=False)
+  minimum_update_version = string_value(manifest, "minimum_update_version", required=False)
   critical_update_version = string_value(manifest, "critical_update_version", required=False)
   public_appcast_url = string_value(manifest, "public_appcast_url")
   stable_dmg_name = string_value(manifest, "stable_dmg_name")
 
+  if not approved_by or not reason or not reason_detail:
+    raise ManifestError("Manifest release approval, reason, and reason_detail must not be empty.")
   if semver_tuple(previous_version) >= semver_tuple(version):
     raise ManifestError(f"previous_version {previous_version} must be older than version {version}.")
   if tag != f"v{version}":
@@ -266,8 +180,13 @@ def validate_manifest_shape(manifest: dict[str, Any]) -> None:
       raise ManifestError("Mandatory releases must minimum-autoupdate from previous_version.")
     if critical_update_version != version:
       raise ManifestError("Mandatory releases must set critical_update_version to version.")
-  elif critical_update_version:
-    raise ManifestError("Optional releases must not set critical_update_version.")
+  else:
+    if minimum_autoupdate_version:
+      raise ManifestError("Optional releases must not set minimum_autoupdate_version.")
+    if critical_update_version:
+      raise ManifestError("Optional releases must not set critical_update_version.")
+  if minimum_update_version:
+    semver_tuple(minimum_update_version)
 
   required_proofs = set(string_list(manifest, "required_proofs"))
   missing_proofs = sorted(REQUIRED_PROOFS - required_proofs)
@@ -283,6 +202,25 @@ def validate_manifest_shape(manifest: dict[str, Any]) -> None:
   bool_value(notes_policy, "show_in_update_window")
   if not string_value(notes_policy, "public_notes_file"):
     raise ManifestError("release_notes_policy.public_notes_file must not be empty.")
+
+  update_ui = table(manifest, "update_ui")
+  optional_prompt = table(update_ui, "optional_prompt")
+  if not string_value(optional_prompt, "title") or not string_value(optional_prompt, "body"):
+    raise ManifestError("update_ui.optional_prompt title and body must not be empty.")
+
+  failure_message = table(update_ui, "failure_message")
+  failure_title = string_value(failure_message, "title")
+  failure_body = string_value(failure_message, "body")
+  if failure_title != "Update failed.":
+    raise ManifestError('update_ui.failure_message.title must be "Update failed."')
+  if failure_body != "Please contact support at paul@haptica.ai.":
+    raise ManifestError("update_ui.failure_message.body must direct users to paul@haptica.ai.")
+
+  post_install = table(update_ui, "post_install_message")
+  bool_value(post_install, "enabled")
+  if string_value(post_install, "title") != "1Context Improved!":
+    raise ManifestError('update_ui.post_install_message.title must default to "1Context Improved!"')
+  string_value(post_install, "body", required=False)
 
   redaction_policy = table(manifest, "evidence_redaction_policy")
   if not bool_value(redaction_policy, "require_redaction"):
@@ -329,22 +267,6 @@ def validate_version_files(
   first_line = release_notes.splitlines()[0] if release_notes.splitlines() else ""
   if version not in first_line and f"v{version}" not in first_line:
     raise ManifestError(f"Release notes heading must mention {version}.")
-
-
-def validate_update_policy(manifest: dict[str, Any], policy_path: Path) -> None:
-  policy = load_toml(policy_path, "update policy")
-  if string_value(policy, "schema_version") != UPDATE_POLICY_SCHEMA_VERSION:
-    raise ManifestError("Update policy schema_version drifted from the release train contract.")
-  for key in ("version", "update_class", "minimum_autoupdate_version", "critical_update_version"):
-    policy_value = string_value(policy, key, required=False)
-    manifest_value = string_value(manifest, key, required=False)
-    if policy_value != manifest_value:
-      raise ManifestError(f"Update policy {key} {policy_value!r} does not match manifest {manifest_value!r}.")
-  notes_policy = table(manifest, "release_notes_policy")
-  ui = table(policy, "ui")
-  policy_show_notes = bool_value(ui, "show_release_notes_in_update_window")
-  if policy_show_notes != bool_value(notes_policy, "show_in_update_window"):
-    raise ManifestError("Update policy release-notes UI flag does not match release manifest.")
 
 
 def validate_appcast(manifest: dict[str, Any], appcast_path: Path) -> None:
@@ -424,15 +346,6 @@ def validate_workflows(manifest: dict[str, Any], *, release_workflow: Path, proo
       raise ManifestError(f"Self-hosted proof workflow is missing runner label {label}.")
 
 
-def validate_goal_doc_hint(manifest: dict[str, Any], goal_doc: Path) -> None:
-  if not goal_doc.exists():
-    return
-  text = goal_doc.read_text(encoding="utf-8")
-  version = string_value(manifest, "version")
-  if version not in text:
-    raise ManifestError(f"Goal doc does not mention current manifest version {version}.")
-
-
 def check_clean_tree(root: Path) -> None:
   result = run_git(root, ["status", "--porcelain=v1", "--untracked-files=all"])
   dirty = [line for line in result.stdout.splitlines() if line.strip()]
@@ -455,6 +368,8 @@ def check_sourced_helpers(root: Path) -> None:
   pattern = re.compile(r"(?:^|[;&|\s])(?:source|\.)\s+[\"']?(?:\$ROOT/)?([^\"'\s]+\.sh)")
   for relative in files:
     path = root / relative
+    if not path.exists():
+      continue
     text = path.read_text(encoding="utf-8", errors="ignore")
     for match in pattern.finditer(text):
       helper = match.group(1)
@@ -480,9 +395,7 @@ def validate_manifest(args: argparse.Namespace) -> dict[str, Any]:
     core_file=args.core_file,
     release_notes_file=args.release_notes,
   )
-  validate_update_policy(manifest, args.update_policy)
   validate_workflows(manifest, release_workflow=args.release_workflow, proof_workflow=args.proof_workflow)
-  validate_goal_doc_hint(manifest, args.goal_doc)
   check_sourced_helpers(args.root)
   if args.appcast is not None:
     validate_appcast(manifest, args.appcast)
@@ -494,15 +407,33 @@ def validate_manifest(args: argparse.Namespace) -> dict[str, Any]:
 def env_for_manifest(manifest: dict[str, Any], manifest_path: Path) -> dict[str, str]:
   version = string_value(manifest, "version")
   tag = string_value(manifest, "tag")
+  update_class = string_value(manifest, "update_class")
+  notes_policy = table(manifest, "release_notes_policy")
+  update_ui = table(manifest, "update_ui")
+  optional_prompt = table(update_ui, "optional_prompt")
+  failure_message = table(update_ui, "failure_message")
+  post_install = table(update_ui, "post_install_message")
   return {
     "ONECONTEXT_RELEASE_MANIFEST": str(manifest_path),
     "ONECONTEXT_RELEASE_VERSION": version,
     "ONECONTEXT_RELEASE_PREVIOUS_VERSION": string_value(manifest, "previous_version"),
     "ONECONTEXT_RELEASE_TAG": tag,
-    "ONECONTEXT_RELEASE_UPDATE_CLASS": string_value(manifest, "update_class"),
+    "ONECONTEXT_RELEASE_UPDATE_CLASS": update_class,
     "ONECONTEXT_RELEASE_PUBLIC_APPCAST_URL": string_value(manifest, "public_appcast_url"),
     "ONECONTEXT_RELEASE_STABLE_DMG_NAME": string_value(manifest, "stable_dmg_name"),
     "ONECONTEXT_SPARKLE_FEED_URL": string_value(manifest, "public_appcast_url"),
+    "ONECONTEXT_SPARKLE_MANDATORY": "1" if update_class == "mandatory" else "0",
+    "ONECONTEXT_SPARKLE_MANDATORY_FROM_VERSION": string_value(manifest, "critical_update_version", required=False),
+    "ONECONTEXT_SPARKLE_MINIMUM_AUTOUPDATE_VERSION": string_value(manifest, "minimum_autoupdate_version", required=False),
+    "ONECONTEXT_SPARKLE_MINIMUM_UPDATE_VERSION": string_value(manifest, "minimum_update_version", required=False),
+    "ONECONTEXT_SPARKLE_SHOW_RELEASE_NOTES_IN_UPDATE_WINDOW": "1" if bool_value(notes_policy, "show_in_update_window") else "0",
+    "ONECONTEXT_UPDATE_OPTIONAL_PROMPT_TITLE": string_value(optional_prompt, "title"),
+    "ONECONTEXT_UPDATE_OPTIONAL_PROMPT_BODY": string_value(optional_prompt, "body"),
+    "ONECONTEXT_UPDATE_FAILURE_TITLE": string_value(failure_message, "title"),
+    "ONECONTEXT_UPDATE_FAILURE_BODY": string_value(failure_message, "body"),
+    "ONECONTEXT_UPDATE_POST_INSTALL_MESSAGE_ENABLED": "1" if bool_value(post_install, "enabled") else "0",
+    "ONECONTEXT_UPDATE_POST_INSTALL_TITLE": string_value(post_install, "title"),
+    "ONECONTEXT_UPDATE_POST_INSTALL_BODY": string_value(post_install, "body", required=False),
     "SPARKLE_DOWNLOAD_URL_PREFIX": f"https://github.com/hapticasensorics/1context/releases/download/{tag}/",
     "SPARKLE_RELEASE_NOTES_URL_PREFIX": f"https://github.com/hapticasensorics/1context/releases/download/{tag}/",
     "SPARKLE_LINK_URL": f"https://github.com/hapticasensorics/1context/releases/tag/{tag}",
@@ -615,12 +546,10 @@ def add_common_args(parser: argparse.ArgumentParser) -> None:
   parser.add_argument("--root", type=Path, default=ROOT)
   parser.add_argument("--manifest", type=Path, default=DEFAULT_MANIFEST)
   parser.add_argument("--version-file", type=Path, default=DEFAULT_VERSION_FILE)
-  parser.add_argument("--update-policy", type=Path, default=DEFAULT_UPDATE_POLICY)
   parser.add_argument("--core-file", type=Path, default=DEFAULT_CORE)
   parser.add_argument("--release-notes", type=Path, default=DEFAULT_RELEASE_NOTES)
   parser.add_argument("--release-workflow", type=Path, default=DEFAULT_RELEASE_WORKFLOW)
   parser.add_argument("--proof-workflow", type=Path, default=DEFAULT_PROOF_WORKFLOW)
-  parser.add_argument("--goal-doc", type=Path, default=DEFAULT_GOAL_DOC)
   parser.add_argument("--appcast", type=Path)
   parser.add_argument("--require-clean", action="store_true")
 

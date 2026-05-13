@@ -176,7 +176,7 @@ log "fetching live appcast"
 curl --fail --location --silent "$APPCAST_URL" > "$EVIDENCE_DIR/live-appcast.xml"
 validate_appcast "$EVIDENCE_DIR/live-appcast.xml"
 if [[ "${ONECONTEXT_REMOTE_UPDATE_VALIDATE_REPO_POLICY:-1}" == "1" ]]; then
-  "$ROOT/scripts/check-update-policy.sh" --appcast "$EVIDENCE_DIR/live-appcast.xml"
+  "$ROOT/scripts/release-manifest.py" validate --appcast "$EVIDENCE_DIR/live-appcast.xml"
 else
   log "skipping repo update-policy validation for staged appcast"
 fi
@@ -187,7 +187,7 @@ capture_accessibility "$EVIDENCE_DIR/accessibility-before.txt"
 capture_menu "$EVIDENCE_DIR/menu-before.txt"
 capture_screenshot "$EVIDENCE_DIR/desktop-before.png"
 if [[ -x "$APP/Contents/MacOS/1context-cli" ]]; then
-  "$APP/Contents/MacOS/1context-cli" status --debug > "$EVIDENCE_DIR/status-before.txt" 2>&1 || true
+  "$APP/Contents/MacOS/1context-cli" diagnose > "$EVIDENCE_DIR/diagnose-before.txt" 2>&1 || true
 fi
 
 if [[ "$(installed_plist_version)" != "$EXPECTED_OLD_VERSION" ]]; then
@@ -292,7 +292,7 @@ write_versions "$EVIDENCE_DIR/version-after-watch.txt"
 capture_windows "$EVIDENCE_DIR/windows-after.txt"
 capture_screenshot "$EVIDENCE_DIR/desktop-after-watch.png"
 if [[ -x "$APP/Contents/MacOS/1context-cli" ]]; then
-  "$APP/Contents/MacOS/1context-cli" status --debug > "$EVIDENCE_DIR/status-after-watch.txt" 2>&1 || true
+  "$APP/Contents/MacOS/1context-cli" diagnose > "$EVIDENCE_DIR/diagnose-after-watch.txt" 2>&1 || true
 fi
 
 {

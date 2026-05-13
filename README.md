@@ -37,14 +37,13 @@ This public preview is early, but the app shell is real and polished:
 - a signed macOS menu bar app
 - a private local wiki served in your browser
 - polished default pages, even before you have much content
-- Claude Code and Codex hooks that point agents at the live wiki
 - user-owned local content under `~/1Context/` as it is created
 - no product telemetry and no upload of project data in this preview
 
 Memory collection and memory writing are still manual in this release. The
 automatic screen activity pipeline, passive remembering, and multi-agent wiki
 editing system are in active development. Today, 1Context is best understood as
-the polished public shell plus the first local wiki and agent integration path.
+the polished public shell plus the first local wiki path.
 
 ![The local 1Context wiki template](docs/assets/readme/local-your-context.png)
 
@@ -59,10 +58,10 @@ will read.
 
 ![A 1Context talk page template](docs/assets/readme/local-talk-template.png)
 
-Under the hood, the public app keeps the sturdy macOS parts separate from the
-experimental memory engine. The menu bar owns the user experience, the local web
-server, updates, and diagnostics. The memory core can improve quickly behind a
-narrow contract without risking the whole app.
+Under the hood, the public app keeps the sturdy macOS parts small and explicit.
+The menu bar owns the user experience, the local web server, updates, setup, and
+diagnostics; future memory publication can plug into that app-owned boundary
+without shipping a source checkout inside the app.
 
 ![The 1Context menu bar app](docs/assets/readme/menu-bar.png)
 
@@ -94,7 +93,6 @@ Support commands are available through the bundled CLI:
 /Applications/1Context.app/Contents/MacOS/1context-cli diagnose
 /Applications/1Context.app/Contents/MacOS/1context-cli setup local-web status
 /Applications/1Context.app/Contents/MacOS/1context-cli wiki local-url
-/Applications/1Context.app/Contents/MacOS/1context-cli agent integrations install
 ```
 
 Uninstall the app:
@@ -108,8 +106,8 @@ CLI:
 ```
 
 Moving the app to the Trash removes the app bundle. The app-owned uninstall path
-also removes 1Context background items, local HTTPS trust, and managed agent
-hooks while preserving `~/1Context` unless you choose `--delete-data`.
+also removes 1Context background items and local HTTPS trust while preserving
+`~/1Context` unless you choose `--delete-data`.
 
 ## Files And Privacy
 
@@ -140,9 +138,8 @@ contract.
 
 This is a founder preview, not a finished memory product:
 
-- Claude Code and Codex are the first supported agent surfaces.
 - Memory collection and page creation are currently manual.
-- Local chat/librarian execution is only an API shell.
+- Local chat/librarian execution is not shipped in the app yet.
 - Cloud wiki sharing is not enabled yet.
 - The local wiki is private.
 
@@ -156,7 +153,6 @@ Maintainer and contract details live in:
 - [Docs index](docs/README.md)
 - [macOS release runbook](docs/macos-release-runbook.md)
 - [Local web contract](docs/local-web-contract.md)
-- [Memory core contract](docs/memory-core-contract.md)
 - [Development and release notes](docs/development.md)
 
 ## Thanks

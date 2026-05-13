@@ -35,46 +35,6 @@ data. Update policy, appcast diagnostics, and CLI-readable update snapshots live
 in `OneContextUpdate`; the actual Sparkle framework driver lives in
 `OneContextSparkleUpdate`. Setup and runtime readiness do not carry update state.
 
-## Agent Integrations
-
-1Context includes first-party Claude Code and Codex hook bridges. They install
-only managed command hooks and can remove them again without touching unrelated
-agent settings:
-
-```bash
-1context agent integrations status
-1context agent integrations install
-1context agent integrations repair
-1context agent integrations uninstall
-```
-
-Hook messages should read the canonical local wiki URL from 1Context-managed
-state. They should not hardcode ports, start web servers, or depend on a
-developer checkout.
-
-## Memory Core Adapter
-
-The public macOS app can be configured to call an external memory-core
-executable through a narrow JSON subprocess boundary. This is the future bridge
-for the private memory engine; the public app does not bundle or copy that
-business logic.
-
-```bash
-1context memory-core status
-1context memory-core doctor
-1context memory-core configure --executable /path/to/memory-core
-1context memory-core run -- status --json
-1context memory-core configure --clear
-```
-
-The adapter is explicit and bounded: lifecycle commands do not depend on memory
-core, hooks do not run heavy memory work, and `run` only accepts documented JSON
-command shapes such as `status --json`, `wiki list --json`, and
-`memory tick --wiki-only --json`.
-
-See [memory-core-contract.md](memory-core-contract.md) for the subprocess
-contract and compatibility fixture.
-
 ## Local Web
 
 The release app bundles Caddy and serves the local wiki at the canonical local
@@ -97,8 +57,9 @@ The CLI remains a support path:
 ```
 
 The menu bar owns Caddy lifetime. The daemon owns the local `/api/wiki/*`
-adapter. Browser code should call relative `/api/wiki/*` routes so the same
-static site can run behind local Caddy today and cloud hosting later.
+adapter and prepares the small placeholder wiki shell. Browser code should call
+relative `/api/wiki/*` routes so the same static site can run behind local Caddy
+today and cloud hosting later.
 
 See [local-web-contract.md](local-web-contract.md) for the local-first web
 contract.
@@ -111,13 +72,6 @@ setup, permissions, update, and local-web source boundaries.
 ```bash
 swift test --package-path macos
 ./scripts/test.sh
-```
-
-For memory-core tests:
-
-```bash
-cd memory-core
-uv run --with pytest pytest
 ```
 
 For RPC lifecycle stress:
@@ -143,41 +97,39 @@ setup readiness.
 Local ad-hoc packaging:
 
 ```bash
-ALLOW_UNNOTARIZED=1 NOTARIZE=0 ./scripts/package-macos-release.sh
+./scripts/package-macos-smoke.sh
 ```
 
 Maintainer release packaging uses Developer ID signing, notarization, and the
 production Sparkle feed configuration:
 
 ```bash
-ONECONTEXT_SPARKLE_FEED_URL="https://github.com/hapticasensorics/1context/releases/latest/download/appcast.xml" \
-SPARKLE_DOWNLOAD_URL_PREFIX="https://github.com/hapticasensorics/1context/releases/download/v$(cat VERSION)/" \
-./scripts/package-macos-production-release.sh
+./scripts/release-train.sh package
 ```
 
-That command auto-detects the Developer ID Application identity, reads the
-Sparkle public EdDSA key from the release keychain account or
-`ONECONTEXT_SPARKLE_PUBLIC_ED_KEY`, signs and notarizes the app and DMG, then
-generates `dist/sparkle-updates/appcast.xml`. For the protected self-hosted
-release workflow, `scripts/prepare-macos-release-keychain.sh` unlocks the
-dedicated release keychain and `scripts/check-macos-release-credentials.sh`
-preflights Developer ID signing, Sparkle signing, and the notary profile before
-any artifact is built.
+The release train reads `release/release.toml`, auto-detects the Developer ID
+Application identity, reads the Sparkle public EdDSA key from the release
+keychain account or `ONECONTEXT_SPARKLE_PUBLIC_ED_KEY`, signs and notarizes the
+app and DMG, then generates `dist/sparkle-updates/appcast.xml`. For the
+protected self-hosted release workflow,
+`scripts/prepare-macos-release-keychain.sh` unlocks the dedicated release
+keychain and `scripts/check-macos-release-credentials.sh` preflights Developer ID
+signing, Sparkle signing, and the notary profile before any artifact is built.
 
 Release packaging validates that archives do not contain local owner/group
 metadata, AppleDouble files, local build paths, SwiftPM resource-bundle fallback
 paths, generated wiki render manifests, or generated markdown source files in
 the bundled user-wiki surface.
 
-When `NOTARIZE=1`, packaging signs and notarizes both layers:
+Production packaging signs and notarizes both layers:
 
 1. `dist/1Context.app` is Developer ID signed, submitted as a ZIP, stapled, and
    assessed with Gatekeeper.
 2. `dist/1Context-<version>-macos-arm64.dmg` is signed, submitted, stapled, and
    assessed with Gatekeeper.
 
-`ALLOW_UNNOTARIZED=1 NOTARIZE=0` is the only supported local-dev bypass for
-stapler and Gatekeeper checks.
+`scripts/package-macos-smoke.sh` is the only local unsigned package path. It is
+not a release command.
 
 The public Homebrew cask in `hapticasensorics/homebrew-tap` should point to the
 same versioned DMG and SHA as the GitHub release. Keep the cask marked
@@ -192,24 +144,18 @@ repair releases after update residue, and launch-candidate milestones. Routine
 patches can rely on hosted CI, release asset audit, appcast validation, and
 targeted maintainer smoke.
 
-When the release owner decides the Mac proof is warranted, use the wrapper so
-`VERSION`, `release/update-policy.toml`, update class, old-version baseline,
-appcast URL, and the protected workflow inputs are resolved consistently. The
-version-N app installed by the proof must already have `SUFeedURL` set to the
-same appcast URL you pass. For a pre-public staging proof, pass `--old-dmg-url`
-for a version-N baseline DMG built with
+When the release owner decides the Mac proof is warranted, use
+`scripts/release-train.sh prove` so `release/release.toml`, update class,
+old-version baseline, appcast URL, and the protected workflow inputs are
+resolved consistently. The version-N app installed by the proof must already
+have `SUFeedURL` set to the same appcast URL you pass. For a pre-public staging
+proof, pass the release-train proof inputs for a version-N baseline DMG built with
 `ONECONTEXT_SPARKLE_FEED_URL=<staging_appcast_url>`; otherwise the old app may
 check the public latest feed instead of the staging candidate, and the proof
 script will fail.
 
 ```bash
-./scripts/request-release-proof.sh --dry-run
-./scripts/request-release-proof.sh \
-  --dispatch \
-  --watch \
-  --download-artifacts \
-  --ref v$(cat VERSION) \
-  --proof-reason "routine mandatory release proof for $(cat VERSION)"
+./scripts/release-train.sh prove
 ```
 
 To clear local release outputs before packaging:

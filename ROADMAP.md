@@ -1,8 +1,8 @@
 # Roadmap
 
 1Context is a signed macOS app with a private local wiki, app-owned setup,
-Sparkle updates, uninstall support, and a bounded memory-core bridge. The next
-work is less about adding basic app plumbing and more about proving the release
+Sparkle updates, uninstall support, and a small bundled runtime. The next work
+is less about adding basic app plumbing and more about proving the release
 flywheel and turning the memory system on safely.
 
 ## Release Flywheel
@@ -21,8 +21,8 @@ flywheel and turning the memory system on safely.
 ## Permissions And Setup
 
 - Treat Local Wiki Access as required setup for the current product.
-- Request future sensitive permissions only from app-owned setup or permissions
-  surfaces, at the moment a shipped feature needs them.
+- Request future sensitive permissions only from app-owned setup surfaces, at
+  the moment a shipped feature needs them.
 - Make blocked actions open the relevant permission or setup flow instead of
   failing silently.
 - Keep setup state live: if permissions or local HTTPS are already granted, the
@@ -36,8 +36,8 @@ flywheel and turning the memory system on safely.
   generated or shipped wiki state under Application Support.
 - Turn on passive capture and memory writing only behind explicit product
   permission decisions and deterministic proof.
-- Promote the memory-core subprocess bridge from status/wiki proof toward
-  durable project memory, talk-page proposals, and librarian flows.
+- Reintroduce memory-writing engines only as explicit runtime artifacts with
+  release proof. Do not ship a source checkout as the app runtime.
 
 ## Cloud And Sharing
 
@@ -45,8 +45,8 @@ flywheel and turning the memory system on safely.
   hosting share the same contract.
 - Add cloud wiki sharing only after the local ownership and consent model stays
   clear.
-- Avoid coupling agent hooks or browser pages to developer ports, source
-  checkouts, or machine-specific paths.
+- Avoid coupling browser pages to developer ports, source checkouts, or
+  machine-specific paths.
 
 ## Current Sources
 

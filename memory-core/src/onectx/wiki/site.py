@@ -76,19 +76,6 @@ def build_content_index(root: Path | str) -> dict[str, Any]:
     }
 
 
-def load_content_index(root: Path | str) -> dict[str, Any]:
-    root = Path(root).resolve()
-    index_path = root / "wiki" / SITE_GENERATED_DIR / CONTENT_INDEX_FILENAME
-    if index_path.exists():
-        try:
-            payload = json.loads(index_path.read_text(encoding="utf-8"))
-            if isinstance(payload, dict):
-                return payload
-        except (OSError, json.JSONDecodeError):
-            pass
-    return build_content_index(root)
-
-
 def load_wiki_stats(root: Path | str) -> dict[str, Any]:
     root = Path(root).resolve()
     stats_path = root / "wiki" / SITE_GENERATED_DIR / WIKI_STATS_FILENAME

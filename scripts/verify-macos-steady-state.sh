@@ -31,10 +31,10 @@ count_runtime_stops() {
 capture_once() {
   local name="$1"
   local status_exit=0
-  "$CLI" status --debug > "$EVIDENCE_DIR/status-$name.txt" 2>&1 || status_exit=$?
+  "$CLI" status > "$EVIDENCE_DIR/status-$name.txt" 2>&1 || status_exit=$?
+  "$CLI" diagnose > "$EVIDENCE_DIR/diagnose-$name.txt" 2>&1 || true
   printf '%s\n' "$status_exit" > "$EVIDENCE_DIR/status-$name.exitcode"
   "$CLI" update > "$EVIDENCE_DIR/update-$name.txt" 2>&1 || true
-  "$CLI" permissions > "$EVIDENCE_DIR/permissions-$name.txt" 2>&1 || true
   launchctl print "gui/$(id -u)/$LABEL_RUNTIME" > "$EVIDENCE_DIR/launchctl-runtime-$name.txt" 2>&1 || true
   launchctl print "gui/$(id -u)/$LABEL_MENU" > "$EVIDENCE_DIR/launchctl-menu-$name.txt" 2>&1 || true
   return "$status_exit"
@@ -42,14 +42,14 @@ capture_once() {
 
 assert_status_healthy() {
   local file="$1"
+  local diagnose_file="${file/status-/diagnose-}"
   grep -q "1Context is running." "$file" || fail "CLI did not report running in $(basename "$file")"
   grep -q "Health: OK" "$file" || fail "runtime health was not OK in $(basename "$file")"
   grep -q "Menu Bar: running" "$file" || fail "menu bar was not running in $(basename "$file")"
-  grep -q "LaunchAgent: loaded" "$file" || fail "runtime LaunchAgent was not loaded in $(basename "$file")"
-  grep -q "Socket: responding" "$file" || fail "runtime socket was not responding in $(basename "$file")"
-  grep -q "Local Web:" "$file" || fail "local web block missing in $(basename "$file")"
-  grep -q "  Health: OK" "$file" || fail "local web health was not OK in $(basename "$file")"
-  grep -q "  Setup Ready: yes" "$file" || fail "setup was not ready in $(basename "$file")"
+  grep -q "Runtime:" "$diagnose_file" || fail "runtime diagnostics missing in $(basename "$diagnose_file")"
+  grep -q "Local Web:" "$diagnose_file" || fail "local web block missing in $(basename "$diagnose_file")"
+  grep -q "  Health: OK" "$diagnose_file" || fail "local web health was not OK in $(basename "$diagnose_file")"
+  grep -q "  Setup Ready: yes" "$diagnose_file" || fail "setup was not ready in $(basename "$diagnose_file")"
 }
 
 [[ -x "$CLI" ]] || fail "missing CLI at $CLI"

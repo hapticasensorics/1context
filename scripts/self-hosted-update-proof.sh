@@ -273,7 +273,7 @@ ensure_final_app_uses_public_feed() {
   open "$APP" || true
   sleep 5
   if [[ -x "$APP/Contents/MacOS/1context-cli" ]]; then
-    "$APP/Contents/MacOS/1context-cli" status --debug > "$EVIDENCE_DIR/status-after-public-restore.txt" 2>&1 || true
+    "$APP/Contents/MacOS/1context-cli" diagnose > "$EVIDENCE_DIR/diagnose-after-public-restore.txt" 2>&1 || true
   fi
 }
 

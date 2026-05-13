@@ -794,17 +794,6 @@ def public_policy(policy: dict[str, Any]) -> dict[str, Any]:
     return {key: value for key, value in policy.items() if key != "source_path"}
 
 
-def normalized_scope(policy: dict[str, Any]) -> dict[str, bool]:
-    scope = policy.get("scope", {})
-    if not isinstance(scope, dict):
-        scope = {}
-    return {
-        "job": bool(scope.get("job", True)),
-        "agent": bool(scope.get("agent", False)),
-        "plugin": bool(scope.get("plugin", False)),
-    }
-
-
 def safe_id(value: str) -> str:
     cleaned = re.sub(r"[^A-Za-z0-9_.-]+", "-", value.strip()).strip("-")
     return cleaned or "runtime"

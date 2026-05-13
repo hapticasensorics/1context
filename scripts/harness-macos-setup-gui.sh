@@ -312,7 +312,6 @@ run_blocked_open_wiki_proof() {
   fi
 
   env \
-    ONECONTEXT_SKIP_APP_INSTALL_PROMPT=1 \
     ONECONTEXT_LAUNCH_AGENT_DISABLED=1 \
     ONECONTEXT_APP_SUPPORT_DIR="$state_dir/Application Support/1Context" \
     ONECONTEXT_USER_CONTENT_DIR="$state_dir/1Context" \

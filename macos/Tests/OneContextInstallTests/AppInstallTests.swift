@@ -3,22 +3,9 @@ import XCTest
 @testable import OneContextInstall
 
 final class AppInstallTests: XCTestCase {
-  func testPlannerContinuesWhenPromptIsSkipped() {
-    let planner = AppInstallPlanner(environment: [
-      AppInstallEnvironment.skipPromptKey: "1"
-    ])
-
-    let recommendation = planner.recommendation(
-      currentBundleURL: URL(fileURLWithPath: "/tmp/1Context.app"),
-      currentVersion: "1.2.3"
-    )
-
-    XCTAssertEqual(recommendation, .continueInPlace("Install prompt disabled by environment."))
-  }
-
   func testPlannerContinuesWhenAlreadyInApplicationsDestination() {
     let destination = URL(fileURLWithPath: "/Applications/1Context.app", isDirectory: true)
-    let planner = AppInstallPlanner(environment: [:])
+    let planner = AppInstallPlanner()
 
     let recommendation = planner.recommendation(
       currentBundleURL: destination,
@@ -32,9 +19,7 @@ final class AppInstallTests: XCTestCase {
     let temporaryDestination = URL(fileURLWithPath: NSTemporaryDirectory())
       .appendingPathComponent("1Context-tests-\(UUID().uuidString)")
       .appendingPathComponent("Applications/1Context.app", isDirectory: true)
-    let planner = AppInstallPlanner(environment: [
-      AppInstallEnvironment.destinationKey: temporaryDestination.path
-    ])
+    let planner = AppInstallPlanner(destinationBundleURL: temporaryDestination)
     let current = URL(fileURLWithPath: "/Users/example/Downloads/1Context.app", isDirectory: true)
 
     let recommendation = planner.recommendation(
@@ -56,9 +41,7 @@ final class AppInstallTests: XCTestCase {
     let temporaryDestination = URL(fileURLWithPath: NSTemporaryDirectory())
       .appendingPathComponent("1Context-tests-\(UUID().uuidString)")
       .appendingPathComponent("Applications/1Context.app", isDirectory: true)
-    let planner = AppInstallPlanner(environment: [
-      AppInstallEnvironment.destinationKey: temporaryDestination.path
-    ])
+    let planner = AppInstallPlanner(destinationBundleURL: temporaryDestination)
 
     for current in [
       URL(fileURLWithPath: "/Volumes/1Context/1Context.app", isDirectory: true),
@@ -83,9 +66,7 @@ final class AppInstallTests: XCTestCase {
     let destination = root.appendingPathComponent("Applications/1Context.app", isDirectory: true)
     try writeBundleVersion("1.2.2", to: destination)
 
-    let planner = AppInstallPlanner(environment: [
-      AppInstallEnvironment.destinationKey: destination.path
-    ])
+    let planner = AppInstallPlanner(destinationBundleURL: destination)
     let current = root.appendingPathComponent("Downloads/1Context.app", isDirectory: true)
 
     var recommendation = planner.recommendation(
@@ -114,9 +95,7 @@ final class AppInstallTests: XCTestCase {
     try writeExecutable("new-proxy", to: current.appendingPathComponent("Contents/Resources/1context-local-web-proxy"))
     try writeBundleVersion("1.2.3", bundleIdentifier: "com.haptica.1context.menu", to: destination)
 
-    let planner = AppInstallPlanner(environment: [
-      AppInstallEnvironment.destinationKey: destination.path
-    ])
+    let planner = AppInstallPlanner(destinationBundleURL: destination)
     let request = try XCTUnwrap(moveRequest(from: planner.recommendation(
       currentBundleURL: current,
       currentVersion: "1.2.3"
@@ -137,9 +116,7 @@ final class AppInstallTests: XCTestCase {
     try writeBundleVersion("1.2.3", bundleIdentifier: "com.haptica.1context", to: destination)
     try writeExecutable("proxy", to: destination.appendingPathComponent("Contents/Resources/1context-local-web-proxy"))
 
-    let planner = AppInstallPlanner(environment: [
-      AppInstallEnvironment.destinationKey: destination.path
-    ])
+    let planner = AppInstallPlanner(destinationBundleURL: destination)
     let request = try XCTUnwrap(moveRequest(from: planner.recommendation(
       currentBundleURL: current,
       currentVersion: "1.2.3"
@@ -186,10 +163,10 @@ final class AppInstallTests: XCTestCase {
     let trash = root.appendingPathComponent("Trash", isDirectory: true)
     try writeBundleVersion("1.2.3", bundleIdentifier: "com.haptica.1context", to: bundle)
 
-    let trashed = try AppBundleTrasher(environment: [
-      AppBundleTrashEnvironment.allowNonApplicationsKey: "1",
-      AppBundleTrashEnvironment.trashDestinationKey: trash.path
-    ]).trash(bundle)
+    let trashed = try AppBundleTrasher(
+      allowsNonApplicationsBundle: true,
+      trashDestination: trash
+    ).trash(bundle)
 
     XCTAssertFalse(FileManager.default.fileExists(atPath: bundle.path))
     XCTAssertEqual(trashed?.deletingLastPathComponent(), trash)
@@ -204,10 +181,10 @@ final class AppInstallTests: XCTestCase {
     let bundle = root.appendingPathComponent("Applications/Other.app", isDirectory: true)
     try writeBundleVersion("1.2.3", bundleIdentifier: "com.example.other", to: bundle)
 
-    XCTAssertThrowsError(try AppBundleTrasher(environment: [
-      AppBundleTrashEnvironment.allowNonApplicationsKey: "1",
-      AppBundleTrashEnvironment.trashDestinationKey: root.appendingPathComponent("Trash").path
-    ]).trash(bundle)) { error in
+    XCTAssertThrowsError(try AppBundleTrasher(
+      allowsNonApplicationsBundle: true,
+      trashDestination: root.appendingPathComponent("Trash")
+    ).trash(bundle)) { error in
       XCTAssertEqual(error as? AppBundleTrashError, .wrongBundleIdentifier("com.example.other"))
     }
   }
@@ -216,9 +193,7 @@ final class AppInstallTests: XCTestCase {
     let missing = URL(fileURLWithPath: NSTemporaryDirectory())
       .appendingPathComponent("missing-1Context.app", isDirectory: true)
 
-    let trashed = try AppBundleTrasher(environment: [
-      AppBundleTrashEnvironment.allowNonApplicationsKey: "1"
-    ]).trash(missing)
+    let trashed = try AppBundleTrasher(allowsNonApplicationsBundle: true).trash(missing)
 
     XCTAssertNil(trashed)
   }

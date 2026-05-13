@@ -2,15 +2,15 @@ import XCTest
 @testable import OneContextCore
 
 final class VersionTests: XCTestCase {
-  func testVersionResolutionPrefersEnvironmentOverrideForFixtureBuilds() {
+  func testVersionResolutionIgnoresEnvironmentOverrides() {
     let version = OneContextVersion.resolve(
-      environment: [OneContextVersion.overrideEnvironmentKey: "9.9.9"],
+      environment: ["ONECONTEXT_VERSION_OVERRIDE": "9.9.9"],
       bundleVersion: "1.0.0",
       executableURL: nil,
       appBundleVersion: { _ in nil }
     )
 
-    XCTAssertEqual(version, "9.9.9")
+    XCTAssertEqual(version, "1.0.0")
   }
 
   func testVersionResolutionUsesMainBundleVersionBeforeFallback() {

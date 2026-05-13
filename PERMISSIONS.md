@@ -45,17 +45,6 @@ current static site served by Caddy, belongs here. Runtime-generated wiki state
 must remain separate from durable user-authored content unless the product
 explicitly promotes it into `~/1Context/`.
 
-Memory-core adapter state lives under:
-
-```text
-~/Library/Application Support/1Context/memory-core/
-~/Library/Logs/1Context/memory-core.log
-```
-
-The adapter stores only configuration, state, and support logs. It does not
-bundle private memory logic, run implicitly during install, or scan files on its
-own. Configuring a memory core requires an explicit executable path.
-
 ### Installer Owns
 
 The installer owns placement and registration only:
@@ -85,51 +74,8 @@ Current public preview:
 - Uses native app UI, ServiceManagement background-item approval, and user
   keychain trust for `https://wiki.1context.localhost`.
 - Keeps native update checks behind app-owned signed release infrastructure.
-- Can optionally install managed Claude Code settings in `~/.claude/settings.json`.
-- Can optionally configure an external memory-core executable under the public app support directory.
 - Does not upload project data.
 - Does not request Screen Recording, Accessibility, Microphone, Calendar, Contacts, or broad file permissions.
-
-### Agent Hooks
-
-`1context agent integrations install` currently modifies Claude Code user
-settings only. It adds:
-
-```text
-~/.claude/settings.json
-  hooks.SessionStart[] -> 1context agent hook --provider claude --event SessionStart
-  statusLine          -> 1context agent statusline --provider claude
-```
-
-The public preview does not install prompt-submit, tool-use, pre-compact, or
-session-end hooks by default. Those hook commands are reserved no-op entry
-points, and require explicit product consent before installation.
-
-`1context agent integrations uninstall` removes only 1Context-managed hook and
-status-line commands. It preserves unrelated Claude settings and user hooks.
-The uninstall path should call this cleanup before the app bundle is removed, so
-Claude should not keep calling a deleted binary.
-
-If Claude settings contain `disableAllHooks`, 1Context reports manual review and
-does not install or repair hooks.
-
-Hook commands receive Claude's event JSON on stdin. The public preview uses only
-minimal fields such as `cwd` to return a small local wiki/repo pointer. It does
-not upload hook payloads. Release hooks ignore `ONECONTEXT_*` environment
-overrides unless `ONECONTEXT_AGENT_ALLOW_ENV_OVERRIDES=1` is explicitly set for
-local development/testing.
-
-Future capture/orchestration features must ask only when needed and explain why the permission is needed before relying on it.
-
-Expected future permission owners:
-
-```text
-Screen Recording       capture/vision feature, product-approved prompt
-Accessibility          automation/control feature, product-approved prompt
-Microphone             meeting/audio feature, product-approved prompt
-Browser/MCP surfaces   explicit connector setup
-Diagnostics            user-initiated support flow
-```
 
 ## Security Invariants
 
@@ -144,18 +90,11 @@ Diagnostics            user-initiated support flow
 - Do not persist dev environment overrides into release LaunchAgents.
 - Make install/start failures visible.
 - Redact user home paths in default diagnostic output.
-- Never run memory-core commands implicitly from install, diagnose, or lifecycle commands.
-- Keep memory-core subprocess calls explicit, allowlisted, timeout-bounded, and JSON-validated.
 
 ## Diagnostics
 
-`1context diagnose` and `1context debug` redact the user home directory by default. Use:
-
-```bash
-1context diagnose --no-redact
-```
-
-only for local debugging when exact paths are needed.
+`1context diagnose` is always redacted. Raw paths and private support details
+belong in internal release evidence, not the public CLI.
 
 Logs live under:
 

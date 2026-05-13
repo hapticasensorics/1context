@@ -52,8 +52,6 @@ public struct LocalWebDiagnostics: Codable, Equatable, Sendable {
   public var nextSitePath: String
   public var previousSitePath: String
   public var currentSiteHasIndex: Bool
-  public var currentSiteHasTheme: Bool
-  public var currentSiteHasEnhanceJS: Bool
   public var currentSiteHasHealth: Bool
 
   public init(
@@ -81,8 +79,6 @@ public struct LocalWebDiagnostics: Codable, Equatable, Sendable {
     nextSitePath: String,
     previousSitePath: String,
     currentSiteHasIndex: Bool,
-    currentSiteHasTheme: Bool,
-    currentSiteHasEnhanceJS: Bool,
     currentSiteHasHealth: Bool
   ) {
     self.snapshot = snapshot
@@ -109,8 +105,6 @@ public struct LocalWebDiagnostics: Codable, Equatable, Sendable {
     self.nextSitePath = nextSitePath
     self.previousSitePath = previousSitePath
     self.currentSiteHasIndex = currentSiteHasIndex
-    self.currentSiteHasTheme = currentSiteHasTheme
-    self.currentSiteHasEnhanceJS = currentSiteHasEnhanceJS
     self.currentSiteHasHealth = currentSiteHasHealth
   }
 }
@@ -597,8 +591,6 @@ public final class CaddyManager: @unchecked Sendable {
       nextSitePath: paths.wikiNext.path,
       previousSitePath: paths.wikiPrevious.path,
       currentSiteHasIndex: fileManager.fileExists(atPath: paths.wikiCurrent.appendingPathComponent("index.html").path),
-      currentSiteHasTheme: fileManager.fileExists(atPath: paths.wikiCurrent.appendingPathComponent("assets/theme.css").path),
-      currentSiteHasEnhanceJS: fileManager.fileExists(atPath: paths.wikiCurrent.appendingPathComponent("assets/enhance.js").path),
       currentSiteHasHealth: fileManager.fileExists(atPath: paths.wikiCurrent.appendingPathComponent("__1context/health").path)
     )
   }
@@ -606,17 +598,11 @@ public final class CaddyManager: @unchecked Sendable {
   public func ensurePlaceholderSite() throws {
     try RuntimePermissions.ensurePrivateDirectory(paths.wikiCurrent)
     try RuntimePermissions.ensurePrivateDirectory(paths.wikiCurrent.appendingPathComponent("__1context", isDirectory: true))
-    try RuntimePermissions.ensurePrivateDirectory(paths.wikiCurrent.appendingPathComponent("api/wiki/chat", isDirectory: true))
-    try copyBundledThemeAssetsIfAvailable(to: paths.wikiCurrent)
     try writeString(staticJSON(["status": "ok", "service": "1context-local-web"]), to: paths.wikiCurrent.appendingPathComponent("__1context/health"))
     try writeString(staticJSON(["query": "", "matches": [], "pages": []]), to: paths.wikiCurrent.appendingPathComponent("api/wiki/search.json"))
     try writeString(staticJSON(["bookmarks": []]), to: paths.wikiCurrent.appendingPathComponent("api/wiki/bookmarks.json"))
     try writeString(staticJSON([:]), to: paths.wikiCurrent.appendingPathComponent("api/wiki/state.json"))
-    try writeString(staticJSON([:]), to: paths.wikiCurrent.appendingPathComponent("api/wiki/chat/config.json"))
     guard !fileManager.fileExists(atPath: paths.wikiCurrent.appendingPathComponent("index.html").path) else { return }
-    if try copyBundledSeedWikiIfAvailable(to: paths.wikiCurrent) {
-      return
-    }
     try RuntimePermissions.ensurePrivateDirectory(paths.wikiCurrent.appendingPathComponent("your-context", isDirectory: true))
     try RuntimePermissions.ensurePrivateDirectory(paths.wikiCurrent.appendingPathComponent("for-you", isDirectory: true))
     try writeString(placeholderHTML(), to: paths.wikiCurrent.appendingPathComponent("index.html"))
@@ -904,239 +890,6 @@ public final class CaddyManager: @unchecked Sendable {
     return handle
   }
 
-  private func copyBundledThemeAssetsIfAvailable(to siteRoot: URL) throws {
-    guard let theme = bundledThemeDirectory() else { return }
-    let assets = siteRoot.appendingPathComponent("assets", isDirectory: true)
-    try RuntimePermissions.ensurePrivateDirectory(assets)
-    try copyIfPresent(theme.appendingPathComponent("css/theme.css"), to: assets.appendingPathComponent("theme.css"))
-    try copyIfPresent(theme.appendingPathComponent("js/enhance.js"), to: assets.appendingPathComponent("enhance.js"))
-
-    let assetSource = theme.appendingPathComponent("assets", isDirectory: true)
-    guard let enumerator = fileManager.enumerator(at: assetSource, includingPropertiesForKeys: [.isRegularFileKey]) else {
-      return
-    }
-    for case let source as URL in enumerator {
-      guard (try? source.resourceValues(forKeys: [.isRegularFileKey]).isRegularFile) == true else { continue }
-      let relative = relativePath(source, from: assetSource)
-      try copyIfPresent(source, to: assets.appendingPathComponent(relative))
-    }
-  }
-
-  private func copyBundledSeedWikiIfAvailable(to siteRoot: URL) throws -> Bool {
-    guard let core = bundledMemoryCoreDirectory() else { return false }
-    let seedGeneratedDirectories = bundledSeedGeneratedDirectories(in: core)
-    guard seedGeneratedDirectories.contains(where: { fileManager.fileExists(atPath: $0.appendingPathComponent("your-context.html").path) }) else {
-      return false
-    }
-
-    for generated in seedGeneratedDirectories where fileManager.fileExists(atPath: generated.path) {
-      try copyGeneratedSeedFiles(from: generated, to: siteRoot)
-    }
-    try copyBundledThemeAssetsIfAvailable(to: siteRoot)
-    try copySeedSiteJSON(from: core, to: siteRoot)
-    try RuntimePermissions.ensurePrivateDirectory(siteRoot.appendingPathComponent("your-context", isDirectory: true))
-    try RuntimePermissions.ensurePrivateDirectory(siteRoot.appendingPathComponent("for-you", isDirectory: true))
-    try copyIfPresent(siteRoot.appendingPathComponent("your-context.html"), to: siteRoot.appendingPathComponent("index.html"))
-    try copyIfPresent(siteRoot.appendingPathComponent("your-context.html"), to: siteRoot.appendingPathComponent("your-context/index.html"))
-    if let forYou = forYouSeedHTML(in: siteRoot) {
-      try copyIfPresent(forYou, to: siteRoot.appendingPathComponent("for-you.html"))
-      try copyIfPresent(forYou, to: siteRoot.appendingPathComponent("for-you/index.html"))
-      if let forYouTalk = forYouTalkSeedHTML(forYou: forYou, in: siteRoot) {
-        try copyIfPresent(forYouTalk, to: siteRoot.appendingPathComponent("for-you.talk.html"))
-      }
-    }
-    try writeString(staticJSON(["status": "ok", "service": "1context-local-web", "seed": true]), to: siteRoot.appendingPathComponent("__1context/health"))
-    return fileManager.fileExists(atPath: siteRoot.appendingPathComponent("index.html").path)
-  }
-
-  private func bundledSeedGeneratedDirectories(in core: URL) -> [URL] {
-    let menu = core.appendingPathComponent("wiki/menu", isDirectory: true)
-    guard let enumerator = fileManager.enumerator(at: menu, includingPropertiesForKeys: [.isRegularFileKey]) else {
-      return []
-    }
-    return enumerator.compactMap { item -> URL? in
-      guard let url = item as? URL,
-        url.lastPathComponent == "family.toml",
-        (try? url.resourceValues(forKeys: [.isRegularFileKey]).isRegularFile) == true
-      else {
-        return nil
-      }
-      guard familyPublishesToUserWiki(manifest: url) else {
-        return nil
-      }
-      let generated = url.deletingLastPathComponent().appendingPathComponent("generated", isDirectory: true)
-      return fileManager.fileExists(atPath: generated.path) ? generated : nil
-    }.sorted { $0.path < $1.path }
-  }
-
-  private func forYouSeedHTML(in siteRoot: URL) -> URL? {
-    guard let children = try? fileManager.contentsOfDirectory(at: siteRoot, includingPropertiesForKeys: [.isRegularFileKey]) else {
-      return nil
-    }
-    return children
-      .filter {
-        $0.lastPathComponent.hasPrefix("for-you-")
-          && $0.pathExtension == "html"
-          && !$0.lastPathComponent.contains(".talk.")
-      }
-      .sorted { $0.lastPathComponent > $1.lastPathComponent }
-      .first
-  }
-
-  private func forYouTalkSeedHTML(forYou: URL, in siteRoot: URL) -> URL? {
-    let baseName = forYou.deletingPathExtension().lastPathComponent
-    let talk = siteRoot.appendingPathComponent("\(baseName).talk.html")
-    return fileManager.fileExists(atPath: talk.path) ? talk : nil
-  }
-
-  private func copyGeneratedSeedFiles(from generated: URL, to siteRoot: URL) throws {
-    guard let enumerator = fileManager.enumerator(at: generated, includingPropertiesForKeys: [.isRegularFileKey]) else {
-      return
-    }
-    for case let source as URL in enumerator {
-      guard (try? source.resourceValues(forKeys: [.isRegularFileKey]).isRegularFile) == true else { continue }
-      guard shouldCopyPublicGeneratedSeedFile(source) else { continue }
-      let relative = relativePath(source, from: generated)
-      try copyIfPresent(source, to: siteRoot.appendingPathComponent(relative))
-    }
-  }
-
-  private func shouldCopyPublicGeneratedSeedFile(_ source: URL) -> Bool {
-    let name = source.lastPathComponent.lowercased()
-    if name == ".gitignore" || name == "render-manifest.json" { return false }
-    if name.contains(".private.") || name.contains(".internal.") { return false }
-    let allowedExtensions: Set<String> = [
-      "html", "json",
-      "css", "js", "map",
-      "png", "jpg", "jpeg", "gif", "webp", "svg", "ico",
-      "woff", "woff2", "txt"
-    ]
-    return allowedExtensions.contains(source.pathExtension.lowercased())
-  }
-
-  private func familyPublishesToUserWiki(manifest: URL) -> Bool {
-    guard let text = try? String(contentsOf: manifest, encoding: .utf8) else {
-      return true
-    }
-    var inPolicies = false
-    var publishToUserWiki: Bool?
-    var audience = ""
-
-    for rawLine in text.split(separator: "\n", omittingEmptySubsequences: false) {
-      let uncommented = rawLine
-        .split(separator: "#", maxSplits: 1, omittingEmptySubsequences: false)
-        .first
-        .map(String.init) ?? ""
-      let line = uncommented.trimmingCharacters(in: .whitespacesAndNewlines)
-      guard !line.isEmpty else { continue }
-      if line.hasPrefix("[") && line.hasSuffix("]") {
-        inPolicies = line == "[policies]"
-        continue
-      }
-      guard inPolicies else { continue }
-      let parts = line.split(separator: "=", maxSplits: 1, omittingEmptySubsequences: false)
-      guard parts.count == 2 else { continue }
-      let key = parts[0].trimmingCharacters(in: .whitespacesAndNewlines)
-      let value = normalizePolicyValue(String(parts[1]))
-      if key == "publish_to_user_wiki" {
-        if ["0", "false", "no", "off"].contains(value) {
-          publishToUserWiki = false
-        } else if ["1", "true", "yes", "on"].contains(value) {
-          publishToUserWiki = true
-        } else {
-          publishToUserWiki = false
-        }
-      } else if key == "audience" || key == "publish_audience" {
-        audience = value
-      }
-    }
-
-    if publishToUserWiki == false { return false }
-    return !["dev", "development", "operator", "control", "internal"].contains(audience)
-  }
-
-  private func normalizePolicyValue(_ value: String) -> String {
-    value
-      .trimmingCharacters(in: .whitespacesAndNewlines)
-      .trimmingCharacters(in: CharacterSet(charactersIn: "\"'"))
-      .lowercased()
-  }
-
-  private func copySeedSiteJSON(from core: URL, to siteRoot: URL) throws {
-    let source = core.appendingPathComponent("wiki/generated", isDirectory: true)
-    let api = siteRoot.appendingPathComponent("api/wiki", isDirectory: true)
-    try RuntimePermissions.ensurePrivateDirectory(api)
-    try copyIfPresent(source.appendingPathComponent("site-manifest.json"), to: siteRoot.appendingPathComponent("site-manifest.json"))
-    try copyIfPresent(source.appendingPathComponent("content-index.json"), to: siteRoot.appendingPathComponent("content-index.json"))
-    try copyIfPresent(source.appendingPathComponent("wiki-stats.json"), to: siteRoot.appendingPathComponent("wiki-stats.json"))
-    try copyIfPresent(source.appendingPathComponent("site-manifest.json"), to: api.appendingPathComponent("site.json"))
-    try copyIfPresent(source.appendingPathComponent("content-index.json"), to: api.appendingPathComponent("pages.json"))
-    try copyIfPresent(source.appendingPathComponent("wiki-stats.json"), to: api.appendingPathComponent("stats.json"))
-  }
-
-  private func relativePath(_ url: URL, from root: URL) -> String {
-    let rootPath = root.standardizedFileURL.path
-    let path = url.standardizedFileURL.path
-    guard path.hasPrefix(rootPath + "/") else {
-      return url.lastPathComponent
-    }
-    return String(path.dropFirst(rootPath.count + 1))
-  }
-
-  private func copyIfPresent(_ source: URL, to destination: URL) throws {
-    guard fileManager.fileExists(atPath: source.path) else { return }
-    try RuntimePermissions.ensurePrivateDirectory(destination.deletingLastPathComponent())
-    if source.standardizedFileURL == destination.standardizedFileURL {
-      return
-    }
-    if fileManager.fileExists(atPath: destination.path) {
-      try fileManager.removeItem(at: destination)
-    }
-    do {
-      try fileManager.copyItem(at: source, to: destination)
-    } catch {
-      if fileManager.fileExists(atPath: destination.path) {
-        try fileManager.removeItem(at: destination)
-        try fileManager.copyItem(at: source, to: destination)
-      } else {
-        throw error
-      }
-    }
-    chmod(destination.path, RuntimePermissions.privateFileMode)
-  }
-
-  private func bundledThemeDirectory() -> URL? {
-    bundledMemoryCoreDirectory()?.appendingPathComponent("wiki-engine/theme", isDirectory: true)
-  }
-
-  private func bundledMemoryCoreDirectory() -> URL? {
-    if let override = environment["ONECONTEXT_MEMORY_CORE_BUNDLE_DIR"], !override.isEmpty {
-      let core = URL(fileURLWithPath: override, isDirectory: true)
-      if fileManager.fileExists(atPath: core.appendingPathComponent("wiki-engine/theme/css/theme.css").path) {
-        return core
-      }
-    }
-
-    if let executableDirectory = currentExecutableURL()?.deletingLastPathComponent() {
-      let releaseCore = executableDirectory
-        .deletingLastPathComponent()
-        .appendingPathComponent("Resources/memory-core", isDirectory: true)
-      if fileManager.fileExists(atPath: releaseCore.appendingPathComponent("wiki-engine/theme/css/theme.css").path) {
-        return releaseCore
-      }
-
-      var directory = executableDirectory
-      for _ in 0..<8 {
-        let candidate = directory.appendingPathComponent("memory-core", isDirectory: true)
-        if fileManager.fileExists(atPath: candidate.appendingPathComponent("wiki-engine/theme/css/theme.css").path) {
-          return candidate
-        }
-        directory.deleteLastPathComponent()
-      }
-    }
-    return nil
-  }
-
   private func writeString(_ value: String, to url: URL) throws {
     try RuntimePermissions.ensurePrivateDirectory(url.deletingLastPathComponent())
     try RuntimePermissions.writePrivateString(value, toFile: url.path)
@@ -1154,95 +907,37 @@ public final class CaddyManager: @unchecked Sendable {
   private func placeholderHTML() -> String {
     """
     <!doctype html>
-    <html lang="en" data-theme="auto" data-article-width="s" data-font-size="m" data-border-radius="rounded" data-links-style="color" data-cover-image="show" data-article-style="full">
+    <html lang="en">
     <head>
       <meta charset="utf-8">
       <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
       <title>1Context Wiki</title>
-      <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png">
-      <link rel="icon" type="image/png" sizes="16x16" href="/assets/favicon-16.png">
-      <link rel="apple-touch-icon" sizes="180x180" href="/assets/apple-touch-icon.png">
       <meta name="generator" content="1Context local web">
       <meta name="description" content="1Context local wiki">
-      <script>
-        (function() {
-          try {
-            var t = localStorage.getItem('opctx-theme');
-            if (t === 'light' || t === 'dark') {
-              document.documentElement.dataset.theme = t;
-            }
-          } catch (e) {}
-        })();
-      </script>
-      <link rel="stylesheet" href="/assets/theme.css">
-      <script type="module" src="/assets/enhance.js" defer></script>
+      <style>
+        :root { color-scheme: light dark; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+        body { margin: 0; background: Canvas; color: CanvasText; }
+        main { max-width: 760px; margin: 0 auto; padding: 72px 24px; }
+        nav { display: flex; gap: 16px; margin-bottom: 48px; }
+        a { color: LinkText; text-decoration-thickness: .08em; text-underline-offset: .18em; }
+        h1 { font-size: clamp(2rem, 6vw, 4rem); line-height: 1; margin: 0 0 20px; letter-spacing: 0; }
+        h2 { font-size: 1.2rem; margin-top: 40px; }
+        p { font-size: 1.05rem; line-height: 1.6; max-width: 62ch; }
+        code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .95em; }
+      </style>
     </head>
     <body>
-      <div class="opctx-visibility-bar" data-tier="private" aria-label="Private - only you"></div>
-      <div class="opctx-progress-bar" aria-hidden="true"></div>
-
-      <header class="opctx-header">
-        <div class="opctx-header-brand">
-          <button type="button"
-                  class="opctx-brand-menu-toggle"
-                  aria-haspopup="menu"
-                  aria-expanded="false"
-                  aria-controls="opctx-brand-menu"
-                  aria-label="Open 1Context navigation menu"
-                  data-home-href="/">
-            <span class="opctx-header-logo">1Context</span>
-          </button>
-          <div id="opctx-brand-menu" class="opctx-brand-menu" role="menu" hidden>
-            <div class="opctx-brand-menu-group" role="group" aria-label="For You">
-              <div class="opctx-brand-menu-heading">For You</div>
-              <ul class="opctx-brand-menu-list">
-                <li><a href="/for-you" role="menuitem"><span class="opctx-brand-menu-label">For You</span><span class="opctx-brand-menu-sub">Rolling local memory surface</span></a></li>
-                <li><a href="/your-context" role="menuitem"><span class="opctx-brand-menu-label">Your Context</span><span class="opctx-brand-menu-sub">Working style and durable preferences</span></a></li>
-              </ul>
-            </div>
-            <div class="opctx-brand-menu-group" role="group" aria-label="Project">
-              <div class="opctx-brand-menu-heading">Project</div>
-              <ul class="opctx-brand-menu-list">
-                <li><a href="/projects" role="menuitem"><span class="opctx-brand-menu-label">Projects</span><span class="opctx-brand-menu-sub">Active, paused, completed, archived</span></a></li>
-              </ul>
-            </div>
-            <div class="opctx-brand-menu-group" role="group" aria-label="Topics">
-              <div class="opctx-brand-menu-heading">Topics</div>
-              <ul class="opctx-brand-menu-list">
-                <li><a href="/topics" role="menuitem"><span class="opctx-brand-menu-label">Topics</span><span class="opctx-brand-menu-sub">Named subjects and concept pages</span></a></li>
-              </ul>
-            </div>
-          </div>
-        </div>
-        <div class="opctx-header-search">
-          <input type="search" placeholder="Search pages, books, tags..." aria-label="Search">
-        </div>
-        <div class="opctx-header-actions">
-          <span class="opctx-tier-badge" data-tier="private" title="Only you">Private</span>
-        </div>
-      </header>
-
-      <div class="opctx-layout">
-        <nav class="opctx-toc" aria-label="Table of contents">
-          <ol>
-            <li><a href="#wiki">Wiki</a></li>
-            <li><a href="#refresh">Refresh</a></li>
-          </ol>
+      <main>
+        <nav aria-label="Wiki pages">
+          <a href="/your-context">Your Context</a>
+          <a href="/for-you">For You</a>
         </nav>
-        <main class="opctx-main">
-          <article class="opctx-article">
-            <header class="opctx-article-header">
-              <p class="opctx-kicker">Local web</p>
-              <h1 id="wiki">1Context Wiki</h1>
-              <p class="opctx-subtitle">The local web shell is ready. The first refresh publishes the latest rendered memory pages into this same 1Context interface.</p>
-            </header>
-            <section>
-              <h2 id="refresh">Refresh</h2>
-              <p>Run <code>1context wiki refresh</code> to publish the latest rendered wiki artifacts.</p>
-            </section>
-          </article>
-        </main>
-      </div>
+        <p>Local web</p>
+        <h1>1Context Wiki</h1>
+        <p>The local wiki shell is ready. 1Context will publish remembered context here as the app starts collecting useful local memory.</p>
+        <h2>How This Page Works</h2>
+        <p>This page is intentionally small: it proves the private local web surface is healthy without shipping generated developer pages or source-checkout artifacts.</p>
+      </main>
     </body>
     </html>
     """

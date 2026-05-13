@@ -1,13 +1,14 @@
 import AppKit
 import Darwin
 import Foundation
-import OneContextAgent
+import OneContextCore
 import OneContextInstall
 import OneContextLocalWeb
-import OneContextPermissions
-import OneContextRuntimeSupport
+import OneContextPlatform
+import OneContextProtocol
 import OneContextSetup
 import OneContextSparkleUpdate
+import OneContextSupervisor
 import OneContextUpdate
 
 private enum Constants {
@@ -121,8 +122,6 @@ private final class AppSetupWindowController: NSWindowController {
 
   private let messageLabel = NSTextField(labelWithString: "")
   private let localWikiRow = SetupRequirementRow(title: "Local Wiki Access")
-  private let screenRecordingRow = SetupRequirementRow(title: "Screen Recording")
-  private let accessibilityRow = SetupRequirementRow(title: "Accessibility")
   private let footer = NSStackView()
   private let refreshButton = NSButton(title: "Check Again", target: nil, action: nil)
 
@@ -179,28 +178,6 @@ private final class AppSetupWindowController: NSWindowController {
       action: localAction
     )
     setRefreshButtonVisible(!snapshot.localWikiAccess.ready || isGrantingLocalWikiAccess)
-
-    let permissions = Dictionary(uniqueKeysWithValues: snapshot.shippedPermissionRows.map { ($0.kind, $0) })
-    renderSensitiveRow(screenRecordingRow, snapshot: permissions[.screenRecording])
-    renderSensitiveRow(accessibilityRow, snapshot: permissions[.accessibility])
-  }
-
-  private func renderSensitiveRow(_ row: SetupRequirementRow, snapshot: PermissionSnapshot?) {
-    guard let snapshot else {
-      row.isHidden = true
-      return
-    }
-    row.isHidden = false
-    let status: SetupRequirementRow.Status
-    switch snapshot.status {
-    case .granted:
-      status = .granted
-    case .unavailable:
-      status = .unavailable
-    case .notChecked, .notGranted:
-      status = .notRequired
-    }
-    row.render(status: status, action: nil)
   }
 
   private func buildContent() {
@@ -233,10 +210,8 @@ private final class AppSetupWindowController: NSWindowController {
     messageLabel.isHidden = true
     stack.addArrangedSubview(messageLabel)
 
-    for row in [localWikiRow, screenRecordingRow, accessibilityRow] {
-      stack.addArrangedSubview(row)
-      row.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
-    }
+    stack.addArrangedSubview(localWikiRow)
+    localWikiRow.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
 
     footer.orientation = .horizontal
     footer.alignment = .centerY
@@ -501,14 +476,9 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
     setenv("ONECONTEXT_WIKI_URL_MODE", LocalWebURLMode.highPortHTTP.rawValue, 1)
   }
 
-  private func currentReadiness(checkSensitivePermissionsInCurrentProcess: Bool = false) -> OneContextAppReadinessSnapshot {
-    let readiness = OneContextAppReadiness.current(
-      localWeb: localWeb,
-      checkSensitivePermissionsInCurrentProcess: checkSensitivePermissionsInCurrentProcess
-    )
-    if !checkSensitivePermissionsInCurrentProcess {
-      cachedRequiredSetupReady = readiness.requiredSetupReady
-    }
+  private func currentReadiness() -> OneContextAppReadinessSnapshot {
+    let readiness = OneContextAppReadiness.current(localWeb: localWeb)
+    cachedRequiredSetupReady = readiness.requiredSetupReady
     return readiness
   }
 
@@ -591,19 +561,6 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
     NSApp.activate(ignoringOtherApps: true)
     guard alert.runModal() == .alertFirstButtonReturn else { return false }
     return moveAndRelaunch(request)
-  }
-
-  private func presentSameVersionInstallPrompt(_ request: AppInstallRequest) -> Bool {
-    let alert = NSAlert()
-    alert.messageText = "Open 1Context from Applications?"
-    alert.informativeText = "1Context is already installed. Open the installed app so updates and setup use the right copy."
-    alert.icon = loadFishAlertIcon()
-    alert.addButton(withTitle: "Open Installed")
-    alert.addButton(withTitle: "Quit")
-    NSApp.setActivationPolicy(.regular)
-    NSApp.activate(ignoringOtherApps: true)
-    guard alert.runModal() == .alertFirstButtonReturn else { return false }
-    return relaunchInstalledApp(request.destinationBundleURL)
   }
 
   private func presentOpenInstalledAppPrompt(_ request: AppInstallRequest) -> Bool {
@@ -1209,7 +1166,7 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
   }
 
   private func updateSetupWindow(message: String? = nil) {
-    let appSetup = currentReadiness(checkSensitivePermissionsInCurrentProcess: true).setup
+    let appSetup = currentReadiness().setup
     setupWindowController.render(
       appSetup,
       isGrantingLocalWikiAccess: isLocalWebSetupInFlight,
@@ -1218,7 +1175,7 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
   }
 
   private func reconcileSetupFromUserRefresh() {
-    let readiness = currentReadiness(checkSensitivePermissionsInCurrentProcess: true)
+    let readiness = currentReadiness()
     guard readiness.requiredSetupReady else {
       updateSetupWindow()
       return
@@ -1352,7 +1309,7 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
   private func confirmUninstall() -> UninstallChoice? {
     let alert = NSAlert()
     alert.messageText = "Uninstall 1Context?"
-    alert.informativeText = "This moves 1Context to Trash and removes background services, Local Wiki Access, and agent integrations. Your wiki content stays unless you choose Delete Data."
+    alert.informativeText = "This moves 1Context to Trash and removes background services and Local Wiki Access. Your wiki content stays unless you choose Delete Data."
     alert.icon = loadFishAlertIcon()
     alert.addButton(withTitle: "Uninstall")
     alert.addButton(withTitle: "Cancel")
@@ -1552,7 +1509,7 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
   }
 
   private func startSetupReadinessObservation(message: String?) {
-    let current = currentReadiness(checkSensitivePermissionsInCurrentProcess: true)
+    let current = currentReadiness()
     if current.requiredSetupReady {
       completeLocalWebSetup(readiness: current, message: message ?? "Local Wiki Access is ready.")
       return
@@ -1692,8 +1649,9 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
   nonisolated private static func startLocalWebEdge(_ localWeb: CaddyManager) {
     do {
       let current = localWeb.status()
-      let snapshot = current.running ? current : try localWeb.start()
-      try AgentConfigStore.writeWikiURL(snapshot.url)
+      if !current.running {
+        _ = try localWeb.start()
+      }
     } catch {
       recordLocalWebStartFailure(error)
     }
@@ -1752,7 +1710,6 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
   }
 
   private func recordWikiURL(_ url: String) {
-    try? AgentConfigStore.writeWikiURL(url)
   }
 
   private func wikiRPC(_ method: String, timeout: TimeInterval) async throws -> WikiMenuSnapshot {

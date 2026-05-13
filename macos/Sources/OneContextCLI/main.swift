@@ -1,11 +1,12 @@
 import Darwin
 import Foundation
-import OneContextAgent
 import OneContextInstall
 import OneContextLocalWeb
-import OneContextMemoryCore
-import OneContextRuntimeSupport
+import OneContextCore
+import OneContextPlatform
+import OneContextProtocol
 import OneContextSetup
+import OneContextSupervisor
 import OneContextUpdate
 
 @main
@@ -23,29 +24,26 @@ struct OneContextCLI {
       case nil:
         await printMain()
       case "start":
-        try rejectUnknownArguments(allowed: ["--debug"])
+        try rejectUnknownArguments()
         try await start()
       case "stop":
-        try rejectUnknownArguments(allowed: ["--debug"])
+        try rejectUnknownArguments()
         try await stop()
       case "quit":
-        try rejectUnknownArguments(allowed: ["--debug"])
+        try rejectUnknownArguments()
         try await quit()
       case "restart":
-        try rejectUnknownArguments(allowed: ["--debug"])
+        try rejectUnknownArguments()
         try await restart()
       case "status":
-        try rejectUnknownArguments(allowed: ["--debug"])
+        try rejectUnknownArguments()
         await status()
-      case "diagnose", "debug":
-        try rejectUnknownArguments(allowed: ["--no-redact"])
+      case "diagnose":
+        try rejectUnknownArguments()
         await diagnose()
       case "logs":
         try rejectUnknownArguments(allowed: ["--follow"])
         try logs()
-      case "permissions":
-        try rejectUnknownArguments(allowed: ["--all"])
-        printRequiredSetup(includeFutureSensitivePermissions: args.contains("--all"))
       case "update":
         try rejectUnknownArguments()
         try await update()
@@ -54,10 +52,6 @@ struct OneContextCLI {
         try await uninstall()
       case "setup":
         try setup()
-      case "agent":
-        try agent()
-      case "memory-core":
-        try memoryCore()
       case "wiki":
         try await wiki()
       default:
@@ -87,22 +81,16 @@ struct OneContextCLI {
       1context
       1context --version
       1context --help
-      1context start [--debug]
-      1context stop [--debug]
-      1context quit [--debug]
-      1context restart [--debug]
-      1context status [--debug]
-      1context diagnose [--no-redact]
-      1context debug [--no-redact]
+      1context start
+      1context stop
+      1context quit
+      1context restart
+      1context status
+      1context diagnose
       1context logs [--follow]
-      1context permissions [--all]
       1context update
       1context uninstall [--delete-data] [--keep-app]
       1context setup local-web <status|install|repair|uninstall>
-      1context agent hook --provider <claude|codex> --event <event>
-      1context agent statusline --provider <claude|codex>
-      1context agent integrations <status|install|repair|uninstall>
-      1context memory-core <status|doctor|configure|run>
       1context wiki <local-url|refresh>
     """)
   }
@@ -114,100 +102,33 @@ struct OneContextCLI {
     }
   }
 
-  static func printDebug(controller: RuntimeController, error: Error?) async {
-    let paths = RuntimePaths.current()
-    let launchAgent = await controller.launchAgentState()
-    print("""
-
-    Runtime:
-      LaunchAgent: \(launchAgent.loaded ? "loaded" : launchAgent.configured ? "installed" : "not installed")
-      Process: \(error == nil ? "running" : "not confirmed")
-      Socket: \(error == nil ? "responding" : "no response")
-      User Content: \(paths.userContentDirectory.path)
-      App Support: \(paths.appSupportDirectory.path)
-      Socket Path: \(paths.socketPath)
-      Log: \(paths.logPath)
-      Cache: \(paths.cacheDirectory.path)
-    """)
-    printLocalWebDiagnostics(redact: false)
-  }
-
   static func start() async throws {
-    let debug = args.contains("--debug")
-    let startedAt = Date()
     let controller = RuntimeController()
-    do {
-      try ensureRequiredSetupForUse()
-      if debug {
-        let result = try await controller.start()
-        recordCurrentWikiURL()
-        print(result.alreadyRunning ? "1Context is already running." : "1Context is running.")
-      } else {
-        try await controller.requestStart()
-        recordWikiURL(LocalWebDefaults.defaultWikiURL)
-        print("1Context Remembering.")
-      }
-      if debug { await printLifecycleDebug(controller: controller, startedAt: startedAt, error: nil) }
-    } catch {
-      if debug { await printLifecycleDebug(controller: controller, startedAt: startedAt, error: error) }
-      throw error
-    }
+    try ensureRequiredSetupForUse()
+    try await controller.requestStart()
+    recordWikiURL(LocalWebDefaults.defaultWikiURL)
+    print("1Context Remembering.")
   }
 
   static func stop() async throws {
-    let debug = args.contains("--debug")
-    let startedAt = Date()
     let controller = RuntimeController()
-    do {
-      if debug {
-        let stopped = try await controller.stop()
-        print(stopped ? "1Context is stopped." : "1Context is not running.")
-      } else {
-        try await controller.requestStop()
-        print("1Context Stopped.")
-      }
-      if debug { await printLifecycleDebug(controller: controller, startedAt: startedAt, error: CLIError.runtimeStopped) }
-    } catch {
-      if debug { await printLifecycleDebug(controller: controller, startedAt: startedAt, error: error) }
-      throw error
-    }
+    try await controller.requestStop()
+    print("1Context Stopped.")
   }
 
   static func quit() async throws {
-    let debug = args.contains("--debug")
-    let startedAt = Date()
     let controller = RuntimeController()
-    do {
-      _ = try await controller.quit()
-      CaddyManager().stop()
-      print("1Context quit.")
-      if debug { await printLifecycleDebug(controller: controller, startedAt: startedAt, error: CLIError.runtimeStopped) }
-    } catch {
-      if debug { await printLifecycleDebug(controller: controller, startedAt: startedAt, error: error) }
-      throw error
-    }
+    _ = try await controller.quit()
+    CaddyManager().stop()
+    print("1Context quit.")
   }
 
   static func restart() async throws {
-    let debug = args.contains("--debug")
-    let startedAt = Date()
     let controller = RuntimeController()
-    do {
-      try ensureRequiredSetupForUse()
-      _ = try await controller.restart()
-      recordCurrentWikiURL()
-      print("1Context is running.")
-      if debug { await printLifecycleDebug(controller: controller, startedAt: startedAt, error: nil) }
-    } catch {
-      if debug { await printLifecycleDebug(controller: controller, startedAt: startedAt, error: error) }
-      throw error
-    }
-  }
-
-  static func printLifecycleDebug(controller: RuntimeController, startedAt: Date, error: Error?) async {
-    let elapsed = Date().timeIntervalSince(startedAt)
-    print("\nCompleted in \(String(format: "%.2f", elapsed))s.")
-    await printDebug(controller: controller, error: error)
+    try ensureRequiredSetupForUse()
+    _ = try await controller.restart()
+    recordCurrentWikiURL()
+    print("1Context is running.")
   }
 
   static func update() async throws {
@@ -222,7 +143,6 @@ struct OneContextCLI {
   }
 
   static func status() async {
-    let debug = args.contains("--debug")
     let controller = RuntimeController()
     switch controller.status() {
     case .success(let health):
@@ -235,7 +155,6 @@ struct OneContextCLI {
         Restart it with:
           1context restart
         """.utf8))
-        if debug { await printDebug(controller: controller, error: RuntimeControlError.launchAgentFailed("runtime version mismatch")) }
         Foundation.exit(1)
       }
       let setupReady = health.requiredSetupReady ?? true
@@ -261,21 +180,19 @@ struct OneContextCLI {
           1context start
         """)
       }
-      if debug { await printDebug(controller: controller, error: nil) }
-    case .failure(let error):
+    case .failure:
       FileHandle.standardError.write(Data("""
       1Context is not running.
 
       Start it with:
         1context start
       """.utf8))
-      if debug { await printDebug(controller: controller, error: error) }
       Foundation.exit(1)
     }
   }
 
   static func diagnose() async {
-    let redact = !args.contains("--no-redact")
+    let redact = true
     let paths = RuntimePaths.current()
     let controller = RuntimeController()
     let health = controller.status()
@@ -311,8 +228,13 @@ struct OneContextCLI {
 
     printLocalWebDiagnostics(redact: redact)
 
-    print("\nPermissions:")
-    printPermissionDiagnostics()
+    print("\nSetup:")
+    for line in OneContextAppSetupDiagnostics.render(
+      readiness.setup,
+      redact: { displayPath($0, redact: redact) }
+    ) {
+      print("  \(line)")
+    }
 
     print("\nLaunchAgents:")
     printLaunchAgent(label: LaunchAgentManager.runtimeLabel, redact: redact)
@@ -323,9 +245,6 @@ struct OneContextCLI {
     for line in AppUpdateDiagnostics.render(updateSnapshot) {
       print(line)
     }
-
-    print("\nMemory Core:")
-    printMemoryCoreStatus(MemoryCoreAdapter().status(forceCheck: false), redact: redact)
 
     print("\nLogs:")
     printLogTail(title: "Runtime", path: paths.logPath, redact: redact)
@@ -366,25 +285,7 @@ struct OneContextCLI {
     print("  Previous Site: \(displayPath(diagnostics.previousSitePath, redact: redact))")
     print("  Next Site: \(displayPath(diagnostics.nextSitePath, redact: redact))")
     print("  Current Has Index: \(yesNo(diagnostics.currentSiteHasIndex))")
-    print("  Current Has Theme: \(yesNo(diagnostics.currentSiteHasTheme))")
-    print("  Current Has Enhance JS: \(yesNo(diagnostics.currentSiteHasEnhanceJS))")
     print("  Current Has Health: \(yesNo(diagnostics.currentSiteHasHealth))")
-  }
-
-  static func printRequiredSetup(includeFutureSensitivePermissions: Bool = false) {
-    print("1Context Setup\n")
-    let readiness = OneContextAppReadiness.current()
-    for line in OneContextAppReadinessDiagnostics.render(readiness) {
-      print(line)
-    }
-    print("")
-    for line in OneContextAppSetupDiagnostics.render(
-      readiness.setup,
-      includeFutureSensitivePermissions: includeFutureSensitivePermissions,
-      redact: { displayPath($0, redact: true) }
-    ) {
-      print(line)
-    }
   }
 
   static func ensureRequiredSetupForUse() throws {
@@ -412,7 +313,6 @@ struct OneContextCLI {
   }
 
   static func recordWikiURL(_ url: String) {
-    try? AgentConfigStore.writeWikiURL(url)
   }
 
   static func logs() throws {
@@ -428,23 +328,6 @@ struct OneContextCLI {
     print("1Context Logs\n")
     printLogTail(title: "Runtime", path: runtimeLog, lineCount: 80)
     printLogTail(title: "Menu", path: menuLog, lineCount: 80)
-  }
-
-  static func agent() throws {
-    guard args.count >= 2 else {
-      throw CLIError.commandFailed("agent requires a subcommand")
-    }
-
-    switch args[1] {
-    case "hook":
-      try agentHook()
-    case "integrations":
-      try agentIntegrations()
-    case "statusline":
-      try agentStatusLine()
-    default:
-      throw CLIError.commandFailed("Unknown agent subcommand: \(args[1])")
-    }
   }
 
   static func setup() throws {
@@ -523,10 +406,6 @@ struct OneContextCLI {
       _ = try LocalWebSetupInstaller().uninstall()
     }
 
-    recordCleanupStep("Agent integrations", warnings: &warnings) {
-      _ = try agentIntegrationManager().uninstall()
-    }
-
     for label in [LaunchAgentManager.menuLabel, LaunchAgentManager.runtimeLabel] {
       recordCleanupStep("LaunchAgent \(label)", warnings: &warnings) {
         try uninstallLaunchAgent(label: label)
@@ -545,7 +424,7 @@ struct OneContextCLI {
       print("Preserved application bundle.")
     } else {
       recordCleanupStep("Application bundle", warnings: &warnings) {
-        _ = try AppBundleTrasher(environment: ProcessInfo.processInfo.environment).trash(installedAppBundleURL())
+        _ = try AppBundleTrasher().trash(installedAppBundleURL())
       }
     }
 
@@ -568,130 +447,6 @@ struct OneContextCLI {
     } catch {
       warnings.append("\(title): \(error.localizedDescription)")
     }
-  }
-
-  static func agentHook() throws {
-    let values = Array(args.dropFirst(2))
-    let providerValue = try optionValue("--provider", in: values)
-    let eventValue = try optionValue("--event", in: values)
-    try rejectUnknownAgentOptions(values, allowed: ["--provider", "--event"])
-
-    guard let provider = AgentProvider(rawValue: providerValue) else {
-      throw CLIError.commandFailed("Unsupported agent provider: \(providerValue)")
-    }
-    guard let event = AgentHookEvent(rawValue: eventValue) else {
-      throw CLIError.commandFailed("Unsupported agent hook event: \(eventValue)")
-    }
-
-    let input = FileHandle.standardInput.readDataToEndOfFile()
-    let agentEnvironment = oneContextAgentRuntimeEnvironment()
-    let paths = RuntimePaths.current(environment: agentEnvironment)
-    let executor = AgentHookExecutor(
-      paths: AgentPaths.current(environment: agentEnvironment),
-      userContentDirectory: paths.userContentDirectory,
-      environment: agentEnvironment
-    )
-    let output = executor.execute(provider: provider, event: event, inputData: input)
-    let encoder = JSONEncoder()
-    let data = try encoder.encode(output)
-    FileHandle.standardOutput.write(data)
-    FileHandle.standardOutput.write(Data("\n".utf8))
-  }
-
-  static func agentStatusLine() throws {
-    let values = Array(args.dropFirst(2))
-    let providerValue = try optionValue("--provider", in: values)
-    try rejectUnknownAgentOptions(values, allowed: ["--provider"])
-
-    guard let provider = AgentProvider(rawValue: providerValue) else {
-      throw CLIError.commandFailed("Unsupported agent provider: \(providerValue)")
-    }
-
-    let input = FileHandle.standardInput.readDataToEndOfFile()
-    let agentEnvironment = oneContextAgentRuntimeEnvironment()
-    let output = AgentStatusLineRenderer(
-      paths: AgentPaths.current(environment: agentEnvironment),
-      environment: agentEnvironment
-    ).render(provider: provider, inputData: input)
-    print(output)
-  }
-
-  static func agentIntegrationManager() -> AgentIntegrationManager {
-    AgentIntegrationManager(
-      paths: AgentPaths.current(environment: oneContextAgentRuntimeEnvironment()),
-      claudeSettingsPath: AgentIntegrationManager.defaultClaudeSettingsPath(),
-      executablePath: AgentIntegrationManager.preferredExecutablePath(
-        currentExecutablePath: currentExecutablePath() ?? CommandLine.arguments[0]
-      )
-    )
-  }
-
-  static func agentIntegrations() throws {
-    guard args.count == 3 else {
-      throw CLIError.commandFailed("Usage: 1context agent integrations <status|install|repair|uninstall>")
-    }
-
-    let manager = agentIntegrationManager()
-
-    let report: AgentIntegrationsReport
-    switch args[2] {
-    case "status":
-      report = manager.status()
-    case "install":
-      report = try manager.install()
-    case "repair":
-      report = try manager.repair()
-    case "uninstall":
-      report = try manager.uninstall()
-    default:
-      throw CLIError.commandFailed("Unknown integrations command: \(args[2])")
-    }
-
-    print(manager.render(report))
-  }
-
-  static func memoryCore() throws {
-    guard args.count >= 2 else {
-      throw CLIError.commandFailed("memory-core requires a subcommand")
-    }
-
-    let adapter = MemoryCoreAdapter()
-    switch args[1] {
-    case "status":
-      guard args.count == 2 else { throw CLIError.commandFailed("Usage: 1context memory-core status") }
-      print("Memory Core\n")
-      try printMemoryCoreStatusAndFailIfDegraded(adapter.status(forceCheck: true), redact: false)
-    case "doctor":
-      guard args.count == 2 else { throw CLIError.commandFailed("Usage: 1context memory-core doctor") }
-      print("Memory Core Doctor\n")
-      try printMemoryCoreStatusAndFailIfDegraded(adapter.doctor(), redact: false)
-    case "configure":
-      try memoryCoreConfigure(adapter: adapter)
-    case "run":
-      try memoryCoreRun(adapter: adapter)
-    default:
-      throw CLIError.commandFailed("Unknown memory-core subcommand: \(args[1])")
-    }
-  }
-
-  static func memoryCoreConfigure(adapter: MemoryCoreAdapter) throws {
-    let values = Array(args.dropFirst(2))
-    if values == ["--clear"] {
-      printMemoryCoreStatus(try adapter.clear(), redact: false)
-      return
-    }
-    let executable = try optionValue("--executable", in: values)
-    try rejectUnknownAgentOptions(values, allowed: ["--executable"])
-    try printMemoryCoreStatusAndFailIfDegraded(try adapter.configure(executable: executable), redact: false)
-  }
-
-  static func memoryCoreRun(adapter: MemoryCoreAdapter) throws {
-    guard args.count >= 4, args[2] == "--" else {
-      throw CLIError.commandFailed("Usage: 1context memory-core run -- <memory-core args...>")
-    }
-    let runArgs = Array(args.dropFirst(3))
-    let result = try adapter.run(arguments: runArgs)
-    print(result.stdout, terminator: result.stdout.hasSuffix("\n") ? "" : "\n")
   }
 
   static func wiki() async throws {
@@ -724,7 +479,6 @@ struct OneContextCLI {
     let manager = CaddyManager()
     let current = manager.status()
     let snapshot = current.running ? current : try manager.start()
-    try? AgentConfigStore.writeWikiURL(snapshot.url)
     return snapshot
   }
 
@@ -770,58 +524,6 @@ struct OneContextCLI {
     let unknown = args.dropFirst(2).filter { !allowed.contains($0) }
     if let first = unknown.first {
       throw CLIError.unknownArgument(first)
-    }
-  }
-
-  static func printMemoryCoreStatusAndFailIfDegraded(_ status: MemoryCoreStatus, redact: Bool) throws {
-    printMemoryCoreStatus(status, redact: redact)
-    if status.health == .degraded {
-      throw CLIError.commandFailed("Memory core health is degraded")
-    }
-  }
-
-  static func printMemoryCoreStatus(_ status: MemoryCoreStatus, redact: Bool) {
-    print("  Configured: \(status.configured ? "yes" : "no")")
-    print("  Enabled: \(status.enabled ? "yes" : "no")")
-    print("  Executable: \(status.executable.map { displayPath($0, redact: redact) } ?? "missing")")
-    print("  Health: \(status.health.rawValue)")
-    print("  Config: \(displayPath(status.paths.configFile.path, redact: redact))")
-    print("  State: \(displayPath(status.paths.stateFile.path, redact: redact))")
-    print("  Log: \(displayPath(status.paths.logFile.path, redact: redact))")
-    if let lastCheckedAt = status.lastCheckedAt {
-      print("  Last Checked: \(ISO8601DateFormatter().string(from: lastCheckedAt))")
-    }
-    if let lastError = status.lastError {
-      print("  Last Error: \(displayPath(lastError, redact: redact))")
-    }
-  }
-
-  static func printPermissionDiagnostics() {
-    let snapshots = PermissionReporter().snapshots()
-    for line in PermissionDiagnostics.render(snapshots) {
-      print(line)
-    }
-  }
-
-  static func optionValue(_ name: String, in values: [String]) throws -> String {
-    guard let index = values.firstIndex(of: name), index + 1 < values.count else {
-      throw CLIError.commandFailed("Missing \(name)")
-    }
-    let value = values[index + 1]
-    guard !value.hasPrefix("--") else {
-      throw CLIError.commandFailed("Missing value for \(name)")
-    }
-    return value
-  }
-
-  static func rejectUnknownAgentOptions(_ values: [String], allowed: Set<String>) throws {
-    var index = 0
-    while index < values.count {
-      let value = values[index]
-      guard allowed.contains(value) else {
-        throw CLIError.unknownArgument(value)
-      }
-      index += 2
     }
   }
 
@@ -962,9 +664,7 @@ struct OneContextCLI {
   }
 
   static func installedAppBundleURL() -> URL {
-    let environment = ProcessInfo.processInfo.environment
-    let appPath = environment["ONECONTEXT_TEST_APP_BUNDLE_PATH"] ?? "/Applications/1Context.app"
-    return URL(fileURLWithPath: appPath, isDirectory: true)
+    URL(fileURLWithPath: "/Applications/1Context.app", isDirectory: true)
   }
 
   static func appVersion() -> String? {

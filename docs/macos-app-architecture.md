@@ -1,6 +1,6 @@
 # macOS App Architecture
 
-1Context is a signed macOS app first. The CLI is a support surface, not the product's setup path. Setup, permissions, update, and the local wiki should therefore be modeled as app-owned capabilities with small infrastructure helpers underneath them.
+1Context is a signed macOS app first. The CLI is a support surface, not the product's setup path. Setup, update, and the local wiki should therefore be modeled as app-owned capabilities with small infrastructure helpers underneath them.
 
 ## Current Direction
 
@@ -11,7 +11,6 @@ flowchart TD
   App["1Context.app\nmenu bar UI"] --> Setup["OneContextSetup\nreadiness + required setup model"]
   CLI["1context CLI\nsupport + automation"] --> Setup
   Setup --> LocalWeb["OneContextLocalWeb\nwiki server + diagnostics"]
-  Setup --> Permissions["OneContextPermissions\nTCC permission snapshots"]
   App --> SparkleUpdate["OneContextSparkleUpdate\nSparkle controller + user driver"]
   SparkleUpdate --> Update["OneContextUpdate\npolicy + update snapshots"]
   LocalWeb --> Caddy["bundled Caddy\nuser-owned HTTPS backend"]
@@ -22,15 +21,14 @@ flowchart TD
 
 ## Source Boundaries
 
-- `OneContextMenuBar`: owns user-facing setup prompts, permissions UI, update UI, and opening the wiki.
+- `OneContextMenuBar`: owns user-facing setup prompts, update UI, and opening the wiki.
 - `OneContextInstall`: owns app placement decisions and moving/relaunching into `/Applications` before setup, update, or runtime chores run.
 - `OneContextSetup`: owns the app-level readiness and setup model. It answers “can the required app experience work?” without knowing about AppKit.
-- `OneContextPermissions`: owns macOS privacy permission snapshots such as Screen Recording and Accessibility.
 - `OneContextLocalWeb`: owns Caddy configuration, local HTTPS diagnostics, certificate trust installation, and ServiceManagement registration.
 - `OneContextLocalWebProxy`: stays intentionally tiny. It only binds the privileged local HTTPS port and forwards bytes to the user-owned Caddy backend.
 - `OneContextUpdate`: owns update policy parsing, appcast configuration snapshots, user-facing update strings, post-install message gates, and CLI-readable update diagnostics.
 - `OneContextSparkleUpdate`: owns the Sparkle framework controller and user driver used by the menu app. Mandatory/optional behavior lives here, backed by the policy values from `OneContextUpdate`.
-- `OneContextCLI`: supports diagnostics, automation, and repair. It should route users back to the app-owned permissions/setup surface when required setup is missing.
+- `OneContextCLI`: supports diagnostics, automation, and repair. It should route users back to the app-owned setup surface when required setup is missing.
 
 ## Setup Policy
 
@@ -52,7 +50,7 @@ stateDiagram-v2
   WikiOpen --> PermissionsUI: setup later becomes stale or missing
 ```
 
-The required launch gate is Local Wiki Access because the app's primary wiki URL is `https://wiki.1context.localhost/your-context`. Future sensitive permissions, such as Screen Recording and Accessibility, should be added to `OneContextPermissions` and surfaced through `OneContextSetup` before feature code depends on them.
+The required launch gate is Local Wiki Access because the app's primary wiki URL is `https://wiki.1context.localhost/your-context`. Future sensitive permissions should be added only with the feature that needs them, plus policy and tests for the exact user-facing prompt.
 
 ## Smoke Policy
 

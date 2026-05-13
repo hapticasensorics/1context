@@ -32,5 +32,5 @@ for ((i = 1; i <= COUNT; i++)); do
   "$BIN_DIR/1context" status >/dev/null
 done
 
-"$BIN_DIR/1context" status --debug | grep -q "Socket: responding"
+"$BIN_DIR/1context" diagnose | grep -q "Health: OK"
 echo "1Context RPC stress passed ($COUNT status requests)."

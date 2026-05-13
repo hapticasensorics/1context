@@ -19,7 +19,7 @@ fi
 
 if [[ ! -d "$APP" ]]; then
   echo "1Context.app not found: $APP" >&2
-  echo "Build one first with: ALLOW_UNNOTARIZED=1 NOTARIZE=0 ./scripts/package-macos-release.sh" >&2
+  echo "Build one first with: ./scripts/package-macos-smoke.sh" >&2
   exit 1
 fi
 
@@ -44,7 +44,6 @@ assert_url_contains() {
   grep -q "$expected" <<<"$output"
 }
 
-export ONECONTEXT_SKIP_APP_INSTALL_PROMPT=1
 export no_proxy="wiki.1context.localhost,localhost,127.0.0.1,::1"
 export NO_PROXY="$no_proxy"
 
@@ -71,7 +70,7 @@ if [[ "$unknown_api_status" != "404" ]]; then
   exit 1
 fi
 
-"$CLI" permissions | grep -q "Local Wiki Access: Granted"
-"$CLI" status --debug | grep -q "URL: https://wiki.1context.localhost/your-context"
+"$CLI" diagnose | grep -q "Local Wiki Access: Granted"
+"$CLI" diagnose | grep -q "URL: https://wiki.1context.localhost/your-context"
 
 echo "Product HTTPS smoke passed."

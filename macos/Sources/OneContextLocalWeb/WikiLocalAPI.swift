@@ -118,28 +118,11 @@ public final class WikiLocalAPIHandler: @unchecked Sendable {
       return .json(statePayload())
     case ("POST", "/api/wiki/state"), ("PATCH", "/api/wiki/state"):
       return saveState(request.body)
-    case ("GET", "/api/wiki/chat/config"):
-      return .json(chatConfigPayload())
-    case ("POST", "/api/wiki/chat/provider"):
-      return saveProviderPreference(request.body)
-    case ("POST", "/api/wiki/chat/reset"):
-      return .json(["ok": true, "enabled": false, "message": chatUnavailableMessage])
-    case ("POST", "/api/wiki/chat"):
-      return .json([
-        "enabled": false,
-        "provider": "none",
-        "text": chatUnavailableMessage,
-        "message": chatUnavailableMessage
-      ])
     case ("OPTIONS", _):
       return WikiLocalAPIResponse(statusCode: 204, reason: "No Content")
     default:
       return .json(["error": "not_found", "message": "Unknown wiki API route"], statusCode: 404, reason: "Not Found")
     }
-  }
-
-  private var chatUnavailableMessage: String {
-    "The 1Context Librarian chat bridge is not enabled in this release yet. Search, bookmarks, and page state are live; chat will connect through the isolated memory bridge next."
   }
 
   private func healthPayload() -> [String: Any] {
@@ -225,7 +208,6 @@ public final class WikiLocalAPIHandler: @unchecked Sendable {
     ]
     if state["settings"] == nil { state["settings"] = [:] }
     if state["bookmarks"] == nil { state["bookmarks"] = [] }
-    if state["chat"] == nil { state["chat"] = [:] }
     return state
   }
 
@@ -245,42 +227,6 @@ public final class WikiLocalAPIHandler: @unchecked Sendable {
       let data = try JSONSerialization.data(withJSONObject: state, options: [.prettyPrinted, .sortedKeys])
       try RuntimePermissions.writePrivateData(data, to: paths.wikiBrowserStateFile)
       return .json(statePayload())
-    } catch {
-      return .json(["error": "write_failed", "message": error.localizedDescription], statusCode: 500, reason: "Internal Server Error")
-    }
-  }
-
-  private func chatConfigPayload() -> [String: Any] {
-    let state = statePayload()
-    let chat = state["chat"] as? [String: Any] ?? [:]
-    let settings = state["settings"] as? [String: Any] ?? [:]
-    let preferred = chat["preferred_provider"] as? String ?? settings["ai-provider"] as? String ?? "auto"
-    return [
-      "enabled": false,
-      "chat_available": false,
-      "preferred_provider": preferred,
-      "providers": [
-        ["id": "codex", "label": "Codex", "installed": false],
-        ["id": "claude", "label": "Claude", "installed": false]
-      ],
-      "message": chatUnavailableMessage
-    ]
-  }
-
-  private func saveProviderPreference(_ body: Data) -> WikiLocalAPIResponse {
-    guard body.count <= Self.maxStateBodyBytes, let incoming = decodeJSONObject(body) else {
-      return .json(["error": "invalid_json", "message": "Provider preference must be a JSON object"], statusCode: 400, reason: "Bad Request")
-    }
-    let provider = incoming["provider"] as? String ?? "auto"
-    var state = readJSON(paths.wikiBrowserStateFile) ?? [:]
-    var chat = state["chat"] as? [String: Any] ?? [:]
-    chat["preferred_provider"] = provider
-    state["chat"] = chat
-    do {
-      try RuntimePermissions.ensurePrivateDirectory(paths.wikiBrowserStateFile.deletingLastPathComponent())
-      let data = try JSONSerialization.data(withJSONObject: state, options: [.prettyPrinted, .sortedKeys])
-      try RuntimePermissions.writePrivateData(data, to: paths.wikiBrowserStateFile)
-      return .json(["ok": true, "preferred_provider": provider, "enabled": false])
     } catch {
       return .json(["error": "write_failed", "message": error.localizedDescription], statusCode: 500, reason: "Internal Server Error")
     }

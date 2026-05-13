@@ -51,7 +51,7 @@ Evidence: \`$EVIDENCE_DIR\`
 ## Useful Checks
 
 \`\`\`bash
-/Applications/1Context.app/Contents/MacOS/1context-cli diagnose --no-redact
+/Applications/1Context.app/Contents/MacOS/1context-cli diagnose
 /Applications/1Context.app/Contents/MacOS/1context-cli setup local-web status
 launchctl print gui/\$(id -u)/com.haptica.1context 2>/dev/null || true
 launchctl print gui/\$(id -u)/com.haptica.1context.menu 2>/dev/null || true
