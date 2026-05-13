@@ -2,15 +2,60 @@
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import re
 import shlex
 import sys
-import tomllib
 import xml.etree.ElementTree as ET
 from pathlib import Path
 from urllib.parse import urlparse
 from typing import Any
+
+try:
+  import tomllib  # type: ignore[import-not-found]
+except ModuleNotFoundError:
+  class _SimpleTOMLDecodeError(ValueError):
+    pass
+
+  class _SimpleTOML:
+    TOMLDecodeError = _SimpleTOMLDecodeError
+
+    @staticmethod
+    def load(handle: Any) -> dict[str, Any]:
+      data: dict[str, Any] = {}
+      section: dict[str, Any] = data
+      for line_number, raw_line in enumerate(handle.read().decode("utf-8").splitlines(), start=1):
+        line = raw_line.strip()
+        if not line or line.startswith("#"):
+          continue
+        if line.startswith("[") and line.endswith("]"):
+          section_name = line[1:-1].strip()
+          if not section_name:
+            raise _SimpleTOMLDecodeError(f"empty section at line {line_number}")
+          section = data
+          for part in section_name.split("."):
+            section = section.setdefault(part, {})
+            if not isinstance(section, dict):
+              raise _SimpleTOMLDecodeError(f"section conflict at line {line_number}")
+          continue
+        if "=" not in line:
+          raise _SimpleTOMLDecodeError(f"invalid TOML line {line_number}")
+        key, value = line.split("=", 1)
+        key = key.strip()
+        value = value.strip()
+        if not key:
+          raise _SimpleTOMLDecodeError(f"empty key at line {line_number}")
+        if value in {"true", "false"}:
+          parsed: Any = value == "true"
+        elif value.startswith('"') and value.endswith('"'):
+          parsed = json.loads(value)
+        else:
+          raise _SimpleTOMLDecodeError(f"unsupported value at line {line_number}")
+        section[key] = parsed
+      return data
+
+  tomllib = _SimpleTOML()
 
 
 ROOT = Path(__file__).resolve().parents[1]
