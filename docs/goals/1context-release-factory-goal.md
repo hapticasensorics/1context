@@ -133,6 +133,8 @@ plugin tree. The factory must keep package-smoke checks that fail on
 
 - [x] Dev build passes local smoke without public asset mutation.
 - [x] Prototype build creates a pass-around DMG without appcast mutation.
+- [x] Private build and publish create private update assets without public
+  appcast mutation.
 - [ ] Private release creates private update assets and proves update on at
   least one non-primary Mac.
 - [ ] Official release proves public Sparkle update on the protected runner.
@@ -195,3 +197,12 @@ plugin tree. The factory must keep package-smoke checks that fail on
   dist/private/appcast.xml`, `codesign --verify`, `spctl --assess`, and
   `./scripts/test-launch-agent-package.sh` passed. Elapsed private build time:
   135 seconds.
+- 2026-05-13: Created the private artifact repo
+  `hapticasensorics/1context-private-release` and proved
+  `./scripts/release-train.sh publish --channel private`. The publish uploaded
+  `1Context-0.1.67-macos-arm64.dmg`, its SHA-256 file, `appcast.xml`, and
+  `private-asset-manifest.json` to the private `v0.1.67` release, downloaded the
+  assets back through GitHub, validated the private appcast, verified the DMG
+  checksum, passed evidence redaction, and wrote
+  `/tmp/1ctx-release-factory-private-publish-evidence/timings/publish-private.json`.
+  Elapsed private publish time: 7 seconds.
