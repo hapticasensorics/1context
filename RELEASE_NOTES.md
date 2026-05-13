@@ -1,18 +1,14 @@
-# 1Context v0.1.63 Public Preview
+# 1Context v0.1.64 Public Preview
 
 This release includes:
 
-- `0.1.63` is a mandatory updater-health release.
-- Automatic update checks no longer show the support popup when no update was
-  found and no install started.
-- Automatic check-only failures retry silently and then stay quiet if the app is
-  already current.
-- Real failed update or install attempts still keep the old app usable and show
-  simple support copy after retries.
-- Manual `Check for Updates` remains a normal user action and can say
-  `1Context is up to date.`
-- Release proof now includes a broken-appcast check-only smoke that verifies no
-  support alert is shown.
+- `0.1.64` is a mandatory release-workflow rehearsal.
+- The protected self-hosted release runner now has an explicit release keychain
+  preflight for Developer ID signing, Sparkle signing, and notarization.
+- The release workflow can build the signed/notarized app and publish the
+  Sparkle appcast assets without relying on a local manual upload fallback.
+- Mandatory updates remain quiet and policy-controlled.
+- Manual `Check for Updates` remains a normal user action.
 
 Install:
 

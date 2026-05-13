@@ -1,12 +1,12 @@
 schema_version = "1context.update-policy.v1"
-version = "0.1.63"
+version = "0.1.64"
 update_class = "mandatory"
 approved_by = "paul"
-reason = "mandatory_updater_check_noise_repair"
-reason_detail = "0.1.63 fixes automatic updater check-only failures that could show the support popup while the app was already current, keeps real failed update/install supportability, and preserves quiet mandatory update behavior."
-minimum_autoupdate_version = "0.1.62"
+reason = "mandatory_release_workflow_rehearsal"
+reason_detail = "0.1.64 proves the protected self-hosted release workflow can sign, notarize, publish, and audit Sparkle assets using the dedicated runner release keychain; it keeps mandatory update behavior quiet and policy-controlled."
+minimum_autoupdate_version = "0.1.63"
 minimum_update_version = ""
-critical_update_version = "0.1.63"
+critical_update_version = "0.1.64"
 
 [ui]
 show_release_notes_in_update_window = false
