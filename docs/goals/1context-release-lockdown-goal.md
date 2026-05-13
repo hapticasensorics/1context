@@ -22,18 +22,14 @@ templates and user content; it should not expose this release checklist at
 `/goal` or copy it into `wiki-site/current`. Evidence and checklist updates now
 belong in this docs file and companion files under `docs/goals/`.
 
-Current status as of 2026-05-13: `v0.1.63` is published as the mandatory
-updater-health repair. The public release assets passed the latest/download
-audit, and the self-hosted Mac proof updated an installed `0.1.62` app to
-`0.1.63` through the public Sparkle feed, then held steady for 120 seconds.
-The remaining release-systems gap is narrower now: `v0.1.63` was published with
-the local production release path from the `paulhan` keychain because the
-protected release workflow could reach the self-hosted runner but the runner
-account could not see signing/Sparkle credentials. The `haptica_release` runner
-now has a dedicated release keychain, GitHub environment variables/secrets point
-at that keychain and Sparkle signing material, and the workflow has explicit
-prepare/check steps. The next proof step is to make `0.1.64` publish through
-that release workflow, then continue to the final `0.1.65` public update proof.
+Current status as of 2026-05-13: `v0.1.64` is published as the protected
+release-workflow rehearsal. The protected self-hosted Release workflow signed,
+notarized, published, and audited the `v0.1.64` Sparkle assets without the local
+manual upload fallback. The public release assets passed an independent
+four-probe latest/download audit, and the self-hosted Mac proof updated an
+installed `0.1.63` app to `0.1.64` through the public Sparkle feed, then held
+steady for 120 seconds. The next proof step is the final `0.1.65` blessed
+public update proof plus the remaining GUI/restart/Homebrew cleanup items.
 
 1Context should behave like a professional macOS app whose job is to remember
 user-directed work. The app is not a shy utility hiding its needs. When a
@@ -1293,21 +1289,22 @@ Descartes maximal release-delivery plan:
   Evidence: `.github/workflows/release.yml` targets
   `self-hosted`, `macOS`, `ARM64`, and `onecontext-update-runner`, guarded by
   the `onecontext-update-runner` environment. `actionlint` passed.
-- [ ] Repair self-hosted release-runner credential visibility so the release
+- [x] Repair self-hosted release-runner credential visibility so the release
   workflow can publish without a local manual upload fallback.
-  Current finding: release run `25778208043` got past checkout, Caddy install,
+  Evidence: release run `25778208043` got past checkout, Caddy install,
   and tool-version checks, then failed in `Check local release credentials`
   because the runner account could not see a Developer ID Application identity
   or the Sparkle EdDSA key for `com.haptica.1context.sparkle`. The local
-  `paulhan` keychain can see both and produced the `v0.1.63` release. Repair
-  progress: the `haptica_release` runner account now has a dedicated
+  `paulhan` keychain can see both and produced the `v0.1.63` release. Repair:
+  the `haptica_release` runner account now has a dedicated
   `/Users/haptica_release/Library/Keychains/1context-release.keychain-db`
   release keychain with the Developer ID identity and `1context-notary`
   profile verified over SSH, and the protected `onecontext-update-runner`
   environment now has release-keychain and Sparkle signing variables/secrets.
   The workflow now runs `scripts/prepare-macos-release-keychain.sh` and
-  `scripts/check-macos-release-credentials.sh`; keep this open until a tagged
-  release workflow publishes a signed/notarized release without local fallback.
+  `scripts/check-macos-release-credentials.sh`. Proof: protected Release run
+  `25779501898` published signed/notarized `v0.1.64` assets and passed its
+  built-in public asset audit without local fallback.
 - [x] Keep release workflow execution tag-only and fail before packaging unless
   `GITHUB_REF == refs/tags/v$(VERSION)`.
   Evidence: `.github/workflows/release.yml` checks the tag before package
@@ -1378,6 +1375,23 @@ Descartes maximal release-delivery plan:
   `version-final.txt` records `plist=0.1.63` and `cli=0.1.63`; the log records
   Sparkle replacing `0.1.62` with `0.1.63` within seven seconds and a
   120-second steady-state proof.
+- [x] Publish and audit signed/notarized `v0.1.64` release assets from the
+  protected self-hosted Release workflow.
+  Evidence: Release run `25779501898` passed on `v0.1.64`, including release
+  keychain prepare, credential preflight, version/update-policy validation,
+  signed/notarized app and DMG build, Sparkle appcast generation, GitHub release
+  upload, and built-in public asset audit. Independent proof:
+  `ONECONTEXT_RELEASE_AUDIT_PROBES=4 scripts/audit-github-release-assets.sh
+  v0.1.64` passed. Release DMG SHA-256:
+  `0c0d3df16216c0f87b92a782bd5f4baabf0f31d4edf02fc374f29fc366bd64b2`.
+- [x] Dispatch, pass, and download the self-hosted `0.1.63 -> 0.1.64` update
+  proof.
+  Evidence: self-hosted run `25779677917` passed. Artifact downloaded to
+  `dist/self-hosted-run-25779677917/`; `result.txt` records `result=passed`,
+  `old_version=0.1.63`, `new_version=0.1.64`, `update_class=mandatory`, and the
+  final feed as the public latest appcast. The log records Sparkle replacing
+  `0.1.63` with `0.1.64` within seven seconds and a 120-second steady-state
+  proof; `version-final.txt` records `plist=0.1.64` and `cli=0.1.64`.
 - [ ] Repeat the same public release audit and self-hosted proof pattern for
   the final `0.1.64 -> 0.1.65` hop.
 
@@ -1531,18 +1545,21 @@ Closed-loop proof plan:
   and CLI status artifacts.
 - [ ] Prove desired state `running` survives update/restart unless the user
   explicitly stops remembering.
-- [ ] Run a full release rehearsal where the only accepted proof is installed
+- [x] Run a full release rehearsal where the only accepted proof is installed
   app behavior after remote update.
-- [ ] Configure the release workflow with signing/notarization secrets or move
+  Evidence: protected Release run `25779501898` published `v0.1.64`, and
+  self-hosted update-proof run `25779677917` installed public `0.1.63`, updated
+  through the public Sparkle feed to `0.1.64`, and held steady for 120 seconds.
+- [x] Configure the release workflow with signing/notarization secrets or move
   production signing to the self-hosted Mac runner, so future blessed releases
   do not require a local manual upload fallback.
   Evidence: `.github/workflows/release.yml` now targets the protected
   self-hosted Mac runner for production release packaging/signing/notarization,
   and `actionlint`, `scripts/test-release-proof-request.sh`, and GitHub CI for
-  commit `92e77f0` passed. Repair progress: the runner has a dedicated release
-  keychain and the protected environment has the matching keychain/Sparkle
-  secrets. Current gap: this stays open until the release workflow itself
-  publishes a signed/notarized release without local fallback.
+  commit `92e77f0` passed. The runner has a dedicated release keychain and the
+  protected environment has the matching keychain/Sparkle secrets. Final proof:
+  protected Release run `25779501898` published signed/notarized `v0.1.64`
+  assets without local fallback.
 - [x] Validate and consolidate the release docs so stale professional-app
   milestone/checklist pages no longer compete with the current release runbook.
   Evidence: `docs/macos-release-runbook.md`, `docs/README.md`, and the updated
@@ -1579,11 +1596,21 @@ Closed-loop proof plan:
   dispatch, watch, and artifact download modes, and is covered by
   `scripts/test-release-proof-request.sh`, `scripts/test-upgrade-paths.sh`, and
   `./scripts/test.sh`.
-- [ ] Validate this release-lockdown goal doc, release policy manifest, public
+- [x] Validate this release-lockdown goal doc, release policy manifest, public
   release notes, appcast, GitHub release assets, and installed app version all
   agree before the final `0.1.64` rehearsal.
+  Evidence: `VERSION`, `release/update-policy.toml`, `RELEASE_NOTES.md`, the
+  public `v0.1.64` appcast, GitHub release assets, and self-hosted installed
+  `version-final.txt` all agree on `0.1.64`. Proof:
+  `scripts/check-version-consistency.sh`, `scripts/check-update-policy.sh`,
+  `scripts/audit-github-release-assets.sh v0.1.64`, Release run `25779501898`,
+  and self-hosted proof run `25779677917`.
 - [ ] Prove menu bar and Settings screenshots match the policy after rehearsal.
-- [ ] Prove remote Sparkle update into `0.1.64`.
+- [x] Prove remote Sparkle update into `0.1.64`.
+  Evidence: self-hosted run `25779677917` installed `0.1.63`, used the public
+  latest appcast, observed `plist=0.1.63 cli=0.1.63` at
+  `2026-05-13T05:11:48Z`, then observed `plist=0.1.64 cli=0.1.64` at
+  `2026-05-13T05:11:55Z`, followed by a 120-second steady-state proof.
 
 ##### 0.1.65 Blessed Professional App
 
