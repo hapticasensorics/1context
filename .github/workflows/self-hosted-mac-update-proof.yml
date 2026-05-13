@@ -72,10 +72,6 @@ jobs:
 
       - uses: actions/checkout@v6
 
-      - name: Validate release manifest
-        shell: bash
-        run: ./scripts/check-release-manifest.sh --require-clean
-
       - name: Resolve expected new version
         id: versions
         shell: bash
@@ -100,7 +96,7 @@ jobs:
           ONECONTEXT_EXPECTED_UPDATE_CLASS: ${{ inputs.update_class }}
           ONECONTEXT_UPDATE_PROOF_TIMEOUT_SECONDS: ${{ inputs.update_timeout_seconds }}
           ONECONTEXT_STEADY_STATE_SECONDS: ${{ inputs.steady_state_seconds }}
-        run: ./scripts/self-hosted-update-proof.sh
+        run: ./scripts/release-train.sh prove --runner-execute
 
       - name: Upload update proof artifacts
         if: always()

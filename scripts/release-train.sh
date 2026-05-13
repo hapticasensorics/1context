@@ -31,6 +31,10 @@ require_tool() {
   fi
 }
 
+release_audit_log() {
+  printf '[release-audit] %s\n' "$*"
+}
+
 quote_command() {
   printf '%q ' "$@"
   printf '\n'
@@ -113,6 +117,171 @@ output.write_text(json.dumps({
 }, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 PY
 }
+
+audit_public_release_assets() (
+  set -euo pipefail
+
+  local tag="$1"
+  local repo="${ONECONTEXT_GITHUB_REPO:-hapticasensorics/1context}"
+  local probes="${ONECONTEXT_RELEASE_AUDIT_PROBES:-1}"
+  local probe_interval_seconds="${ONECONTEXT_RELEASE_AUDIT_INTERVAL_SECONDS:-0}"
+  local latest_appcast_url="${ONECONTEXT_LATEST_APPCAST_URL:-https://github.com/$repo/releases/latest/download/appcast.xml}"
+  local stable_dmg_url="${ONECONTEXT_STABLE_DMG_URL:-https://github.com/$repo/releases/latest/download/1Context.dmg}"
+  local work_dir
+  work_dir="$(mktemp -d /tmp/1context-release-audit-XXXXXX)"
+  trap 'rm -rf "$work_dir"' EXIT
+
+  require_tool gh
+  require_tool python3
+  require_tool curl
+
+  release_audit_log "reading GitHub release $repo@$tag"
+  gh release view "$tag" --repo "$repo" --json tagName,isDraft,isPrerelease,assets,url > "$work_dir/release.json"
+
+  python3 - "$work_dir/release.json" "$tag" "$VERSION" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+release = json.loads(Path(sys.argv[1]).read_text())
+tag = sys.argv[2]
+version = sys.argv[3]
+if release.get("tagName") != tag:
+    raise SystemExit(f"release tag {release.get('tagName')!r} != expected {tag!r}")
+if release.get("isDraft"):
+    raise SystemExit("release is still draft")
+if release.get("isPrerelease"):
+    raise SystemExit("release is marked prerelease")
+assets = {asset["name"] for asset in release.get("assets", [])}
+required = {
+    f"1Context-{version}-macos-arm64.dmg",
+    f"1Context-{version}-macos-arm64.dmg.sha256",
+    "1Context.dmg",
+    "1Context.dmg.sha256",
+    "appcast.xml",
+}
+missing = sorted(required - assets)
+if missing:
+    raise SystemExit(f"release is missing assets: {', '.join(missing)}")
+print(release.get("url", ""))
+PY
+
+  release_audit_log "downloading appcast.xml"
+  gh release download "$tag" --repo "$repo" --pattern appcast.xml --dir "$work_dir" --clobber >/dev/null
+  "$ROOT/scripts/release-manifest.py" validate --appcast "$work_dir/appcast.xml"
+
+  if ! [[ "$probes" =~ ^[0-9]+$ ]] || (( probes < 1 )); then
+    fail "ONECONTEXT_RELEASE_AUDIT_PROBES must be a positive integer."
+  fi
+  if ! [[ "$probe_interval_seconds" =~ ^[0-9]+$ ]]; then
+    fail "ONECONTEXT_RELEASE_AUDIT_INTERVAL_SECONDS must be a non-negative integer."
+  fi
+
+  release_audit_log "checking latest/download appcast propagation"
+  local latest_ok=0
+  local probe
+  for ((probe = 1; probe <= probes; probe++)); do
+    if (( probe > 1 && probe_interval_seconds > 0 )); then
+      sleep "$probe_interval_seconds"
+    fi
+    if curl --fail --location --silent --show-error "$latest_appcast_url" --output "$work_dir/latest-appcast.xml" &&
+      "$ROOT/scripts/release-manifest.py" validate --appcast "$work_dir/latest-appcast.xml" &&
+      cmp -s "$work_dir/appcast.xml" "$work_dir/latest-appcast.xml"; then
+      latest_ok=1
+      release_audit_log "latest/download appcast probe $probe/$probes passed"
+      break
+    fi
+    release_audit_log "latest/download appcast probe $probe/$probes has not propagated yet"
+  done
+  if [[ "$latest_ok" != "1" ]]; then
+    fail "latest/download appcast does not match the $tag appcast yet: $latest_appcast_url"
+  fi
+
+  release_audit_log "probing appcast enclosure download"
+  gh release download "$tag" \
+    --repo "$repo" \
+    --pattern "1Context-$VERSION-macos-arm64.dmg.sha256" \
+    --pattern "1Context.dmg.sha256" \
+    --dir "$work_dir" \
+    --clobber >/dev/null
+
+  python3 - "$work_dir/appcast.xml" "$VERSION" > "$work_dir/enclosure.txt" <<'PY'
+import sys
+import xml.etree.ElementTree as ET
+from pathlib import Path
+from urllib.parse import urlparse
+
+appcast = Path(sys.argv[1])
+version = sys.argv[2]
+root = ET.parse(appcast).getroot()
+item = root.find("channel/item")
+if item is None:
+    raise SystemExit("appcast missing channel/item")
+enclosure = item.find("enclosure")
+if enclosure is None:
+    raise SystemExit("appcast missing enclosure")
+url = enclosure.attrib.get("url", "")
+if not url:
+    raise SystemExit("appcast enclosure missing url")
+name = Path(urlparse(url).path).name
+expected_name = f"1Context-{version}-macos-arm64.dmg"
+if name != expected_name:
+    raise SystemExit(f"appcast enclosure asset {name!r} != expected {expected_name!r}")
+length = enclosure.attrib.get("length", "")
+print(url)
+print(length)
+print(name)
+PY
+
+  local enclosure_url enclosure_length enclosure_name expected_sha stable_expected_sha
+  enclosure_url="$(sed -n '1p' "$work_dir/enclosure.txt")"
+  enclosure_length="$(sed -n '2p' "$work_dir/enclosure.txt")"
+  enclosure_name="$(sed -n '3p' "$work_dir/enclosure.txt")"
+  expected_sha="$(awk '{ print $1; exit }' "$work_dir/$enclosure_name.sha256")"
+  stable_expected_sha="$(awk '{ print $1; exit }' "$work_dir/1Context.dmg.sha256")"
+
+  if [[ -z "$expected_sha" ]]; then
+    fail "Release checksum file for $enclosure_name is empty."
+  fi
+  if [[ -z "$stable_expected_sha" ]]; then
+    fail "Release checksum file for 1Context.dmg is empty."
+  fi
+  if [[ "$stable_expected_sha" != "$expected_sha" ]]; then
+    fail "Stable 1Context.dmg checksum $stable_expected_sha != versioned $enclosure_name checksum $expected_sha."
+  fi
+
+  for ((probe = 1; probe <= probes; probe++)); do
+    if (( probe > 1 && probe_interval_seconds > 0 )); then
+      sleep "$probe_interval_seconds"
+    fi
+    local output actual_size actual_sha stable_output stable_size stable_sha
+    output="$work_dir/enclosure-$probe.dmg"
+    curl --fail --location --silent --show-error "$enclosure_url" --output "$output"
+    actual_size="$(wc -c < "$output" | tr -d '[:space:]')"
+    if [[ -n "$enclosure_length" && "$actual_size" != "$enclosure_length" ]]; then
+      fail "Downloaded enclosure size $actual_size != appcast length $enclosure_length on probe $probe."
+    fi
+    actual_sha="$(shasum -a 256 "$output" | awk '{ print $1 }')"
+    if [[ "$actual_sha" != "$expected_sha" ]]; then
+      fail "Downloaded enclosure sha256 $actual_sha != expected $expected_sha on probe $probe."
+    fi
+    release_audit_log "appcast enclosure probe $probe/$probes passed"
+
+    stable_output="$work_dir/stable-$probe.dmg"
+    curl --fail --location --silent --show-error "$stable_dmg_url" --output "$stable_output"
+    stable_size="$(wc -c < "$stable_output" | tr -d '[:space:]')"
+    if [[ -n "$enclosure_length" && "$stable_size" != "$enclosure_length" ]]; then
+      fail "Downloaded stable 1Context.dmg size $stable_size != appcast length $enclosure_length on probe $probe."
+    fi
+    stable_sha="$(shasum -a 256 "$stable_output" | awk '{ print $1 }')"
+    if [[ "$stable_sha" != "$expected_sha" ]]; then
+      fail "Downloaded stable 1Context.dmg sha256 $stable_sha != versioned expected $expected_sha on probe $probe."
+    fi
+    release_audit_log "stable 1Context.dmg probe $probe/$probes passed"
+  done
+
+  release_audit_log "release asset audit passed for $tag"
+)
 
 ensure_tag_ref() {
   if [[ -n "${GITHUB_REF:-}" ]]; then
@@ -201,7 +370,7 @@ release_publish() {
     "$ROOT/dist/appcast.xml" \
     "$ASSET_MANIFEST" \
     --clobber
-  "$ROOT/scripts/audit-github-release-assets.sh" "$TAG"
+  audit_public_release_assets "$TAG"
   write_release_evidence "publish"
   "$ROOT/scripts/redact-evidence.sh" "$EVIDENCE_DIR"
   "$ROOT/scripts/audit-evidence-redaction.sh" "$EVIDENCE_DIR"
@@ -227,6 +396,10 @@ release_prove() {
         ;;
       --dispatch)
         mode="dispatch"
+        shift
+        ;;
+      --runner-execute)
+        mode="runner-execute"
         shift
         ;;
       --repo)
@@ -270,6 +443,24 @@ release_prove() {
         ;;
     esac
   done
+
+  if [[ "$mode" == "runner-execute" ]]; then
+    "$ROOT/scripts/check-release-manifest.sh" --require-clean
+    if [[ -n "${ONECONTEXT_OLD_VERSION:-}" && "$ONECONTEXT_OLD_VERSION" != "$PREVIOUS_VERSION" ]]; then
+      fail "Runner old_version (${ONECONTEXT_OLD_VERSION}) must match release/release.toml previous_version ($PREVIOUS_VERSION)."
+    fi
+    if [[ -n "${ONECONTEXT_NEW_VERSION:-}" && "$ONECONTEXT_NEW_VERSION" != "$VERSION" ]]; then
+      fail "Runner new_version (${ONECONTEXT_NEW_VERSION}) must match release/release.toml version ($VERSION)."
+    fi
+    if [[ -n "${ONECONTEXT_EXPECTED_UPDATE_CLASS:-}" && "$ONECONTEXT_EXPECTED_UPDATE_CLASS" != "$UPDATE_CLASS" ]]; then
+      fail "Runner update_class (${ONECONTEXT_EXPECTED_UPDATE_CLASS}) must match release/release.toml update_class ($UPDATE_CLASS)."
+    fi
+    export ONECONTEXT_OLD_VERSION="${ONECONTEXT_OLD_VERSION:-$PREVIOUS_VERSION}"
+    export ONECONTEXT_NEW_VERSION="${ONECONTEXT_NEW_VERSION:-$VERSION}"
+    export ONECONTEXT_STAGING_APPCAST_URL="${ONECONTEXT_STAGING_APPCAST_URL:-$PUBLIC_APPCAST_URL}"
+    export ONECONTEXT_EXPECTED_UPDATE_CLASS="${ONECONTEXT_EXPECTED_UPDATE_CLASS:-$UPDATE_CLASS}"
+    exec "$ROOT/scripts/release/internal/self-hosted-update-proof.sh"
+  fi
 
   case "$ref" in
     main|release/*|rc/*|v*) ;;
@@ -378,7 +569,7 @@ PY
 
 release_audit() {
   release_validate
-  "$ROOT/scripts/audit-github-release-assets.sh" "$TAG"
+  audit_public_release_assets "$TAG"
   if [[ -d "$EVIDENCE_DIR" ]]; then
     "$ROOT/scripts/audit-evidence-redaction.sh" "$EVIDENCE_DIR"
   fi

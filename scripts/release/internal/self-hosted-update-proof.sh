@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
 APP="${ONECONTEXT_INSTALLED_APP:-/Applications/1Context.app}"
 ARCH="${ONECONTEXT_ARCH:-arm64}"
 REPO="${ONECONTEXT_GITHUB_REPO:-hapticasensorics/1context}"

@@ -53,27 +53,14 @@ final class SparkleUpdateControllerTests: XCTestCase {
     )
   }
 
-  func testRetryDelayOverrideSupportsShortSmokeHorizons() {
+  func testRetryDelaysAreProductPolicyConstants() {
     XCTAssertEqual(
-      AppManagedSparkleUserDriverPolicy.silentFailureRetryDelays(
-        for: .automaticMandatory,
-        environment: ["ONECONTEXT_SPARKLE_AUTOMATIC_RETRY_DELAYS_SECONDS": "0.1, 0.2, 0.3"]
-      ),
-      [0.1, 0.2, 0.3]
-    )
-    XCTAssertEqual(
-      AppManagedSparkleUserDriverPolicy.silentFailureRetryDelays(
-        for: .userInitiated,
-        environment: ["ONECONTEXT_SPARKLE_MANUAL_RETRY_DELAYS_SECONDS": "0"]
-      ),
-      [0]
-    )
-    XCTAssertEqual(
-      AppManagedSparkleUserDriverPolicy.silentFailureRetryDelays(
-        for: .automaticMandatory,
-        environment: ["ONECONTEXT_SPARKLE_AUTOMATIC_RETRY_DELAYS_SECONDS": "not-a-delay"]
-      ),
+      AppManagedSparkleUserDriverPolicy.silentFailureRetryDelays(for: .automaticMandatory),
       [15, 90, 300]
+    )
+    XCTAssertEqual(
+      AppManagedSparkleUserDriverPolicy.silentFailureRetryDelays(for: .userInitiated),
+      [2]
     )
   }
 

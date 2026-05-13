@@ -71,8 +71,8 @@ release assets:
 
 ## Update Policy
 
-Founder-controlled policy lives in [update_policy.html](update_policy.html) for
-human review and `release/release.toml` for machine release truth.
+Founder-controlled policy lives in `release/release.toml`. The runbook explains
+the product rule; the manifest is the machine-enforced release truth.
 
 Mandatory releases may interrupt active use and should auto-install/relaunch as
 soon as Sparkle can safely do so. Optional releases should stay quiet until the
@@ -118,13 +118,9 @@ not more planning docs:
 - Non-destructive uninstall preserving `~/1Context`.
 - Controlled delete-data uninstall in a fixture account or fixture path.
 
-Useful local harnesses:
-
-```bash
-./scripts/harness-macos-clean-machine-checklist.sh
-./scripts/harness-macos-setup-flow.sh
-./scripts/test-macos-uninstall-command.sh
-```
+The normalized release proof should own this evidence. Keep any exploratory
+local checks temporary until they become `release-train.sh prove` proof JSON or
+focused tests such as `scripts/test-macos-uninstall-command.sh`.
 
 Track detailed release-train work in
 [goals/1context-release-lockdown-goal.md](goals/1context-release-lockdown-goal.md).

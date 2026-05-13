@@ -51,7 +51,8 @@ flywheel and turning the memory system on safely.
 ## Current Sources
 
 - Release operations: [docs/macos-release-runbook.md](docs/macos-release-runbook.md)
-- Update policy: [docs/update_policy.html](docs/update_policy.html)
+- Update policy: [release/release.toml](release/release.toml) and
+  [docs/macos-release-runbook.md](docs/macos-release-runbook.md)
 - App boundaries: [docs/macos-app-architecture.md](docs/macos-app-architecture.md)
 - Local web contract: [docs/local-web-contract.md](docs/local-web-contract.md)
 - Permissions contract: [PERMISSIONS.md](PERMISSIONS.md)

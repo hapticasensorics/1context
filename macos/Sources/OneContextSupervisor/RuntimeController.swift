@@ -303,13 +303,6 @@ public final class RuntimeController {
 
   private func findDaemonPath() -> String? {
     let fm = FileManager.default
-    if environment["ONECONTEXT_ALLOW_DAEMON_OVERRIDE"] == "1",
-      let override = environment["ONECONTEXT_DAEMON_PATH"]
-    {
-      let resolved = URL(fileURLWithPath: override).resolvingSymlinksInPath().path
-      return fm.isExecutableFile(atPath: resolved) ? resolved : nil
-    }
-
     guard let executableDirectory = currentExecutableURL()?.deletingLastPathComponent() else {
       return nil
     }

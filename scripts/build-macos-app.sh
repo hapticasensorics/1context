@@ -176,18 +176,6 @@ UPDATE_POLICY_PLIST_KEYS="$(cat <<PLIST
 PLIST
 )"
 
-SMOKE_PLIST_KEYS=""
-if [[ "${ONECONTEXT_SMOKE_FIXTURE:-0}" == "1" ]]; then
-  SMOKE_STATE_DIR_ESCAPED="$(plist_escape "${ONECONTEXT_SMOKE_STATE_DIR:-/tmp/1context-sparkle-smoke}")"
-  SMOKE_PLIST_KEYS="$(cat <<PLIST
-  <key>OneContextSmokeFixture</key>
-  <true/>
-  <key>OneContextSmokeStateDir</key>
-  <string>$SMOKE_STATE_DIR_ESCAPED</string>
-PLIST
-)"
-fi
-
 cat > "$CONTENTS_DIR/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -215,7 +203,6 @@ cat > "$CONTENTS_DIR/Info.plist" <<PLIST
   <true/>
 $UPDATE_POLICY_PLIST_KEYS
 $SPARKLE_PLIST_KEYS
-$SMOKE_PLIST_KEYS
 </dict>
 </plist>
 PLIST

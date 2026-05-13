@@ -118,9 +118,10 @@ Measurement:
   fewer.
 - Current measurement after deleting generated outputs, agent integration,
   shipped memory-core packaging, public debug/permissions surfaces, install
-  env hooks, the runtime-support shim, structural grep tests, and the dead chat
-  API shell, and dead helpers: 17 files and 8,362 nonblank lines, a
-  52,947-line / 86.36%
+  env hooks, the runtime-support shim, structural grep tests, the dead chat API
+  shell, old GUI harnesses, stale policy docs/assets, and Sparkle retry env
+  hooks: 17 files and 8,299 nonblank lines, a
+  53,010-line / 86.46%
   reduction from the baseline.
   This passes the 24,523-line 60% reduction target.
 
@@ -197,11 +198,11 @@ env.
 - [x] Delete `scripts/request-release-proof.sh`.
 - [x] Delete `scripts/test-release-proof-request.sh` after proof request
   coverage moves into `scripts/test-release-train.sh`.
-- [ ] Delete `scripts/audit-github-release-assets.sh` after asset checks move
+- [x] Delete `scripts/audit-github-release-assets.sh` after asset checks move
   into `scripts/release-train.sh audit` or `scripts/release-manifest.py`.
-- [ ] Change `.github/workflows/self-hosted-mac-update-proof.yml` to enter
+- [x] Change `.github/workflows/self-hosted-mac-update-proof.yml` to enter
   through `scripts/release-train.sh prove`.
-- [ ] Absorb or move `scripts/self-hosted-update-proof.sh` under an internal
+- [x] Absorb or move `scripts/self-hosted-update-proof.sh` under an internal
   implementation path that is not documented as a release command.
 - [x] Delete `scripts/collect-release-lockdown-evidence.sh`.
 - [x] Delete `scripts/classify-release-lockdown-diagnostics.py`.
@@ -230,20 +231,29 @@ Evidence, 2026-05-13: `scripts/audit-evidence-redaction.sh` no longer edits
 `proof-results/*.json`; it only writes `redaction-report.json` and fails on
 forbidden evidence. Proof: `scripts/test-release-train.sh`.
 
+Evidence, 2026-05-13: moved the GitHub public asset audit into
+`scripts/release-train.sh audit`/`publish`, deleted
+`scripts/audit-github-release-assets.sh`, moved the real-Mac proof engine to
+`scripts/release/internal/self-hosted-update-proof.sh`, and changed the
+self-hosted workflow to execute it only through
+`scripts/release-train.sh prove --runner-execute`. Proof:
+`scripts/test-release-train.sh`, `bash -n`, and negative `rg` over active docs,
+scripts, and workflows for the deleted public script paths.
+
 ### 5. Shipped App Backdoor Removal
 
-- [ ] Delete `ONECONTEXT_SMOKE_FIXTURE` from production app build and launch
+- [x] Delete `ONECONTEXT_SMOKE_FIXTURE` from production app build and launch
   behavior.
-- [ ] Delete `ONECONTEXT_SHOW_SETUP_ON_LAUNCH`.
+- [x] Delete `ONECONTEXT_SHOW_SETUP_ON_LAUNCH`.
 - [x] Delete `ONECONTEXT_VERSION_OVERRIDE`.
 - [ ] Delete product path overrides in `Paths.swift`.
 - [x] Delete install prompt bypass and destination override hooks in
   `AppInstall.swift`.
-- [ ] Delete daemon/runtime override gates that are not needed by production.
+- [x] Delete daemon/runtime override gates that are not needed by production.
 - [x] Delete agent override gates that only exist for legacy harnesses.
 - [ ] Delete local-web setup path overrides that make the product depend on
   source-checkout layout.
-- [ ] Delete Sparkle retry/test env overrides once retry behavior is covered by
+- [x] Delete Sparkle retry/test env overrides once retry behavior is covered by
   reducer tests and release-train proof.
 - [x] Delete public `--no-redact` diagnostic output from the product CLI.
 - [ ] Replace any remaining product test hooks with internal harness fixtures
@@ -260,6 +270,20 @@ install-move harnesses. Proof: `swift test --package-path macos`,
 `./scripts/test.sh`, `./scripts/package-macos-smoke.sh`,
 `./scripts/test-launch-agent-package.sh`, `actionlint`, `bash -n`,
 `git diff --check`, and negative `rg` over the deleted env names.
+
+Evidence, 2026-05-13: removed `ONECONTEXT_SMOKE_FIXTURE`,
+`ONECONTEXT_SMOKE_STATE_DIR`, and `ONECONTEXT_SHOW_SETUP_ON_LAUNCH` from the app
+build, menu launch path, and active scripts. Deleted old ad hoc GUI harnesses
+that preserved those hooks. Removed `ONECONTEXT_ALLOW_DAEMON_OVERRIDE` and
+`ONECONTEXT_DAEMON_PATH` from runtime daemon discovery. Proof:
+`swift test --package-path macos`, `bash -n`, and negative `rg`.
+
+Evidence, 2026-05-13: removed Sparkle retry-delay environment overrides from
+the shipped updater policy. Retry timing is now a product constant covered by
+pure reducer tests rather than a smoke-harness process variable. Proof:
+`swift test --package-path macos` and negative `rg` for
+`ONECONTEXT_SPARKLE_AUTOMATIC_RETRY_DELAYS_SECONDS` /
+`ONECONTEXT_SPARKLE_MANUAL_RETRY_DELAYS_SECONDS` in active code.
 
 ### 6. Local Web And Permissions Cleanup
 
@@ -375,9 +399,10 @@ validate`, `./scripts/test-release-train.sh`, `bash -n`, and `git diff --check`
 passed. `scripts/measure-shipped-app-lines.sh` reports 8,796 nonblank
 shipped-app lines, an 85.65% reduction from baseline.
 
-Evidence, 2026-05-13: after the public CLI/env-hook, chat/API, and dead-helper
-cleanup, `scripts/measure-shipped-app-lines.sh` reports 8,362 nonblank
-shipped-app lines, an 86.36% reduction from baseline.
+Evidence, 2026-05-13: after the public CLI/env-hook, chat/API, dead-helper,
+old harness, stale policy-doc, and Sparkle retry-env cleanup,
+`scripts/measure-shipped-app-lines.sh` reports 8,299 nonblank shipped-app
+lines, an 86.46% reduction from baseline.
 
 ### 11. Dead Code, Assets, And Docs
 
@@ -389,15 +414,15 @@ shipped-app lines, an 86.36% reduction from baseline.
   live tests confirm they are unused.
 - [x] Delete the `OneContextRuntimeSupport` re-export module if direct imports
   are cleaner after the package graph is simplified.
-- [ ] Delete stale update-policy screenshots and assets such as
+- [x] Delete stale update-policy screenshots and assets such as
   `current-update-prompt.png` when no doc uses them.
-- [ ] Delete unused wiki icon assets if no shipped surface references them.
+- [x] Delete unused wiki icon assets if no shipped surface references them.
 - [x] Rewrite `docs/macos-release-runbook.md` around only the release train.
 - [x] Rewrite `docs/development.md` so local packaging points at smoke tooling,
   not release tooling.
 - [x] Rewrite `docs/ci/self-hosted-mac-runner.md` around release-train proof,
   runner attestation, and evidence.
-- [ ] Delete or rewrite `docs/update_policy.html` after policy lives in the
+- [x] Delete or rewrite `docs/update_policy.html` after policy lives in the
   release manifest and control panel plan.
 - [x] Update `ROADMAP.md`, `PERMISSIONS.md`, and `docs/local-web-contract.md`
   so they no longer teach old architecture.
@@ -412,6 +437,13 @@ CLI/daemon/menu imports to direct module dependencies. Updated `ROADMAP.md`,
 current docs no longer teach agent hooks, shipped memory-core, public raw
 diagnostics, or old install harnesses.
 
+Evidence, 2026-05-13: deleted stale `docs/update_policy.html`, its obsolete
+update-prompt screenshot asset, and unused wiki theme icon variants. Updated
+`ROADMAP.md`, `docs/README.md`, and `docs/macos-release-runbook.md` so active
+docs point at `release/release.toml` and `scripts/release-train.sh` instead of
+a separate policy page. Proof: negative `rg` over active docs for
+`update_policy.html`, `current-update-prompt.png`, and `assets/update-policy`.
+
 Evidence, 2026-05-13: deleted unreferenced helpers
 `presentSameVersionInstallPrompt`, `LaunchAgentManager.registerMenu`,
 `load_content_index`, `normalized_scope`, and `find_transition_contract`.
@@ -424,7 +456,7 @@ agent/memory-core cuts. Proof: negative `rg` over `macos/`, `memory-core/`, and
 - [x] Replace grep-based structural tests with behavior tests and proof JSON
   validation where practical.
 - [x] Keep negative `rg` audits for deleted public surfaces and env knobs.
-- [ ] Add release-train tests for dirty-tree failure, deleted-script absence,
+- [x] Add release-train tests for dirty-tree failure, deleted-script absence,
   manifest mismatch failure, missing artifact failure, and proof matrix
   completeness.
 - [x] Run `scripts/release-train.sh validate`.
@@ -433,7 +465,7 @@ agent/memory-core cuts. Proof: negative `rg` over `macos/`, `memory-core/`, and
 - [x] Run package smoke for the allowlisted app bundle.
 - [ ] Run self-hosted real-Mac proof through the release train after the cleanup
   is packaged.
-- [ ] Capture a final deletion audit artifact showing removed files, negative
+- [x] Capture a final deletion audit artifact showing removed files, negative
   compatibility checks, and the current release command surface.
 - [x] Capture the final shipped app code-line measurement and prove at least a
   60% reduction from the baseline.
@@ -447,9 +479,14 @@ proof: `swift test --package-path macos`, `./scripts/test.sh`,
 validate`, `cd memory-core && uv run --with pytest pytest`, `actionlint`,
 `bash -n`, `git diff --check`, and `scripts/measure-shipped-app-lines.sh`.
 
+Evidence, 2026-05-13: captured the deletion audit artifact at
+`docs/goals/evidence/delete-bloat-audit-2026-05-13.md`, including removed file
+families, negative checks for deleted public surfaces, proof commands, and the
+86.46% shipped-app line reduction result.
+
 ### 13. Exit
 
-- [ ] No documented production release path exists except
+- [x] No documented production release path exists except
   `scripts/release-train.sh`.
 - [x] No old update-policy files or scripts remain.
 - [x] No old proof request scripts remain as documented user/operator entry

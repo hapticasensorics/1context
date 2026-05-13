@@ -460,22 +460,6 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
     appVersion
   }
 
-  private var smokeFixtureEnabled: Bool {
-    Bundle.main.object(forInfoDictionaryKey: "OneContextSmokeFixture") as? Bool == true
-  }
-
-  private func configureSmokeFixtureEnvironmentIfNeeded() {
-    guard smokeFixtureEnabled else { return }
-    let stateDir = (Bundle.main.object(forInfoDictionaryKey: "OneContextSmokeStateDir") as? String)
-      ?? NSTemporaryDirectory().appending("1context-sparkle-smoke")
-    setenv("ONECONTEXT_APP_SUPPORT_DIR", "\(stateDir)/Application Support/1Context", 1)
-    setenv("ONECONTEXT_USER_CONTENT_DIR", "\(stateDir)/1Context", 1)
-    setenv("ONECONTEXT_LOG_DIR", "\(stateDir)/Logs/1Context", 1)
-    setenv("ONECONTEXT_CACHE_DIR", "\(stateDir)/Caches/1Context", 1)
-    setenv("ONECONTEXT_LAUNCH_AGENT_DISABLED", "1", 1)
-    setenv("ONECONTEXT_WIKI_URL_MODE", LocalWebURLMode.highPortHTTP.rawValue, 1)
-  }
-
   private func currentReadiness() -> OneContextAppReadinessSnapshot {
     let readiness = OneContextAppReadiness.current(localWeb: localWeb)
     cachedRequiredSetupReady = readiness.requiredSetupReady
@@ -662,17 +646,13 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
 
   func applicationDidFinishLaunching(_ notification: Notification) {
     let start = perfStart()
-    configureSmokeFixtureEnvironmentIfNeeded()
-    let smokeFixture = smokeFixtureEnabled
-    guard smokeFixture || !handleAppInstallAtLaunch() else { return }
+    guard !handleAppInstallAtLaunch() else { return }
     guard acquireMenuInstanceLock() else {
       NSApp.terminate(nil)
       return
     }
-    if !smokeFixture {
-      adoptLaunchRuntimeIntent()
-      registerMenuLaunchAgent()
-    }
+    adoptLaunchRuntimeIntent()
+    registerMenuLaunchAgent()
     NSApp.setActivationPolicy(.accessory)
     statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
     configureStatusIcon()
@@ -680,17 +660,14 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
     startAppUpdater()
     presentPostInstallUpdateMessageIfNeeded()
     refreshMenuItems()
-    if !smokeFixture {
-      startDesiredStateMonitor()
-      showSetupWindowForHarnessIfRequested()
-      scheduleLocalWebSetupRepairPrompt()
-      refreshApplicationLifecycle(userInitiated: false, force: true)
-      scheduleLocalWebEdgeStartupRetries()
+    startDesiredStateMonitor()
+    scheduleLocalWebSetupRepairPrompt()
+    refreshApplicationLifecycle(userInitiated: false, force: true)
+    scheduleLocalWebEdgeStartupRetries()
 
-      timer = Timer.scheduledTimer(withTimeInterval: 30, repeats: true) { [weak self] _ in
-        Task { @MainActor in
-          self?.refreshApplicationLifecycle(userInitiated: false, force: true)
-        }
+    timer = Timer.scheduledTimer(withTimeInterval: 30, repeats: true) { [weak self] _ in
+      Task { @MainActor in
+        self?.refreshApplicationLifecycle(userInitiated: false, force: true)
       }
     }
     perfLog("launch.ready", start: start)
@@ -1426,15 +1403,6 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
       Task { @MainActor in
         await self.offerLocalWebSetupRepairAtLaunch()
       }
-    }
-  }
-
-  private func showSetupWindowForHarnessIfRequested() {
-    guard ProcessInfo.processInfo.environment["ONECONTEXT_SHOW_SETUP_ON_LAUNCH"] == "1" else {
-      return
-    }
-    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
-      self?.showSetupWindow(message: nil)
     }
   }
 

@@ -572,42 +572,13 @@ struct AppManagedSparkleUserDriverPolicy {
     silentFailureRetryDelays(for: mode).count
   }
 
-  static func silentFailureRetryDelays(
-    for mode: AppManagedSparkleCheckMode,
-    environment: [String: String] = ProcessInfo.processInfo.environment
-  ) -> [TimeInterval] {
-    let overrideKey: String
-    switch mode {
-    case .automaticMandatory:
-      overrideKey = "ONECONTEXT_SPARKLE_AUTOMATIC_RETRY_DELAYS_SECONDS"
-    case .userInitiated:
-      overrideKey = "ONECONTEXT_SPARKLE_MANUAL_RETRY_DELAYS_SECONDS"
-    }
-    if let override = retryDelayOverride(environment[overrideKey]) {
-      return override
-    }
+  static func silentFailureRetryDelays(for mode: AppManagedSparkleCheckMode) -> [TimeInterval] {
     switch mode {
     case .automaticMandatory:
       return [15, 90, 300]
     case .userInitiated:
       return [2]
     }
-  }
-
-  private static func retryDelayOverride(_ value: String?) -> [TimeInterval]? {
-    guard let value, !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-      return nil
-    }
-    let parts = value.split(separator: ",")
-    var delays: [TimeInterval] = []
-    for raw in parts {
-      let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-      guard let parsed = TimeInterval(trimmed), parsed >= 0 else {
-        return nil
-      }
-      delays.append(parsed)
-    }
-    return delays.isEmpty ? nil : delays
   }
 
   static func checkInvocation(for mode: AppManagedSparkleCheckMode) -> AppManagedSparkleUpdateCheckInvocation {

@@ -13,9 +13,6 @@ that operators and contributors should use.
   local proof, update policy, and self-hosted Mac proof guidance.
 - [Development And Release Notes](development.md): maintainer details for local
   files, local web, tests, and packaging.
-- [Update Policy](update_policy.html): founder-controlled policy for mandatory
-  and optional updates, updater copy, failure copy, menu behavior, and rare
-  post-install messages.
 - [Roadmap](../ROADMAP.md): current product and release-train priorities.
 
 ## Contracts
@@ -42,7 +39,6 @@ that operators and contributors should use.
 ## Assets
 
 - `assets/readme/`: README screenshots.
-- `assets/update-policy/`: updater policy screenshots.
 
 ## Retired Docs
 

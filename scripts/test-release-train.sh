@@ -82,6 +82,7 @@ bash -n \
   "$ROOT/scripts/redact-evidence.sh" \
   "$ROOT/scripts/audit-evidence-redaction.sh" \
   "$ROOT/scripts/lib-gui-evidence.sh" \
+  "$ROOT/scripts/release/internal/self-hosted-update-proof.sh" \
   "$ROOT/scripts/write-runner-attestation.sh" \
   "$ROOT/scripts/package-macos-smoke.sh"
 python3 -m py_compile "$ROOT/scripts/release-manifest.py"
@@ -154,6 +155,14 @@ fi
 
 test ! -e "$ROOT/scripts/package-macos-production-release.sh"
 test ! -e "$ROOT/scripts/package-macos-release.sh"
+test ! -e "$ROOT/scripts/audit-github-release-assets.sh"
+test ! -e "$ROOT/scripts/self-hosted-update-proof.sh"
+test -x "$ROOT/scripts/release/internal/self-hosted-update-proof.sh"
+grep -q "./scripts/release-train.sh prove --runner-execute" "$ROOT/.github/workflows/self-hosted-mac-update-proof.yml"
+if grep -q "run: ./scripts/self-hosted-update-proof.sh" "$ROOT/.github/workflows/self-hosted-mac-update-proof.yml"; then
+  echo "self-hosted workflow must enter proof execution through release-train.sh." >&2
+  exit 1
+fi
 
 ONECONTEXT_RELEASE_EVIDENCE_DIR="$TMP_DIR/proof-evidence" \
   "$ROOT/scripts/release-train.sh" prove --dry-run --ref main --proof-reason "fixture proof" \
