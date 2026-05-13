@@ -2,6 +2,8 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+# shellcheck disable=SC1091
+source "$ROOT/scripts/lib-gui-evidence.sh"
 ARCH="${ONECONTEXT_ARCH:-arm64}"
 BASE_VERSION="$(tr -d '[:space:]' < "$ROOT/VERSION")"
 OLD_VERSION="${ONECONTEXT_SMOKE_OLD_VERSION:-$BASE_VERSION.900}"
@@ -24,6 +26,7 @@ FAILURE_TITLE="${ONECONTEXT_SPARKLE_SMOKE_FAILURE_TITLE:-Update failed.}"
 FAILURE_BODY="${ONECONTEXT_SPARKLE_SMOKE_FAILURE_BODY:-Please contact support at paul@haptica.ai.}"
 RETRY_AFTER_FAILURE="${ONECONTEXT_SPARKLE_SMOKE_RETRY_AFTER_FAILURE:-0}"
 PROVE_RUNTIME_SURVIVES_FAILURE="${ONECONTEXT_SPARKLE_SMOKE_PROVE_RUNTIME_SURVIVES_FAILURE:-0}"
+PROVE_MANUAL_UP_TO_DATE="${ONECONTEXT_SPARKLE_SMOKE_PROVE_MANUAL_UP_TO_DATE:-0}"
 SILENT_FAILURE_WATCH_SECONDS="${ONECONTEXT_SPARKLE_SMOKE_SILENT_FAILURE_WATCH_SECONDS:-25}"
 GENERATE_APPCAST="$ROOT/macos/.build/artifacts/sparkle/Sparkle/bin/generate_appcast"
 
@@ -119,6 +122,7 @@ DOWNLOAD_PREFIX="http://127.0.0.1:$PORT/"
   echo "failure_body=$FAILURE_BODY"
   echo "retry_after_failure=$RETRY_AFTER_FAILURE"
   echo "prove_runtime_survives_failure=$PROVE_RUNTIME_SURVIVES_FAILURE"
+  echo "prove_manual_up_to_date=$PROVE_MANUAL_UP_TO_DATE"
   echo "silent_failure_watch_seconds=$SILENT_FAILURE_WATCH_SECONDS"
   echo "runtime_wiki_port=$RUNTIME_WIKI_PORT"
   echo "runtime_wiki_api_port=$RUNTIME_WIKI_API_PORT"
@@ -126,109 +130,12 @@ DOWNLOAD_PREFIX="http://127.0.0.1:$PORT/"
   echo "work_dir=$WORK_DIR"
 } > "$EVIDENCE_DIR/environment.txt"
 
-capture_accessibility() {
-  local output="$1"
-  osascript >"$output" 2>&1 <<'APPLESCRIPT' || true
-tell application "System Events"
-  set reportLines to {}
-  repeat with proc in application processes
-    set procName to name of proc
-    if procName contains "1Context" or procName contains "Sparkle" or procName contains "Updater" then
-      set end of reportLines to "process=" & procName
-      repeat with win in windows of proc
-        set end of reportLines to "window=" & (name of win) & tab & (description of win)
-        repeat with textRef in static texts of win
-          try
-            set end of reportLines to "static-text" & tab & (name of textRef as text)
-          end try
-          try
-            set end of reportLines to "static-text-value" & tab & (value of textRef as text)
-          end try
-        end repeat
-        repeat with buttonRef in buttons of win
-          try
-            set end of reportLines to "button" & tab & (name of buttonRef as text)
-          end try
-        end repeat
-        repeat with groupRef in groups of win
-          repeat with textRef in static texts of groupRef
-            try
-              set end of reportLines to "group-static-text" & tab & (name of textRef as text)
-            end try
-            try
-              set end of reportLines to "group-static-text-value" & tab & (value of textRef as text)
-            end try
-          end repeat
-          repeat with buttonRef in buttons of groupRef
-            try
-              set end of reportLines to "group-button" & tab & (name of buttonRef as text)
-            end try
-          end repeat
-        end repeat
-        repeat with elementRef in entire contents of win
-          set lineText to ""
-          try
-            set lineText to lineText & "role=" & (role of elementRef as text)
-          end try
-          try
-            set lineText to lineText & tab & "description=" & (description of elementRef as text)
-          end try
-          try
-            set lineText to lineText & tab & "name=" & (name of elementRef as text)
-          end try
-          try
-            set lineText to lineText & tab & "value=" & (value of elementRef as text)
-          end try
-          if lineText is not "" then set end of reportLines to lineText
-        end repeat
-      end repeat
-    end if
-  end repeat
-  set AppleScript's text item delimiters to linefeed
-  return reportLines as text
-end tell
-APPLESCRIPT
-}
-
-capture_screenshot() {
-  local output="$1"
-  screencapture -x "$output" >/dev/null 2>&1 || true
-}
-
 click_post_install_ok() {
-  osascript >/dev/null 2>&1 <<'APPLESCRIPT' || true
-tell application "System Events"
-  repeat with proc in application processes
-    set procName to name of proc
-    if procName contains "1Context" then
-      repeat with win in windows of proc
-        try
-          click button "OK" of win
-          return
-        end try
-      end repeat
-    end if
-  end repeat
-end tell
-APPLESCRIPT
+  click_window_button "OK"
 }
 
 click_failure_try_again() {
-  osascript >/dev/null 2>&1 <<'APPLESCRIPT' || true
-tell application "System Events"
-  repeat with proc in application processes
-    set procName to name of proc
-    if procName contains "1Context" then
-      repeat with win in windows of proc
-        try
-          click button "Try Again" of win
-          return
-        end try
-      end repeat
-    end if
-  end repeat
-end tell
-APPLESCRIPT
+  click_window_button "Try Again"
 }
 
 repair_failure_for_retry() {
@@ -407,6 +314,36 @@ watch_for_no_failure_message() {
     fi
     if (( "$(date +%s)" >= deadline )); then
       return 0
+    fi
+    sleep 1
+  done
+}
+
+wait_for_manual_up_to_date_message() {
+  local deadline=$(( "$(date +%s)" + 30 ))
+  local attempt=0
+  log "checking manual up-to-date update flow"
+  click_menu_item "Check for Updates"
+  while true; do
+    attempt=$((attempt + 1))
+    local accessibility="$EVIDENCE_DIR/manual-up-to-date-accessibility-$attempt.txt"
+    capture_accessibility "$accessibility"
+    capture_screenshot "$EVIDENCE_DIR/manual-up-to-date-desktop-$attempt.png"
+    cp "$accessibility" "$EVIDENCE_DIR/manual-up-to-date-accessibility.txt"
+    cp "$EVIDENCE_DIR/manual-up-to-date-desktop-$attempt.png" "$EVIDENCE_DIR/manual-up-to-date-desktop.png"
+    if grep -Fq "1Context is up to date." "$accessibility"; then
+      echo "title=1Context is up to date." > "$EVIDENCE_DIR/manual-up-to-date-message.txt"
+      click_window_button "OK"
+      return 0
+    fi
+    if grep -Eiq 'release notes|verify the signed release|installer|relaunch the app|Update failed|Please contact support' "$accessibility"; then
+      echo "Manual up-to-date check showed unwanted update UI. Evidence: $accessibility" >&2
+      return 1
+    fi
+    if (( "$(date +%s)" >= deadline )); then
+      echo "Timed out waiting for manual up-to-date message." >&2
+      echo "Evidence: $EVIDENCE_DIR" >&2
+      return 1
     fi
     sleep 1
   done
@@ -698,6 +635,9 @@ if [[ "$UPDATED_CLI_VERSION" != "$NEW_VERSION" ]]; then
   echo "Expected updated CLI version $NEW_VERSION, got $UPDATED_CLI_VERSION." >&2
   exit 1
 fi
+if [[ "$PROVE_MANUAL_UP_TO_DATE" == "1" ]]; then
+  wait_for_manual_up_to_date_message
+fi
 
 {
   echo "result=passed"
@@ -706,6 +646,9 @@ fi
   echo "feed_url=$FEED_URL"
   echo "appcast=$APPCAST"
   echo "updated_cli_version=$UPDATED_CLI_VERSION"
+  if [[ "$PROVE_MANUAL_UP_TO_DATE" == "1" ]]; then
+    cat "$EVIDENCE_DIR/manual-up-to-date-message.txt"
+  fi
 } > "$EVIDENCE_DIR/result.txt"
 
 log "passed; evidence at $EVIDENCE_DIR"

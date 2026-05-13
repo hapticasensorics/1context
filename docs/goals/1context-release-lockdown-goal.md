@@ -876,13 +876,15 @@ Each release in this train must answer four questions:
   `dist/release-lockdown-evidence/20260510T043210Z/result.txt` records
   `result=collected`, installed version `0.1.61`, the GitHub appcast URL, and
   `redaction=1`.
-- [ ] Add a reusable GUI evidence harness for app/menu/Sparkle windows using
+- [x] Add a reusable GUI evidence harness for app/menu/Sparkle windows using
   osascript, accessibility window text, and screenshots; include a fallback path
   when the in-app browser automation control surface is unavailable.
-  Partial evidence: `scripts/prove-remote-sparkle-update.sh` now captures
-  osascript window text plus desktop screenshots for remote update proofs; this
-  item stays open until failed-update and optional-update windows use the same
-  harness.
+  Evidence: `scripts/lib-gui-evidence.sh` now owns window, accessibility, menu,
+  Hammerspoon screenshot, screencapture fallback, menu-click, and window-button
+  helpers. Both `scripts/prove-remote-sparkle-update.sh` and
+  `scripts/smoke-sparkle-local-appcast.sh` source it, and the refactored
+  broken-appcast Sparkle smoke passed at
+  `dist/sparkle-local-smoke/20260512-191927/evidence`.
 - [x] Redact sensitive paths/content by default while preserving operator-useful
   state.
   Evidence: `scripts/collect-release-lockdown-evidence.sh` defaults
@@ -1026,18 +1028,29 @@ Rawls: updater state-machine closure.
   plus
   `testAutomaticOptionalUpdateFoundDoesNotTurnCheckFailureIntoFailedInstall`
   passed.
-- [ ] Replace the remaining loose updater booleans with an
+- [x] Replace the remaining loose updater booleans with an
   `AppManagedSparkleUpdateSession` type and phase enum.
-- [ ] Route automatic launch checks and silent retries through
+  Evidence: `SparkleUpdateController` now uses
+  `AppManagedSparkleUpdateSession` plus `AppManagedSparkleUpdatePhase`; full
+  Swift tests passed.
+- [x] Route automatic launch checks and silent retries through
   `checkForUpdatesInBackground()` while preserving manual menu checks through
   `checkForUpdates()`.
-- [ ] Add lifecycle-level tests for automatic check-only failure, automatic
+  Evidence: `SparkleUpdateControllerTests.testCheckInvocationMatchesUserIntent`
+  and the controller call paths are covered by full Swift tests.
+- [x] Add lifecycle-level tests for automatic check-only failure, automatic
   critical-update-found failure, manual no-update, manual feed/download failure,
   stale retry isolation, and user-requested Try Again budget reset.
-- [ ] Extend the local Sparkle smoke so `broken_appcast` covers the full silent
+  Evidence: focused updater lifecycle tests cover all named cases and full
+  Swift tests passed.
+- [x] Extend the local Sparkle smoke so `broken_appcast` covers the full silent
   retry horizon or uses test-only retry delays, and add a separate automatic
   critical-update failure smoke proving the support alert still appears after
   retries.
+  Evidence: `ONECONTEXT_SPARKLE_AUTOMATIC_RETRY_DELAYS_SECONDS` drives
+  short-horizon smoke coverage. Broken appcast stayed silent through the retry
+  horizon, missing-DMG presented the controlled support alert after retries,
+  and `Try Again` repaired the update.
 
 Descartes: release delivery and CI proof closure.
 
@@ -1062,8 +1075,10 @@ Descartes: release delivery and CI proof closure.
   `0.1.63` with `sparkle:minimumAutoupdateVersion` of `0.1.62`,
   `sparkle:criticalUpdate`, and a `sparkle:edSignature`; the packaged app
   `Info.plist` contains the real public key and public latest feed URL.
-- [ ] Commit and push the release-proof scripts and release-workflow gates so
+- [x] Commit and push the release-proof scripts and release-workflow gates so
   the tag cannot be cut without them.
+  Evidence: commit `92e77f0` (`Lock down Sparkle release flywheel`) is pushed
+  to `origin/main`, and GitHub CI passed for that SHA.
 - [ ] Run the GitHub release workflow on `v0.1.63`, then verify the hosted
   release audit passes against the public latest appcast.
 - [ ] Dispatch the self-hosted Mac proof for `0.1.62 -> 0.1.63` and download
@@ -1082,13 +1097,20 @@ Ramanujan: shipped wiki and product-surface closure.
   `render-manifest.json`; `scripts/test-launch-agent-package.sh` fails on those
   files, `/goal` assets, or local developer paths. The ad-hoc `0.1.63` package
   and package smoke passed.
-- [ ] Apply local-web setup diagnostics redaction consistently to every rendered
+- [x] Apply local-web setup diagnostics redaction consistently to every rendered
   setup line, not only the main `diagnose` output.
-- [ ] Make default `1context permissions` output match shipped setup rows, with
+  Evidence: `LocalWebSetupDiagnostics.render` accepts a redactor, CLI setup and
+  diagnose paths apply it, and focused LocalWeb tests plus full Swift tests
+  passed.
+- [x] Make default `1context permissions` output match shipped setup rows, with
   future Screen Recording and Accessibility details behind `diagnose` or an
   explicit `--all`.
-- [ ] Remove the stale `isPausingRuntimeForMandatoryUpdate` remnant after the
+  Evidence: default setup diagnostics hide future sensitive permissions,
+  `permissions --all` can still expose them, and full Swift tests passed.
+- [x] Remove the stale `isPausingRuntimeForMandatoryUpdate` remnant after the
   updater-session refactor confirms there is no live pause path.
+  Evidence: the live menu bar source no longer contains the pause flag, and
+  `scripts/test-menu-lifecycle-deterministic.sh` guards against its return.
 
 ##### 0.1.65 Maximal Update Surface Closure
 
@@ -1202,8 +1224,11 @@ Rawls maximal updater plan:
   (`dist/sparkle-local-smoke/20260512-183003/evidence`), mandatory success
   (`dist/sparkle-local-smoke/20260512-183158/evidence`), and `Try Again`
   repair (`dist/sparkle-local-smoke/20260512-183523/evidence`).
-- [ ] Run one long, real-delay Sparkle smoke before `0.1.65` if the short-delay
+- [x] Run one long, real-delay Sparkle smoke before `0.1.65` if the short-delay
   smoke is the only automated proof of the retry horizon.
+  Evidence: the real-delay broken-appcast smoke passed without presenting a
+  false support alert through the production retry horizon at
+  `dist/sparkle-local-smoke/20260512-192259/evidence`.
 
 Descartes maximal release-delivery plan:
 
@@ -1298,14 +1323,19 @@ Closed-loop proof plan:
   Evidence: the ad-hoc package/appcast proof passed after injecting the
   keychain-backed Sparkle public key into the local build; package smoke and
   `scripts/check-update-policy.sh --appcast dist/sparkle-updates/appcast.xml`
-  passed.
+  passed. Latest local proof rebuilt the real `0.1.63` bundle after fixture
+  Sparkle smokes, then package smoke and appcast policy validation passed again.
 - [x] Local Sparkle smokes prove automatic mandatory success, check-only
   silence, attempted-update failure after retries, and `Try Again`.
   Evidence: local Sparkle smokes passed for mandatory success, broken-appcast
   check-only silence, missing-DMG failure after retries with runtime survival,
   and `Try Again` repair.
-- [ ] GUI smoke proves manual Check for Updates shows the normal current-state
+- [x] GUI smoke proves manual Check for Updates shows the normal current-state
   message when the app is already up to date.
+  Evidence:
+  `dist/sparkle-local-smoke/20260512-192038/evidence/result.txt` records
+  `title=1Context is up to date.`, and
+  `manual-up-to-date-accessibility.txt` shows the normal alert with only `OK`.
 - [ ] Hosted or self-hosted release workflow publishes signed/notarized
   `v0.1.65` assets and `scripts/audit-github-release-assets.sh v0.1.65` passes
   against public latest URLs.
@@ -1333,20 +1363,42 @@ Closed-loop proof plan:
   `scripts/test-menu-lifecycle-deterministic.sh` asserts this UI contract and
   passed.
 - [ ] Prove blocked action opens the relevant permission/setup flow.
+  Current deterministic proof: `AppSetupTests` covers action-specific setup
+  messages and one-shot continuation after setup. This stays open until native
+  GUI/accessibility evidence captures the blocked action opening setup.
 - [ ] Prove granted state is detected automatically without manual Check Again.
+  Current deterministic proof: readiness tests cover granted Local Wiki Access
+  returning the app to `1Context Ready`. This stays open until real app GUI
+  evidence captures automatic state refresh after setup is granted.
 - [ ] Run clean-machine checklist from DMG install through setup, wiki open,
   update, relaunch, and uninstall cleanup.
-- [ ] Add full uninstall smoke that can inspect helper, LaunchAgents, local CA,
+- [x] Add full uninstall smoke that can inspect helper, LaunchAgents, local CA,
   managed hooks, logs/cache, and optional data deletion.
-- [ ] Run uninstall without `--delete-data` and prove user wiki content remains.
-- [ ] Run uninstall with delete-data in a controlled fixture account or fixture
+  Evidence: `scripts/test-macos-uninstall-command.sh` now runs fixture-backed
+  uninstall proof for app bundle trashing, fixture LaunchAgent removal,
+  local-web setup certificate/marker cleanup, managed Claude/Codex hook
+  removal, logs/cache cleanup, temporary update command cleanup, and
+  delete-data allowlist behavior. The smoke passed locally.
+- [x] Run uninstall without `--delete-data` and prove user wiki content remains.
+  Evidence: the fixture uninstall smoke keeps
+  `1Context/human-wiki-content.md` and the app bundle when `--keep-app` is
+  used without `--delete-data`.
+- [x] Run uninstall with delete-data in a controlled fixture account or fixture
   path and prove only approved paths are removed.
+  Evidence: the fixture uninstall smoke removes approved `1Context`,
+  Application Support, Logs, Caches, HTTPStorages, Preferences, Saved
+  Application State, WebKit, and temporary update-command paths while preserving
+  an adjacent `Not1Context/sentinel.txt`.
 - [ ] Reinstall from DMG and prove setup/update still works after residue
   cleanup.
 - [ ] Capture screenshots and command artifacts for every consent or native UI
   step.
 - [ ] Prove Homebrew remains an install channel and Sparkle remains the update
   engine.
+  Current finding: the public `hapticasensorics/homebrew-tap` cask still has
+  `auto_updates true`, but it points at `0.1.51` while GitHub latest is
+  `0.1.62`; keep this open until the tap is updated or the final `0.1.65` cask
+  audit proves Homebrew installs a Sparkle-capable baseline.
 - [x] Promote the updater check-noise repair into mandatory `0.1.63` release
   metadata.
   Evidence: `VERSION`, `Core.swift`, `RELEASE_NOTES.md`, and
@@ -1368,9 +1420,13 @@ Closed-loop proof plan:
   explicitly stops remembering.
 - [ ] Run a full release rehearsal where the only accepted proof is installed
   app behavior after remote update.
-- [ ] Configure the release workflow with signing/notarization secrets or move
+- [x] Configure the release workflow with signing/notarization secrets or move
   production signing to the self-hosted Mac runner, so future blessed releases
   do not require a local manual upload fallback.
+  Evidence: `.github/workflows/release.yml` now targets the protected
+  self-hosted Mac runner for production release packaging/signing/notarization,
+  and `actionlint`, `scripts/test-release-proof-request.sh`, and GitHub CI for
+  commit `92e77f0` passed.
 - [x] Validate and consolidate the release docs so stale professional-app
   milestone/checklist pages no longer compete with the current release runbook.
   Evidence: `docs/macos-release-runbook.md`, `docs/README.md`, and the updated

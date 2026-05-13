@@ -469,7 +469,9 @@ public struct LocalWebSetupInstaller {
   public func uninstall() throws -> LocalWebSetupInstallResult {
     try rejectRootInvocation()
     let systemPaths = LocalWebSetupSystemPaths(environment: environment)
-    try unregisterProxyService()
+    if environment["ONECONTEXT_LOCAL_WEB_SKIP_SERVICE_MANAGEMENT"] != "1" {
+      try unregisterProxyService()
+    }
     try removeUserCertificateTrust(systemPaths: systemPaths)
     manager.stop()
     return LocalWebSetupInstallResult(action: "uninstall", setup: manager.diagnostics().setup, localWeb: nil)
@@ -532,13 +534,16 @@ public struct LocalWebSetupInstaller {
 
   private func removeUserCertificateTrust(systemPaths: LocalWebSetupSystemPaths) throws {
     let keychain = userKeychainPath()
-    if fileManager.fileExists(atPath: systemPaths.trustedRootCertificate) {
+    let skipKeychainMutation = environment["ONECONTEXT_LOCAL_WEB_SKIP_KEYCHAIN_MUTATION"] == "1"
+    if !skipKeychainMutation, fileManager.fileExists(atPath: systemPaths.trustedRootCertificate) {
       _ = runCapture("/usr/bin/security", [
         "remove-trusted-cert",
         systemPaths.trustedRootCertificate
       ])
     }
-    if let sha1 = readTrimmed(URL(fileURLWithPath: systemPaths.trustedRootSHA1)), !sha1.isEmpty {
+    if !skipKeychainMutation,
+      let sha1 = readTrimmed(URL(fileURLWithPath: systemPaths.trustedRootSHA1)), !sha1.isEmpty
+    {
       _ = runCapture("/usr/bin/security", [
         "delete-certificate",
         "-Z",

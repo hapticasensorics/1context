@@ -516,7 +516,7 @@ struct OneContextCLI {
     print("Uninstalling 1Context app-owned setup...")
 
     _ = try? await RuntimeController().quit(stopMenu: !menuProcess)
-    CaddyManager().stop()
+    CaddyManager(environment: ProcessInfo.processInfo.environment).stop()
     print("Removed: Runtime")
 
     recordCleanupStep("Local Wiki Access", warnings: &warnings) {
@@ -982,9 +982,13 @@ struct OneContextCLI {
 
   static func uninstallLaunchAgent(label: String) throws {
     let fileManager = FileManager.default
-    let plist = fileManager.homeDirectoryForCurrentUser
+    let home = try uninstallHomeDirectory()
+    let usingHomeOverride = ProcessInfo.processInfo.environment["ONECONTEXT_ALLOW_UNINSTALL_HOME_OVERRIDE"] == "1"
+    let plist = home
       .appendingPathComponent("Library/LaunchAgents/\(label).plist")
-    _ = runCapture("/bin/launchctl", ["bootout", "gui/\(getuid())/\(label)"])
+    if !usingHomeOverride {
+      _ = runCapture("/bin/launchctl", ["bootout", "gui/\(getuid())/\(label)"])
+    }
     _ = runCapture("/bin/launchctl", ["bootout", "gui/\(getuid())", plist.path])
     if fileManager.fileExists(atPath: plist.path) {
       try fileManager.removeItem(at: plist)
@@ -993,7 +997,7 @@ struct OneContextCLI {
 
   static func deleteApprovedUserData() throws {
     let fileManager = FileManager.default
-    let home = fileManager.homeDirectoryForCurrentUser
+    let home = try uninstallHomeDirectory()
     let relativePaths = [
       "1Context",
       "Library/Application Support/1Context",
@@ -1018,6 +1022,22 @@ struct OneContextCLI {
       try removeApprovedUserPath(home.appendingPathComponent(relativePath), home: home, fileManager: fileManager)
     }
     try removeApprovedTemporaryFiles(fileManager: fileManager)
+  }
+
+  static func uninstallHomeDirectory() throws -> URL {
+    let environment = ProcessInfo.processInfo.environment
+    let realHome = FileManager.default.homeDirectoryForCurrentUser.standardizedFileURL
+    guard let override = environment["ONECONTEXT_UNINSTALL_HOME_DIR"], !override.isEmpty else {
+      return realHome
+    }
+    guard environment["ONECONTEXT_ALLOW_UNINSTALL_HOME_OVERRIDE"] == "1" else {
+      throw CLIError.commandFailed("Refusing uninstall home override without ONECONTEXT_ALLOW_UNINSTALL_HOME_OVERRIDE=1.")
+    }
+    let fixtureHome = URL(fileURLWithPath: override, isDirectory: true).standardizedFileURL
+    guard fixtureHome.path != "/", fixtureHome.path != realHome.path else {
+      throw CLIError.commandFailed("Refusing unsafe uninstall home override: \(fixtureHome.path)")
+    }
+    return fixtureHome
   }
 
   static func removeApprovedUserPath(_ url: URL, home: URL, fileManager: FileManager) throws {
