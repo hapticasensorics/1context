@@ -16,47 +16,40 @@ public struct RuntimePaths {
   public let downloadCacheDirectory: URL
   public let preferencesPath: String
 
-  public static func current(environment: [String: String] = ProcessInfo.processInfo.environment) -> RuntimePaths {
-    let home = FileManager.default.homeDirectoryForCurrentUser
-    let userContentDirectory = URL(
-      fileURLWithPath: environment["ONECONTEXT_USER_CONTENT_DIR"]
-        ?? home.appendingPathComponent("1Context").path,
-      isDirectory: true
-    )
-    let appSupport = URL(
-      fileURLWithPath: environment["ONECONTEXT_APP_SUPPORT_DIR"]
-        ?? home.appendingPathComponent("Library/Application Support/1Context").path,
-      isDirectory: true
-    )
-    let cacheDirectory = URL(
-      fileURLWithPath: environment["ONECONTEXT_CACHE_DIR"]
-        ?? home.appendingPathComponent("Library/Caches/1Context").path,
-      isDirectory: true
-    )
-    let runDirectory = appSupport.appendingPathComponent("run", isDirectory: true)
-    let logDirectory = URL(
-      fileURLWithPath: environment["ONECONTEXT_LOG_DIR"]
-        ?? home.appendingPathComponent("Library/Logs/1Context").path,
-      isDirectory: true
-    )
+  public init(
+    userContentDirectory: URL,
+    appSupportDirectory: URL,
+    logDirectory: URL,
+    cacheDirectory: URL,
+    socketPath: String? = nil,
+    logPath: String? = nil,
+    preferencesPath: String? = nil
+  ) {
+    let runDirectory = appSupportDirectory.appendingPathComponent("run", isDirectory: true)
+    self.userContentDirectory = userContentDirectory
+    self.appSupportDirectory = appSupportDirectory
+    self.configPath = appSupportDirectory.appendingPathComponent("config.json").path
+    self.runDirectory = runDirectory
+    self.desiredStatePath = appSupportDirectory.appendingPathComponent("desired-state").path
+    self.socketPath = socketPath ?? runDirectory.appendingPathComponent("1context.sock").path
+    self.pidPath = runDirectory.appendingPathComponent("1contextd.pid").path
+    self.logDirectory = logDirectory
+    self.logPath = logPath ?? logDirectory.appendingPathComponent("1contextd.log").path
+    self.cacheDirectory = cacheDirectory
+    self.renderCacheDirectory = cacheDirectory.appendingPathComponent("render-cache", isDirectory: true)
+    self.downloadCacheDirectory = cacheDirectory.appendingPathComponent("download-cache", isDirectory: true)
+    self.preferencesPath = preferencesPath
+      ?? FileManager.default.homeDirectoryForCurrentUser
+        .appendingPathComponent("Library/Preferences/com.haptica.1context.plist").path
+  }
 
+  public static func current() -> RuntimePaths {
+    let home = FileManager.default.homeDirectoryForCurrentUser
     return RuntimePaths(
-      userContentDirectory: userContentDirectory,
-      appSupportDirectory: appSupport,
-      configPath: appSupport.appendingPathComponent("config.json").path,
-      runDirectory: runDirectory,
-      desiredStatePath: appSupport.appendingPathComponent("desired-state").path,
-      socketPath: environment["ONECONTEXT_SOCKET_PATH"]
-        ?? runDirectory.appendingPathComponent("1context.sock").path,
-      pidPath: runDirectory.appendingPathComponent("1contextd.pid").path,
-      logDirectory: logDirectory,
-      logPath: environment["ONECONTEXT_LOG_PATH"]
-        ?? logDirectory.appendingPathComponent("1contextd.log").path,
-      cacheDirectory: cacheDirectory,
-      renderCacheDirectory: cacheDirectory.appendingPathComponent("render-cache", isDirectory: true),
-      downloadCacheDirectory: cacheDirectory.appendingPathComponent("download-cache", isDirectory: true),
-      preferencesPath: environment["ONECONTEXT_PREFERENCES_PATH"]
-        ?? home.appendingPathComponent("Library/Preferences/com.haptica.1context.plist").path
+      userContentDirectory: home.appendingPathComponent("1Context", isDirectory: true),
+      appSupportDirectory: home.appendingPathComponent("Library/Application Support/1Context", isDirectory: true),
+      logDirectory: home.appendingPathComponent("Library/Logs/1Context", isDirectory: true),
+      cacheDirectory: home.appendingPathComponent("Library/Caches/1Context", isDirectory: true)
     )
   }
 }

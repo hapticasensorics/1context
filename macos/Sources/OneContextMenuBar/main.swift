@@ -436,7 +436,6 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
   private let quitItem = NSMenuItem(title: "Quit", action: #selector(quit), keyEquivalent: "q")
   private let appVersion = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String
     ?? oneContextVersion
-  private let perfLoggingEnabled = ProcessInfo.processInfo.environment["ONECONTEXT_MENU_PERF_LOG"] == "1"
   private let localWeb = CaddyManager()
   private let localWebQueue = DispatchQueue(label: "com.haptica.1context.menu.local-web")
   private lazy var sparkleUpdater = SparkleUpdateController()
@@ -645,7 +644,6 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
   }
 
   func applicationDidFinishLaunching(_ notification: Notification) {
-    let start = perfStart()
     guard !handleAppInstallAtLaunch() else { return }
     guard acquireMenuInstanceLock() else {
       NSApp.terminate(nil)
@@ -670,7 +668,6 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
         self?.refreshApplicationLifecycle(userInitiated: false, force: true)
       }
     }
-    perfLog("launch.ready", start: start)
   }
 
   private func configureStatusIcon() {
@@ -758,7 +755,6 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
   }
 
   private func refreshMenuItems() {
-    let start = perfStart()
     let stateTitle = runtimeState.title
     if renderedStateTitle != stateTitle {
       stateItem.title = stateTitle
@@ -803,7 +799,6 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
       updateItem.action = updateAction
       renderedUpdateAction = updateAction
     }
-    perfLog("menu.render", start: start)
   }
 
   private func setRuntimeState(_ newValue: RuntimeState, forceRender: Bool = false) {
@@ -852,17 +847,13 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
   }
 
   func menuWillOpen(_ menu: NSMenu) {
-    let start = perfStart()
     isMenuOpen = true
     renderGeneration += 1
-    perfLog("menu.willOpen", start: start)
   }
 
   func menuDidClose(_ menu: NSMenu) {
-    let start = perfStart()
     isMenuOpen = false
     guard pendingUpdateState != nil else {
-      perfLog("menu.didClose.noop", start: start)
       return
     }
     renderGeneration += 1
@@ -875,7 +866,6 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
         self.pendingUpdateState = nil
       }
       refreshMenuItems()
-      perfLog("menu.didClose.deferredRender", start: start)
     }
   }
 
@@ -895,14 +885,12 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
       return
     }
     if !userInitiated && !force && !shouldRefreshRuntimeState() {
-      perfLog("runtime.refresh.skipped")
       return
     }
     isRepairingRuntime = true
     lastRuntimeRefreshStartedAt = Date()
 
     Task.detached(priority: .utility) {
-      let healthStart = await self.perfStart()
       let controller = RuntimeController()
       defer {
         Task { @MainActor in
@@ -920,20 +908,17 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
         guard shouldShowRunning else {
           await MainActor.run {
             self.setRuntimeState(.stopped)
-            self.perfLog("runtime.health.ignoredStoppedIntent", start: healthStart)
           }
           return
         }
         guard health.version == oneContextVersion else {
           _ = try await controller.restart(startMenu: false)
           await MainActor.run {
-            self.perfLog("runtime.repair.versionMismatch", start: healthStart)
             self.setRuntimeState(.running)
           }
           return
         }
         await MainActor.run {
-          self.perfLog("runtime.health.ok", start: healthStart)
           self.setRuntimeState(.running)
           self.startLocalWebEdge(requiredSetupReady: true)
         }
@@ -950,7 +935,6 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
           do {
             _ = try await controller.start(startMenu: false)
             await MainActor.run {
-              self.perfLog("runtime.start.ok", start: healthStart)
               self.setRuntimeState(.running)
               self.startLocalWebEdge(requiredSetupReady: true)
             }
@@ -1065,14 +1049,12 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
     setRuntimeState(targetIntent == .running ? .running : .stopped, forceRender: true)
 
     Task.detached(priority: .userInitiated) {
-      let start = await self.perfStart()
       do {
         let controller = RuntimeController()
         if targetIntent == .running {
           try await controller.requestStart(startMenu: false)
           await MainActor.run {
             guard generation == self.runtimeToggleGeneration else { return }
-            self.perfLog("runtime.userStart.ok", start: start)
             self.setRuntimeState(.running, forceRender: true)
             self.startLocalWebEdge(requiredSetupReady: true)
           }
@@ -1080,14 +1062,12 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
           try await controller.requestStop()
           await MainActor.run {
             guard generation == self.runtimeToggleGeneration else { return }
-            self.perfLog("runtime.userStop.ok", start: start)
             self.setRuntimeState(.stopped, forceRender: true)
           }
         }
       } catch {
         await MainActor.run {
           guard generation == self.runtimeToggleGeneration else { return }
-          self.perfLog("runtime.userToggle.failed", start: start)
           self.setRuntimeState(.needsAttention, forceRender: true)
           self.presentMenuAlert("Could not \(targetIntent == .running ? "start" : "stop") 1Context.")
         }
@@ -1693,21 +1673,6 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
     throw lastError ?? MenuError.wikiTimedOut(method)
   }
 
-  private func perfStart() -> UInt64 {
-    DispatchTime.now().uptimeNanoseconds
-  }
-
-  private func perfLog(_ event: String, start: UInt64? = nil) {
-    guard perfLoggingEnabled else { return }
-    let suffix: String
-    if let start {
-      let elapsedMs = Double(DispatchTime.now().uptimeNanoseconds - start) / 1_000_000
-      suffix = String(format: " %.2fms", elapsedMs)
-    } else {
-      suffix = ""
-    }
-    fputs("[1context-menu-perf] \(event)\(suffix)\n", stderr)
-  }
 }
 
 private let app = NSApplication.shared

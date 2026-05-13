@@ -139,10 +139,6 @@ def live_agent_config_path() -> Path:
     if agent_dir:
         return Path(agent_dir).expanduser() / "config.json"
 
-    app_support_dir = text(os.environ.get("ONECONTEXT_APP_SUPPORT_DIR"))
-    if app_support_dir:
-        return Path(app_support_dir).expanduser() / "agent" / "config.json"
-
     if sys.platform == "darwin":
         return Path.home() / "Library" / "Application Support" / "1Context" / "agent" / "config.json"
 

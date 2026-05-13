@@ -14,19 +14,9 @@ public final class LaunchAgentManager {
   public static let runtimeLabel = "com.haptica.1context"
   public static let menuLabel = "com.haptica.1context.menu"
 
-  private let environment: [String: String]
-
-  public init(environment: [String: String] = ProcessInfo.processInfo.environment) {
-    self.environment = environment
-  }
-
-  public var isDisabled: Bool {
-    ProcessInfo.processInfo.operatingSystemVersionString.isEmpty
-      || environment["ONECONTEXT_LAUNCH_AGENT_DISABLED"] == "1"
-  }
+  public init() {}
 
   public func status() async -> LaunchAgentState {
-    if isDisabled { return LaunchAgentState(configured: false, loaded: false) }
     let result = await launchctl(["print", agentTarget()])
     return LaunchAgentState(
       configured: FileManager.default.fileExists(atPath: launchAgentPath.path),
@@ -45,7 +35,6 @@ public final class LaunchAgentManager {
   }
 
   public func startMenu(appPath: String) async throws {
-    guard !isDisabled else { return }
     try ensureNormalUserLifecycle()
     try installMenu(appPath: appPath)
     let path = launchAgentPath(label: Self.menuLabel)
@@ -123,7 +112,7 @@ public final class LaunchAgentManager {
   }
 
   private func install(daemonPath: String) throws {
-    let paths = launchAgentRuntimePaths()
+    let paths = RuntimePaths.current()
     try RuntimePermissions.ensurePrivateDirectory(paths.appSupportDirectory)
     try RuntimePermissions.ensurePrivateDirectory(paths.runDirectory)
     try RuntimePermissions.ensurePrivateDirectory(paths.logDirectory)
@@ -133,7 +122,7 @@ public final class LaunchAgentManager {
   }
 
   private func installMenu(appPath: String) throws {
-    let paths = launchAgentRuntimePaths()
+    let paths = RuntimePaths.current()
     let menuLogPath = paths.logDirectory.appendingPathComponent("menu.log").path
     try RuntimePermissions.ensurePrivateDirectory(paths.logDirectory)
     _ = FileManager.default.createFile(atPath: menuLogPath, contents: nil)
@@ -168,8 +157,6 @@ public final class LaunchAgentManager {
       <string>\(plistEscape(paths.logPath))</string>
       <key>StandardErrorPath</key>
       <string>\(plistEscape(paths.logPath))</string>
-      <key>EnvironmentVariables</key>
-      \(environmentPlist(paths: paths))
     </dict>
     </plist>
     """
@@ -197,44 +184,13 @@ public final class LaunchAgentManager {
       <string>\(plistEscape(paths.logDirectory.appendingPathComponent("menu.log").path))</string>
       <key>StandardErrorPath</key>
       <string>\(plistEscape(paths.logDirectory.appendingPathComponent("menu.log").path))</string>
-      <key>EnvironmentVariables</key>
-      \(environmentPlist(paths: paths))
     </dict>
     </plist>
     """
   }
 
-  private func environmentPlist(paths: RuntimePaths) -> String {
-    """
-      <dict>
-        <key>ONECONTEXT_APP_SUPPORT_DIR</key>
-        <string>\(plistEscape(paths.appSupportDirectory.path))</string>
-        <key>ONECONTEXT_USER_CONTENT_DIR</key>
-        <string>\(plistEscape(paths.userContentDirectory.path))</string>
-        <key>ONECONTEXT_LOG_DIR</key>
-        <string>\(plistEscape(paths.logDirectory.path))</string>
-        <key>ONECONTEXT_LOG_PATH</key>
-        <string>\(plistEscape(paths.logPath))</string>
-        <key>ONECONTEXT_CACHE_DIR</key>
-        <string>\(plistEscape(paths.cacheDirectory.path))</string>
-        <key>ONECONTEXT_SOCKET_PATH</key>
-        <string>\(plistEscape(paths.socketPath))</string>
-        <key>ONECONTEXT_PREFERENCES_PATH</key>
-        <string>\(plistEscape(paths.preferencesPath))</string>
-      </dict>
-    """
-  }
-
-  private func launchAgentRuntimePaths() -> RuntimePaths {
-    RuntimePaths.current(environment: launchAgentPathEnvironment())
-  }
-
-  private func launchAgentPathEnvironment() -> [String: String] {
-    environment["ONECONTEXT_PERSIST_ENV_PATH_OVERRIDES"] == "1" ? environment : [:]
-  }
-
   private func ensureNormalUserLifecycle() throws {
-    if geteuid() == 0 || environment["SUDO_USER"] != nil {
+    if geteuid() == 0 || ProcessInfo.processInfo.environment["SUDO_USER"] != nil {
       throw RuntimeControlError.rootUserUnsupported
     }
   }

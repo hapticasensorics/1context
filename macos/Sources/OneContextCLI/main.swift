@@ -394,7 +394,7 @@ struct OneContextCLI {
     print("Uninstalling 1Context app-owned setup...")
 
     _ = try? await RuntimeController().quit(stopMenu: !menuProcess)
-    CaddyManager(environment: ProcessInfo.processInfo.environment).stop()
+    CaddyManager().stop()
     print("Removed: Runtime")
 
     recordCleanupStep("Local Wiki Access", warnings: &warnings) {
@@ -678,12 +678,9 @@ struct OneContextCLI {
   static func uninstallLaunchAgent(label: String) throws {
     let fileManager = FileManager.default
     let home = try uninstallHomeDirectory()
-    let usingHomeOverride = ProcessInfo.processInfo.environment["ONECONTEXT_ALLOW_UNINSTALL_HOME_OVERRIDE"] == "1"
     let plist = home
       .appendingPathComponent("Library/LaunchAgents/\(label).plist")
-    if !usingHomeOverride {
-      _ = runCapture("/bin/launchctl", ["bootout", "gui/\(getuid())/\(label)"])
-    }
+    _ = runCapture("/bin/launchctl", ["bootout", "gui/\(getuid())/\(label)"])
     _ = runCapture("/bin/launchctl", ["bootout", "gui/\(getuid())", plist.path])
     if fileManager.fileExists(atPath: plist.path) {
       try fileManager.removeItem(at: plist)
@@ -720,19 +717,7 @@ struct OneContextCLI {
   }
 
   static func uninstallHomeDirectory() throws -> URL {
-    let environment = ProcessInfo.processInfo.environment
-    let realHome = FileManager.default.homeDirectoryForCurrentUser.standardizedFileURL
-    guard let override = environment["ONECONTEXT_UNINSTALL_HOME_DIR"], !override.isEmpty else {
-      return realHome
-    }
-    guard environment["ONECONTEXT_ALLOW_UNINSTALL_HOME_OVERRIDE"] == "1" else {
-      throw CLIError.commandFailed("Refusing uninstall home override without ONECONTEXT_ALLOW_UNINSTALL_HOME_OVERRIDE=1.")
-    }
-    let fixtureHome = URL(fileURLWithPath: override, isDirectory: true).standardizedFileURL
-    guard fixtureHome.path != "/", fixtureHome.path != realHome.path else {
-      throw CLIError.commandFailed("Refusing unsafe uninstall home override: \(fixtureHome.path)")
-    }
-    return fixtureHome
+    FileManager.default.homeDirectoryForCurrentUser.standardizedFileURL
   }
 
   static func removeApprovedUserPath(_ url: URL, home: URL, fileManager: FileManager) throws {
@@ -796,17 +781,10 @@ struct OneContextCLI {
     )
   }
 
-  static func runProcess(
-    _ executable: String,
-    _ arguments: [String],
-    environment: [String: String] = [:]
-  ) throws {
+  static func runProcess(_ executable: String, _ arguments: [String]) throws {
     let process = Process()
     process.executableURL = URL(fileURLWithPath: executable)
     process.arguments = arguments
-    if !environment.isEmpty {
-      process.environment = ProcessInfo.processInfo.environment.merging(environment) { _, new in new }
-    }
     process.standardInput = FileHandle.standardInput
     process.standardOutput = FileHandle.standardOutput
     process.standardError = FileHandle.standardError

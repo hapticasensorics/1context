@@ -72,7 +72,7 @@ final class OneContextDaemon: @unchecked Sendable {
   private lazy var logger = Logger(path: paths.logPath)
   private lazy var localWeb = CaddyManager(runtimePaths: paths)
   private lazy var wikiAPI = WikiLocalAPIServer(
-    config: WikiLocalAPIConfig(environment: ProcessInfo.processInfo.environment),
+    config: WikiLocalAPIConfig(),
     handler: WikiLocalAPIHandler(paths: LocalWebPaths(runtimePaths: paths), renderState: { [weak self] in
       self?.wikiRenderState ?? "idle"
     })

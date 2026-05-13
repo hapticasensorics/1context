@@ -24,49 +24,41 @@ public struct LocalWebSetupSystemPaths: Codable, Equatable, Sendable {
   public let logDirectory: String
   public let proxyLog: String
 
-  public init(environment: [String: String] = ProcessInfo.processInfo.environment) {
-    let userSupport = "\(NSHomeDirectory())/Library/Application Support/1Context/local-web/setup"
-    let userLog = "\(NSHomeDirectory())/Library/Logs/1Context"
-    let appBundle = Self.appBundleURL(environment: environment)
+  public init(
+    appBundle: URL = Self.appBundleURL(),
+    supportDirectory: String = "\(NSHomeDirectory())/Library/Application Support/1Context/local-web/setup",
+    logDirectory: String = "\(NSHomeDirectory())/Library/Logs/1Context",
+    proxyExecutable: String? = nil,
+    launchDaemonPlist: String? = nil,
+    trustedRootCertificate: String? = nil,
+    trustedRootSHA1: String? = nil,
+    trustedRootSHA256: String? = nil,
+    setupMarker: String? = nil,
+    proxyLog: String? = nil
+  ) {
     let bundleLaunchDaemon = appBundle
       .appendingPathComponent("Contents/Library/LaunchDaemons/\(LocalWebSetupConstants.proxyPlistName)")
       .path
     let bundledProxy = appBundle
       .appendingPathComponent("Contents/Resources/\(LocalWebSetupConstants.proxyExecutableName)")
       .path
-    let support = environment["ONECONTEXT_LOCAL_WEB_SYSTEM_SUPPORT_DIR"]
-      ?? userSupport
-    let log = environment["ONECONTEXT_LOCAL_WEB_SYSTEM_LOG_DIR"]
-      ?? userLog
     self.appBundle = appBundle.path
-    self.supportDirectory = support
-    self.binDirectory = "\(support)/bin"
-    self.proxyExecutable = environment["ONECONTEXT_LOCAL_WEB_PROXY_EXECUTABLE_PATH"]
-      ?? bundledProxy
-    self.launchDaemonPlist = environment["ONECONTEXT_LOCAL_WEB_LAUNCH_DAEMON_PATH"]
-      ?? bundleLaunchDaemon
-    self.trustedRootCertificate = environment["ONECONTEXT_LOCAL_WEB_TRUSTED_ROOT_CERT_PATH"]
-      ?? "\(support)/local-web-root.crt"
-    self.trustedRootSHA1 = environment["ONECONTEXT_LOCAL_WEB_TRUSTED_ROOT_SHA1_PATH"]
-      ?? "\(support)/local-web-root.sha1"
-    self.trustedRootSHA256 = environment["ONECONTEXT_LOCAL_WEB_TRUSTED_ROOT_SHA256_PATH"]
-      ?? "\(support)/local-web-root.sha256"
-    self.setupMarker = environment["ONECONTEXT_LOCAL_WEB_SETUP_MARKER_PATH"]
-      ?? "\(support)/local-web-setup.json"
-    self.logDirectory = log
-    self.proxyLog = environment["ONECONTEXT_LOCAL_WEB_PROXY_LOG_PATH"]
-      ?? "\(log)/local-web-proxy.log"
+    self.supportDirectory = supportDirectory
+    self.binDirectory = "\(supportDirectory)/bin"
+    self.proxyExecutable = proxyExecutable ?? bundledProxy
+    self.launchDaemonPlist = launchDaemonPlist ?? bundleLaunchDaemon
+    self.trustedRootCertificate = trustedRootCertificate ?? "\(supportDirectory)/local-web-root.crt"
+    self.trustedRootSHA1 = trustedRootSHA1 ?? "\(supportDirectory)/local-web-root.sha1"
+    self.trustedRootSHA256 = trustedRootSHA256 ?? "\(supportDirectory)/local-web-root.sha256"
+    self.setupMarker = setupMarker ?? "\(supportDirectory)/local-web-setup.json"
+    self.logDirectory = logDirectory
+    self.proxyLog = proxyLog ?? "\(logDirectory)/local-web-proxy.log"
   }
 
-  static func appBundleURL(
-    environment: [String: String],
+  public static func appBundleURL(
     commandLineExecutable: String = CommandLine.arguments[0],
     mainBundleURL: URL = Bundle.main.bundleURL
   ) -> URL {
-    if let override = environment["ONECONTEXT_APP_BUNDLE_PATH"], !override.isEmpty {
-      return URL(fileURLWithPath: override, isDirectory: true)
-    }
-
     if mainBundleURL.pathExtension == "app" {
       return mainBundleURL
     }
@@ -208,8 +200,8 @@ public struct LocalWebSetupInstallResult: Codable, Equatable, Sendable {
 public enum LocalWebSetupInspector {
   public static func inspect(
     runtimePaths: RuntimePaths = .current(),
-    environment: [String: String] = ProcessInfo.processInfo.environment,
     fileManager: FileManager = .default,
+    systemPaths: LocalWebSetupSystemPaths = LocalWebSetupSystemPaths(),
     host: String = LocalWebDefaults.wikiHost,
     backendHost: String = LocalWebDefaults.bindHost,
     backendPort: Int = LocalWebDefaults.wikiPort,
@@ -217,15 +209,14 @@ public enum LocalWebSetupInspector {
     sourceProxyExecutable: URL? = nil
   ) -> LocalWebSetupState {
     let paths = LocalWebPaths(runtimePaths: runtimePaths)
-    let systemPaths = LocalWebSetupSystemPaths(environment: environment)
     let rootCertificate = localHTTPSRootCertificateURL(paths: paths)
     let userFingerprints = try? certificateFingerprints(at: rootCertificate)
     let trustedSHA1 = readTrimmed(systemPaths.trustedRootSHA1, fileManager: fileManager)
     let trustedSHA256 = readTrimmed(systemPaths.trustedRootSHA256, fileManager: fileManager)
     let trustedCertificateInKeychain = trustedSHA1.map {
-      keychainContainsCertificate(sha1: $0, keychainPath: userKeychainPath(environment: environment, fileManager: fileManager))
+      keychainContainsCertificate(sha1: $0, keychainPath: userKeychainPath(fileManager: fileManager))
     } ?? false
-    let proxyServiceStatus = serviceStatus(environment: environment)
+    let proxyServiceStatus = serviceStatus()
     let proxyPlistInstalled = fileManager.fileExists(atPath: systemPaths.launchDaemonPlist)
       || proxyServiceStatus != "notFound"
     let proxyExecutableInstalled = fileManager.isExecutableFile(atPath: systemPaths.proxyExecutable)
@@ -234,11 +225,9 @@ public enum LocalWebSetupInspector {
     let installedProxySHA256 = fileSHA256(at: URL(fileURLWithPath: systemPaths.proxyExecutable), fileManager: fileManager)
       ?? sourceProxySHA256
     let launchctlOutput = launchctlPrint(label: LocalWebSetupConstants.proxyLabel)
-    let launchDaemonLoaded = environment["ONECONTEXT_LOCAL_WEB_ASSUME_PROXY_LOADED"] == "1"
-      || (proxyServiceStatus == "enabled" && launchctlOutput.map(launchctlHasPID) == true)
-    let portReachable = environment["ONECONTEXT_LOCAL_WEB_ASSUME_PROXY_PORT_REACHABLE"] == "1"
-      || (proxyPlistInstalled && proxyExecutableInstalled
-        && proxyOwnsPrivilegedPort(host: backendHost, port: LocalWebSetupConstants.privilegedHTTPSPort))
+    let launchDaemonLoaded = proxyServiceStatus == "enabled" && launchctlOutput.map(launchctlHasPID) == true
+    let portReachable = proxyPlistInstalled && proxyExecutableInstalled
+      && proxyOwnsPrivilegedPort(host: backendHost, port: LocalWebSetupConstants.privilegedHTTPSPort)
 
     return LocalWebSetupState(
       label: LocalWebSetupConstants.proxyLabel,
@@ -316,11 +305,7 @@ public enum LocalWebSetupInspector {
       .uppercased()
   }
 
-  private static func serviceStatus(environment: [String: String]) -> String {
-    if let override = environment["ONECONTEXT_LOCAL_WEB_SERVICE_STATUS"], !override.isEmpty {
-      return override
-    }
-
+  private static func serviceStatus() -> String {
     if #available(macOS 13.0, *) {
       switch SMAppService.daemon(plistName: LocalWebSetupConstants.proxyPlistName).status {
       case .notRegistered:
@@ -350,10 +335,7 @@ public enum LocalWebSetupInspector {
     }
   }
 
-  private static func userKeychainPath(environment: [String: String], fileManager: FileManager) -> String {
-    if let override = environment["ONECONTEXT_LOCAL_WEB_USER_KEYCHAIN_PATH"], !override.isEmpty {
-      return override
-    }
+  private static func userKeychainPath(fileManager: FileManager) -> String {
     let modern = "\(NSHomeDirectory())/Library/Keychains/login.keychain-db"
     if fileManager.fileExists(atPath: modern) {
       return modern
@@ -431,16 +413,19 @@ public enum LocalWebSetupInspector {
 
 public struct LocalWebSetupInstaller {
   private let manager: CaddyManager
-  private let environment: [String: String]
+  private let systemPaths: LocalWebSetupSystemPaths
   private let fileManager: FileManager
 
   public init(
     manager: CaddyManager? = nil,
-    environment: [String: String] = ProcessInfo.processInfo.environment,
+    systemPaths: LocalWebSetupSystemPaths = LocalWebSetupSystemPaths(),
     fileManager: FileManager = .default
   ) {
-    self.manager = manager ?? CaddyManager(environment: environment, fileManager: fileManager)
-    self.environment = environment
+    self.manager = manager ?? CaddyManager(
+      setupSystemPaths: systemPaths,
+      fileManager: fileManager
+    )
+    self.systemPaths = systemPaths
     self.fileManager = fileManager
   }
 
@@ -451,7 +436,6 @@ public struct LocalWebSetupInstaller {
   public func install() throws -> LocalWebSetupInstallResult {
     try rejectRootInvocation()
     let assets = try manager.prepareLocalHTTPSAssets()
-    let systemPaths = LocalWebSetupSystemPaths(environment: environment)
     try requireInstalledApplication(systemPaths: systemPaths)
     try installUserCertificateTrust(assets: assets, systemPaths: systemPaths)
     try registerProxyService()
@@ -466,10 +450,7 @@ public struct LocalWebSetupInstaller {
 
   public func uninstall() throws -> LocalWebSetupInstallResult {
     try rejectRootInvocation()
-    let systemPaths = LocalWebSetupSystemPaths(environment: environment)
-    if environment["ONECONTEXT_LOCAL_WEB_SKIP_SERVICE_MANAGEMENT"] != "1" {
-      try unregisterProxyService()
-    }
+    try unregisterProxyService()
     try removeUserCertificateTrust(systemPaths: systemPaths)
     manager.stop()
     return LocalWebSetupInstallResult(action: "uninstall", setup: manager.diagnostics().setup, localWeb: nil)
@@ -532,15 +513,13 @@ public struct LocalWebSetupInstaller {
 
   private func removeUserCertificateTrust(systemPaths: LocalWebSetupSystemPaths) throws {
     let keychain = userKeychainPath()
-    let skipKeychainMutation = environment["ONECONTEXT_LOCAL_WEB_SKIP_KEYCHAIN_MUTATION"] == "1"
-    if !skipKeychainMutation, fileManager.fileExists(atPath: systemPaths.trustedRootCertificate) {
+    if fileManager.fileExists(atPath: systemPaths.trustedRootCertificate) {
       _ = runCapture("/usr/bin/security", [
         "remove-trusted-cert",
         systemPaths.trustedRootCertificate
       ])
     }
-    if !skipKeychainMutation,
-      let sha1 = readTrimmed(URL(fileURLWithPath: systemPaths.trustedRootSHA1)), !sha1.isEmpty
+    if let sha1 = readTrimmed(URL(fileURLWithPath: systemPaths.trustedRootSHA1)), !sha1.isEmpty
     {
       _ = runCapture("/usr/bin/security", [
         "delete-certificate",
@@ -600,10 +579,6 @@ public struct LocalWebSetupInstaller {
   }
 
   private func requireInstalledApplication(systemPaths: LocalWebSetupSystemPaths) throws {
-    if environment["ONECONTEXT_ALLOW_NON_APPLICATIONS_LOCAL_WEB_SETUP"] == "1" {
-      return
-    }
-
     let app = URL(fileURLWithPath: systemPaths.appBundle, isDirectory: true)
       .standardizedFileURL
       .resolvingSymlinksInPath()
@@ -677,15 +652,12 @@ public struct LocalWebSetupInstaller {
   }
 
   private func rejectRootInvocation() throws {
-    if geteuid() == 0 || environment["SUDO_USER"] != nil {
+    if geteuid() == 0 || ProcessInfo.processInfo.environment["SUDO_USER"] != nil {
       throw LocalWebSetupInstallerError.rootUserUnsupported
     }
   }
 
   private func userKeychainPath() -> String {
-    if let override = environment["ONECONTEXT_LOCAL_WEB_USER_KEYCHAIN_PATH"], !override.isEmpty {
-      return override
-    }
     let modern = "\(NSHomeDirectory())/Library/Keychains/login.keychain-db"
     if fileManager.fileExists(atPath: modern) {
       return modern

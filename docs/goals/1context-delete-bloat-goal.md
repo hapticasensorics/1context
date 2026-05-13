@@ -119,10 +119,13 @@ Measurement:
 - Current measurement after deleting generated outputs, agent integration,
   shipped memory-core packaging, public debug/permissions surfaces, install
   env hooks, the runtime-support shim, structural grep tests, the dead chat API
-  shell, old GUI harnesses, stale policy docs/assets, and Sparkle retry env
-  hooks, and the old developer-port local-web mode: 17 files and 8,191
+  shell, old GUI harnesses, stale policy docs/assets, Sparkle retry env hooks,
+  the old developer-port local-web mode, runtime path env overrides, detached
+  LaunchAgent bypasses, fixture uninstall/RPC stress harnesses, local-web setup
+  path env overrides, menu perf env logging, and the remaining shipped
+  `ONECONTEXT_*` product env hooks: 17 files and 8,014
   nonblank lines, a
-  53,118-line / 86.64%
+  53,295-line / 86.93%
   reduction from the baseline.
   This passes the 24,523-line 60% reduction target.
 
@@ -247,17 +250,17 @@ scripts, and workflows for the deleted public script paths.
   behavior.
 - [x] Delete `ONECONTEXT_SHOW_SETUP_ON_LAUNCH`.
 - [x] Delete `ONECONTEXT_VERSION_OVERRIDE`.
-- [ ] Delete product path overrides in `Paths.swift`.
+- [x] Delete product path overrides in `Paths.swift`.
 - [x] Delete install prompt bypass and destination override hooks in
   `AppInstall.swift`.
 - [x] Delete daemon/runtime override gates that are not needed by production.
 - [x] Delete agent override gates that only exist for legacy harnesses.
-- [ ] Delete local-web setup path overrides that make the product depend on
+- [x] Delete local-web setup path overrides that make the product depend on
   source-checkout layout.
 - [x] Delete Sparkle retry/test env overrides once retry behavior is covered by
   reducer tests and release-train proof.
 - [x] Delete public `--no-redact` diagnostic output from the product CLI.
-- [ ] Replace any remaining product test hooks with internal harness fixtures
+- [x] Replace any remaining product test hooks with internal harness fixtures
   outside the shipped app surface.
 
 Evidence, 2026-05-13: removed `ONECONTEXT_VERSION_OVERRIDE`,
@@ -286,6 +289,36 @@ pure reducer tests rather than a smoke-harness process variable. Proof:
 `ONECONTEXT_SPARKLE_AUTOMATIC_RETRY_DELAYS_SECONDS` /
 `ONECONTEXT_SPARKLE_MANUAL_RETRY_DELAYS_SECONDS` in active code.
 
+Evidence, 2026-05-13: removed shipped runtime path overrides from
+`RuntimePaths`, stopped writing `ONECONTEXT_*` path variables into LaunchAgent
+plists, removed the detached `ONECONTEXT_LAUNCH_AGENT_DISABLED` lifecycle path,
+and deleted fixture-only uninstall home overrides plus the old RPC stress and
+fixture uninstall shell scripts. Tests now construct fixture `RuntimePaths`
+directly, while destructive uninstall proof is reserved for the protected
+release runner. Proof: `swift test --package-path macos`, `./scripts/test.sh`,
+`./scripts/package-macos-smoke.sh`, `./scripts/test-launch-agent-package.sh`,
+`cd memory-core && uv run --with pytest pytest`, `git diff --check`, and
+negative `rg` for the deleted path/lifecycle/uninstall env names.
+
+Evidence, 2026-05-13: deleted `ONECONTEXT_MENU_PERF_LOG` and the menu-app
+performance logging scaffolding from shipped product code and docs. Proof:
+`swift test --package-path macos`, `./scripts/test.sh`,
+`./scripts/package-macos-smoke.sh`, `./scripts/test-launch-agent-package.sh`,
+`./scripts/test-release-train.sh`, `git diff --check`, and negative `rg` for
+the deleted perf env/logging names.
+
+Evidence, 2026-05-13: removed the remaining shipped `ONECONTEXT_*` product env
+hooks from `macos/Sources`. Caddy/local-web tests now inject fixture binaries
+and setup paths through typed constructors, local-web setup no longer fakes
+ServiceManagement/keychain/Applications state through env vars, and version
+resolution no longer accepts a process environment parameter. Build/release
+scripts still use explicit release env vars as operator tooling. Proof:
+`swift test --package-path macos`, `./scripts/test.sh`,
+`./scripts/package-macos-smoke.sh`, `./scripts/test-launch-agent-package.sh`,
+`./scripts/test-release-train.sh`,
+`cd memory-core && uv run --with pytest pytest`, `git diff --check`, and
+`rg -n "ONECONTEXT_[A-Z0-9_]+" macos/Sources` returning no matches.
+
 ### 6. Local Web And Permissions Cleanup
 
 - [x] Delete high-port HTTP as a shipped product mode. Public 1Context should
@@ -308,6 +341,18 @@ wiki commands require Local Wiki Access setup instead of bypassing setup with a
 developer port. Proof: `swift test --package-path macos`, `./scripts/test.sh`,
 and negative `rg` for `high-port-http`, `highPortHTTP`, and
 `ONECONTEXT_WIKI_URL_MODE` in active code/scripts/docs.
+
+Evidence, 2026-05-13: removed local-web setup path environment overrides from
+`LocalWebSetupSystemPaths` and replaced them with typed fixture path injection
+for tests and diagnostics. Production setup now derives the app bundle, helper
+plist, support directory, certificate files, and proxy log paths from the signed
+app and the user's standard 1Context folders instead of
+`ONECONTEXT_LOCAL_WEB_*` path variables. Proof:
+`swift test --package-path macos`, `./scripts/test.sh`,
+`./scripts/package-macos-smoke.sh`, `./scripts/test-launch-agent-package.sh`,
+`./scripts/test-release-train.sh`,
+`cd memory-core && uv run --with pytest pytest`, `git diff --check`, and
+negative `rg` for the deleted local-web setup path env names.
 
 ### 7. First-Party Agent Integration Deletion
 
@@ -412,6 +457,13 @@ old harness, stale policy-doc, Sparkle retry-env, and developer-port local-web
 cleanup, `scripts/measure-shipped-app-lines.sh` reports 8,191 nonblank
 shipped-app lines, an 86.64% reduction from baseline.
 
+Evidence, 2026-05-13: after deleting runtime path env overrides, the detached
+LaunchAgent bypass, and obsolete fixture uninstall/RPC stress harnesses,
+`scripts/measure-shipped-app-lines.sh` reports 8,014 nonblank shipped-app
+lines after the remaining shipped `ONECONTEXT_*` product env hooks were removed,
+an 86.93% reduction from
+baseline.
+
 ### 11. Dead Code, Assets, And Docs
 
 - [x] Delete high-confidence dead Swift helpers:
@@ -490,7 +542,19 @@ validate`, `cd memory-core && uv run --with pytest pytest`, `actionlint`,
 Evidence, 2026-05-13: captured the deletion audit artifact at
 `docs/goals/evidence/delete-bloat-audit-2026-05-13.md`, including removed file
 families, negative checks for deleted public surfaces, proof commands, and the
-86.46% shipped-app line reduction result.
+current 86.83% shipped-app line reduction result.
+
+Evidence, 2026-05-13: product path override deletion tranche passed with
+`swift test --package-path macos`, `./scripts/test.sh`,
+`./scripts/package-macos-smoke.sh`, `./scripts/test-launch-agent-package.sh`,
+`cd memory-core && uv run --with pytest pytest`, `git diff --check`, and a
+negative `rg` for `RuntimePaths.current(environment`,
+`ONECONTEXT_USER_CONTENT_DIR`, `ONECONTEXT_APP_SUPPORT_DIR`,
+`ONECONTEXT_CACHE_DIR`, `ONECONTEXT_LOG_DIR`, `ONECONTEXT_SOCKET_PATH`,
+`ONECONTEXT_LOG_PATH`, `ONECONTEXT_PREFERENCES_PATH`,
+`ONECONTEXT_PERSIST_ENV_PATH_OVERRIDES`, `ONECONTEXT_LAUNCH_AGENT_DISABLED`,
+`ONECONTEXT_UNINSTALL_HOME_DIR`, `ONECONTEXT_ALLOW_UNINSTALL_HOME_OVERRIDE`,
+`stress-runtime-rpc`, and `test-macos-uninstall-command`.
 
 ### 13. Exit
 
@@ -499,7 +563,7 @@ families, negative checks for deleted public surfaces, proof commands, and the
 - [x] No old update-policy files or scripts remain.
 - [x] No old proof request scripts remain as documented user/operator entry
   points.
-- [ ] No shipped app product code depends on source-checkout discovery or test
+- [x] No shipped app product code depends on source-checkout discovery or test
   fixture env vars.
 - [x] No shipped app product code installs first-party agent hooks unless agent
   integration is explicitly re-approved as a current product surface.

@@ -74,19 +74,6 @@ swift test --package-path macos
 ./scripts/test.sh
 ```
 
-For RPC lifecycle stress:
-
-```bash
-ONECONTEXT_STRESS_COUNT=1000 ./scripts/stress-runtime-rpc.sh
-```
-
-For menu responsiveness work, launch the app with perf timing enabled and
-inspect `~/Library/Logs/1Context/menu.log`:
-
-```bash
-ONECONTEXT_MENU_PERF_LOG=1 open /Applications/1Context.app
-```
-
 For updater work, keep tests on update policy, appcast configuration, the
 Sparkle controller, and the release feed. `1context update`, menu update, and
 diagnostics should all report the same app-owned update state without involving

@@ -14,13 +14,6 @@ public struct WikiLocalAPIConfig: Equatable, Sendable {
     self.port = port
   }
 
-  public init(environment: [String: String]) {
-    self.init(
-      bindHost: environment["ONECONTEXT_WIKI_API_BIND_HOST"] ?? LocalWebDefaults.bindHost,
-      port: Int(environment["ONECONTEXT_WIKI_API_PORT"] ?? "") ?? LocalWebDefaults.wikiAPIPort
-    )
-  }
-
   public var baseURL: URL {
     URL(string: "http://\(bindHost):\(port)")!
   }
@@ -455,8 +448,7 @@ public final class WikiLocalAPIServer: @unchecked Sendable {
 }
 
 public enum WikiLocalAPIProbe {
-  public static func health(environment: [String: String] = ProcessInfo.processInfo.environment) -> String {
-    let config = WikiLocalAPIConfig(environment: environment)
+  public static func health(config: WikiLocalAPIConfig = WikiLocalAPIConfig()) -> String {
     var request = URLRequest(url: config.healthURL)
     request.timeoutInterval = 0.5
     let semaphore = DispatchSemaphore(value: 0)

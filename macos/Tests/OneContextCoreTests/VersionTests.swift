@@ -2,20 +2,8 @@ import XCTest
 @testable import OneContextCore
 
 final class VersionTests: XCTestCase {
-  func testVersionResolutionIgnoresEnvironmentOverrides() {
-    let version = OneContextVersion.resolve(
-      environment: ["ONECONTEXT_VERSION_OVERRIDE": "9.9.9"],
-      bundleVersion: "1.0.0",
-      executableURL: nil,
-      appBundleVersion: { _ in nil }
-    )
-
-    XCTAssertEqual(version, "1.0.0")
-  }
-
   func testVersionResolutionUsesMainBundleVersionBeforeFallback() {
     let version = OneContextVersion.resolve(
-      environment: [:],
       bundleVersion: "1.2.3",
       executableURL: nil,
       appBundleVersion: { _ in nil }
@@ -27,7 +15,6 @@ final class VersionTests: XCTestCase {
   func testVersionResolutionFindsContainingAppBundleForEmbeddedTools() {
     let executableURL = URL(fileURLWithPath: "/Applications/1Context.app/Contents/MacOS/1context-cli")
     let version = OneContextVersion.resolve(
-      environment: [:],
       bundleVersion: nil,
       executableURL: executableURL,
       appBundleVersion: { appURL in
@@ -40,7 +27,6 @@ final class VersionTests: XCTestCase {
 
   func testVersionResolutionFallsBackForSwiftPMExecutables() {
     let version = OneContextVersion.resolve(
-      environment: [:],
       bundleVersion: nil,
       executableURL: URL(fileURLWithPath: "/tmp/1context"),
       appBundleVersion: { _ in nil }

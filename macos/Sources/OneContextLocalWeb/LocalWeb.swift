@@ -373,29 +373,39 @@ private struct CaddyState: Codable {
 public final class CaddyManager: @unchecked Sendable {
   private let runtimePaths: RuntimePaths
   private let paths: LocalWebPaths
-  private let environment: [String: String]
+  private let setupSystemPaths: LocalWebSetupSystemPaths
   private let fileManager: FileManager
   private let urlMode: LocalWebURLMode
   private let host: String
   private let port: Int
   private let apiBindHost: String
   private let apiPort: Int
+  private let caddyExecutableOverride: URL?
+  private let proxyExecutableOverride: URL?
   private let lifecycleLock = NSLock()
 
   public init(
     runtimePaths: RuntimePaths = .current(),
-    environment: [String: String] = ProcessInfo.processInfo.environment,
-    fileManager: FileManager = .default
+    setupSystemPaths: LocalWebSetupSystemPaths = LocalWebSetupSystemPaths(),
+    fileManager: FileManager = .default,
+    caddyExecutable: URL? = nil,
+    proxyExecutable: URL? = nil,
+    host: String = LocalWebDefaults.wikiHost,
+    port: Int = LocalWebDefaults.wikiPort,
+    apiBindHost: String = LocalWebDefaults.bindHost,
+    apiPort: Int = LocalWebDefaults.wikiAPIPort
   ) {
     self.runtimePaths = runtimePaths
     self.paths = LocalWebPaths(runtimePaths: runtimePaths)
-    self.environment = environment
+    self.setupSystemPaths = setupSystemPaths
     self.fileManager = fileManager
     self.urlMode = .localHTTPSPortless
-    self.host = environment["ONECONTEXT_WIKI_HOST"] ?? LocalWebDefaults.wikiHost
-    self.port = Int(environment["ONECONTEXT_WIKI_PORT"] ?? "") ?? LocalWebDefaults.wikiPort
-    self.apiBindHost = environment["ONECONTEXT_WIKI_API_BIND_HOST"] ?? LocalWebDefaults.bindHost
-    self.apiPort = Int(environment["ONECONTEXT_WIKI_API_PORT"] ?? "") ?? LocalWebDefaults.wikiAPIPort
+    self.host = host
+    self.port = port
+    self.apiBindHost = apiBindHost
+    self.apiPort = apiPort
+    self.caddyExecutableOverride = caddyExecutable
+    self.proxyExecutableOverride = proxyExecutable
   }
 
   public var pidPath: String {
@@ -413,8 +423,8 @@ public final class CaddyManager: @unchecked Sendable {
   public func localWebSetupState() -> LocalWebSetupState {
     LocalWebSetupInspector.inspect(
       runtimePaths: runtimePaths,
-      environment: environment,
       fileManager: fileManager,
+      systemPaths: setupSystemPaths,
       host: host,
       backendHost: LocalWebDefaults.bindHost,
       backendPort: port,
@@ -469,9 +479,9 @@ public final class CaddyManager: @unchecked Sendable {
       trustMode: urlMode.trustMode,
       privilegedBindRequired: urlMode.privilegedBindRequired,
       setup: localWebSetupSnapshot(),
-      apiURL: WikiLocalAPIConfig(environment: environment).healthURL.absoluteString,
-      apiHealth: WikiLocalAPIProbe.health(environment: environment),
-      apiPort: WikiLocalAPIConfig(environment: environment).port,
+      apiURL: apiConfig().healthURL.absoluteString,
+      apiHealth: WikiLocalAPIProbe.health(config: apiConfig()),
+      apiPort: apiConfig().port,
       apiStatePath: paths.wikiBrowserStateFile.path,
       caddyExecutable: caddy.path,
       caddyExecutableExists: !caddy.path.isEmpty && fileManager.fileExists(atPath: caddy.path),
@@ -689,8 +699,8 @@ public final class CaddyManager: @unchecked Sendable {
 
   private func localWebProxyCandidates() -> [URL] {
     var candidates: [URL] = []
-    if let override = environment["ONECONTEXT_LOCAL_WEB_PROXY_SOURCE_PATH"], !override.isEmpty {
-      candidates.append(URL(fileURLWithPath: override))
+    if let proxyExecutableOverride {
+      candidates.append(proxyExecutableOverride)
     }
     if let executableDirectory = currentExecutableURL()?.deletingLastPathComponent() {
       candidates.append(
@@ -707,8 +717,8 @@ public final class CaddyManager: @unchecked Sendable {
 
   private func caddyCandidates() -> [URL] {
     var candidates: [URL] = []
-    if let override = environment["ONECONTEXT_CADDY_PATH"], !override.isEmpty {
-      candidates.append(URL(fileURLWithPath: override))
+    if let caddyExecutableOverride {
+      candidates.append(caddyExecutableOverride)
     }
     if let executableDirectory = currentExecutableURL()?.deletingLastPathComponent() {
       candidates.append(bundledCaddyURL(executableDirectory: executableDirectory))
@@ -728,11 +738,15 @@ public final class CaddyManager: @unchecked Sendable {
   }
 
   private func caddyProcessEnvironment() -> [String: String] {
-    var env = ProcessInfo.processInfo.environment.merging(environment) { _, new in new }
+    var env = ProcessInfo.processInfo.environment
     env["HOME"] = paths.caddyDirectory.appendingPathComponent("home", isDirectory: true).path
     env["XDG_CONFIG_HOME"] = paths.caddyDirectory.appendingPathComponent("config", isDirectory: true).path
     env["XDG_DATA_HOME"] = paths.caddyDirectory.appendingPathComponent("data", isDirectory: true).path
     return env
+  }
+
+  private func apiConfig() -> WikiLocalAPIConfig {
+    WikiLocalAPIConfig(bindHost: apiBindHost, port: apiPort)
   }
 
   private func healthOK(_ url: URL) -> Bool {

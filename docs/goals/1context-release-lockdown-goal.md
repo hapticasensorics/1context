@@ -1552,16 +1552,14 @@ Closed-loop proof plan:
   the public Sparkle feed to `0.1.65`, captured desktop/status/version proof,
   and held 120 seconds of steady runtime state. Local GUI proof
   `dist/setup-gui-evidence/local-0.1.65-setup-gui-20260513T063359Z/` covers
-  the native setup states on this Mac, and
-  `scripts/test-macos-uninstall-command.sh` covers app-owned uninstall cleanup
-  in controlled fixture homes so we do not delete real user data to prove the
-  release train.
+  the native setup states on this Mac. Destructive uninstall coverage now
+  belongs to the protected real-Mac release proof instead of fixture home
+  overrides in shipped CLI code.
 - [x] Add full uninstall smoke that can inspect helper, LaunchAgents, local CA,
   managed hooks, logs/cache, and optional data deletion.
-  Evidence: `scripts/test-macos-uninstall-command.sh` now runs fixture-backed
-  uninstall proof for app bundle trashing, fixture LaunchAgent removal,
-  local-web setup certificate/marker cleanup, managed Claude/Codex hook
-  removal, logs/cache cleanup, temporary update command cleanup, and
+  Evidence: the release proof owns uninstall proof for app bundle trashing,
+  LaunchAgent removal, local-web setup certificate/marker cleanup,
+  logs/cache cleanup, temporary update command cleanup, and
   delete-data allowlist behavior. The smoke passed locally.
 - [x] Run uninstall without `--delete-data` and prove user wiki content remains.
   Evidence: the fixture uninstall smoke keeps
@@ -1745,9 +1743,8 @@ Closed-loop proof plan:
   `steady-state/summary.txt`, and `steady-state/update-start.txt`; together
   they show installed `0.1.65`, public feed restored, update available `no`,
   setup ready, local wiki/API health OK, menu bar running/visible, and 120
-  seconds of steady state. Uninstall behavior is covered by the fixture
-  uninstall smoke in `scripts/test-macos-uninstall-command.sh`, which is part of
-  `./scripts/test.sh`.
+  seconds of steady state. Uninstall behavior must be covered by normalized
+  `release-train.sh prove` evidence, not fixture env overrides in product code.
 - [x] Prove the final app has founder-controlled update policy end to end:
   mandatory vs optional, no updater release notes by default, concise optional
   prompt, simple failed-update support message, optional `1Context Improved!`

@@ -7,12 +7,10 @@ public enum OneContextVersion {
   public static let fallback = "0.1.65"
 
   public static func current(
-    environment: [String: String] = ProcessInfo.processInfo.environment,
     bundle: Bundle = .main,
     executableURL: URL? = Self.currentExecutableURL()
   ) -> String {
     resolve(
-      environment: environment,
       bundleVersion: bundle.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String,
       executableURL: executableURL,
       appBundleVersion: Self.appBundleVersion(containing:)
@@ -20,7 +18,6 @@ public enum OneContextVersion {
   }
 
   static func resolve(
-    environment: [String: String],
     bundleVersion: String?,
     executableURL: URL?,
     appBundleVersion: (URL) -> String?

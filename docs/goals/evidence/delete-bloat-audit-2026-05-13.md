@@ -1,6 +1,6 @@
 # 1Context Delete Bloat Audit - 2026-05-13
 
-Generated at: `2026-05-13T21:02:24Z`
+Generated at: `2026-05-13T21:33:00Z`
 
 Comparison base: `dd5ccd2` (`Close 0.1.65 release lockdown goal`)
 
@@ -41,6 +41,21 @@ Comparison base: `dd5ccd2` (`Close 0.1.65 release lockdown goal`)
   `ONECONTEXT_SMOKE_FIXTURE`, `ONECONTEXT_SMOKE_STATE_DIR`,
   `ONECONTEXT_SHOW_SETUP_ON_LAUNCH`, daemon path overrides, and Sparkle retry
   delay overrides.
+- Deleted runtime path/lifecycle fixture backdoors:
+  `RuntimePaths.current(environment:)`, LaunchAgent `EnvironmentVariables`
+  path persistence, `ONECONTEXT_LAUNCH_AGENT_DISABLED`, uninstall home
+  overrides, `scripts/stress-runtime-rpc.sh`, and
+  `scripts/test-macos-uninstall-command.sh`.
+- Deleted local-web setup path env overrides from shipped setup code:
+  `ONECONTEXT_LOCAL_WEB_SYSTEM_*`, proxy executable/plist/cert path overrides,
+  and `ONECONTEXT_APP_BUNDLE_PATH`. Tests now pass typed
+  `LocalWebSetupSystemPaths` fixtures instead.
+- Deleted menu performance logging env scaffolding:
+  `ONECONTEXT_MENU_PERF_LOG`, `perfStart`, `perfLog`, and the stderr
+  `[1context-menu-perf]` hook.
+- Deleted the remaining shipped `ONECONTEXT_*` product env hooks from
+  `macos/Sources`; release/build scripts keep explicit operator env vars, but
+  product code no longer uses them as hidden behavior switches.
 - Deleted unshipped local wiki chat/provider API routes and placeholder JSON.
 - Deleted old ad hoc GUI harnesses that preserved product test hooks:
   `scripts/smoke-sparkle-local-appcast.sh`,
@@ -76,6 +91,33 @@ Comparison base: `dd5ccd2` (`Close 0.1.65 release lockdown goal`)
   `ONECONTEXT_DAEMON_PATH`,
   `ONECONTEXT_SPARKLE_AUTOMATIC_RETRY_DELAYS_SECONDS`,
   `ONECONTEXT_SPARKLE_MANUAL_RETRY_DELAYS_SECONDS`,
+  `ONECONTEXT_USER_CONTENT_DIR`,
+  `ONECONTEXT_APP_SUPPORT_DIR`,
+  `ONECONTEXT_CACHE_DIR`,
+  `ONECONTEXT_LOG_DIR`,
+  `ONECONTEXT_SOCKET_PATH`,
+  `ONECONTEXT_LOG_PATH`,
+  `ONECONTEXT_PREFERENCES_PATH`,
+  `ONECONTEXT_PERSIST_ENV_PATH_OVERRIDES`,
+  `ONECONTEXT_LAUNCH_AGENT_DISABLED`,
+  `ONECONTEXT_UNINSTALL_HOME_DIR`,
+  `ONECONTEXT_ALLOW_UNINSTALL_HOME_OVERRIDE`,
+  `scripts/stress-runtime-rpc.sh`,
+  `scripts/test-macos-uninstall-command.sh`,
+  `ONECONTEXT_LOCAL_WEB_SYSTEM_SUPPORT_DIR`,
+  `ONECONTEXT_LOCAL_WEB_SYSTEM_LOG_DIR`,
+  `ONECONTEXT_LOCAL_WEB_PROXY_EXECUTABLE_PATH`,
+  `ONECONTEXT_LOCAL_WEB_LAUNCH_DAEMON_PATH`,
+  `ONECONTEXT_LOCAL_WEB_TRUSTED_ROOT_CERT_PATH`,
+  `ONECONTEXT_LOCAL_WEB_TRUSTED_ROOT_SHA1_PATH`,
+  `ONECONTEXT_LOCAL_WEB_TRUSTED_ROOT_SHA256_PATH`,
+  `ONECONTEXT_LOCAL_WEB_SETUP_MARKER_PATH`,
+  `ONECONTEXT_LOCAL_WEB_PROXY_LOG_PATH`,
+  `ONECONTEXT_APP_BUNDLE_PATH`,
+  `ONECONTEXT_MENU_PERF_LOG`,
+  `perfStart`,
+  `perfLog`,
+  `1context-menu-perf`,
   `docs/update_policy.html`,
   `current-update-prompt.png`, or
   `assets/update-policy`.
@@ -85,6 +127,7 @@ Comparison base: `dd5ccd2` (`Close 0.1.65 release lockdown goal`)
 - `scripts/test-launch-agent-package.sh` asserts the packaged app has no
   bundled `memory-core`, generated local goal/wiki source, or dead chat/provider
   API strings.
+- `rg -n "ONECONTEXT_[A-Z0-9_]+" macos/Sources` returns no matches.
 
 ## Proof Commands
 
@@ -106,7 +149,7 @@ Passed on 2026-05-13:
 `scripts/measure-shipped-app-lines.sh` reports:
 
 - Baseline: 61,309 nonblank shipped-app lines.
-- Current: 8,299 nonblank shipped-app lines.
-- Removed: 53,010 lines.
-- Reduction: 86.46%.
+- Current: 8,014 nonblank shipped-app lines.
+- Removed: 53,295 lines.
+- Reduction: 86.93%.
 - Target: at most 24,523 lines for the 60% reduction goal.

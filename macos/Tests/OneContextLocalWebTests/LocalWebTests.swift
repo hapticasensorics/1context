@@ -39,11 +39,7 @@ final class LocalWebTests: XCTestCase {
   func testLocalWebPathsUseDedicatedInfrastructureFolders() {
     let root = URL(fileURLWithPath: NSTemporaryDirectory())
       .appendingPathComponent("1context-local-web-tests-\(UUID().uuidString)", isDirectory: true)
-    let paths = RuntimePaths.current(environment: [
-      "ONECONTEXT_APP_SUPPORT_DIR": root.appendingPathComponent("Application Support/1Context").path,
-      "ONECONTEXT_LOG_DIR": root.appendingPathComponent("Logs/1Context").path,
-      "ONECONTEXT_CACHE_DIR": root.appendingPathComponent("Caches/1Context").path
-    ])
+    let paths = testRuntimePaths(root: root)
     let web = LocalWebPaths(runtimePaths: paths)
 
     XCTAssertTrue(web.caddyDirectory.path.hasSuffix("Application Support/1Context/local-web/caddy"))
@@ -64,7 +60,6 @@ final class LocalWebTests: XCTestCase {
     try FileManager.default.createSymbolicLink(at: link, withDestinationURL: cli)
 
     let resolved = LocalWebSetupSystemPaths.appBundleURL(
-      environment: [:],
       commandLineExecutable: link.path,
       mainBundleURL: root.appendingPathComponent("homebrew/bin", isDirectory: true)
     )
@@ -80,14 +75,12 @@ final class LocalWebTests: XCTestCase {
     FileManager.default.createFile(atPath: caddy.path, contents: Data("#!/bin/sh\n".utf8))
     chmod(caddy.path, 0o755)
 
-    let paths = RuntimePaths.current(environment: [
-      "ONECONTEXT_APP_SUPPORT_DIR": root.appendingPathComponent("Application Support/1Context").path,
-      "ONECONTEXT_LOG_DIR": root.appendingPathComponent("Logs/1Context").path,
-      "ONECONTEXT_CACHE_DIR": root.appendingPathComponent("Caches/1Context").path
-    ])
-    let manager = CaddyManager(runtimePaths: paths, environment: [
-      "ONECONTEXT_CADDY_PATH": caddy.path
-    ])
+    let paths = testRuntimePaths(root: root)
+    let manager = CaddyManager(
+      runtimePaths: paths,
+      setupSystemPaths: testSetupSystemPaths(root: root),
+      caddyExecutable: caddy
+    )
     let diagnostics = manager.diagnostics()
 
     XCTAssertEqual(diagnostics.urlMode, "local-https-portless")
@@ -111,14 +104,12 @@ final class LocalWebTests: XCTestCase {
     FileManager.default.createFile(atPath: caddy.path, contents: Data("#!/bin/sh\n".utf8))
     chmod(caddy.path, 0o755)
 
-    let paths = RuntimePaths.current(environment: [
-      "ONECONTEXT_APP_SUPPORT_DIR": root.appendingPathComponent("Application Support/1Context").path,
-      "ONECONTEXT_LOG_DIR": root.appendingPathComponent("Logs/1Context").path,
-      "ONECONTEXT_CACHE_DIR": root.appendingPathComponent("Caches/1Context").path
-    ])
-    let manager = CaddyManager(runtimePaths: paths, environment: [
-      "ONECONTEXT_CADDY_PATH": caddy.path
-    ].merging(localWebSetupTestEnvironment(root: root)) { _, new in new })
+    let paths = testRuntimePaths(root: root)
+    let manager = CaddyManager(
+      runtimePaths: paths,
+      setupSystemPaths: testSetupSystemPaths(root: root),
+      caddyExecutable: caddy
+    )
 
     let diagnostics = manager.diagnostics()
 
@@ -141,7 +132,7 @@ final class LocalWebTests: XCTestCase {
       "started_at": "2026-04-30T00:00:00Z"
     ], to: web.stateFile)
 
-    let manager = CaddyManager(runtimePaths: paths, environment: localWebSetupTestEnvironment(root: root))
+    let manager = CaddyManager(runtimePaths: paths, setupSystemPaths: testSetupSystemPaths(root: root))
     let snapshot = manager.status()
 
     XCTAssertFalse(snapshot.running)
@@ -153,7 +144,7 @@ final class LocalWebTests: XCTestCase {
   func testStartRequiresSetupBeforeProfessionalLocalHTTPSModeRuns() throws {
     let root = temporaryRoot()
     let paths = testRuntimePaths(root: root)
-    let manager = CaddyManager(runtimePaths: paths, environment: localWebSetupTestEnvironment(root: root))
+    let manager = CaddyManager(runtimePaths: paths, setupSystemPaths: testSetupSystemPaths(root: root))
 
     XCTAssertThrowsError(try manager.start()) { error in
       XCTAssertEqual(
@@ -167,7 +158,7 @@ final class LocalWebTests: XCTestCase {
     let root = temporaryRoot()
     let paths = testRuntimePaths(root: root)
     let web = LocalWebPaths(runtimePaths: paths)
-    let manager = CaddyManager(runtimePaths: paths, environment: [:])
+    let manager = CaddyManager(runtimePaths: paths)
 
     try manager.ensurePlaceholderSite()
 
@@ -182,11 +173,7 @@ final class LocalWebTests: XCTestCase {
   }
 
   func testLocalHTTPSSetupSnapshotReflectsInstalledProxyAndTrust() {
-    let systemPaths = LocalWebSetupSystemPaths(environment: [
-      "ONECONTEXT_LOCAL_WEB_SYSTEM_SUPPORT_DIR": "/tmp/1Context/System",
-      "ONECONTEXT_LOCAL_WEB_SYSTEM_LOG_DIR": "/tmp/1Context/Logs",
-      "ONECONTEXT_LOCAL_WEB_LAUNCH_DAEMON_PATH": "/tmp/1Context/LaunchDaemons/proxy.plist"
-    ])
+    let systemPaths = testSetupSystemPaths(root: URL(fileURLWithPath: "/tmp/1Context", isDirectory: true))
     let state = LocalWebSetupState(
       label: LocalWebSetupConstants.proxyLabel,
       targetHost: LocalWebDefaults.wikiHost,
@@ -223,11 +210,7 @@ final class LocalWebTests: XCTestCase {
   }
 
   func testLocalHTTPSSetupRequiresRepairWhenInstalledProxyIsStale() {
-    let systemPaths = LocalWebSetupSystemPaths(environment: [
-      "ONECONTEXT_LOCAL_WEB_SYSTEM_SUPPORT_DIR": "/tmp/1Context/System",
-      "ONECONTEXT_LOCAL_WEB_SYSTEM_LOG_DIR": "/tmp/1Context/Logs",
-      "ONECONTEXT_LOCAL_WEB_LAUNCH_DAEMON_PATH": "/tmp/1Context/LaunchDaemons/proxy.plist"
-    ])
+    let systemPaths = testSetupSystemPaths(root: URL(fileURLWithPath: "/tmp/1Context", isDirectory: true))
     let state = LocalWebSetupState(
       label: LocalWebSetupConstants.proxyLabel,
       targetHost: LocalWebDefaults.wikiHost,
@@ -363,19 +346,21 @@ final class LocalWebTests: XCTestCase {
   }
 
   private func testRuntimePaths(root: URL) -> RuntimePaths {
-    RuntimePaths.current(environment: [
-      "ONECONTEXT_APP_SUPPORT_DIR": root.appendingPathComponent("Application Support/1Context").path,
-      "ONECONTEXT_LOG_DIR": root.appendingPathComponent("Logs/1Context").path,
-      "ONECONTEXT_CACHE_DIR": root.appendingPathComponent("Caches/1Context").path
-    ])
+    RuntimePaths(
+      userContentDirectory: root.appendingPathComponent("1Context", isDirectory: true),
+      appSupportDirectory: root.appendingPathComponent("Application Support/1Context", isDirectory: true),
+      logDirectory: root.appendingPathComponent("Logs/1Context", isDirectory: true),
+      cacheDirectory: root.appendingPathComponent("Caches/1Context", isDirectory: true)
+    )
   }
 
-  private func localWebSetupTestEnvironment(root: URL) -> [String: String] {
-    [
-      "ONECONTEXT_LOCAL_WEB_SYSTEM_SUPPORT_DIR": root.appendingPathComponent("System/Application Support/1Context").path,
-      "ONECONTEXT_LOCAL_WEB_SYSTEM_LOG_DIR": root.appendingPathComponent("System/Logs/1Context").path,
-      "ONECONTEXT_LOCAL_WEB_LAUNCH_DAEMON_PATH": root.appendingPathComponent("System/LaunchDaemons/com.haptica.1context.local-web-proxy.plist").path
-    ]
+  private func testSetupSystemPaths(root: URL) -> LocalWebSetupSystemPaths {
+    LocalWebSetupSystemPaths(
+      appBundle: root.appendingPathComponent("Applications/1Context.app", isDirectory: true),
+      supportDirectory: root.appendingPathComponent("System", isDirectory: true).path,
+      logDirectory: root.appendingPathComponent("Logs", isDirectory: true).path,
+      launchDaemonPlist: root.appendingPathComponent("LaunchDaemons/proxy.plist").path
+    )
   }
 
   private func localHTTPSSetupSnapshot(
@@ -398,11 +383,7 @@ final class LocalWebTests: XCTestCase {
         userRootCertificateExists: true,
         userRootCertificateSHA1: "ABC123",
         userRootCertificateSHA256: "DEF456",
-        systemPaths: LocalWebSetupSystemPaths(environment: [
-          "ONECONTEXT_LOCAL_WEB_SYSTEM_SUPPORT_DIR": "/tmp/1Context/System",
-          "ONECONTEXT_LOCAL_WEB_SYSTEM_LOG_DIR": "/tmp/1Context/Logs",
-          "ONECONTEXT_LOCAL_WEB_LAUNCH_DAEMON_PATH": "/tmp/1Context/LaunchDaemons/proxy.plist"
-        ]),
+        systemPaths: testSetupSystemPaths(root: URL(fileURLWithPath: "/tmp/1Context", isDirectory: true)),
         proxyPlistInstalled: true,
         proxyExecutableInstalled: true,
         proxyServiceStatus: "enabled",

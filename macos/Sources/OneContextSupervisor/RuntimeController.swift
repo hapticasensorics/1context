@@ -5,14 +5,12 @@ import OneContextPlatform
 import OneContextProtocol
 
 public final class RuntimeController {
-  private let environment: [String: String]
   private let client: UnixJSONRPCClient
   private let launchAgent: LaunchAgentManager
 
-  public init(environment: [String: String] = ProcessInfo.processInfo.environment) {
-    self.environment = environment
-    self.client = UnixJSONRPCClient(socketPath: RuntimePaths.current(environment: environment).socketPath)
-    self.launchAgent = LaunchAgentManager(environment: environment)
+  public init() {
+    self.client = UnixJSONRPCClient(socketPath: RuntimePaths.current().socketPath)
+    self.launchAgent = LaunchAgentManager()
   }
 
   public func status() -> Result<RuntimeHealth, Error> {
@@ -65,17 +63,13 @@ public final class RuntimeController {
         return (true, health)
       }
 
-      let restarted = try await restartRuntimeForVersionMismatch(existingHealth: health)
+      let restarted = try await restartRuntimeForVersionMismatch()
       if startMenu { try await startMenuIfAvailable() }
       return (false, restarted)
     }
     guard let daemon = findDaemonPath() else { throw RuntimeControlError.daemonNotFound }
 
-    if launchAgent.isDisabled {
-      try startDetached(daemonPath: daemon)
-    } else {
-      try await launchAgent.start(daemonPath: daemon)
-    }
+    try await launchAgent.start(daemonPath: daemon)
 
     let health = try await waitForRunning()
     if startMenu { try await startMenuIfAvailable() }
@@ -92,12 +86,7 @@ public final class RuntimeController {
     }
     guard let daemon = findDaemonPath() else { throw RuntimeControlError.daemonNotFound }
 
-    if launchAgent.isDisabled {
-      if case .success(let health) = current, health.pid > 0 {
-        kill(health.pid, SIGTERM)
-      }
-      try startDetached(daemonPath: daemon)
-    } else if case .success(let health) = current, health.version != oneContextVersion {
+    if case .success(let health) = current, health.version != oneContextVersion {
       try await launchAgent.restart(daemonPath: daemon)
     } else {
       try await launchAgent.start(daemonPath: daemon)
@@ -119,16 +108,8 @@ public final class RuntimeController {
       setStartDesired(false)
     }
     let current = status()
-    if !launchAgent.isDisabled {
-      await launchAgent.stop()
-      if case .failure = current { return false }
-      try await waitForStopped()
-      return true
-    }
-
-    guard case .success(let health) = current else { return false }
-    guard health.pid > 0 else { throw RuntimeControlError.missingPID }
-    kill(health.pid, SIGTERM)
+    await launchAgent.stop()
+    if case .failure = current { return false }
     try await waitForStopped()
     return true
   }
@@ -136,13 +117,7 @@ public final class RuntimeController {
   public func requestStop() async throws {
     try ensureNormalUserLifecycle()
     setStartDesired(false)
-    if !launchAgent.isDisabled {
-      await launchAgent.stop()
-      return
-    }
-
-    guard case .success(let health) = status(), health.pid > 0 else { return }
-    kill(health.pid, SIGTERM)
+    await launchAgent.stop()
   }
 
   public func quit() async throws -> Bool {
@@ -152,22 +127,14 @@ public final class RuntimeController {
   public func quit(stopMenu: Bool) async throws -> Bool {
     try ensureNormalUserLifecycle()
     let stopped = try await stop()
-    if stopMenu, !launchAgent.isDisabled {
+    if stopMenu {
       await launchAgent.stopMenu()
     }
     return stopped
   }
 
-  private func restartRuntimeForVersionMismatch(existingHealth health: RuntimeHealth) async throws -> RuntimeHealth {
+  private func restartRuntimeForVersionMismatch() async throws -> RuntimeHealth {
     guard let daemon = findDaemonPath() else { throw RuntimeControlError.daemonNotFound }
-
-    if launchAgent.isDisabled {
-      guard health.pid > 0 else { throw RuntimeControlError.missingPID }
-      kill(health.pid, SIGTERM)
-      try await waitForStopped()
-      try startDetached(daemonPath: daemon)
-      return try await waitForRunning()
-    }
 
     try await launchAgent.restart(daemonPath: daemon)
     return try await waitForRunning()
@@ -182,12 +149,6 @@ public final class RuntimeController {
     setStartDesired(true)
     guard let daemon = findDaemonPath() else { throw RuntimeControlError.daemonNotFound }
 
-    if launchAgent.isDisabled {
-      _ = try await stop()
-      setStartDesired(true)
-      return try await start(startMenu: startMenu).health
-    }
-
     try await launchAgent.restart(daemonPath: daemon)
     let health = try await waitForRunning()
     if startMenu { try await startMenuIfAvailable() }
@@ -195,7 +156,7 @@ public final class RuntimeController {
   }
 
   public func shouldAutoStartRuntime() -> Bool {
-    let paths = RuntimePaths.current(environment: environment)
+    let paths = RuntimePaths.current()
     guard let state = try? String(contentsOfFile: paths.desiredStatePath, encoding: .utf8) else {
       return true
     }
@@ -213,7 +174,7 @@ public final class RuntimeController {
 
   private func removeLocalData() throws {
     let fileManager = FileManager.default
-    let runtimePaths = RuntimePaths.current(environment: environment)
+    let runtimePaths = RuntimePaths.current()
     for url in [
       runtimePaths.userContentDirectory,
       runtimePaths.appSupportDirectory,
@@ -268,25 +229,8 @@ public final class RuntimeController {
     throw RuntimeControlError.timedOut("1Context did not stop in time")
   }
 
-  private func startDetached(daemonPath: String) throws {
-    let paths = RuntimePaths.current(environment: environment)
-    try RuntimePermissions.ensurePrivateDirectory(paths.appSupportDirectory)
-    try RuntimePermissions.ensurePrivateDirectory(paths.runDirectory)
-    try RuntimePermissions.ensurePrivateDirectory(paths.logDirectory)
-    try RuntimePermissions.ensurePrivateDirectory(paths.cacheDirectory)
-    RuntimePermissions.repairRuntimePaths(paths)
-
-    let process = Process()
-    process.executableURL = URL(fileURLWithPath: daemonPath)
-    process.environment = ProcessInfo.processInfo.environment.merging(environment) { _, new in new }
-    process.standardInput = FileHandle.nullDevice
-    process.standardOutput = FileHandle.nullDevice
-    process.standardError = FileHandle.nullDevice
-    try process.run()
-  }
-
   private func setStartDesired(_ desired: Bool) {
-    let paths = RuntimePaths.current(environment: environment)
+    let paths = RuntimePaths.current()
     do {
       try RuntimePermissions.ensurePrivateDirectory(paths.appSupportDirectory)
       try RuntimePermissions.writePrivateString(desired ? "running\n" : "stopped\n", toFile: paths.desiredStatePath)
@@ -296,7 +240,7 @@ public final class RuntimeController {
   }
 
   private func ensureNormalUserLifecycle() throws {
-    if geteuid() == 0 || environment["SUDO_USER"] != nil {
+    if geteuid() == 0 || ProcessInfo.processInfo.environment["SUDO_USER"] != nil {
       throw RuntimeControlError.rootUserUnsupported
     }
   }
@@ -309,10 +253,6 @@ public final class RuntimeController {
 
     let bundled = executableDirectory.appendingPathComponent("1contextd").resolvingSymlinksInPath()
     if isBundledMacOSDirectory(executableDirectory), fm.isExecutableFile(atPath: bundled.path) {
-      return bundled.path
-    }
-
-    if environment["ONECONTEXT_LAUNCH_AGENT_DISABLED"] == "1", fm.isExecutableFile(atPath: bundled.path) {
       return bundled.path
     }
 

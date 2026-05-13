@@ -116,11 +116,10 @@ not more planning docs:
 - App relaunch and login-style LaunchAgent recovery.
 - Sparkle update from previous public version.
 - Non-destructive uninstall preserving `~/1Context`.
-- Controlled delete-data uninstall in a fixture account or fixture path.
+- Controlled delete-data uninstall on the real proof runner.
 
 The normalized release proof should own this evidence. Keep any exploratory
-local checks temporary until they become `release-train.sh prove` proof JSON or
-focused tests such as `scripts/test-macos-uninstall-command.sh`.
+local checks temporary until they become `release-train.sh prove` proof JSON.
 
 Track detailed release-train work in
 [goals/1context-release-lockdown-goal.md](goals/1context-release-lockdown-goal.md).

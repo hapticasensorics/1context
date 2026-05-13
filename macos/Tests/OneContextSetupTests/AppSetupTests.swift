@@ -167,11 +167,11 @@ final class AppSetupTests: XCTestCase {
         userRootCertificateExists: ready,
         userRootCertificateSHA1: ready ? "SHA1" : nil,
         userRootCertificateSHA256: ready ? "SHA256" : nil,
-        systemPaths: LocalWebSetupSystemPaths(environment: [
-          "ONECONTEXT_APP_BUNDLE_PATH": "/Applications/1Context.app",
-          "ONECONTEXT_LOCAL_WEB_SYSTEM_SUPPORT_DIR": "/tmp/1context/setup",
-          "ONECONTEXT_LOCAL_WEB_SYSTEM_LOG_DIR": "/tmp/1context/logs"
-        ]),
+        systemPaths: LocalWebSetupSystemPaths(
+          appBundle: URL(fileURLWithPath: "/Applications/1Context.app", isDirectory: true),
+          supportDirectory: "/tmp/1context/setup",
+          logDirectory: "/tmp/1context/logs"
+        ),
         proxyPlistInstalled: ready,
         proxyExecutableInstalled: ready,
         proxyServiceStatus: ready ? "enabled" : "notFound",
