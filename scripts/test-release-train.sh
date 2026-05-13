@@ -162,8 +162,11 @@ test ! -e "$ROOT/scripts/self-hosted-update-proof.sh"
 test -x "$ROOT/scripts/release/internal/self-hosted-update-proof.sh"
 grep -q "./scripts/release-train.sh prove --runner-execute" "$ROOT/.github/workflows/self-hosted-mac-update-proof.yml"
 grep -q "proof_reason:" "$ROOT/.github/workflows/self-hosted-mac-update-proof.yml"
+grep -q "./scripts/release-train.sh prove --channel private --runner-execute" "$ROOT/.github/workflows/self-hosted-mac-private-update-proof.yml"
+grep -q "proof_reason:" "$ROOT/.github/workflows/self-hosted-mac-private-update-proof.yml"
 if rg -n '^\s+(old_version|new_version|staging_appcast_url|update_class|old_tag|old_dmg_url|update_timeout_seconds|steady_state_seconds|artifact_retention_days):' \
-  "$ROOT/.github/workflows/self-hosted-mac-update-proof.yml" > "$TMP_DIR/proof-workflow-release-inputs.out"
+  "$ROOT/.github/workflows/self-hosted-mac-update-proof.yml" \
+  "$ROOT/.github/workflows/self-hosted-mac-private-update-proof.yml" > "$TMP_DIR/proof-workflow-release-inputs.out"
 then
   cat "$TMP_DIR/proof-workflow-release-inputs.out" >&2
   echo "self-hosted proof workflow must expose proof_reason only; release facts come from release/release.toml." >&2
@@ -171,6 +174,10 @@ then
 fi
 if grep -q "run: ./scripts/self-hosted-update-proof.sh" "$ROOT/.github/workflows/self-hosted-mac-update-proof.yml"; then
   echo "self-hosted workflow must enter proof execution through release-train.sh." >&2
+  exit 1
+fi
+if grep -q "run: ./scripts/self-hosted-update-proof.sh" "$ROOT/.github/workflows/self-hosted-mac-private-update-proof.yml"; then
+  echo "self-hosted private workflow must enter proof execution through release-train.sh." >&2
   exit 1
 fi
 grep -q "./scripts/release-train.sh build --channel official" "$ROOT/.github/workflows/release.yml"
@@ -221,6 +228,19 @@ grep -q "proof_reason=fixture\\\\ proof" "$TMP_DIR/prove-dry-run.out"
 if grep -Eq -- '-f (old_version|new_version|staging_appcast_url|update_class|old_tag|old_dmg_url|update_timeout_seconds|steady_state_seconds|artifact_retention_days)=' "$TMP_DIR/prove-dry-run.out"; then
   cat "$TMP_DIR/prove-dry-run.out" >&2
   echo "release-train prove dispatch must pass only proof_reason to the workflow." >&2
+  exit 1
+fi
+
+ONECONTEXT_RELEASE_EVIDENCE_DIR="$TMP_DIR/private-proof-evidence" \
+  "$ROOT/scripts/release-train.sh" prove --channel private --dry-run --proof-reason "fixture private proof" \
+  > "$TMP_DIR/private-prove-dry-run.out"
+grep -q "workflow run self-hosted-mac-private-update-proof.yml" "$TMP_DIR/private-prove-dry-run.out"
+grep -q "ref: main" "$TMP_DIR/private-prove-dry-run.out"
+grep -q "channel: private" "$TMP_DIR/private-prove-dry-run.out"
+grep -q "1context-private-release/releases/latest/download/appcast.xml" "$TMP_DIR/private-prove-dry-run.out"
+if grep -Eq -- '-f (old_version|new_version|staging_appcast_url|update_class|old_tag|old_dmg_url|update_timeout_seconds|steady_state_seconds|artifact_retention_days|channel)=' "$TMP_DIR/private-prove-dry-run.out"; then
+  cat "$TMP_DIR/private-prove-dry-run.out" >&2
+  echo "private release-train prove dispatch must pass only proof_reason to the workflow." >&2
   exit 1
 fi
 

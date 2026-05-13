@@ -24,6 +24,7 @@ DEFAULT_CORE = ROOT / "macos" / "Sources" / "OneContextCore" / "Core.swift"
 DEFAULT_RELEASE_NOTES = ROOT / "RELEASE_NOTES.md"
 DEFAULT_RELEASE_WORKFLOW = ROOT / ".github" / "workflows" / "release.yml"
 DEFAULT_PROOF_WORKFLOW = ROOT / ".github" / "workflows" / "self-hosted-mac-update-proof.yml"
+DEFAULT_PRIVATE_PROOF_WORKFLOW = ROOT / ".github" / "workflows" / "self-hosted-mac-private-update-proof.yml"
 SCHEMA_VERSION = "1context.release.v1"
 VERSION_RE = re.compile(r"^\d+\.\d+\.\d+$")
 CORE_FALLBACK_RE = re.compile(r"fallback\s*=\s*\"([^\"]+)\"")
@@ -442,24 +443,16 @@ def validate_appcast(manifest: dict[str, Any], appcast_path: Path, channel_name:
       raise ManifestError("Manifest hides updater release notes, but appcast contains a description.")
 
 
-def validate_workflows(manifest: dict[str, Any], *, release_workflow: Path, proof_workflow: Path) -> None:
-  release_text = read_text(release_workflow, "release workflow")
-  for fragment in (
-    "./scripts/release-train.sh validate",
-    "./scripts/release-train.sh build --channel official",
-    "./scripts/release-train.sh publish",
-  ):
-    if fragment not in release_text:
-      raise ManifestError(f"Release workflow must invoke {fragment}.")
-  for label in REQUIRED_RUNNER_LABELS:
-    if label not in release_text:
-      raise ManifestError(f"Release workflow is missing runner label {label}.")
-
-  proof_text = read_text(proof_workflow, "self-hosted proof workflow")
-  if "./scripts/release-train.sh prove --runner-execute" not in proof_text:
-    raise ManifestError("Self-hosted proof workflow must execute through release-train.sh prove --runner-execute.")
+def validate_proof_workflow_text(
+  *,
+  proof_text: str,
+  proof_workflow: Path,
+  runner_command: str,
+) -> None:
+  if runner_command not in proof_text:
+    raise ManifestError(f"{proof_workflow} must execute through {runner_command}.")
   if "proof_reason:" not in proof_text:
-    raise ManifestError("Self-hosted proof workflow must require a proof_reason input.")
+    raise ManifestError(f"{proof_workflow} must require a proof_reason input.")
   forbidden_inputs = (
     "old_version:",
     "new_version:",
@@ -473,7 +466,7 @@ def validate_workflows(manifest: dict[str, Any], *, release_workflow: Path, proo
   )
   for fragment in forbidden_inputs:
     if fragment in proof_text:
-      raise ManifestError(f"Self-hosted proof workflow must not expose release fact input {fragment}")
+      raise ManifestError(f"{proof_workflow} must not expose release fact input {fragment}")
   forbidden_envs = (
     "ONECONTEXT_OLD_VERSION:",
     "ONECONTEXT_NEW_VERSION:",
@@ -486,10 +479,43 @@ def validate_workflows(manifest: dict[str, Any], *, release_workflow: Path, proo
   )
   for fragment in forbidden_envs:
     if fragment in proof_text:
-      raise ManifestError(f"Self-hosted proof workflow must not pass manual release env {fragment}")
+      raise ManifestError(f"{proof_workflow} must not pass manual release env {fragment}")
   for label in REQUIRED_RUNNER_LABELS:
     if label not in proof_text:
-      raise ManifestError(f"Self-hosted proof workflow is missing runner label {label}.")
+      raise ManifestError(f"{proof_workflow} is missing runner label {label}.")
+
+
+def validate_workflows(
+  manifest: dict[str, Any],
+  *,
+  release_workflow: Path,
+  proof_workflow: Path,
+  private_proof_workflow: Path,
+) -> None:
+  release_text = read_text(release_workflow, "release workflow")
+  for fragment in (
+    "./scripts/release-train.sh validate",
+    "./scripts/release-train.sh build --channel official",
+    "./scripts/release-train.sh publish",
+  ):
+    if fragment not in release_text:
+      raise ManifestError(f"Release workflow must invoke {fragment}.")
+  for label in REQUIRED_RUNNER_LABELS:
+    if label not in release_text:
+      raise ManifestError(f"Release workflow is missing runner label {label}.")
+
+  proof_text = read_text(proof_workflow, "self-hosted proof workflow")
+  validate_proof_workflow_text(
+    proof_text=proof_text,
+    proof_workflow=proof_workflow,
+    runner_command="./scripts/release-train.sh prove --runner-execute",
+  )
+  private_proof_text = read_text(private_proof_workflow, "self-hosted private proof workflow")
+  validate_proof_workflow_text(
+    proof_text=private_proof_text,
+    proof_workflow=private_proof_workflow,
+    runner_command="./scripts/release-train.sh prove --channel private --runner-execute",
+  )
 
 
 def check_clean_tree(root: Path) -> None:
@@ -541,7 +567,12 @@ def validate_manifest(args: argparse.Namespace) -> dict[str, Any]:
     core_file=args.core_file,
     release_notes_file=args.release_notes,
   )
-  validate_workflows(manifest, release_workflow=args.release_workflow, proof_workflow=args.proof_workflow)
+  validate_workflows(
+    manifest,
+    release_workflow=args.release_workflow,
+    proof_workflow=args.proof_workflow,
+    private_proof_workflow=args.private_proof_workflow,
+  )
   check_sourced_helpers(args.root)
   if args.appcast is not None:
     validate_appcast(manifest, args.appcast, args.channel)
@@ -733,6 +764,7 @@ def add_common_args(parser: argparse.ArgumentParser) -> None:
   parser.add_argument("--release-notes", type=Path, default=DEFAULT_RELEASE_NOTES)
   parser.add_argument("--release-workflow", type=Path, default=DEFAULT_RELEASE_WORKFLOW)
   parser.add_argument("--proof-workflow", type=Path, default=DEFAULT_PROOF_WORKFLOW)
+  parser.add_argument("--private-proof-workflow", type=Path, default=DEFAULT_PRIVATE_PROOF_WORKFLOW)
   parser.add_argument("--appcast", type=Path)
   parser.add_argument("--channel", default="")
   parser.add_argument("--require-clean", action="store_true")

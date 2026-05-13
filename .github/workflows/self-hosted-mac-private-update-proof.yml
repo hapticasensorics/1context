@@ -1,0 +1,65 @@
+name: Self-hosted Mac Private Update Proof
+
+on:
+  workflow_dispatch:
+    inputs:
+      proof_reason:
+        description: "Why this private update hop deserves the real-Mac proof runner."
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: self-hosted-mac-private-update-proof
+  cancel-in-progress: false
+
+jobs:
+  update-proof:
+    name: Prove private Sparkle update on real Mac
+    runs-on: [self-hosted, macOS, ARM64, onecontext-update-runner]
+    timeout-minutes: 35
+    environment: onecontext-update-runner
+    steps:
+      - name: Guard trusted refs
+        shell: bash
+        run: |
+          case "$GITHUB_REF" in
+            refs/heads/main|refs/heads/release/*|refs/heads/rc/*|refs/tags/v*)
+              ;;
+            *)
+              echo "Ref $GITHUB_REF is not allowed to use the self-hosted update runner." >&2
+              echo "Use main, release/*, rc/*, or v* tags with the protected onecontext-update-runner environment." >&2
+              exit 1
+              ;;
+          esac
+
+      - uses: actions/checkout@v6
+
+      - name: Resolve private release manifest
+        id: manifest
+        shell: bash
+        run: |
+          eval "$(./scripts/release-manifest.py export-env --channel private)"
+          {
+            echo "previous_version=$ONECONTEXT_RELEASE_PREVIOUS_VERSION"
+            echo "version=$ONECONTEXT_RELEASE_VERSION"
+            echo "update_class=$ONECONTEXT_RELEASE_UPDATE_CLASS"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Prove private update
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.ONECONTEXT_PRIVATE_RELEASE_TOKEN }}
+          ONECONTEXT_UPDATE_RUNNER_I_UNDERSTAND_DESTRUCTIVE: "1"
+          ONECONTEXT_UPDATE_PROOF_REASON: ${{ inputs.proof_reason }}
+        run: ./scripts/release-train.sh prove --channel private --runner-execute
+
+      - name: Upload private update proof artifacts
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: self-hosted-mac-private-update-proof-${{ steps.manifest.outputs.previous_version }}-to-${{ steps.manifest.outputs.version }}
+          path: dist/self-hosted-update-proof/**
+          if-no-files-found: warn
+          retention-days: 21

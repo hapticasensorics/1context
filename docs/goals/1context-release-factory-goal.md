@@ -206,3 +206,10 @@ plugin tree. The factory must keep package-smoke checks that fail on
   checksum, passed evidence redaction, and wrote
   `/tmp/1ctx-release-factory-private-publish-evidence/timings/publish-private.json`.
   Elapsed private publish time: 7 seconds.
+- 2026-05-13: Added the private real-Mac proof workflow
+  `.github/workflows/self-hosted-mac-private-update-proof.yml`. It still accepts
+  only `proof_reason`, but it runs `release-train.sh prove --channel private
+  --runner-execute`, uses the private release repo for old/new DMG downloads, and
+  leaves the runner on the private feed by policy. Proof:
+  `./scripts/release-manifest.py validate`, `./scripts/test-release-train.sh`,
+  `actionlint`, and `git diff --check`.

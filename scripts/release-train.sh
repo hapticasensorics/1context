@@ -621,9 +621,14 @@ release_prove() {
   stage_started="$(date +%s)"
   local mode="dispatch"
   local repo="${ONECONTEXT_GITHUB_REPO:-hapticasensorics/1context}"
-  local workflow="${ONECONTEXT_RELEASE_PROOF_WORKFLOW:-self-hosted-mac-update-proof.yml}"
+  local default_workflow="self-hosted-mac-update-proof.yml"
   local ref="$TAG"
   local proof_reason="manifest-driven $UPDATE_CLASS Sparkle proof for 1Context $VERSION"
+  if [[ "$CHANNEL" == "private" ]]; then
+    default_workflow="self-hosted-mac-private-update-proof.yml"
+    ref="main"
+  fi
+  local workflow="${ONECONTEXT_RELEASE_PROOF_WORKFLOW:-$default_workflow}"
 
   while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -682,6 +687,11 @@ release_prove() {
     export ONECONTEXT_NEW_VERSION="$VERSION"
     export ONECONTEXT_STAGING_APPCAST_URL="$ONECONTEXT_SPARKLE_FEED_URL"
     export ONECONTEXT_EXPECTED_UPDATE_CLASS="$UPDATE_CLASS"
+    if [[ "$CHANNEL" == "private" ]]; then
+      export ONECONTEXT_GITHUB_REPO="${ONECONTEXT_PRIVATE_GITHUB_REPO:-hapticasensorics/1context-private-release}"
+      export ONECONTEXT_UPDATE_RUNNER_ALLOW_NON_PUBLIC_FINAL_FEED=1
+      export ONECONTEXT_UPDATE_RUNNER_RESTORE_PUBLIC_FINAL_FEED=0
+    fi
     exec "$ROOT/scripts/release/internal/self-hosted-update-proof.sh"
   fi
 
