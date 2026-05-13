@@ -582,6 +582,16 @@ negative `rg` for `RuntimePaths.current(environment`,
 `ONECONTEXT_UNINSTALL_HOME_DIR`, `ONECONTEXT_ALLOW_UNINSTALL_HOME_OVERRIDE`,
 `stress-runtime-rpc`, and `test-macos-uninstall-command`.
 
+Evidence, 2026-05-13: after the CLI collapse landed, `scripts/release-train.sh
+prove --dry-run` produced the expected self-hosted proof dispatch for
+`0.1.64 -> 0.1.65`. A clean detached worktree validation from current `main`
+correctly failed because `release/release.toml` still points at already-tagged
+`v0.1.65` while current `HEAD` is `40e2196`, post-release cleanup work. The
+remaining closure now requires choosing and tagging the next release, expected
+to be `0.1.66`, then running
+`scripts/release-train.sh validate/package/publish/prove/audit/bless` from that
+clean tag.
+
 ### 13. Exit
 
 - [x] No documented production release path exists except
@@ -605,11 +615,8 @@ negative `rg` for `RuntimePaths.current(environment`,
 
 ## Immediate Next Step
 
-Start with the release surface, because it has the highest leverage and the
-least product ambiguity:
-
-1. Delete the old update-policy system.
-2. Delete or absorb the old release wrappers.
-3. Route production release docs and workflows through `scripts/release-train.sh`.
-4. Run release-train validation and focused release tests.
-5. Update this goal with the exact deleted files and proof output.
+Prepare the next clean tagged release, expected `0.1.66`, from current `main`.
+Update the release manifest, `VERSION`, `Core.swift`, release notes, and proof
+workflow defaults together; tag the clean tree; then run the greenfield release
+train end to end: `validate`, `package`, `publish`, `prove`, `audit`, and
+`bless`.
