@@ -1590,12 +1590,20 @@ Closed-loop proof plan:
   and `git diff --check` passed.
 - [x] Make the self-hosted release proof request routine instead of a hand-built
   `gh workflow run` ritual.
-  Evidence: `scripts/request-release-proof.sh` resolves `VERSION`,
-  `release/update-policy.toml`, mandatory `minimum_autoupdate_version`, the
-  public appcast URL, trusted ref, and workflow inputs, supports dry-run,
-  dispatch, watch, and artifact download modes, and is covered by
+  Evidence: `scripts/request-release-proof.sh` resolves `release/release.toml`,
+  the previous version, update class, public appcast URL, trusted ref, and
+  workflow inputs, supports dry-run, dispatch, watch, and artifact download modes,
+  and is covered by
   `scripts/test-release-proof-request.sh`, `scripts/test-upgrade-paths.sh`, and
   `./scripts/test.sh`.
+- [x] Promote the release train to a manifest-driven command path.
+  Evidence: `release/release.toml` is the canonical release source, validated by
+  `scripts/check-release-manifest.sh`; `.github/workflows/release.yml` runs
+  `scripts/release-train.sh validate` before preparing the release keychain and
+  uses `scripts/release-train.sh package` / `publish` for the signed asset path.
+  The evidence contract now includes asset manifests, runner attestation,
+  redaction reports, and normalized proof result JSON under
+  `dist/release-evidence/<version>/`.
 - [x] Validate this release-lockdown goal doc, release policy manifest, public
   release notes, appcast, GitHub release assets, and installed app version all
   agree before the final `0.1.64` rehearsal.

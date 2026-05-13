@@ -1,0 +1,103 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://1context.local/schemas/release.v1.json",
+  "title": "1Context Release Manifest",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "version",
+    "previous_version",
+    "tag",
+    "update_class",
+    "public_appcast_url",
+    "stable_dmg_name",
+    "required_proofs",
+    "required_runner_labels",
+    "release_notes_policy",
+    "evidence_redaction_policy",
+    "updater_matrix"
+  ],
+  "properties": {
+    "schema_version": { "const": "1context.release.v1" },
+    "version": { "type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$" },
+    "previous_version": { "type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$" },
+    "tag": { "type": "string", "pattern": "^v\\d+\\.\\d+\\.\\d+$" },
+    "update_class": { "enum": ["mandatory", "optional"] },
+    "minimum_autoupdate_version": { "type": "string" },
+    "critical_update_version": { "type": "string" },
+    "public_appcast_url": { "type": "string", "format": "uri" },
+    "stable_dmg_name": { "type": "string", "minLength": 1 },
+    "required_proofs": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 },
+      "uniqueItems": true
+    },
+    "required_runner_labels": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 },
+      "uniqueItems": true
+    },
+    "release_notes_policy": {
+      "type": "object",
+      "required": ["show_in_update_window", "public_notes_file"],
+      "properties": {
+        "show_in_update_window": { "type": "boolean" },
+        "public_notes_file": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    },
+    "evidence_redaction_policy": {
+      "type": "object",
+      "required": ["require_redaction", "forbidden_patterns"],
+      "properties": {
+        "require_redaction": { "type": "boolean" },
+        "forbidden_patterns": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "uniqueItems": true
+        }
+      },
+      "additionalProperties": false
+    },
+    "updater_matrix": {
+      "type": "array",
+      "minItems": 13,
+      "items": {
+        "type": "object",
+        "required": ["case", "expected_version", "proof", "description"],
+        "properties": {
+          "case": { "type": "string", "minLength": 1 },
+          "expected_version": { "type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$" },
+          "proof": { "type": "string", "minLength": 1 },
+          "description": { "type": "string", "minLength": 1 }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": { "update_class": { "const": "mandatory" } },
+        "required": ["update_class"]
+      },
+      "then": {
+        "required": ["minimum_autoupdate_version", "critical_update_version"],
+        "properties": {
+          "minimum_autoupdate_version": {
+            "type": "string",
+            "pattern": "^\\d+\\.\\d+\\.\\d+$"
+          },
+          "critical_update_version": {
+            "type": "string",
+            "pattern": "^\\d+\\.\\d+\\.\\d+$"
+          }
+        }
+      },
+      "else": {
+        "not": { "required": ["critical_update_version"] }
+      }
+    }
+  ],
+  "additionalProperties": false
+}

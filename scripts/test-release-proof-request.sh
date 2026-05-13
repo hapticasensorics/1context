@@ -5,7 +5,7 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 TMP_DIR="$(mktemp -d /tmp/1ctx-release-proof-request-XXXXXX)"
 trap 'rm -rf "$TMP_DIR"' EXIT
 EXPECTED_NEW_VERSION="$(tr -d '[:space:]' < "$ROOT/VERSION")"
-EXPECTED_OLD_VERSION="$(awk -F'"' '/^minimum_autoupdate_version[[:space:]]*=/ { print $2; exit }' "$ROOT/release/update-policy.toml")"
+EXPECTED_OLD_VERSION="$(awk -F'"' '/^previous_version[[:space:]]*=/ { print $2; exit }' "$ROOT/release/release.toml")"
 
 assert_contains() {
   local needle="$1"

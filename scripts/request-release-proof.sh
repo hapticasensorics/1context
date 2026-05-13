@@ -23,8 +23,8 @@ usage() {
   cat <<'USAGE'
 Usage: scripts/request-release-proof.sh [--dry-run|--dispatch] [options]
 
-Resolves the routine self-hosted Mac update proof inputs from VERSION and
-release/update-policy.toml, then prints or dispatches the protected GitHub
+Resolves the routine self-hosted Mac update proof inputs from release/release.toml,
+then prints or dispatches the protected GitHub
 workflow.
 
 Defaults:
@@ -32,9 +32,9 @@ Defaults:
   --repo hapticasensorics/1context
   --workflow self-hosted-mac-update-proof.yml
   --appcast-url https://github.com/hapticasensorics/1context/releases/latest/download/appcast.xml
-  --new-version VERSION
-  --update-class release/update-policy.toml update_class
-  --old-version release/update-policy.toml minimum_autoupdate_version for mandatory releases
+  --new-version release/release.toml version
+  --update-class release/release.toml update_class
+  --old-version release/release.toml previous_version
 
 Options:
   --dispatch                         Actually call gh workflow run.
@@ -173,16 +173,12 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-eval "$("$ROOT/scripts/update-policy.py" export-env)"
+eval "$("$ROOT/scripts/release-manifest.py" export-env)"
 
-NEW_VERSION="${NEW_VERSION:-$ONECONTEXT_RELEASE_POLICY_VERSION}"
-UPDATE_CLASS="${UPDATE_CLASS:-$ONECONTEXT_RELEASE_POLICY_CLASS}"
-if [[ -z "$OLD_VERSION" && "$UPDATE_CLASS" == "mandatory" ]]; then
-  OLD_VERSION="${ONECONTEXT_SPARKLE_MINIMUM_AUTOUPDATE_VERSION:-}"
-fi
-if [[ -z "$OLD_VERSION" && "$UPDATE_CLASS" == "mandatory" ]]; then
-  OLD_VERSION="${ONECONTEXT_SPARKLE_MINIMUM_UPDATE_VERSION:-}"
-fi
+NEW_VERSION="${NEW_VERSION:-$ONECONTEXT_RELEASE_VERSION}"
+UPDATE_CLASS="${UPDATE_CLASS:-$ONECONTEXT_RELEASE_UPDATE_CLASS}"
+OLD_VERSION="${OLD_VERSION:-$ONECONTEXT_RELEASE_PREVIOUS_VERSION}"
+APPCAST_URL="${APPCAST_URL:-$ONECONTEXT_RELEASE_PUBLIC_APPCAST_URL}"
 if [[ -z "$OLD_VERSION" ]]; then
   fail "Could not infer old version. Pass --old-version for optional releases or policies without minimum_autoupdate_version."
 fi

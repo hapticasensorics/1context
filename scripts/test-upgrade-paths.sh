@@ -17,6 +17,13 @@ require_file "$ROOT/scripts/prove-remote-sparkle-update.sh"
 require_file "$ROOT/scripts/self-hosted-update-proof.sh"
 require_file "$ROOT/scripts/self-hosted-mac-runner-enroll.sh"
 require_file "$ROOT/scripts/request-release-proof.sh"
+require_file "$ROOT/scripts/release-train.sh"
+require_file "$ROOT/scripts/check-release-manifest.sh"
+require_file "$ROOT/scripts/lib-gui-evidence.sh"
+require_file "$ROOT/scripts/redact-evidence.sh"
+require_file "$ROOT/scripts/audit-evidence-redaction.sh"
+require_file "$ROOT/scripts/write-runner-attestation.sh"
+require_file "$ROOT/scripts/test-release-train.sh"
 require_file "$ROOT/scripts/test-release-proof-request.sh"
 require_file "$ROOT/scripts/smoke-sparkle-local-appcast.sh"
 require_file "$ROOT/scripts/collect-release-lockdown-evidence.sh"
@@ -28,6 +35,13 @@ bash -n \
   "$ROOT/scripts/self-hosted-update-proof.sh" \
   "$ROOT/scripts/self-hosted-mac-runner-enroll.sh" \
   "$ROOT/scripts/request-release-proof.sh" \
+  "$ROOT/scripts/release-train.sh" \
+  "$ROOT/scripts/check-release-manifest.sh" \
+  "$ROOT/scripts/lib-gui-evidence.sh" \
+  "$ROOT/scripts/redact-evidence.sh" \
+  "$ROOT/scripts/audit-evidence-redaction.sh" \
+  "$ROOT/scripts/write-runner-attestation.sh" \
+  "$ROOT/scripts/test-release-train.sh" \
   "$ROOT/scripts/test-release-proof-request.sh" \
   "$ROOT/scripts/smoke-sparkle-local-appcast.sh" \
   "$ROOT/scripts/collect-release-lockdown-evidence.sh" \
@@ -40,6 +54,13 @@ if command -v shellcheck >/dev/null 2>&1; then
     "$ROOT/scripts/self-hosted-update-proof.sh" \
     "$ROOT/scripts/self-hosted-mac-runner-enroll.sh" \
     "$ROOT/scripts/request-release-proof.sh" \
+    "$ROOT/scripts/release-train.sh" \
+    "$ROOT/scripts/check-release-manifest.sh" \
+    "$ROOT/scripts/lib-gui-evidence.sh" \
+    "$ROOT/scripts/redact-evidence.sh" \
+    "$ROOT/scripts/audit-evidence-redaction.sh" \
+    "$ROOT/scripts/write-runner-attestation.sh" \
+    "$ROOT/scripts/test-release-train.sh" \
     "$ROOT/scripts/test-release-proof-request.sh" \
     "$ROOT/scripts/smoke-sparkle-local-appcast.sh" \
     "$ROOT/scripts/collect-release-lockdown-evidence.sh" \
@@ -74,5 +95,6 @@ grep -q "final_feed_action=restored_public_release" "$ROOT/scripts/self-hosted-u
 grep -q "ONECONTEXT_RELEASE_LOCKDOWN_EVIDENCE_REDACT" "$ROOT/scripts/collect-release-lockdown-evidence.sh"
 "$ROOT/scripts/test-release-lockdown-diagnostics.sh"
 "$ROOT/scripts/test-release-proof-request.sh"
+"$ROOT/scripts/test-release-train.sh"
 
 echo "1Context upgrade path checks passed."

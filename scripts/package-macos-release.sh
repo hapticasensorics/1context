@@ -47,7 +47,7 @@ fi
 "$ROOT/scripts/validate-macos-dmg.sh" "$DMG"
 if [[ "${GENERATE_SPARKLE_APPCAST:-0}" == "1" ]]; then
   "$ROOT/scripts/generate-sparkle-appcast.sh" "$DMG"
-  "$ROOT/scripts/update-policy.py" validate --appcast "$ROOT/dist/sparkle-updates/appcast.xml"
+  "$ROOT/scripts/check-update-policy.sh" --appcast "$ROOT/dist/sparkle-updates/appcast.xml"
   cp "$ROOT/dist/sparkle-updates/appcast.xml" "$ROOT/dist/appcast.xml"
 fi
 cp "$DMG" "$ROOT/dist/1Context.dmg"

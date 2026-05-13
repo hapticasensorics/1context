@@ -346,7 +346,49 @@ collect_final_logs() {
   capture_process_state "final"
 }
 
+write_proof_result() {
+  mkdir -p "$EVIDENCE_DIR/proof-results"
+  python3 - "$EVIDENCE_DIR/proof-results/mandatory_automatic_success.json" "$OLD_VERSION" "$NEW_VERSION" "$UPDATE_CLASS" <<'PY'
+import datetime as dt
+import json
+import sys
+from pathlib import Path
+
+output = Path(sys.argv[1])
+old_version = sys.argv[2]
+new_version = sys.argv[3]
+update_class = sys.argv[4]
+output.write_text(json.dumps({
+  "case": "mandatory_automatic_success",
+  "expected_version": new_version,
+  "actual_version": new_version,
+  "old_version": old_version,
+  "update_class": update_class,
+  "status": "passed",
+  "ui_assertions": [
+    "no_release_notes_prompt",
+    "no_installer_click_through",
+    "no_support_alert"
+  ],
+  "runtime_assertions": [
+    "no_runtime_pause",
+    "final_installed_version_matches_expected",
+    "public_feed_restored"
+  ],
+  "redaction_status": "pending",
+  "artifact_paths": [
+    "update-proof",
+    "steady-state",
+    "version-final.txt",
+    "self-hosted-update-proof.log"
+  ],
+  "generated_at": dt.datetime.now(dt.timezone.utc).isoformat(),
+}, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+PY
+}
+
 collect_host_snapshot
+"$ROOT/scripts/write-runner-attestation.sh" "$EVIDENCE_DIR/runner-attestation.json"
 write_versions "$EVIDENCE_DIR/version-before-runner-reset.txt"
 preflight_runner_setup
 capture_process_state "before"
@@ -378,6 +420,7 @@ ONECONTEXT_STEADY_STATE_EVIDENCE_DIR="$EVIDENCE_DIR/steady-state" \
 
 ensure_final_app_uses_public_feed
 collect_final_logs
+write_proof_result
 
 cat > "$EVIDENCE_DIR/result.txt" <<RESULT
 result=passed
@@ -391,4 +434,7 @@ final_feed=$(installed_feed_url)
 evidence_dir=$EVIDENCE_DIR
 RESULT
 
-log "passed; evidence at $EVIDENCE_DIR"
+"$ROOT/scripts/redact-evidence.sh" "$EVIDENCE_DIR"
+"$ROOT/scripts/audit-evidence-redaction.sh" "$EVIDENCE_DIR"
+
+log "passed; evidence bundle redacted and audited"

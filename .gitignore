@@ -2,6 +2,7 @@
 *.log
 tmp/
 dist/
+scripts/__pycache__/
 .vscode/
 macos/.build/
 memory-core/.venv/

@@ -25,6 +25,8 @@ jobs:
       NOTARYTOOL_PROFILE: ${{ vars.ONECONTEXT_NOTARYTOOL_PROFILE }}
     steps:
       - uses: actions/checkout@v6
+      - name: Validate release manifest before credentials
+        run: ./scripts/release-train.sh validate
       - name: Install bundled web edge dependency
         run: |
           if ! command -v caddy >/dev/null 2>&1; then
@@ -42,61 +44,13 @@ jobs:
           security find-identity -v -p codesigning
       - name: Check local release credentials
         run: ./scripts/check-macos-release-credentials.sh
-      - name: Check release version
-        run: |
-          version="$(tr -d '[:space:]' < VERSION)"
-          if [[ "${GITHUB_REF}" != "refs/tags/v${version}" ]]; then
-            echo "Release workflow must run from tag v${version}; current ref is ${GITHUB_REF}." >&2
-            exit 1
-          fi
-          ./scripts/check-version-consistency.sh
-          ./scripts/check-update-policy.sh
       - name: Build notarized artifact
-        env:
-          ONECONTEXT_SPARKLE_FEED_URL: https://github.com/hapticasensorics/1context/releases/latest/download/appcast.xml
-          SPARKLE_DOWNLOAD_URL_PREFIX: https://github.com/hapticasensorics/1context/releases/download/${{ github.ref_name }}/
-          SPARKLE_RELEASE_NOTES_URL_PREFIX: https://github.com/hapticasensorics/1context/releases/download/${{ github.ref_name }}/
-          SPARKLE_LINK_URL: https://github.com/hapticasensorics/1context/releases/tag/${{ github.ref_name }}
-        run: |
-          ./scripts/package-macos-production-release.sh
-      - name: Collect Sparkle release assets
-        run: |
-          version="$(tr -d '[:space:]' < VERSION)"
-          artifact="dist/1Context-${version}-macos-arm64.dmg"
-          appcast="dist/sparkle-updates/appcast.xml"
-          test -f "$artifact"
-          test -f "$appcast"
-          ./scripts/check-update-policy.sh --appcast "$appcast"
-          (
-            cd dist
-            shasum -a 256 "$(basename "$artifact")" > "$(basename "$artifact").sha256"
-          )
-          cp "$artifact" dist/1Context.dmg
-          (
-            cd dist
-            shasum -a 256 1Context.dmg > 1Context.dmg.sha256
-          )
-          cp "$appcast" dist/appcast.xml
-          cat "$artifact.sha256"
-          cat dist/1Context.dmg.sha256
+        run: ./scripts/release-train.sh package
       - name: Upload GitHub release artifacts
         if: startsWith(github.ref, 'refs/tags/')
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          version="$(tr -d '[:space:]' < VERSION)"
-          artifact="dist/1Context-${version}-macos-arm64.dmg"
-          gh release view "${GITHUB_REF_NAME}" >/dev/null 2>&1 || \
-            gh release create "${GITHUB_REF_NAME}" \
-              --title "1Context ${GITHUB_REF_NAME}" \
-              --notes-file RELEASE_NOTES.md
-          gh release upload "${GITHUB_REF_NAME}" \
-            "$artifact" \
-            "$artifact.sha256" \
-            dist/1Context.dmg \
-            dist/1Context.dmg.sha256 \
-            dist/appcast.xml \
-            --clobber
           ONECONTEXT_RELEASE_AUDIT_PROBES=2 \
           ONECONTEXT_RELEASE_AUDIT_INTERVAL_SECONDS=60 \
-            ./scripts/audit-github-release-assets.sh "${GITHUB_REF_NAME}"
+            ./scripts/release-train.sh publish

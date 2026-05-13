@@ -9,7 +9,7 @@ on:
       old_version:
         description: "Installed version N to lay down before proving the staged update."
         required: true
-        default: "0.1.60"
+        default: "0.1.63"
       new_version:
         description: "Expected version N+1. Defaults to the checked-out VERSION file."
         required: false
@@ -71,6 +71,10 @@ jobs:
           esac
 
       - uses: actions/checkout@v6
+
+      - name: Validate release manifest
+        shell: bash
+        run: ./scripts/check-release-manifest.sh --require-clean
 
       - name: Resolve expected new version
         id: versions

@@ -6,6 +6,11 @@ SPARKLE_ACCOUNT="${SPARKLE_KEY_ACCOUNT:-com.haptica.1context.sparkle}"
 GENERATE_KEYS="$ROOT/macos/.build/artifacts/sparkle/Sparkle/bin/generate_keys"
 CODESIGN_KEYCHAIN="${CODESIGN_KEYCHAIN:-${ONECONTEXT_RELEASE_KEYCHAIN:-}}"
 
+if [[ "${ONECONTEXT_RELEASE_TRAIN:-0}" != "1" ]]; then
+  echo "Production release packaging must run through scripts/release-train.sh package." >&2
+  exit 1
+fi
+
 developer_id_identity() {
   if [[ -n "$CODESIGN_KEYCHAIN" ]]; then
     security find-identity -v -p codesigning "$CODESIGN_KEYCHAIN"
