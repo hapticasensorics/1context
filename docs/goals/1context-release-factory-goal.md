@@ -132,7 +132,7 @@ plugin tree. The factory must keep package-smoke checks that fail on
 ### Channel Proof
 
 - [x] Dev build passes local smoke without public asset mutation.
-- [ ] Prototype build creates a pass-around DMG without appcast mutation.
+- [x] Prototype build creates a pass-around DMG without appcast mutation.
 - [ ] Private release creates private update assets and proves update on at
   least one non-primary Mac.
 - [ ] Official release proves public Sparkle update on the protected runner.
@@ -179,3 +179,10 @@ plugin tree. The factory must keep package-smoke checks that fail on
   `Core.swift`, `RELEASE_NOTES.md`, the runbook, and `release/release.toml`.
   Proof: `./scripts/release-manifest.py validate`, `./scripts/test-release-train.sh`,
   `./scripts/test.sh`, `swift test --package-path macos`, and `git diff --check`.
+- 2026-05-13: Proved the prototype channel. `./scripts/release-train.sh build
+  --channel prototype` produced `dist/1Context-0.1.67-macos-arm64.dmg`, signed
+  and notarized both the app and DMG, and wrote timing evidence at
+  `/tmp/1ctx-release-factory-prototype-evidence/timings/build-prototype.json`.
+  Elapsed build time was 125 seconds, under the 720 second prototype budget.
+  `codesign --verify`, `spctl --assess`, and `./scripts/test-launch-agent-package.sh`
+  passed. The prototype app has no `SUFeedURL`, and no new appcast was generated.
