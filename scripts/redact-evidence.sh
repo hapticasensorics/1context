@@ -12,7 +12,10 @@ if [[ ! -d "$TARGET" ]]; then
   exit 1
 fi
 
-mapfile -t PATTERNS < <("$ROOT/scripts/release-manifest.py" forbidden-patterns)
+PATTERNS=()
+while IFS= read -r pattern; do
+  PATTERNS+=("$pattern")
+done < <("$ROOT/scripts/release-manifest.py" forbidden-patterns)
 python3 - "$TARGET" "${PATTERNS[@]}" <<'PY'
 from __future__ import annotations
 
