@@ -661,6 +661,12 @@ Proof: `bash -n`, `python3 -m py_compile scripts/release-manifest.py`, and
 `scripts/test-release-train.sh` negative checks for old workflow inputs,
 deleted release fact dispatch flags, and packaging update-copy env overrides.
 
+Evidence, 2026-05-13: committed and pushed the manifest-only proof cleanup plus
+desired-state deletion as `c508a88`; GitHub CI run `25830255788` passed
+`check-version-consistency`, `swift test --package-path macos`,
+`./scripts/test.sh`, `./scripts/package-macos-smoke.sh`, and the packaged
+LaunchAgent smoke.
+
 ### 13. Exit
 
 - [x] No documented production release path exists except
@@ -684,6 +690,6 @@ deleted release fact dispatch flags, and packaging update-copy env overrides.
 
 ## Immediate Next Step
 
-Push/publish the `v0.1.66` release when approved, then run the remaining
-greenfield release train stages from the clean tag: `publish`, `prove`, `audit`,
-and `bless`.
+Refresh the release tag to include `c508a88` or bump the manifest to the next
+release version, then run the remaining greenfield release train stages from
+the clean tag: `package`, `publish`, `prove`, `audit`, and `bless`.
