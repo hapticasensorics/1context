@@ -85,7 +85,7 @@ Maintainer release packaging uses Developer ID signing, notarization, and the
 production Sparkle feed configuration:
 
 ```bash
-./scripts/release-train.sh package
+./scripts/release-train.sh build --channel official
 ```
 
 The release train reads `release/release.toml`, auto-detects the Developer ID
@@ -118,12 +118,9 @@ same versioned DMG and SHA as the GitHub release. Keep the cask marked
 retain an older Caskroom receipt after an in-app update even while
 `/Applications/1Context.app` and the linked `1context` command are current.
 
-The self-hosted Mac update proof is an optional escalation gate, not a required
-step for every release. Use it for important updater/runtime hops: Sparkle
-metadata changes, mandatory updates, install/setup/LaunchAgent/local-web changes,
-repair releases after update residue, and launch-candidate milestones. Routine
-patches can rely on hosted CI, release asset audit, appcast validation, and
-targeted maintainer smoke.
+The self-hosted Mac update proof is required for official releases that list it
+in `release/release.toml`. Private and official updater hops should be proved by
+the factory instead of by hand-filled workflow inputs.
 
 When the release owner decides the Mac proof is warranted, use
 `scripts/release-train.sh prove` so `release/release.toml` owns the update

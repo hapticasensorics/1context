@@ -69,6 +69,18 @@ REQUIRED_MATRIX_CASES = {
   "app_relaunch_recovery",
   "login_restart_recovery",
 }
+REQUIRED_RELEASE_CHANNELS = {"dev", "prototype", "private", "official"}
+CHANNEL_APPCAST_MODES = {"none", "private", "public"}
+CHANNEL_SIGNING_MODES = {"adhoc", "developer-id"}
+CHANNEL_BUDGET_KEYS = (
+  "budget_validate_seconds",
+  "budget_build_seconds",
+  "budget_publish_seconds",
+  "budget_prove_seconds",
+  "budget_audit_seconds",
+  "budget_bless_seconds",
+)
+STAGE_TIMING_SCHEMA = "1context.release-stage-timing.v1"
 
 
 class ManifestError(Exception):
@@ -120,6 +132,15 @@ def bool_value(mapping: dict[str, Any], key: str) -> bool:
   return value
 
 
+def int_value(mapping: dict[str, Any], key: str) -> int:
+  value = mapping.get(key)
+  if isinstance(value, bool) or not isinstance(value, int):
+    raise ManifestError(f"Manifest key {key} must be an integer.")
+  if value < 0:
+    raise ManifestError(f"Manifest key {key} must be non-negative.")
+  return value
+
+
 def string_list(mapping: dict[str, Any], key: str) -> list[str]:
   value = mapping.get(key)
   if not isinstance(value, list) or not all(isinstance(item, str) for item in value):
@@ -142,6 +163,94 @@ def semver_tuple(version: str) -> tuple[int, int, int]:
 
 def manifest_version(manifest: dict[str, Any]) -> str:
   return string_value(manifest, "version")
+
+
+def release_factory(manifest: dict[str, Any]) -> dict[str, Any]:
+  return table(manifest, "release_factory")
+
+
+def release_channels(manifest: dict[str, Any]) -> dict[str, Any]:
+  factory = release_factory(manifest)
+  return table(factory, "channels")
+
+
+def channel_policy(manifest: dict[str, Any], channel_name: str | None = None) -> tuple[str, dict[str, Any]]:
+  factory = release_factory(manifest)
+  channels = release_channels(manifest)
+  name = (channel_name or string_value(factory, "default_channel")).strip()
+  if not name:
+    raise ManifestError("Release channel must not be empty.")
+  policy = channels.get(name)
+  if not isinstance(policy, dict):
+    raise ManifestError(f"Unknown release channel: {name}")
+  return name, policy
+
+
+def validate_release_factory(manifest: dict[str, Any]) -> None:
+  factory = release_factory(manifest)
+  default_channel = string_value(factory, "default_channel")
+  if default_channel != "official":
+    raise ManifestError('release_factory.default_channel must be "official".')
+  if not bool_value(factory, "forbid_backwards_compatibility_shims"):
+    raise ManifestError("release_factory.forbid_backwards_compatibility_shims must be true.")
+  if string_value(factory, "stage_timing_schema") != STAGE_TIMING_SCHEMA:
+    raise ManifestError(f"release_factory.stage_timing_schema must be {STAGE_TIMING_SCHEMA!r}.")
+
+  channels = release_channels(manifest)
+  missing_channels = sorted(REQUIRED_RELEASE_CHANNELS - set(channels))
+  if missing_channels:
+    raise ManifestError(f"release_factory.channels is missing: {', '.join(missing_channels)}")
+
+  for name in sorted(REQUIRED_RELEASE_CHANNELS):
+    policy = channels.get(name)
+    if not isinstance(policy, dict):
+      raise ManifestError(f"release_factory.channels.{name} must be a table.")
+    if not string_value(policy, "description"):
+      raise ManifestError(f"release_factory.channels.{name}.description must not be empty.")
+    requires_clean_tree = bool_value(policy, "requires_clean_tree")
+    requires_tag = bool_value(policy, "requires_tag")
+    signing_mode = string_value(policy, "signing_mode")
+    notarize = bool_value(policy, "notarize")
+    appcast = string_value(policy, "appcast")
+    public_asset_mutation = bool_value(policy, "public_asset_mutation")
+    proof = string_value(policy, "proof")
+    bool_value(policy, "budget_is_advisory")
+    if signing_mode not in CHANNEL_SIGNING_MODES:
+      raise ManifestError(f"release_factory.channels.{name}.signing_mode must be one of {sorted(CHANNEL_SIGNING_MODES)}.")
+    if appcast not in CHANNEL_APPCAST_MODES:
+      raise ManifestError(f"release_factory.channels.{name}.appcast must be one of {sorted(CHANNEL_APPCAST_MODES)}.")
+    if not proof:
+      raise ManifestError(f"release_factory.channels.{name}.proof must not be empty.")
+    for key in CHANNEL_BUDGET_KEYS:
+      int_value(policy, key)
+
+    if name == "dev":
+      if requires_clean_tree or requires_tag or signing_mode != "adhoc" or notarize or appcast != "none" or public_asset_mutation:
+        raise ManifestError("dev channel must stay local, adhoc, unnotarized, appcast-free, and non-mutating.")
+    if name == "prototype":
+      if requires_tag or appcast != "none" or public_asset_mutation:
+        raise ManifestError("prototype channel must not require a tag, appcast, or public asset mutation.")
+      if signing_mode != "developer-id" or not notarize:
+        raise ManifestError("prototype channel must produce a Developer ID notarized DMG.")
+    if name == "private":
+      private_appcast_url = string_value(policy, "private_appcast_url", required=False)
+      private_download_url_prefix = string_value(policy, "private_download_url_prefix", required=False)
+      private_link_url = string_value(policy, "private_link_url", required=False)
+      if appcast != "private" or not private_appcast_url:
+        raise ManifestError("private channel must define a private appcast URL.")
+      if private_download_url_prefix != f"https://github.com/hapticasensorics/1context-private-release/releases/download/{string_value(manifest, 'tag')}/":
+        raise ManifestError("private channel download prefix must be the private release tag URL.")
+      if private_link_url != f"https://github.com/hapticasensorics/1context-private-release/releases/tag/{string_value(manifest, 'tag')}":
+        raise ManifestError("private channel link URL must be the private release tag URL.")
+      if public_asset_mutation:
+        raise ManifestError("private channel must not mutate public assets.")
+      if signing_mode != "developer-id" or not notarize:
+        raise ManifestError("private channel must produce Developer ID notarized assets.")
+    if name == "official":
+      if not requires_clean_tree or not requires_tag:
+        raise ManifestError("official channel must require a clean tagged tree.")
+      if signing_mode != "developer-id" or not notarize or appcast != "public" or not public_asset_mutation:
+        raise ManifestError("official channel must be Developer ID notarized, public-appcast, and public-mutating.")
 
 
 def validate_manifest_shape(manifest: dict[str, Any]) -> None:
@@ -197,6 +306,8 @@ def validate_manifest_shape(manifest: dict[str, Any]) -> None:
   missing_labels = sorted(REQUIRED_RUNNER_LABELS - runner_labels)
   if missing_labels:
     raise ManifestError(f"Manifest is missing runner labels: {', '.join(missing_labels)}")
+
+  validate_release_factory(manifest)
 
   notes_policy = table(manifest, "release_notes_policy")
   bool_value(notes_policy, "show_in_update_window")
@@ -269,7 +380,7 @@ def validate_version_files(
     raise ManifestError(f"Release notes heading must mention {version}.")
 
 
-def validate_appcast(manifest: dict[str, Any], appcast_path: Path) -> None:
+def validate_appcast(manifest: dict[str, Any], appcast_path: Path, channel_name: str | None = None) -> None:
   if not appcast_path.exists():
     raise ManifestError(f"Appcast not found: {appcast_path}")
   root = ET.parse(appcast_path).getroot()
@@ -279,6 +390,10 @@ def validate_appcast(manifest: dict[str, Any], appcast_path: Path) -> None:
     raise ManifestError("Appcast is missing channel/item.")
 
   version = string_value(manifest, "version")
+  channel, channel_data = channel_policy(manifest, channel_name)
+  appcast_mode = string_value(channel_data, "appcast")
+  if appcast_mode == "none":
+    raise ManifestError(f"Channel {channel} must not produce an appcast.")
   update_class = string_value(manifest, "update_class")
   appcast_version = item.findtext("sparkle:version", namespaces=namespaces)
   if appcast_version != version:
@@ -313,7 +428,10 @@ def validate_appcast(manifest: dict[str, Any], appcast_path: Path) -> None:
   enclosure_asset = Path(urlparse(enclosure_url).path).name
   if enclosure_asset != expected_asset:
     raise ManifestError(f"Appcast enclosure asset {enclosure_asset!r} does not match {expected_asset!r}.")
-  expected_url = f"https://github.com/hapticasensorics/1context/releases/download/v{version}/{expected_asset}"
+  if appcast_mode == "private":
+    expected_url = f"{string_value(channel_data, 'private_download_url_prefix')}{expected_asset}"
+  else:
+    expected_url = f"https://github.com/hapticasensorics/1context/releases/download/v{version}/{expected_asset}"
   if enclosure_url != expected_url:
     raise ManifestError(f"Appcast enclosure url {enclosure_url!r} does not match {expected_url!r}.")
 
@@ -328,7 +446,7 @@ def validate_workflows(manifest: dict[str, Any], *, release_workflow: Path, proo
   release_text = read_text(release_workflow, "release workflow")
   for fragment in (
     "./scripts/release-train.sh validate",
-    "./scripts/release-train.sh package",
+    "./scripts/release-train.sh build --channel official",
     "./scripts/release-train.sh publish",
   ):
     if fragment not in release_text:
@@ -426,30 +544,67 @@ def validate_manifest(args: argparse.Namespace) -> dict[str, Any]:
   validate_workflows(manifest, release_workflow=args.release_workflow, proof_workflow=args.proof_workflow)
   check_sourced_helpers(args.root)
   if args.appcast is not None:
-    validate_appcast(manifest, args.appcast)
+    validate_appcast(manifest, args.appcast, args.channel)
   if args.require_clean:
     check_clean_tree(args.root)
   return manifest
 
 
-def env_for_manifest(manifest: dict[str, Any], manifest_path: Path) -> dict[str, str]:
+def env_for_manifest(manifest: dict[str, Any], manifest_path: Path, channel_name: str | None = None) -> dict[str, str]:
   version = string_value(manifest, "version")
   tag = string_value(manifest, "tag")
   update_class = string_value(manifest, "update_class")
+  channel, channel_data = channel_policy(manifest, channel_name)
+  factory = release_factory(manifest)
   notes_policy = table(manifest, "release_notes_policy")
   update_ui = table(manifest, "update_ui")
   optional_prompt = table(update_ui, "optional_prompt")
   failure_message = table(update_ui, "failure_message")
   post_install = table(update_ui, "post_install_message")
+  public_appcast_url = string_value(manifest, "public_appcast_url")
+  channel_appcast_mode = string_value(channel_data, "appcast")
+  channel_appcast_url = ""
+  if channel_appcast_mode == "public":
+    channel_appcast_url = public_appcast_url
+    download_url_prefix = f"https://github.com/hapticasensorics/1context/releases/download/{tag}/"
+    release_notes_url_prefix = download_url_prefix
+    link_url = f"https://github.com/hapticasensorics/1context/releases/tag/{tag}"
+  elif channel_appcast_mode == "private":
+    channel_appcast_url = string_value(channel_data, "private_appcast_url")
+    download_url_prefix = string_value(channel_data, "private_download_url_prefix")
+    release_notes_url_prefix = download_url_prefix
+    link_url = string_value(channel_data, "private_link_url")
+  else:
+    download_url_prefix = ""
+    release_notes_url_prefix = ""
+    link_url = ""
+
+  budget_env: dict[str, str] = {}
+  for key in CHANNEL_BUDGET_KEYS:
+    env_key = "ONECONTEXT_RELEASE_" + key.removeprefix("budget_").upper()
+    budget_env[env_key] = str(int_value(channel_data, key))
+
   return {
     "ONECONTEXT_RELEASE_MANIFEST": str(manifest_path),
     "ONECONTEXT_RELEASE_VERSION": version,
     "ONECONTEXT_RELEASE_PREVIOUS_VERSION": string_value(manifest, "previous_version"),
     "ONECONTEXT_RELEASE_TAG": tag,
     "ONECONTEXT_RELEASE_UPDATE_CLASS": update_class,
-    "ONECONTEXT_RELEASE_PUBLIC_APPCAST_URL": string_value(manifest, "public_appcast_url"),
+    "ONECONTEXT_RELEASE_PUBLIC_APPCAST_URL": public_appcast_url,
     "ONECONTEXT_RELEASE_STABLE_DMG_NAME": string_value(manifest, "stable_dmg_name"),
-    "ONECONTEXT_SPARKLE_FEED_URL": string_value(manifest, "public_appcast_url"),
+    "ONECONTEXT_RELEASE_DEFAULT_CHANNEL": string_value(factory, "default_channel"),
+    "ONECONTEXT_RELEASE_CHANNEL": channel,
+    "ONECONTEXT_RELEASE_CHANNEL_REQUIRES_CLEAN_TREE": "1" if bool_value(channel_data, "requires_clean_tree") else "0",
+    "ONECONTEXT_RELEASE_CHANNEL_REQUIRES_TAG": "1" if bool_value(channel_data, "requires_tag") else "0",
+    "ONECONTEXT_RELEASE_CHANNEL_SIGNING_MODE": string_value(channel_data, "signing_mode"),
+    "ONECONTEXT_RELEASE_CHANNEL_NOTARIZE": "1" if bool_value(channel_data, "notarize") else "0",
+    "ONECONTEXT_RELEASE_CHANNEL_APPCAST": channel_appcast_mode,
+    "ONECONTEXT_RELEASE_CHANNEL_APPCAST_URL": channel_appcast_url,
+    "ONECONTEXT_RELEASE_CHANNEL_PUBLIC_ASSET_MUTATION": "1" if bool_value(channel_data, "public_asset_mutation") else "0",
+    "ONECONTEXT_RELEASE_CHANNEL_PROOF": string_value(channel_data, "proof"),
+    "ONECONTEXT_RELEASE_BUDGET_ADVISORY": "1" if bool_value(channel_data, "budget_is_advisory") else "0",
+    "ONECONTEXT_RELEASE_STAGE_TIMING_SCHEMA": string_value(factory, "stage_timing_schema"),
+    "ONECONTEXT_SPARKLE_FEED_URL": channel_appcast_url,
     "ONECONTEXT_SPARKLE_MANDATORY": "1" if update_class == "mandatory" else "0",
     "ONECONTEXT_SPARKLE_MANDATORY_FROM_VERSION": string_value(manifest, "critical_update_version", required=False),
     "ONECONTEXT_SPARKLE_MINIMUM_AUTOUPDATE_VERSION": string_value(manifest, "minimum_autoupdate_version", required=False),
@@ -462,10 +617,10 @@ def env_for_manifest(manifest: dict[str, Any], manifest_path: Path) -> dict[str,
     "ONECONTEXT_UPDATE_POST_INSTALL_MESSAGE_ENABLED": "1" if bool_value(post_install, "enabled") else "0",
     "ONECONTEXT_UPDATE_POST_INSTALL_TITLE": string_value(post_install, "title"),
     "ONECONTEXT_UPDATE_POST_INSTALL_BODY": string_value(post_install, "body", required=False),
-    "SPARKLE_DOWNLOAD_URL_PREFIX": f"https://github.com/hapticasensorics/1context/releases/download/{tag}/",
-    "SPARKLE_RELEASE_NOTES_URL_PREFIX": f"https://github.com/hapticasensorics/1context/releases/download/{tag}/",
-    "SPARKLE_LINK_URL": f"https://github.com/hapticasensorics/1context/releases/tag/{tag}",
-  }
+    "SPARKLE_DOWNLOAD_URL_PREFIX": download_url_prefix,
+    "SPARKLE_RELEASE_NOTES_URL_PREFIX": release_notes_url_prefix,
+    "SPARKLE_LINK_URL": link_url,
+  } | budget_env
 
 
 def export_env(values: dict[str, str]) -> None:
@@ -527,7 +682,7 @@ def command_validate(args: argparse.Namespace) -> int:
 
 def command_export_env(args: argparse.Namespace) -> int:
   manifest = validate_manifest(args)
-  export_env(env_for_manifest(manifest, args.manifest))
+  export_env(env_for_manifest(manifest, args.manifest, args.channel))
   return 0
 
 
@@ -579,6 +734,7 @@ def add_common_args(parser: argparse.ArgumentParser) -> None:
   parser.add_argument("--release-workflow", type=Path, default=DEFAULT_RELEASE_WORKFLOW)
   parser.add_argument("--proof-workflow", type=Path, default=DEFAULT_PROOF_WORKFLOW)
   parser.add_argument("--appcast", type=Path)
+  parser.add_argument("--channel", default="")
   parser.add_argument("--require-clean", action="store_true")
 
 

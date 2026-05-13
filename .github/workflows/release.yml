@@ -55,7 +55,7 @@ jobs:
           SPARKLE_PRIVATE_ED_KEY: ${{ secrets.ONECONTEXT_SPARKLE_PRIVATE_ED_KEY }}
           SPARKLE_KEY_ACCOUNT: ${{ vars.ONECONTEXT_SPARKLE_KEY_ACCOUNT }}
           NOTARYTOOL_PROFILE: ${{ vars.ONECONTEXT_NOTARYTOOL_PROFILE }}
-        run: ./scripts/release-train.sh package
+        run: ./scripts/release-train.sh build --channel official
       - name: Upload GitHub release artifacts
         if: startsWith(github.ref, 'refs/tags/')
         env:

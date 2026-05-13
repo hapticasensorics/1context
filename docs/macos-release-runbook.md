@@ -33,7 +33,7 @@ The app is the user-facing product surface. The CLI is support and automation.
 See [macos-app-architecture.md](macos-app-architecture.md) and
 [local-web-contract.md](local-web-contract.md) for the detailed contracts.
 
-## Release Package
+## Release Factory
 
 Local ad-hoc package:
 
@@ -41,15 +41,19 @@ Local ad-hoc package:
 ./scripts/package-macos-smoke.sh
 ```
 
-Production package:
+Release factory builds:
 
 ```bash
-./scripts/release-train.sh package
+./scripts/release-train.sh build --channel dev
+./scripts/release-train.sh build --channel prototype
+./scripts/release-train.sh build --channel private
+./scripts/release-train.sh build --channel official
 ```
 
-The production path signs and notarizes the app and DMG, staples both, validates
-Gatekeeper acceptance, and generates Sparkle appcast artifacts for the release
-DMG.
+The official path signs and notarizes the app and DMG, staples both, validates
+Gatekeeper acceptance, and generates public Sparkle appcast artifacts for the
+release DMG. Dev, prototype, and private channels must not mutate the public
+appcast.
 
 ## Required Local Proof
 
@@ -106,8 +110,8 @@ Routine request:
 ./scripts/release-train.sh prove
 ```
 
-The wrapper resolves the old version, new version, update class, public appcast
-URL, timeout budget, artifact retention, and required proof matrix from
+The factory resolves the old version, new version, update class, appcast URL,
+timeout budget, artifact retention, and required proof matrix from
 `release/release.toml`. The workflow dispatch form should ask only for a short
 human reason.
 

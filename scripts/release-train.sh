@@ -6,14 +6,35 @@ COMMAND="${1:-}"
 if [[ $# -gt 0 ]]; then
   shift
 fi
+CHANNEL_ARG=""
+POSITIONAL_ARGS=()
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --channel)
+      CHANNEL_ARG="${2:?}"
+      shift 2
+      ;;
+    *)
+      POSITIONAL_ARGS+=("$1")
+      shift
+      ;;
+  esac
+done
+set -- "${POSITIONAL_ARGS[@]}"
 
 usage() {
   cat <<'USAGE'
-Usage: scripts/release-train.sh <validate|package|publish|prove|audit|bless>
+Usage: scripts/release-train.sh <validate|build|publish|prove|audit|bless> [--channel <name>]
 
 Runs the manifest-driven release train. release/release.toml is the only release
 source of truth; VERSION, update policy, appcast, workflows, and proof evidence
 must all agree with it.
+
+Build channels:
+  scripts/release-train.sh build --channel dev
+  scripts/release-train.sh build --channel prototype
+  scripts/release-train.sh build --channel private
+  scripts/release-train.sh build --channel official
 
 Proof dry-run:
   scripts/release-train.sh prove --dry-run
@@ -61,13 +82,24 @@ sparkle_public_key() {
 }
 
 load_manifest_env() {
-  eval "$("$ROOT/scripts/release-manifest.py" export-env)"
+  local channel_args=()
+  if [[ -n "$CHANNEL_ARG" ]]; then
+    channel_args=(--channel "$CHANNEL_ARG")
+  fi
+  eval "$("$ROOT/scripts/release-manifest.py" export-env "${channel_args[@]}")"
   VERSION="$ONECONTEXT_RELEASE_VERSION"
   PREVIOUS_VERSION="$ONECONTEXT_RELEASE_PREVIOUS_VERSION"
   TAG="$ONECONTEXT_RELEASE_TAG"
   UPDATE_CLASS="$ONECONTEXT_RELEASE_UPDATE_CLASS"
   PUBLIC_APPCAST_URL="$ONECONTEXT_RELEASE_PUBLIC_APPCAST_URL"
   STABLE_DMG_NAME="$ONECONTEXT_RELEASE_STABLE_DMG_NAME"
+  CHANNEL="$ONECONTEXT_RELEASE_CHANNEL"
+  CHANNEL_REQUIRES_CLEAN_TREE="$ONECONTEXT_RELEASE_CHANNEL_REQUIRES_CLEAN_TREE"
+  CHANNEL_REQUIRES_TAG="$ONECONTEXT_RELEASE_CHANNEL_REQUIRES_TAG"
+  CHANNEL_SIGNING_MODE="$ONECONTEXT_RELEASE_CHANNEL_SIGNING_MODE"
+  CHANNEL_NOTARIZE="$ONECONTEXT_RELEASE_CHANNEL_NOTARIZE"
+  CHANNEL_APPCAST="$ONECONTEXT_RELEASE_CHANNEL_APPCAST"
+  CHANNEL_PUBLIC_ASSET_MUTATION="$ONECONTEXT_RELEASE_CHANNEL_PUBLIC_ASSET_MUTATION"
   EVIDENCE_DIR="${ONECONTEXT_RELEASE_EVIDENCE_DIR:-$ROOT/dist/release-evidence/$VERSION}"
   PROOF_RESULTS_DIR="$EVIDENCE_DIR/proof-results"
   ASSET_MANIFEST="$EVIDENCE_DIR/asset-manifest.json"
@@ -116,6 +148,53 @@ output.write_text(json.dumps({
   },
 }, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 PY
+}
+
+write_stage_timing() {
+  local stage="$1"
+  local status="$2"
+  local started_epoch="$3"
+  local ended_epoch elapsed_seconds budget_key budget_seconds advisory output
+  ended_epoch="$(date +%s)"
+  elapsed_seconds=$((ended_epoch - started_epoch))
+  budget_key="$(printf 'ONECONTEXT_RELEASE_%s_SECONDS' "$(printf '%s' "$stage" | tr '[:lower:]' '[:upper:]')")"
+  budget_seconds="${!budget_key:-0}"
+  advisory="${ONECONTEXT_RELEASE_BUDGET_ADVISORY:-1}"
+  output="$EVIDENCE_DIR/timings/$stage-$CHANNEL.json"
+  mkdir -p "$(dirname "$output")"
+  python3 - "$output" \
+    "${ONECONTEXT_RELEASE_STAGE_TIMING_SCHEMA:-1context.release-stage-timing.v1}" \
+    "$stage" "$CHANNEL" "$status" "$started_epoch" "$ended_epoch" \
+    "$elapsed_seconds" "$budget_seconds" "$advisory" <<'PY'
+import datetime as dt
+import json
+import sys
+from pathlib import Path
+
+output = Path(sys.argv[1])
+started = int(sys.argv[6])
+ended = int(sys.argv[7])
+elapsed = int(sys.argv[8])
+budget = int(sys.argv[9])
+advisory = sys.argv[10] == "1"
+output.write_text(json.dumps({
+  "schema_version": sys.argv[2],
+  "stage": sys.argv[3],
+  "channel": sys.argv[4],
+  "status": sys.argv[5],
+  "started_epoch": started,
+  "ended_epoch": ended,
+  "started_at": dt.datetime.fromtimestamp(started, dt.timezone.utc).isoformat(),
+  "ended_at": dt.datetime.fromtimestamp(ended, dt.timezone.utc).isoformat(),
+  "elapsed_seconds": elapsed,
+  "budget_seconds": budget,
+  "budget_advisory": advisory,
+  "budget_exceeded": budget > 0 and elapsed > budget,
+}, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+PY
+  if [[ "$advisory" != "1" && "$budget_seconds" =~ ^[0-9]+$ && "$budget_seconds" != "0" && "$elapsed_seconds" -gt "$budget_seconds" ]]; then
+    fail "$stage exceeded ${budget_seconds}s budget for $CHANNEL channel (${elapsed_seconds}s)."
+  fi
 }
 
 collect_downloaded_proof_results() {
@@ -318,50 +397,112 @@ collect_release_assets() {
     shasum -a 256 "$(basename "$artifact")" > "$(basename "$artifact").sha256"
     shasum -a 256 "$STABLE_DMG_NAME" > "$STABLE_DMG_NAME.sha256"
   )
-  "$ROOT/scripts/check-release-manifest.sh" --appcast "$ROOT/dist/appcast.xml"
+  "$ROOT/scripts/release-manifest.py" validate --appcast "$ROOT/dist/appcast.xml" --channel official
   "$ROOT/scripts/release-manifest.py" write-asset-manifest --appcast "$ROOT/dist/appcast.xml" --output "$ASSET_MANIFEST"
 }
 
 release_validate() {
-  "$ROOT/scripts/check-release-manifest.sh" --require-clean
-  ensure_tag_ref
+  local args=(validate)
+  if [[ "${CHANNEL_REQUIRES_CLEAN_TREE:-0}" == "1" ]]; then
+    args+=(--require-clean)
+  fi
+  "$ROOT/scripts/release-manifest.py" "${args[@]}" --channel "$CHANNEL"
+  if [[ "${CHANNEL_REQUIRES_TAG:-0}" == "1" ]]; then
+    ensure_tag_ref
+  fi
   "$ROOT/scripts/check-version-consistency.sh"
 }
 
-release_package() {
+release_build() {
+  local dry_run="0"
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --dry-run)
+        dry_run="1"
+        shift
+        ;;
+      *)
+        fail "Unknown build argument: $1"
+        ;;
+    esac
+  done
+
+  local stage_started
+  stage_started="$(date +%s)"
   release_validate
   mkdir -p "$EVIDENCE_DIR"
   "$ROOT/scripts/write-runner-attestation.sh" "$RUNNER_ATTESTATION"
-  export ONECONTEXT_VERSION="$VERSION"
-  export ONECONTEXT_SIGNING_MODE="developer-id"
-  export CODESIGN_IDENTITY="${CODESIGN_IDENTITY:-$(developer_id_identity)}"
-  if [[ -z "$CODESIGN_IDENTITY" ]]; then
-    fail "No Developer ID Application signing identity found."
+  if [[ "$dry_run" == "1" ]]; then
+    write_release_evidence "build-$CHANNEL-dry-run"
+    write_stage_timing "build" "dry-run" "$stage_started"
+    return
   fi
-  export ONECONTEXT_SPARKLE_PUBLIC_ED_KEY="${ONECONTEXT_SPARKLE_PUBLIC_ED_KEY:-$(sparkle_public_key)}"
-  if [[ -z "$ONECONTEXT_SPARKLE_PUBLIC_ED_KEY" ]]; then
-    fail "No Sparkle public key found for account '$SPARKLE_ACCOUNT'. Run: CREATE_SPARKLE_KEY=1 scripts/configure-macos-release-secrets.sh"
+
+  export ONECONTEXT_VERSION="$VERSION"
+  export ONECONTEXT_SIGNING_MODE="$CHANNEL_SIGNING_MODE"
+  if [[ "$CHANNEL_SIGNING_MODE" == "developer-id" ]]; then
+    export CODESIGN_IDENTITY="${CODESIGN_IDENTITY:-$(developer_id_identity)}"
+    if [[ -z "$CODESIGN_IDENTITY" ]]; then
+      fail "No Developer ID Application signing identity found."
+    fi
+  fi
+  if [[ "$CHANNEL_APPCAST" == "none" ]]; then
+    unset ONECONTEXT_SPARKLE_PUBLIC_ED_KEY
+  else
+    export ONECONTEXT_SPARKLE_PUBLIC_ED_KEY="${ONECONTEXT_SPARKLE_PUBLIC_ED_KEY:-$(sparkle_public_key)}"
+    if [[ -z "$ONECONTEXT_SPARKLE_PUBLIC_ED_KEY" ]]; then
+      fail "No Sparkle public key found for account '$SPARKLE_ACCOUNT'. Run: CREATE_SPARKLE_KEY=1 scripts/configure-macos-release-secrets.sh"
+    fi
   fi
   "$ROOT/scripts/build-macos-app.sh"
-  "$ROOT/scripts/notarize-macos-artifact.sh" "$ROOT/dist/1Context.app"
-  "$ROOT/scripts/create-macos-dmg.sh" "$ROOT/dist/1Context.app" "$DMG" >/dev/null
-  codesign_args=(--force --timestamp --sign "$CODESIGN_IDENTITY")
-  if [[ -n "$CODESIGN_KEYCHAIN" ]]; then
-    codesign_args+=(--keychain "$CODESIGN_KEYCHAIN")
+  if [[ "$CHANNEL" == "dev" ]]; then
+    write_release_evidence "build-$CHANNEL"
+    "$ROOT/scripts/redact-evidence.sh" "$EVIDENCE_DIR"
+    "$ROOT/scripts/audit-evidence-redaction.sh" "$EVIDENCE_DIR"
+    write_stage_timing "build" "passed" "$stage_started"
+    return
   fi
-  codesign "${codesign_args[@]}" "$DMG" >/dev/null
-  codesign --verify --strict "$DMG" >/dev/null
-  "$ROOT/scripts/notarize-macos-artifact.sh" "$DMG"
-  "$ROOT/scripts/validate-macos-dmg.sh" "$DMG"
-  "$ROOT/scripts/generate-sparkle-appcast.sh" "$DMG"
-  "$ROOT/scripts/release-manifest.py" validate --appcast "$ROOT/dist/sparkle-updates/appcast.xml"
-  collect_release_assets
-  write_release_evidence "package"
+
+  if [[ "$CHANNEL_NOTARIZE" == "1" ]]; then
+    "$ROOT/scripts/notarize-macos-artifact.sh" "$ROOT/dist/1Context.app"
+  fi
+  "$ROOT/scripts/create-macos-dmg.sh" "$ROOT/dist/1Context.app" "$DMG" >/dev/null
+  if [[ "$CHANNEL_SIGNING_MODE" == "developer-id" ]]; then
+    codesign_args=(--force --timestamp --sign "$CODESIGN_IDENTITY")
+    if [[ -n "$CODESIGN_KEYCHAIN" ]]; then
+      codesign_args+=(--keychain "$CODESIGN_KEYCHAIN")
+    fi
+    codesign "${codesign_args[@]}" "$DMG" >/dev/null
+    codesign --verify --strict "$DMG" >/dev/null
+  fi
+  if [[ "$CHANNEL_NOTARIZE" == "1" ]]; then
+    "$ROOT/scripts/notarize-macos-artifact.sh" "$DMG"
+    "$ROOT/scripts/validate-macos-dmg.sh" "$DMG"
+  else
+    ALLOW_UNNOTARIZED=1 "$ROOT/scripts/validate-macos-dmg.sh" "$DMG"
+  fi
+  if [[ "$CHANNEL_APPCAST" != "none" ]]; then
+    "$ROOT/scripts/generate-sparkle-appcast.sh" "$DMG"
+    "$ROOT/scripts/release-manifest.py" validate --appcast "$ROOT/dist/sparkle-updates/appcast.xml" --channel "$CHANNEL"
+    if [[ "$CHANNEL" == "official" ]]; then
+      collect_release_assets
+    else
+      mkdir -p "$ROOT/dist/$CHANNEL"
+      cp "$ROOT/dist/sparkle-updates/appcast.xml" "$ROOT/dist/$CHANNEL/appcast.xml"
+    fi
+  fi
+  write_release_evidence "build-$CHANNEL"
   "$ROOT/scripts/redact-evidence.sh" "$EVIDENCE_DIR"
   "$ROOT/scripts/audit-evidence-redaction.sh" "$EVIDENCE_DIR"
+  write_stage_timing "build" "passed" "$stage_started"
 }
 
 release_publish() {
+  local stage_started
+  stage_started="$(date +%s)"
+  if [[ "$CHANNEL" != "official" ]]; then
+    fail "publish --channel $CHANNEL is not wired yet; only official public publishing is active."
+  fi
   require_tool gh
   release_validate
   ensure_tag_ref
@@ -387,9 +528,12 @@ release_publish() {
   write_release_evidence "publish"
   "$ROOT/scripts/redact-evidence.sh" "$EVIDENCE_DIR"
   "$ROOT/scripts/audit-evidence-redaction.sh" "$EVIDENCE_DIR"
+  write_stage_timing "publish" "passed" "$stage_started"
 }
 
 release_prove() {
+  local stage_started
+  stage_started="$(date +%s)"
   local mode="dispatch"
   local repo="${ONECONTEXT_GITHUB_REPO:-hapticasensorics/1context}"
   local workflow="${ONECONTEXT_RELEASE_PROOF_WORKFLOW:-self-hosted-mac-update-proof.yml}"
@@ -433,7 +577,7 @@ release_prove() {
   done
 
   if [[ "$mode" == "runner-execute" ]]; then
-    "$ROOT/scripts/check-release-manifest.sh" --require-clean
+    "$ROOT/scripts/release-manifest.py" validate --require-clean --channel "$CHANNEL"
     local forbidden_runner_env
     for forbidden_runner_env in \
       ONECONTEXT_OLD_VERSION \
@@ -451,7 +595,7 @@ release_prove() {
     done
     export ONECONTEXT_OLD_VERSION="$PREVIOUS_VERSION"
     export ONECONTEXT_NEW_VERSION="$VERSION"
-    export ONECONTEXT_STAGING_APPCAST_URL="$PUBLIC_APPCAST_URL"
+    export ONECONTEXT_STAGING_APPCAST_URL="$ONECONTEXT_SPARKLE_FEED_URL"
     export ONECONTEXT_EXPECTED_UPDATE_CLASS="$UPDATE_CLASS"
     exec "$ROOT/scripts/release/internal/self-hosted-update-proof.sh"
   fi
@@ -468,7 +612,7 @@ release_prove() {
     release_validate
     ensure_tag_ref
   else
-    "$ROOT/scripts/release-manifest.py" validate
+    "$ROOT/scripts/release-manifest.py" validate --channel "$CHANNEL"
   fi
 
   mkdir -p "$PROOF_RESULTS_DIR"
@@ -491,12 +635,16 @@ release_proof_request:
   new_version: $VERSION
   update_class: $UPDATE_CLASS
   appcast_url: $PUBLIC_APPCAST_URL
+  channel: $CHANNEL
+  channel_appcast: $CHANNEL_APPCAST
+  channel_appcast_url: $ONECONTEXT_SPARKLE_FEED_URL
   proof_reason: $proof_reason
 gh_command: $(quote_command "${cmd[@]}")
 SUMMARY
   cat "$transcript"
 
   if [[ "$mode" == "dry-run" ]]; then
+    write_stage_timing "prove" "dry-run" "$stage_started"
     return
   fi
 
@@ -547,17 +695,29 @@ PY
   write_release_evidence "prove"
   "$ROOT/scripts/redact-evidence.sh" "$EVIDENCE_DIR"
   "$ROOT/scripts/audit-evidence-redaction.sh" "$EVIDENCE_DIR"
+  write_stage_timing "prove" "passed" "$stage_started"
 }
 
 release_audit() {
+  local stage_started
+  stage_started="$(date +%s)"
+  if [[ "$CHANNEL" != "official" ]]; then
+    fail "audit --channel $CHANNEL is not wired yet; only official public audit is active."
+  fi
   release_validate
   audit_public_release_assets "$TAG"
   if [[ -d "$EVIDENCE_DIR" ]]; then
     "$ROOT/scripts/audit-evidence-redaction.sh" "$EVIDENCE_DIR"
   fi
+  write_stage_timing "audit" "passed" "$stage_started"
 }
 
 release_bless() {
+  local stage_started
+  stage_started="$(date +%s)"
+  if [[ "$CHANNEL" != "official" ]]; then
+    fail "bless --channel $CHANNEL is only valid for the official channel."
+  fi
   release_validate
   for required in "$RELEASE_EVIDENCE" "$ASSET_MANIFEST" "$RUNNER_ATTESTATION" "$EVIDENCE_DIR/redaction-report.json"; do
     [[ -f "$required" ]] || fail "Bless requires evidence file: $required"
@@ -586,17 +746,20 @@ if bad:
 PY
   "$ROOT/scripts/audit-evidence-redaction.sh" "$EVIDENCE_DIR"
   write_release_evidence "bless"
+  write_stage_timing "bless" "passed" "$stage_started"
   echo "release blessed: $TAG"
 }
 
 case "$COMMAND" in
   validate)
     load_manifest_env
+    stage_started="$(date +%s)"
     release_validate "$@"
+    write_stage_timing "validate" "passed" "$stage_started"
     ;;
-  package)
+  build)
     load_manifest_env
-    release_package "$@"
+    release_build "$@"
     ;;
   publish)
     load_manifest_env

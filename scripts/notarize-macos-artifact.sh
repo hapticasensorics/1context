@@ -93,7 +93,7 @@ if [[ -d "$ARTIFACT" && "$ARTIFACT" == *.app ]]; then
 elif [[ -f "$ARTIFACT" && "$ARTIFACT" == *.dmg ]]; then
   if ! codesign --verify --strict "$ARTIFACT" >/dev/null 2>&1; then
     echo "DMG must be signed before notarization: $ARTIFACT" >&2
-    echo "Use scripts/release-train.sh package so the DMG is signed before submission." >&2
+    echo "Use scripts/release-train.sh build --channel official so the DMG is signed before submission." >&2
     exit 1
   fi
   submit_to_notary "$ARTIFACT"

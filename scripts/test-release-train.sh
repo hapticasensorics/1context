@@ -77,7 +77,6 @@ PY
 }
 
 bash -n \
-  "$ROOT/scripts/check-release-manifest.sh" \
   "$ROOT/scripts/release-train.sh" \
   "$ROOT/scripts/redact-evidence.sh" \
   "$ROOT/scripts/audit-evidence-redaction.sh" \
@@ -87,9 +86,11 @@ bash -n \
   "$ROOT/scripts/package-macos-smoke.sh"
 python3 -m py_compile "$ROOT/scripts/release-manifest.py"
 
-"$ROOT/scripts/check-release-manifest.sh"
+"$ROOT/scripts/release-manifest.py" validate
 test "$("$ROOT/scripts/release-manifest.py" matrix-cases | wc -l | tr -d '[:space:]')" = "13"
 "$ROOT/scripts/release-manifest.py" matrix-cases | grep -q "^login_restart_recovery$"
+"$ROOT/scripts/release-manifest.py" export-env --channel dev | grep -q "ONECONTEXT_RELEASE_CHANNEL=dev"
+"$ROOT/scripts/release-manifest.py" export-env --channel private | grep -q "ONECONTEXT_RELEASE_CHANNEL_APPCAST=private"
 
 MANDATORY_OK="$TMP_DIR/mandatory-ok.xml"
 MANDATORY_WITH_NOTES="$TMP_DIR/mandatory-with-notes.xml"
@@ -155,6 +156,7 @@ fi
 
 test ! -e "$ROOT/scripts/package-macos-production-release.sh"
 test ! -e "$ROOT/scripts/package-macos-release.sh"
+test ! -e "$ROOT/scripts/check-release-manifest.sh"
 test ! -e "$ROOT/scripts/audit-github-release-assets.sh"
 test ! -e "$ROOT/scripts/self-hosted-update-proof.sh"
 test -x "$ROOT/scripts/release/internal/self-hosted-update-proof.sh"
@@ -169,6 +171,15 @@ then
 fi
 if grep -q "run: ./scripts/self-hosted-update-proof.sh" "$ROOT/.github/workflows/self-hosted-mac-update-proof.yml"; then
   echo "self-hosted workflow must enter proof execution through release-train.sh." >&2
+  exit 1
+fi
+grep -q "./scripts/release-train.sh build --channel official" "$ROOT/.github/workflows/release.yml"
+if rg -n --glob '!test-release-train.sh' 'release-train\.sh package|ONECONTEXT_RUNTIME_ROOT|dev-runtime-env|with-dev-runtime|release/update-policy' \
+  "$ROOT/.github" "$ROOT/scripts" "$ROOT/docs/README.md" "$ROOT/docs/development.md" "$ROOT/docs/macos-release-runbook.md" "$ROOT/docs/ci/self-hosted-mac-runner.md" "$ROOT/release" \
+  > "$TMP_DIR/no-shim-scan.out"
+then
+  cat "$TMP_DIR/no-shim-scan.out" >&2
+  echo "active release surfaces must not mention deleted shims, old package commands, or old update-policy files." >&2
   exit 1
 fi
 if rg -n 'ONECONTEXT_(SPARKLE_FEED_URL|UPDATE_OPTIONAL_PROMPT_TITLE|UPDATE_OPTIONAL_PROMPT_BODY|UPDATE_FAILURE_TITLE|UPDATE_FAILURE_BODY|UPDATE_POST_INSTALL_MESSAGE_ENABLED|UPDATE_POST_INSTALL_TITLE|UPDATE_POST_INSTALL_BODY|SPARKLE_SHOW_RELEASE_NOTES_IN_UPDATE_WINDOW):-' \
@@ -187,6 +198,17 @@ then
   echo "release proof scripts must not depend on deleted public CLI control-plane commands." >&2
   exit 1
 fi
+
+ONECONTEXT_RELEASE_EVIDENCE_DIR="$TMP_DIR/build-evidence" \
+  "$ROOT/scripts/release-train.sh" build --channel dev --dry-run \
+  > "$TMP_DIR/build-dev-dry-run.out"
+test -f "$TMP_DIR/build-evidence/timings/build-dev.json"
+grep -q '"channel": "dev"' "$TMP_DIR/build-evidence/timings/build-dev.json"
+if "$ROOT/scripts/release-train.sh" package > "$TMP_DIR/package-command.out" 2>&1; then
+  echo "release-train package must not remain as a compatibility shim." >&2
+  exit 1
+fi
+grep -q "Unknown release train command: package" "$TMP_DIR/package-command.out"
 
 ONECONTEXT_RELEASE_EVIDENCE_DIR="$TMP_DIR/proof-evidence" \
   "$ROOT/scripts/release-train.sh" prove --dry-run --ref main --proof-reason "fixture proof" \
