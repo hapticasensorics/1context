@@ -186,3 +186,12 @@ plugin tree. The factory must keep package-smoke checks that fail on
   Elapsed build time was 125 seconds, under the 720 second prototype budget.
   `codesign --verify`, `spctl --assess`, and `./scripts/test-launch-agent-package.sh`
   passed. The prototype app has no `SUFeedURL`, and no new appcast was generated.
+- 2026-05-13: Proved the private asset build after fixing
+  `scripts/build-macos-app.sh` to preserve `ONECONTEXT_RELEASE_CHANNEL` when it
+  reloads the manifest. `./scripts/release-train.sh build --channel private`
+  produced a signed/notarized `0.1.67` DMG and a private appcast at
+  `dist/private/appcast.xml`. The app `SUFeedURL` is the private latest appcast
+  URL, and `./scripts/release-manifest.py validate --channel private --appcast
+  dist/private/appcast.xml`, `codesign --verify`, `spctl --assess`, and
+  `./scripts/test-launch-agent-package.sh` passed. Elapsed private build time:
+  135 seconds.

@@ -500,6 +500,10 @@ release_build() {
 release_publish() {
   local stage_started
   stage_started="$(date +%s)"
+  if [[ "$CHANNEL" == "private" ]]; then
+    release_publish_private "$stage_started"
+    return
+  fi
   if [[ "$CHANNEL" != "official" ]]; then
     fail "publish --channel $CHANNEL is not wired yet; only official public publishing is active."
   fi
@@ -526,6 +530,87 @@ release_publish() {
     --clobber
   audit_public_release_assets "$TAG"
   write_release_evidence "publish"
+  "$ROOT/scripts/redact-evidence.sh" "$EVIDENCE_DIR"
+  "$ROOT/scripts/audit-evidence-redaction.sh" "$EVIDENCE_DIR"
+  write_stage_timing "publish" "passed" "$stage_started"
+}
+
+release_publish_private() {
+  local stage_started="$1"
+  local repo="${ONECONTEXT_PRIVATE_GITHUB_REPO:-hapticasensorics/1context-private-release}"
+  local private_dir="$ROOT/dist/private"
+  local private_appcast="$private_dir/appcast.xml"
+  local private_asset_manifest="$EVIDENCE_DIR/private-asset-manifest.json"
+  local versioned_dmg="$ROOT/dist/1Context-$VERSION-macos-$ARCH.dmg"
+  local versioned_sha="$private_dir/1Context-$VERSION-macos-$ARCH.dmg.sha256"
+  require_tool gh
+  release_validate
+  mkdir -p "$EVIDENCE_DIR" "$private_dir"
+  [[ -f "$versioned_dmg" ]] || fail "Missing private release DMG: $versioned_dmg"
+  [[ -f "$private_appcast" ]] || fail "Missing private appcast. Run: scripts/release-train.sh build --channel private"
+  "$ROOT/scripts/release-manifest.py" validate --channel private --appcast "$private_appcast"
+  shasum -a 256 "$versioned_dmg" > "$versioned_sha"
+  "$ROOT/scripts/write-runner-attestation.sh" "$RUNNER_ATTESTATION"
+  python3 - "$private_asset_manifest" "$VERSION" "$TAG" "$versioned_dmg" "$versioned_sha" "$private_appcast" "$repo" <<'PY'
+import datetime as dt
+import hashlib
+import json
+import sys
+from pathlib import Path
+
+output = Path(sys.argv[1])
+version = sys.argv[2]
+tag = sys.argv[3]
+repo = sys.argv[7]
+
+def sha256(path: Path) -> str:
+  h = hashlib.sha256()
+  with path.open("rb") as handle:
+    for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+      h.update(chunk)
+  return h.hexdigest()
+
+assets = []
+for raw in sys.argv[4:7]:
+  path = Path(raw)
+  assets.append({
+    "name": path.name,
+    "path": str(path),
+    "size": path.stat().st_size,
+    "sha256": sha256(path),
+  })
+output.write_text(json.dumps({
+  "schema_version": "1context.private-asset-manifest.v1",
+  "version": version,
+  "tag": tag,
+  "repo": repo,
+  "generated_at": dt.datetime.now(dt.timezone.utc).isoformat(),
+  "assets": assets,
+}, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+PY
+
+  gh release view "$TAG" --repo "$repo" >/dev/null 2>&1 || \
+    gh release create "$TAG" --repo "$repo" --target main --title "1Context $TAG private" \
+      --notes "Private 1Context release-factory update assets for $TAG."
+  gh release upload "$TAG" --repo "$repo" \
+    "$versioned_dmg" \
+    "$versioned_sha" \
+    "$private_appcast#appcast.xml" \
+    "$private_asset_manifest" \
+    --clobber
+
+  local work_dir
+  work_dir="$(mktemp -d /tmp/1context-private-release-audit-XXXXXX)"
+  trap 'rm -rf "$work_dir"' RETURN
+  gh release download "$TAG" --repo "$repo" --pattern appcast.xml --dir "$work_dir" --clobber >/dev/null
+  gh release download "$TAG" --repo "$repo" --pattern "1Context-$VERSION-macos-$ARCH.dmg" --dir "$work_dir" --clobber >/dev/null
+  gh release download "$TAG" --repo "$repo" --pattern "1Context-$VERSION-macos-$ARCH.dmg.sha256" --dir "$work_dir" --clobber >/dev/null
+  "$ROOT/scripts/release-manifest.py" validate --channel private --appcast "$work_dir/appcast.xml"
+  (
+    cd "$work_dir"
+    shasum -a 256 --check "1Context-$VERSION-macos-$ARCH.dmg.sha256" >/dev/null
+  )
+  write_release_evidence "publish-private"
   "$ROOT/scripts/redact-evidence.sh" "$EVIDENCE_DIR"
   "$ROOT/scripts/audit-evidence-redaction.sh" "$EVIDENCE_DIR"
   write_stage_timing "publish" "passed" "$stage_started"
