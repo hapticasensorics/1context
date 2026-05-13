@@ -14,6 +14,7 @@ private let sparkleUpdateLog = Logger(
 public final class SparkleUpdateController: NSObject {
   private let configuration: SparkleUpdaterConfiguration
   private let appContext: AppUpdateContext
+  private let retrySleeper: @Sendable (UInt64) async -> Void
   private var updater: SPUUpdater?
   private var userDriver: AppManagedSparkleUserDriver?
   private var observation: SparkleFrameworkObservation?
@@ -23,10 +24,14 @@ public final class SparkleUpdateController: NSObject {
   public init(
     configuration: SparkleUpdaterConfiguration = .current(),
     appContext: AppUpdateContext = .current(),
-    startUpdater: Bool = true
+    startUpdater: Bool = true,
+    retrySleeper: @escaping @Sendable (UInt64) async -> Void = { nanoseconds in
+      try? await Task.sleep(nanoseconds: nanoseconds)
+    }
   ) {
     self.configuration = configuration
     self.appContext = appContext
+    self.retrySleeper = retrySleeper
     self.updater = nil
     self.userDriver = nil
     super.init()
@@ -67,8 +72,7 @@ public final class SparkleUpdateController: NSObject {
     guard let updater, updater.canCheckForUpdates else {
       return false
     }
-    userDriver?.prepareForUserInitiatedCheck()
-    updater.checkForUpdates()
+    executeControllerEffects(userDriver?.prepareForUserInitiatedCheck() ?? [])
     return true
   }
 
@@ -86,8 +90,7 @@ public final class SparkleUpdateController: NSObject {
     guard updater.automaticallyChecksForUpdates, updater.automaticallyDownloadsUpdates else {
       return false
     }
-    userDriver?.prepareForMandatoryAutomaticCheck()
-    updater.checkForUpdatesInBackground()
+    executeControllerEffects(userDriver?.prepareForMandatoryAutomaticCheck() ?? [])
     return true
   }
 
@@ -126,6 +129,34 @@ public final class SparkleUpdateController: NSObject {
       startupErrorDescription: error?.localizedDescription ?? "Sparkle updater could not start."
     )
     onUpdateInformationChanged?()
+  }
+
+  private func executeControllerEffects(_ effects: [AppManagedSparkleUpdateEffect]) {
+    for effect in effects {
+      switch effect {
+      case .clearObservation:
+        observation = nil
+        onUpdateInformationChanged?()
+      case .checkForeground:
+        guard let updater, updater.canCheckForUpdates else { continue }
+        updater.checkForUpdates()
+      case .checkBackground:
+        guard let updater else { continue }
+        configureAutomaticUpdateDefaults()
+        guard updater.automaticallyChecksForUpdates, updater.automaticallyDownloadsUpdates else {
+          continue
+        }
+        updater.checkForUpdatesInBackground()
+      case .scheduleRetry(let retryRequest):
+        let retrySleeper = retrySleeper
+        Task { @MainActor [weak self] in
+          await retrySleeper(retryRequest.delayNanoseconds)
+          self?.retryUpdateCheck(retryRequest)
+        }
+      case .askUser, .install, .dismiss, .showSupportAlert, .showUpToDate:
+        continue
+      }
+    }
   }
 }
 
@@ -176,10 +207,7 @@ extension SparkleUpdateController: SPUUpdaterDelegate {
     }
     let retryRequest = userDriver?.finishUpdateSessionAndConsumeRetryRequest()
     if let retryRequest {
-      Task { @MainActor [weak self] in
-        try? await Task.sleep(nanoseconds: retryRequest.delayNanoseconds)
-        self?.retryUpdateCheck(retryRequest)
-      }
+      executeControllerEffects([.scheduleRetry(retryRequest)])
     }
   }
 
@@ -196,20 +224,10 @@ extension SparkleUpdateController: SPUUpdaterDelegate {
   }
 
   private func retryUpdateCheck(_ retryRequest: AppManagedSparkleFailureRetryRequest) {
-    switch retryRequest.mode {
-    case .automaticMandatory:
-      guard let updater else { return }
-      configureAutomaticUpdateDefaults()
-      guard updater.automaticallyChecksForUpdates, updater.automaticallyDownloadsUpdates else {
-        return
-      }
-      guard userDriver?.prepareForFailureRetry(retryRequest) == true else { return }
-      updater.checkForUpdatesInBackground()
-    case .userInitiated:
-      guard let updater, updater.canCheckForUpdates else { return }
-      guard userDriver?.prepareForFailureRetry(retryRequest) == true else { return }
-      updater.checkForUpdates()
+    guard let effects = userDriver?.prepareForFailureRetry(retryRequest) else {
+      return
     }
+    executeControllerEffects(effects)
   }
 }
 
@@ -341,15 +359,123 @@ struct AppManagedSparkleFailureRetryRequest: Equatable {
   let sourceSessionID: UInt64
   let mode: AppManagedSparkleCheckMode
   let kind: AppManagedSparkleFailureRetryKind
-  let remainingSilentRetries: Int
+  let attemptNumber: Int
+  let remainingBudget: Int
   let delayNanoseconds: UInt64
+
+  var remainingSilentRetries: Int {
+    remainingBudget
+  }
+}
+
+struct AppManagedSparkleUpdateFailure: Equatable {
+  let domain: String
+  let code: Int
+  let localizedDescription: String
+
+  init(_ error: Error) {
+    let nsError = error as NSError
+    self.domain = nsError.domain
+    self.code = nsError.code
+    self.localizedDescription = nsError.localizedDescription
+  }
+}
+
+enum AppManagedSparkleUpdateEvent: Equatable {
+  case start(mode: AppManagedSparkleCheckMode)
+  case retryTimerFired(AppManagedSparkleFailureRetryRequest)
+  case observedUpdateMetadata(isCriticalUpdate: Bool)
+  case foundUpdate(isCriticalUpdate: Bool, isInformationOnlyUpdate: Bool)
+  case userAcceptedUpdate
+  case userDismissedUpdate
+  case didNotFindUpdate
+  case downloadStarted
+  case readyToInstall
+  case installing
+  case checkFailed(AppManagedSparkleUpdateFailure)
+  case updateAttemptFailed(AppManagedSparkleUpdateFailure)
+  case userRequestedRetry(sessionID: UInt64)
+  case finished
+}
+
+enum AppManagedSparkleUpdateEffect: Equatable {
+  case checkForeground
+  case checkBackground
+  case askUser
+  case install
+  case dismiss
+  case scheduleRetry(AppManagedSparkleFailureRetryRequest)
+  case showSupportAlert(sessionID: UInt64)
+  case showUpToDate
+  case clearObservation
+}
+
+private extension AppManagedSparkleUpdateEvent {
+  var logDescription: String {
+    switch self {
+    case .start(let mode):
+      return "start(mode:\(mode))"
+    case .retryTimerFired(let request):
+      return "retryTimerFired(sourceSessionID:\(request.sourceSessionID),kind:\(request.kind),attempt:\(request.attemptNumber),remainingBudget:\(request.remainingBudget))"
+    case .observedUpdateMetadata(let isCriticalUpdate):
+      return "observedUpdateMetadata(critical:\(isCriticalUpdate))"
+    case .foundUpdate(let isCriticalUpdate, let isInformationOnlyUpdate):
+      return "foundUpdate(critical:\(isCriticalUpdate),informationOnly:\(isInformationOnlyUpdate))"
+    case .userAcceptedUpdate:
+      return "userAcceptedUpdate"
+    case .userDismissedUpdate:
+      return "userDismissedUpdate"
+    case .didNotFindUpdate:
+      return "didNotFindUpdate"
+    case .downloadStarted:
+      return "downloadStarted"
+    case .readyToInstall:
+      return "readyToInstall"
+    case .installing:
+      return "installing"
+    case .checkFailed(let failure):
+      return "checkFailed(domain:\(failure.domain),code:\(failure.code))"
+    case .updateAttemptFailed(let failure):
+      return "updateAttemptFailed(domain:\(failure.domain),code:\(failure.code))"
+    case .userRequestedRetry(let sessionID):
+      return "userRequestedRetry(sessionID:\(sessionID))"
+    case .finished:
+      return "finished"
+    }
+  }
+}
+
+private extension AppManagedSparkleUpdateEffect {
+  var logDescription: String {
+    switch self {
+    case .checkForeground:
+      return "checkForeground"
+    case .checkBackground:
+      return "checkBackground"
+    case .askUser:
+      return "askUser"
+    case .install:
+      return "install"
+    case .dismiss:
+      return "dismiss"
+    case .scheduleRetry(let request):
+      return "scheduleRetry(sourceSessionID:\(request.sourceSessionID),kind:\(request.kind),attempt:\(request.attemptNumber),remainingBudget:\(request.remainingBudget))"
+    case .showSupportAlert(let sessionID):
+      return "showSupportAlert(sessionID:\(sessionID))"
+    case .showUpToDate:
+      return "showUpToDate"
+    case .clearObservation:
+      return "clearObservation"
+    }
+  }
 }
 
 struct AppManagedSparkleUpdateSession: Equatable {
   let id: UInt64
   var mode: AppManagedSparkleCheckMode
   var phase: AppManagedSparkleUpdatePhase
-  var remainingSilentRetries: Int
+  var retryAttemptNumber: Int
+  var remainingRetryBudget: Int
   var updateWasFound = false
   var criticalUpdateWasFound = false
   var downloadBegan = false
@@ -361,6 +487,11 @@ struct AppManagedSparkleUpdateSession: Equatable {
 
   var userInitiated: Bool {
     mode == .userInitiated
+  }
+
+  var remainingSilentRetries: Int {
+    get { remainingRetryBudget }
+    set { remainingRetryBudget = newValue }
   }
 
   var failureRepresentsUpdateAttempt: Bool {
@@ -395,6 +526,24 @@ struct AppManagedSparkleUpdateSession: Equatable {
   mutating func recordFailed() {
     phase = .failed
   }
+}
+
+struct AppManagedSparkleUpdateState: Equatable {
+  var nextSessionID: UInt64
+  var session: AppManagedSparkleUpdateSession
+
+  static let initial = AppManagedSparkleUpdateState(
+    nextSessionID: 0,
+    session: AppManagedSparkleUpdateSession(
+      id: 0,
+      mode: .automaticMandatory,
+      phase: .finished,
+      retryAttemptNumber: 0,
+      remainingRetryBudget: AppManagedSparkleUserDriverPolicy.silentFailureRetryBudget(
+        for: .automaticMandatory
+      )
+    )
+  )
 }
 
 struct AppManagedSparkleUserDriverPolicy {
@@ -482,9 +631,20 @@ struct AppManagedSparkleUserDriverPolicy {
     mode: AppManagedSparkleCheckMode,
     attemptedInstall: Bool
   ) -> Bool {
-    let nsError = error as NSError
-    if nsError.domain == SUSparkleErrorDomain {
-      switch nsError.code {
+    shouldPresentFailure(
+      for: AppManagedSparkleUpdateFailure(error),
+      mode: mode,
+      attemptedInstall: attemptedInstall
+    )
+  }
+
+  static func shouldPresentFailure(
+    for failure: AppManagedSparkleUpdateFailure,
+    mode: AppManagedSparkleCheckMode,
+    attemptedInstall: Bool
+  ) -> Bool {
+    if failure.domain == SUSparkleErrorDomain {
+      switch failure.code {
       case 1001, 4007, 4008:
         return false
       default:
@@ -500,7 +660,21 @@ struct AppManagedSparkleUserDriverPolicy {
     attemptedInstall: Bool,
     remainingSilentRetries: Int
   ) -> AppManagedSparkleFailureDisposition {
-    if isBenignSparkleFailure(error) {
+    failureDisposition(
+      for: AppManagedSparkleUpdateFailure(error),
+      mode: mode,
+      attemptedInstall: attemptedInstall,
+      remainingSilentRetries: remainingSilentRetries
+    )
+  }
+
+  static func failureDisposition(
+    for failure: AppManagedSparkleUpdateFailure,
+    mode: AppManagedSparkleCheckMode,
+    attemptedInstall: Bool,
+    remainingSilentRetries: Int
+  ) -> AppManagedSparkleFailureDisposition {
+    if isBenignSparkleFailure(failure) {
       return .ignore
     }
     if mode == .automaticMandatory, !attemptedInstall {
@@ -510,7 +684,7 @@ struct AppManagedSparkleUserDriverPolicy {
       )
     }
     guard shouldPresentFailure(
-      for: error,
+      for: failure,
       mode: mode,
       attemptedInstall: attemptedInstall
     ) else {
@@ -526,9 +700,12 @@ struct AppManagedSparkleUserDriverPolicy {
   }
 
   private static func isBenignSparkleFailure(_ error: Error) -> Bool {
-    let nsError = error as NSError
-    if nsError.domain == SUSparkleErrorDomain {
-      switch nsError.code {
+    isBenignSparkleFailure(AppManagedSparkleUpdateFailure(error))
+  }
+
+  private static func isBenignSparkleFailure(_ failure: AppManagedSparkleUpdateFailure) -> Bool {
+    if failure.domain == SUSparkleErrorDomain {
+      switch failure.code {
       case 1001, 4007, 4008:
         return true
       default:
@@ -559,25 +736,227 @@ struct AppManagedSparkleUserDriverPolicy {
   }
 }
 
+enum AppManagedSparkleUpdateReducer {
+  static func reduce(
+    state: AppManagedSparkleUpdateState,
+    event: AppManagedSparkleUpdateEvent
+  ) -> (state: AppManagedSparkleUpdateState, effects: [AppManagedSparkleUpdateEffect]) {
+    var state = state
+    var effects: [AppManagedSparkleUpdateEffect] = []
+
+    switch event {
+    case .start(let mode):
+      state.startSession(
+        mode: mode,
+        retryAttemptNumber: 0,
+        remainingRetryBudget: AppManagedSparkleUserDriverPolicy.silentFailureRetryBudget(for: mode)
+      )
+      effects.append(.clearObservation)
+      effects.append(checkEffect(for: mode))
+
+    case .retryTimerFired(let retryRequest):
+      guard state.session.id == retryRequest.sourceSessionID else {
+        return (state, [])
+      }
+      let retryBudget: Int
+      switch retryRequest.kind {
+      case .silent:
+        retryBudget = retryRequest.remainingBudget
+      case .userRequested:
+        retryBudget = AppManagedSparkleUserDriverPolicy.silentFailureRetryBudget(
+          for: retryRequest.mode
+        )
+      }
+      state.startSession(
+        mode: retryRequest.mode,
+        retryAttemptNumber: retryRequest.attemptNumber,
+        remainingRetryBudget: retryBudget
+      )
+      effects.append(.clearObservation)
+      effects.append(checkEffect(for: retryRequest.mode))
+
+    case .observedUpdateMetadata(let isCriticalUpdate):
+      state.session.recordUpdateFound(isCriticalUpdate: isCriticalUpdate)
+
+    case .foundUpdate(let isCriticalUpdate, let isInformationOnlyUpdate):
+      state.session.recordUpdateFound(isCriticalUpdate: isCriticalUpdate)
+      switch AppManagedSparkleUserDriverPolicy.decision(
+        mode: state.session.mode,
+        isCriticalUpdate: isCriticalUpdate,
+        isInformationOnlyUpdate: isInformationOnlyUpdate
+      ) {
+      case .installWithoutPrompt:
+        state.session.recordReadyToInstall()
+        effects.append(.install)
+      case .askUser:
+        effects.append(.askUser)
+      case .dismiss:
+        effects.append(.dismiss)
+      }
+
+    case .userAcceptedUpdate:
+      state.session.recordReadyToInstall()
+      effects.append(.install)
+
+    case .userDismissedUpdate:
+      effects.append(.dismiss)
+
+    case .didNotFindUpdate:
+      if state.session.mode == .userInitiated {
+        effects.append(.showUpToDate)
+      }
+
+    case .downloadStarted:
+      state.session.recordDownloadStarted()
+
+    case .readyToInstall:
+      let shouldInstall = state.session.installWasOffered || state.session.criticalUpdateWasFound
+      if shouldInstall {
+        state.session.recordReadyToInstall()
+      } else {
+        debugAssertIllegalTransition("Sparkle reported ready-to-install before an install was offered.")
+      }
+      effects.append(shouldInstall ? .install : .dismiss)
+
+    case .installing:
+      state.session.recordInstalling()
+
+    case .checkFailed(let failure):
+      handleFailure(
+        failure,
+        representsUpdateAttempt: false,
+        state: &state,
+        effects: &effects
+      )
+
+    case .updateAttemptFailed(let failure):
+      handleFailure(
+        failure,
+        representsUpdateAttempt: true,
+        state: &state,
+        effects: &effects
+      )
+
+    case .userRequestedRetry(let sessionID):
+      guard state.session.id == sessionID else {
+        return (state, [])
+      }
+      let retryRequest = AppManagedSparkleFailureRetryRequest(
+        sourceSessionID: state.session.id,
+        mode: state.session.mode,
+        kind: .userRequested,
+        attemptNumber: state.session.retryAttemptNumber + 1,
+        remainingBudget: AppManagedSparkleUserDriverPolicy.silentFailureRetryBudget(
+          for: state.session.mode
+        ),
+        delayNanoseconds: 250_000_000
+      )
+      state.session.retryRequest = retryRequest
+      effects.append(.scheduleRetry(retryRequest))
+
+    case .finished:
+      if state.session.retryRequest == nil, state.session.phase != .failed {
+        state.session.recordFinished()
+      }
+    }
+
+    return (state, effects)
+  }
+
+  private static func handleFailure(
+    _ failure: AppManagedSparkleUpdateFailure,
+    representsUpdateAttempt: Bool,
+    state: inout AppManagedSparkleUpdateState,
+    effects: inout [AppManagedSparkleUpdateEffect]
+  ) {
+    guard !state.session.didHandleFailure, !state.session.didPresentFailure else {
+      return
+    }
+    state.session.didHandleFailure = true
+    let disposition = AppManagedSparkleUserDriverPolicy.failureDisposition(
+      for: failure,
+      mode: state.session.mode,
+      attemptedInstall: representsUpdateAttempt,
+      remainingSilentRetries: state.session.remainingRetryBudget
+    )
+    switch disposition {
+    case .ignore:
+      break
+    case .silentRetry(let remainingRetries, let delaySeconds):
+      state.session.recordFailed()
+      state.session.remainingRetryBudget = remainingRetries
+      let retryRequest = AppManagedSparkleFailureRetryRequest(
+        sourceSessionID: state.session.id,
+        mode: state.session.mode,
+        kind: .silent,
+        attemptNumber: state.session.retryAttemptNumber + 1,
+        remainingBudget: remainingRetries,
+        delayNanoseconds: AppManagedSparkleUserDriverPolicy.retryDelayNanoseconds(
+          seconds: delaySeconds
+        )
+      )
+      state.session.retryRequest = retryRequest
+      effects.append(.scheduleRetry(retryRequest))
+    case .presentFailure:
+      state.session.recordFailed()
+      state.session.didPresentFailure = true
+      effects.append(.showSupportAlert(sessionID: state.session.id))
+    }
+  }
+
+  private static func checkEffect(for mode: AppManagedSparkleCheckMode) -> AppManagedSparkleUpdateEffect {
+    switch AppManagedSparkleUserDriverPolicy.checkInvocation(for: mode) {
+    case .foreground:
+      return .checkForeground
+    case .background:
+      return .checkBackground
+    }
+  }
+
+  private static func debugAssertIllegalTransition(_ message: String) {
+    #if DEBUG
+      assertionFailure(message)
+    #endif
+  }
+}
+
+private extension AppManagedSparkleUpdateState {
+  mutating func startSession(
+    mode: AppManagedSparkleCheckMode,
+    retryAttemptNumber: Int,
+    remainingRetryBudget: Int
+  ) {
+    nextSessionID += 1
+    session = AppManagedSparkleUpdateSession(
+      id: nextSessionID,
+      mode: mode,
+      phase: .checking,
+      retryAttemptNumber: retryAttemptNumber,
+      remainingRetryBudget: remainingRetryBudget
+    )
+  }
+}
+
+struct AppManagedSparkleTransitionEvidence: Equatable {
+  let sessionID: UInt64
+  let oldPhase: AppManagedSparkleUpdatePhase
+  let event: String
+  let newPhase: AppManagedSparkleUpdatePhase
+  let effects: [String]
+}
+
 @MainActor
 final class AppManagedSparkleUserDriver: NSObject, SPUUserDriver {
   private let policy: UpdateUserFacingPolicy
-  private var nextSessionID: UInt64 = 0
-  private var session = AppManagedSparkleUpdateSession(
-    id: 0,
-    mode: .automaticMandatory,
-    phase: .finished,
-    remainingSilentRetries: AppManagedSparkleUserDriverPolicy.silentFailureRetryBudget(
-      for: .automaticMandatory
-    )
-  )
+  private var reducerState = AppManagedSparkleUpdateState.initial
+  private(set) var transitionEvidence: [AppManagedSparkleTransitionEvidence] = []
 
   var currentCycleRepresentsUpdateAttempt: Bool {
-    session.failureRepresentsUpdateAttempt
+    reducerState.session.failureRepresentsUpdateAttempt
   }
 
   var currentSession: AppManagedSparkleUpdateSession {
-    session
+    reducerState.session
   }
 
   init(policy: UpdateUserFacingPolicy) {
@@ -585,42 +964,40 @@ final class AppManagedSparkleUserDriver: NSObject, SPUUserDriver {
     super.init()
   }
 
-  func prepareForMandatoryAutomaticCheck() {
-    beginUpdateSession(mode: .automaticMandatory, resetRetryBudget: true)
+  @discardableResult
+  func prepareForMandatoryAutomaticCheck() -> [AppManagedSparkleUpdateEffect] {
+    apply(.start(mode: .automaticMandatory))
   }
 
-  func prepareForUserInitiatedCheck() {
-    beginUpdateSession(mode: .userInitiated, resetRetryBudget: true)
+  @discardableResult
+  func prepareForUserInitiatedCheck() -> [AppManagedSparkleUpdateEffect] {
+    apply(.start(mode: .userInitiated))
   }
 
   func recordUpdateFound(isCriticalUpdate: Bool) {
-    session.recordUpdateFound(isCriticalUpdate: isCriticalUpdate)
+    apply(.observedUpdateMetadata(isCriticalUpdate: isCriticalUpdate))
   }
 
   func recordUpdateInstallationWillBegin() {
-    session.recordUpdateFound(isCriticalUpdate: true)
-    session.recordInstalling()
+    apply(.observedUpdateMetadata(isCriticalUpdate: true))
+    apply(.installing)
   }
 
-  func prepareForFailureRetry(_ retryRequest: AppManagedSparkleFailureRetryRequest) -> Bool {
-    guard session.id == retryRequest.sourceSessionID else {
-      return false
-    }
-    beginUpdateSession(
-      mode: retryRequest.mode,
-      resetRetryBudget: retryRequest.kind == .userRequested,
-      remainingSilentRetries: retryRequest.remainingSilentRetries
-    )
-    return true
+  func prepareForFailureRetry(
+    _ retryRequest: AppManagedSparkleFailureRetryRequest
+  ) -> [AppManagedSparkleUpdateEffect]? {
+    let effects = apply(.retryTimerFired(retryRequest))
+    return effects.isEmpty ? nil : effects
   }
 
   func finishUpdateSessionAndConsumeRetryRequest() -> AppManagedSparkleFailureRetryRequest? {
-    let retryRequest = session.retryRequest
-    session.retryRequest = nil
-    if retryRequest == nil, session.phase != .failed {
-      session.recordFinished()
+    let retryRequest = reducerState.session.retryRequest
+    if retryRequest != nil {
+      reducerState.session.retryRequest = nil
+      return retryRequest
     }
-    return retryRequest
+    apply(.finished)
+    return nil
   }
 
   func show(
@@ -641,26 +1018,11 @@ final class AppManagedSparkleUserDriver: NSObject, SPUUserDriver {
     state: SPUUserUpdateState,
     reply: @escaping (SPUUserUpdateChoice) -> Void
   ) {
-    switch AppManagedSparkleUserDriverPolicy.decision(
-      mode: session.mode,
+    let effects = apply(.foundUpdate(
       isCriticalUpdate: appcastItem.isCriticalUpdate,
       isInformationOnlyUpdate: appcastItem.isInformationOnlyUpdate
-    ) {
-    case .installWithoutPrompt:
-      recordUpdateFound(isCriticalUpdate: appcastItem.isCriticalUpdate)
-      session.recordReadyToInstall()
-      reply(.install)
-    case .askUser:
-      if confirmInstall(appcastItem) {
-        recordUpdateFound(isCriticalUpdate: appcastItem.isCriticalUpdate)
-        session.recordReadyToInstall()
-        reply(.install)
-      } else {
-        reply(.dismiss)
-      }
-    case .dismiss:
-      reply(.dismiss)
-    }
+    ))
+    replyWithEffects(effects, appcastItem: appcastItem, reply: reply)
   }
 
   func showUpdateReleaseNotes(with downloadData: SPUDownloadData) {
@@ -670,9 +1032,7 @@ final class AppManagedSparkleUserDriver: NSObject, SPUUserDriver {
   func showUpdateReleaseNotesFailedToDownloadWithError(_ error: Error) {}
 
   func showUpdateNotFoundWithError(_ error: Error) async {
-    if session.mode == .userInitiated {
-      presentAlert(title: "1Context is up to date.", message: "")
-    }
+    executeUserFacingEffects(apply(.didNotFindUpdate))
   }
 
   func showUpdaterError(_ error: Error) async {
@@ -680,7 +1040,7 @@ final class AppManagedSparkleUserDriver: NSObject, SPUUserDriver {
   }
 
   func showDownloadInitiated(cancellation: @escaping () -> Void) {
-    session.recordDownloadStarted()
+    apply(.downloadStarted)
   }
 
   func showDownloadDidReceiveExpectedContentLength(_ expectedContentLength: UInt64) {}
@@ -688,28 +1048,24 @@ final class AppManagedSparkleUserDriver: NSObject, SPUUserDriver {
   func showDownloadDidReceiveData(ofLength length: UInt64) {}
 
   func showDownloadDidStartExtractingUpdate() {
-    session.recordDownloadStarted()
+    apply(.downloadStarted)
   }
 
   func showExtractionReceivedProgress(_ progress: Double) {}
 
   func showReady(toInstallAndRelaunch reply: @escaping (SPUUserUpdateChoice) -> Void) {
-    let shouldInstall = session.installWasOffered || session.criticalUpdateWasFound
-    if shouldInstall {
-      session.recordReadyToInstall()
-    }
-    reply(shouldInstall ? .install : .dismiss)
+    replyWithEffects(apply(.readyToInstall), appcastItem: nil, reply: reply)
   }
 
   func showInstallingUpdate(
     withApplicationTerminated applicationTerminated: Bool,
     retryTerminatingApplication: @escaping () -> Void
   ) {
-    session.recordInstalling()
+    apply(.installing)
   }
 
   func showUpdateInstalledAndRelaunched(_ relaunched: Bool) async {
-    session.recordFinished()
+    apply(.finished)
     guard policy.postInstallMessageEnabled else { return }
     presentAlert(
       title: policy.postInstallTitle,
@@ -718,79 +1074,84 @@ final class AppManagedSparkleUserDriver: NSObject, SPUUserDriver {
   }
 
   func dismissUpdateInstallation() {
-    session.recordFinished()
+    apply(.finished)
   }
 
   func showUpdateInFocus() {}
 
   func handleFailureIfAppropriate(for error: Error) {
-    guard !session.didHandleFailure, !session.didPresentFailure else { return }
-    session.didHandleFailure = true
-    let attemptedInstall = currentCycleRepresentsUpdateAttempt
+    let event: AppManagedSparkleUpdateEvent = currentCycleRepresentsUpdateAttempt
+      ? .updateAttemptFailed(AppManagedSparkleUpdateFailure(error))
+      : .checkFailed(AppManagedSparkleUpdateFailure(error))
+    executeUserFacingEffects(apply(event))
+  }
 
-    let disposition = AppManagedSparkleUserDriverPolicy.failureDisposition(
-      for: error,
-      mode: session.mode,
-      attemptedInstall: attemptedInstall,
-      remainingSilentRetries: session.remainingSilentRetries
-    )
-    let nsError = error as NSError
-    sparkleUpdateLog.warning(
-      "Sparkle update cycle error sessionID=\(self.session.id, privacy: .public) mode=\(String(describing: self.session.mode), privacy: .public) phase=\(String(describing: self.session.phase), privacy: .public) attemptedInstall=\(attemptedInstall, privacy: .public) updateWasFound=\(self.session.updateWasFound, privacy: .public) criticalUpdateFound=\(self.session.criticalUpdateWasFound, privacy: .public) downloadBegan=\(self.session.downloadBegan, privacy: .public) installWasOffered=\(self.session.installWasOffered, privacy: .public) installBegan=\(self.session.installBegan, privacy: .public) domain=\(nsError.domain, privacy: .public) code=\(nsError.code, privacy: .public) disposition=\(String(describing: disposition), privacy: .public) description=\(nsError.localizedDescription, privacy: .public)"
-    )
+  private func replyWithEffects(
+    _ effects: [AppManagedSparkleUpdateEffect],
+    appcastItem: SUAppcastItem?,
+    reply: @escaping (SPUUserUpdateChoice) -> Void
+  ) {
+    for effect in effects {
+      switch effect {
+      case .install:
+        reply(.install)
+        return
+      case .dismiss:
+        reply(.dismiss)
+        return
+      case .askUser:
+        guard let appcastItem else {
+          reply(.dismiss)
+          return
+        }
+        if confirmInstall(appcastItem) {
+          replyWithEffects(apply(.userAcceptedUpdate), appcastItem: appcastItem, reply: reply)
+        } else {
+          replyWithEffects(apply(.userDismissedUpdate), appcastItem: appcastItem, reply: reply)
+        }
+        return
+      case .checkForeground, .checkBackground, .scheduleRetry, .showSupportAlert,
+           .showUpToDate, .clearObservation:
+        continue
+      }
+    }
+    reply(.dismiss)
+  }
 
-    switch disposition {
-    case .ignore:
-      return
-    case .silentRetry(let remainingRetries, let delaySeconds):
-      session.recordFailed()
-      session.remainingSilentRetries = remainingRetries
-      session.retryRequest = AppManagedSparkleFailureRetryRequest(
-        sourceSessionID: session.id,
-        mode: session.mode,
-        kind: .silent,
-        remainingSilentRetries: remainingRetries,
-        delayNanoseconds: AppManagedSparkleUserDriverPolicy.retryDelayNanoseconds(
-          seconds: delaySeconds
-        )
-      )
-    case .presentFailure:
-      session.recordFailed()
-      session.didPresentFailure = true
-      if presentFailureAlert(title: policy.failureTitle, message: policy.failureBody) {
-        session.retryRequest = AppManagedSparkleFailureRetryRequest(
-          sourceSessionID: session.id,
-          mode: session.mode,
-          kind: .userRequested,
-          remainingSilentRetries: AppManagedSparkleUserDriverPolicy.silentFailureRetryBudget(
-            for: session.mode
-          ),
-          delayNanoseconds: 250_000_000
-        )
+  private func executeUserFacingEffects(_ effects: [AppManagedSparkleUpdateEffect]) {
+    for effect in effects {
+      switch effect {
+      case .showUpToDate:
+        presentAlert(title: "1Context is up to date.", message: "")
+      case .showSupportAlert(let sessionID):
+        if presentFailureAlert(title: policy.failureTitle, message: policy.failureBody) {
+          _ = apply(.userRequestedRetry(sessionID: sessionID))
+        }
+      case .checkForeground, .checkBackground, .askUser, .install, .dismiss, .scheduleRetry,
+           .clearObservation:
+        continue
       }
     }
   }
 
-  private func beginUpdateSession(
-    mode: AppManagedSparkleCheckMode,
-    resetRetryBudget: Bool,
-    remainingSilentRetries: Int? = nil
-  ) {
-    nextSessionID += 1
-    let retryBudget: Int
-    if resetRetryBudget {
-      retryBudget = AppManagedSparkleUserDriverPolicy.silentFailureRetryBudget(for: mode)
-    } else if let remainingSilentRetries {
-      retryBudget = remainingSilentRetries
-    } else {
-      retryBudget = session.remainingSilentRetries
-    }
-    session = AppManagedSparkleUpdateSession(
-      id: nextSessionID,
-      mode: mode,
-      phase: .checking,
-      remainingSilentRetries: retryBudget
+  @discardableResult
+  private func apply(_ event: AppManagedSparkleUpdateEvent) -> [AppManagedSparkleUpdateEffect] {
+    let oldPhase = reducerState.session.phase
+    let result = AppManagedSparkleUpdateReducer.reduce(state: reducerState, event: event)
+    reducerState = result.state
+    let effectDescriptions = result.effects.map(\.logDescription)
+    let evidence = AppManagedSparkleTransitionEvidence(
+      sessionID: reducerState.session.id,
+      oldPhase: oldPhase,
+      event: event.logDescription,
+      newPhase: reducerState.session.phase,
+      effects: effectDescriptions
     )
+    transitionEvidence.append(evidence)
+    sparkleUpdateLog.info(
+      "Sparkle reducer transition sessionID=\(evidence.sessionID, privacy: .public) oldPhase=\(String(describing: evidence.oldPhase), privacy: .public) event=\(evidence.event, privacy: .public) newPhase=\(String(describing: evidence.newPhase), privacy: .public) effects=\(effectDescriptions.joined(separator: ","), privacy: .public) retryAttempt=\(self.reducerState.session.retryAttemptNumber, privacy: .public) remainingBudget=\(self.reducerState.session.remainingRetryBudget, privacy: .public)"
+    )
+    return result.effects
   }
 
   private func confirmInstall(_ appcastItem: SUAppcastItem) -> Bool {

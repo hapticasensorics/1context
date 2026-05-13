@@ -231,7 +231,10 @@ final class SparkleUpdateControllerTests: XCTestCase {
     XCTAssertEqual(retryRequest?.remainingSilentRetries, startingBudget - 1)
     XCTAssertEqual(driver.currentSession.phase, .failed)
 
-    XCTAssertEqual(driver.prepareForFailureRetry(try XCTUnwrap(retryRequest)), true)
+    XCTAssertEqual(
+      driver.prepareForFailureRetry(try XCTUnwrap(retryRequest)),
+      [.clearObservation, .checkBackground]
+    )
     XCTAssertNotEqual(driver.currentSession.id, sourceSessionID)
     XCTAssertEqual(driver.currentSession.mode, .automaticMandatory)
     XCTAssertEqual(driver.currentSession.phase, .checking)
@@ -247,7 +250,7 @@ final class SparkleUpdateControllerTests: XCTestCase {
 
     driver.prepareForUserInitiatedCheck()
 
-    XCTAssertFalse(driver.prepareForFailureRetry(retryRequest))
+    XCTAssertNil(driver.prepareForFailureRetry(retryRequest))
     XCTAssertEqual(driver.currentSession.mode, .userInitiated)
     XCTAssertEqual(driver.currentSession.phase, .checking)
   }
@@ -260,11 +263,15 @@ final class SparkleUpdateControllerTests: XCTestCase {
       sourceSessionID: driver.currentSession.id,
       mode: .userInitiated,
       kind: .userRequested,
-      remainingSilentRetries: 0,
+      attemptNumber: 1,
+      remainingBudget: 0,
       delayNanoseconds: 0
     )
 
-    XCTAssertTrue(driver.prepareForFailureRetry(retryRequest))
+    XCTAssertEqual(
+      driver.prepareForFailureRetry(retryRequest),
+      [.clearObservation, .checkForeground]
+    )
     XCTAssertEqual(driver.currentSession.mode, .userInitiated)
     XCTAssertEqual(
       driver.currentSession.remainingSilentRetries,
@@ -285,6 +292,97 @@ final class SparkleUpdateControllerTests: XCTestCase {
     driver.recordUpdateInstallationWillBegin()
     XCTAssertTrue(driver.currentSession.installBegan)
     XCTAssertEqual(driver.currentSession.phase, .installing)
+  }
+
+  func testReducerAutomaticCheckOnlyFailureRetriesThenQuietlyFinishes() throws {
+    var state = AppManagedSparkleUpdateState.initial
+    let budget = AppManagedSparkleUserDriverPolicy.silentFailureRetryBudget(
+      for: .automaticMandatory
+    )
+
+    XCTAssertEqual(
+      reduce(&state, .start(mode: .automaticMandatory)),
+      [.clearObservation, .checkBackground]
+    )
+
+    for attemptNumber in 1...budget {
+      let effects = reduce(&state, .checkFailed(failingSparkleUpdate()))
+      let retryRequest = try scheduledRetry(from: effects)
+      XCTAssertEqual(retryRequest.kind, .silent)
+      XCTAssertEqual(retryRequest.attemptNumber, attemptNumber)
+      XCTAssertEqual(retryRequest.remainingBudget, budget - attemptNumber)
+      XCTAssertEqual(state.session.phase, .failed)
+
+      XCTAssertEqual(
+        reduce(&state, .retryTimerFired(retryRequest)),
+        [.clearObservation, .checkBackground]
+      )
+      XCTAssertEqual(state.session.retryAttemptNumber, attemptNumber)
+      XCTAssertEqual(state.session.remainingRetryBudget, budget - attemptNumber)
+      XCTAssertEqual(state.session.phase, .checking)
+    }
+
+    XCTAssertEqual(reduce(&state, .checkFailed(failingSparkleUpdate())), [])
+    XCTAssertEqual(reduce(&state, .finished), [])
+    XCTAssertEqual(state.session.phase, .finished)
+    XCTAssertFalse(state.session.didPresentFailure)
+  }
+
+  func testReducerCriticalUpdateAttemptRetriesThenShowsSupportAlert() throws {
+    var state = AppManagedSparkleUpdateState.initial
+    let budget = AppManagedSparkleUserDriverPolicy.silentFailureRetryBudget(
+      for: .automaticMandatory
+    )
+
+    XCTAssertEqual(
+      reduce(&state, .start(mode: .automaticMandatory)),
+      [.clearObservation, .checkBackground]
+    )
+
+    for attemptNumber in 1...budget {
+      XCTAssertEqual(
+        reduce(&state, .foundUpdate(isCriticalUpdate: true, isInformationOnlyUpdate: false)),
+        [.install]
+      )
+      XCTAssertTrue(state.session.failureRepresentsUpdateAttempt)
+
+      let effects = reduce(&state, .updateAttemptFailed(failingSparkleUpdate()))
+      let retryRequest = try scheduledRetry(from: effects)
+      XCTAssertEqual(retryRequest.kind, .silent)
+      XCTAssertEqual(retryRequest.attemptNumber, attemptNumber)
+      XCTAssertEqual(retryRequest.remainingBudget, budget - attemptNumber)
+
+      XCTAssertEqual(
+        reduce(&state, .retryTimerFired(retryRequest)),
+        [.clearObservation, .checkBackground]
+      )
+    }
+
+    XCTAssertEqual(
+      reduce(&state, .foundUpdate(isCriticalUpdate: true, isInformationOnlyUpdate: false)),
+      [.install]
+    )
+    XCTAssertEqual(
+      reduce(&state, .updateAttemptFailed(failingSparkleUpdate())),
+      [.showSupportAlert(sessionID: state.session.id)]
+    )
+    XCTAssertEqual(state.session.phase, .failed)
+    XCTAssertTrue(state.session.didPresentFailure)
+  }
+
+  @MainActor
+  func testUserDriverRecordsReducerTransitionEvidence() {
+    let driver = AppManagedSparkleUserDriver(policy: .default)
+
+    XCTAssertEqual(
+      driver.prepareForMandatoryAutomaticCheck(),
+      [.clearObservation, .checkBackground]
+    )
+
+    XCTAssertEqual(driver.transitionEvidence.last?.oldPhase, .finished)
+    XCTAssertEqual(driver.transitionEvidence.last?.event, "start(mode:automaticMandatory)")
+    XCTAssertEqual(driver.transitionEvidence.last?.newPhase, .checking)
+    XCTAssertEqual(driver.transitionEvidence.last?.effects, ["clearObservation", "checkBackground"])
   }
 
   func testManualFailuresUseShorterSilentRetryBudget() {
@@ -354,5 +452,35 @@ final class SparkleUpdateControllerTests: XCTestCase {
         attemptedInstall: false
       ))
     }
+  }
+
+  private func failingSparkleUpdate() -> AppManagedSparkleUpdateFailure {
+    AppManagedSparkleUpdateFailure(NSError(domain: "SUSparkleErrorDomain", code: 2001))
+  }
+
+  private func reduce(
+    _ state: inout AppManagedSparkleUpdateState,
+    _ event: AppManagedSparkleUpdateEvent
+  ) -> [AppManagedSparkleUpdateEffect] {
+    let result = AppManagedSparkleUpdateReducer.reduce(state: state, event: event)
+    state = result.state
+    return result.effects
+  }
+
+  private func scheduledRetry(
+    from effects: [AppManagedSparkleUpdateEffect],
+    file: StaticString = #filePath,
+    line: UInt = #line
+  ) throws -> AppManagedSparkleFailureRetryRequest {
+    if effects.count == 1 {
+      switch effects[0] {
+      case .scheduleRetry(let retryRequest):
+        return retryRequest
+      default:
+        break
+      }
+    }
+    XCTFail("Expected one scheduled retry effect, got \(effects)", file: file, line: line)
+    throw NSError(domain: "SparkleUpdateControllerTests", code: 1)
   }
 }

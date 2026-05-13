@@ -1168,6 +1168,26 @@ Version train:
   public release audit, self-hosted Mac update proof, and final installed-app
   screenshots/evidence.
 
+Architecture operating principle:
+
+Formalize the workflows that can hurt users; keep the rest plain. Decision
+machines should own product policy and emit explicit effects. Adapters should
+translate platform APIs into events and execute effects without inventing
+policy. User copy stays small and human; logs and proof artifacts carry the
+technical detail.
+
+- [x] Apply this principle to the updater first, because it is asynchronous,
+  user-visible, release-critical, and expensive to debug after the fact.
+- [ ] Apply the same reducer shape to setup permissions when the next
+  permission-surface change ships.
+- [ ] Apply the same reducer shape to runtime start/stop and local-web helper
+  repair after the updater release train is proven.
+- [ ] Add package/release allowlists for every shipping boundary that still
+  relies on absence checks instead of explicit allowed contents.
+- [ ] Make the current blessed version machine-checkable across `VERSION`,
+  `release/update-policy.toml`, appcast, GitHub release assets, packaged app,
+  installed app, and release docs.
+
 Rawls maximal updater plan:
 
 - [x] Replace `AppManagedSparkleUserDriver` loose booleans with an
@@ -1179,7 +1199,25 @@ Rawls maximal updater plan:
   budget, update-found, download, ready-to-install, installing, failure, and
   retry-request state. Focused proof:
   `swift test --package-path macos --filter SparkleUpdateControllerTests`
-  passed 19 tests.
+  passed 23 tests.
+- [x] Put updater policy behind a pure reducer and keep the Sparkle driver as a
+  thin adapter.
+  Evidence: `AppManagedSparkleUpdateReducer.reduce(state:event:)` now owns
+  `start`, `retryTimerFired`, update-found, download, install, check-failure,
+  update-attempt-failure, user retry, and finish decisions as
+  `State + Event -> State + Effect`. `SparkleUpdateController` executes the
+  effects, and `AppManagedSparkleUserDriver` translates Sparkle callbacks into
+  reducer events.
+- [x] Make updater effects explicit and testable.
+  Evidence: update effects are now explicit values:
+  `checkForeground`, `checkBackground`, `askUser`, `install`, `dismiss`,
+  `scheduleRetry`, `showSupportAlert`, `showUpToDate`, and
+  `clearObservation`; reducer tests assert effect sequences directly.
+- [x] Log reducer transitions as structured operator evidence.
+  Evidence: `AppManagedSparkleTransitionEvidence` records `sessionID`,
+  `oldPhase`, `event`, `newPhase`, and `effects`, and the adapter writes the
+  same transition fields to the Sparkle update log. Test
+  `testUserDriverRecordsReducerTransitionEvidence` passed.
 - [x] Give every update session a generation ID; delayed retry tasks must carry
   the generation and be ignored if a newer session exists.
   Evidence: `AppManagedSparkleFailureRetryRequest` carries
@@ -1270,6 +1308,14 @@ Descartes maximal release-delivery plan:
   Evidence: `scripts/test-release-proof-request.sh` passed after adding a
   mocked watch/download path, artifact proof, `--download-artifacts` requires
   `--watch`, and ambiguous matching workflow runs fail closed.
+- [x] Harden DMG creation against transient `hdiutil create` resource-busy
+  failures in CI.
+  Evidence: `scripts/create-macos-dmg.sh` now creates the compressed DMG at an
+  isolated temp output path, retries `hdiutil create` up to three times, then
+  moves the completed image into `dist`. Local proof:
+  `ALLOW_UNNOTARIZED=1 NOTARIZE=0 GENERATE_SPARKLE_APPCAST=1
+  ./scripts/package-macos-release.sh` passed and produced
+  `dist/1Context-0.1.63-macos-arm64.dmg`.
 - [ ] Commit, push, tag, run the release workflow, audit `latest/download`,
   then dispatch and download the self-hosted `0.1.64 -> 0.1.65` proof.
 
@@ -1309,7 +1355,7 @@ Closed-loop proof plan:
 
 - [x] `swift test --package-path macos` passes after the updater-session
   refactor and shipped-surface cleanup.
-  Evidence: `swift test --package-path macos` passed, 125 tests.
+  Evidence: `swift test --package-path macos` passed, 128 tests.
 - [x] `cd memory-core && uv run --with pytest pytest` passes after wiki manifest
   and family-surface changes.
   Evidence: `uv run --with pytest pytest` passed, 98 tests.
@@ -1324,7 +1370,8 @@ Closed-loop proof plan:
   keychain-backed Sparkle public key into the local build; package smoke and
   `scripts/check-update-policy.sh --appcast dist/sparkle-updates/appcast.xml`
   passed. Latest local proof rebuilt the real `0.1.63` bundle after fixture
-  Sparkle smokes, then package smoke and appcast policy validation passed again.
+  Sparkle smokes and the reducer refactor, then package smoke and appcast
+  policy validation passed again.
 - [x] Local Sparkle smokes prove automatic mandatory success, check-only
   silence, attempted-update failure after retries, and `Try Again`.
   Evidence: local Sparkle smokes passed for mandatory success, broken-appcast
