@@ -592,6 +592,16 @@ to be `0.1.66`, then running
 `scripts/release-train.sh validate/package/publish/prove/audit/bless` from that
 clean tag.
 
+Evidence, 2026-05-13: prepared `0.1.66` release metadata for the next clean
+tag: `VERSION`, `Core.swift`, `release/release.toml`, `RELEASE_NOTES.md`, and
+the self-hosted proof workflow default now agree on `0.1.65 -> 0.1.66`.
+Proof: `./scripts/check-version-consistency.sh`,
+`./scripts/release-manifest.py validate`, `swift test --package-path macos`,
+`./scripts/test.sh`, `./scripts/test-release-train.sh`,
+`./scripts/release-train.sh prove --dry-run`,
+`./scripts/package-macos-smoke.sh`, `git diff --check`, and packaged
+`1context-cli --version` reporting `0.1.66`.
+
 ### 13. Exit
 
 - [x] No documented production release path exists except
@@ -615,8 +625,5 @@ clean tag.
 
 ## Immediate Next Step
 
-Prepare the next clean tagged release, expected `0.1.66`, from current `main`.
-Update the release manifest, `VERSION`, `Core.swift`, release notes, and proof
-workflow defaults together; tag the clean tree; then run the greenfield release
-train end to end: `validate`, `package`, `publish`, `prove`, `audit`, and
-`bless`.
+Tag the clean `0.1.66` tree, then run the greenfield release train end to end:
+`validate`, `package`, `publish`, `prove`, `audit`, and `bless`.

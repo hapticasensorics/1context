@@ -9,7 +9,7 @@ on:
       old_version:
         description: "Installed version N to lay down before proving the staged update."
         required: true
-        default: "0.1.64"
+        default: "0.1.65"
       new_version:
         description: "Expected version N+1. Defaults to the checked-out VERSION file."
         required: false

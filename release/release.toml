@@ -1,14 +1,14 @@
 schema_version = "1context.release.v1"
-version = "0.1.65"
-previous_version = "0.1.64"
-tag = "v0.1.65"
+version = "0.1.66"
+previous_version = "0.1.65"
+tag = "v0.1.66"
 update_class = "mandatory"
 approved_by = "paul"
-reason = "blessed_professional_update_train"
-reason_detail = "0.1.65 is the blessed professional-app release for the Sparkle update and permissions setup flywheel. It proves the manifest-driven protected release train, signed/notarized publication, redacted evidence, and public-feed automatic update from 0.1.64."
-minimum_autoupdate_version = "0.1.64"
+reason = "delete_bloat_release_train"
+reason_detail = "0.1.66 is the destructive cleanup release for the Sparkle-era app. It removes obsolete public CLI control-plane commands, keeps setup and updates app-owned, and proves the smaller manifest-driven release train from 0.1.65."
+minimum_autoupdate_version = "0.1.65"
 minimum_update_version = ""
-critical_update_version = "0.1.65"
+critical_update_version = "0.1.66"
 public_appcast_url = "https://github.com/hapticasensorics/1context/releases/latest/download/appcast.xml"
 stable_dmg_name = "1Context.dmg"
 required_proofs = [
@@ -69,78 +69,78 @@ forbidden_patterns = [
 
 [[updater_matrix]]
 case = "already_current_manual_check"
-expected_version = "0.1.65"
+expected_version = "0.1.66"
 proof = "self_hosted_gui_update"
 description = "Manual Check for Updates on an already-current install reports current state without release notes."
 
 [[updater_matrix]]
 case = "mandatory_automatic_success"
-expected_version = "0.1.65"
+expected_version = "0.1.66"
 proof = "self_hosted_gui_update"
 description = "Mandatory automatic update succeeds without a release-notes prompt or installer click-through."
 
 [[updater_matrix]]
 case = "optional_prompt"
-expected_version = "0.1.65"
+expected_version = "0.1.66"
 proof = "sparkle_fixture"
 description = "Optional policy displays the approved prompt and installs after explicit confirmation."
 
 [[updater_matrix]]
 case = "broken_appcast_quiet_failure"
-expected_version = "0.1.64"
+expected_version = "0.1.65"
 proof = "sparkle_fixture"
 description = "Broken appcast discovery fails quietly without a support alert."
 
 [[updater_matrix]]
 case = "missing_dmg_retry_support_alert"
-expected_version = "0.1.64"
+expected_version = "0.1.65"
 proof = "sparkle_fixture"
 description = "Missing DMG exposes retry/support UI only after the user-requested update attempt fails."
 
 [[updater_matrix]]
 case = "bad_signature"
-expected_version = "0.1.64"
+expected_version = "0.1.65"
 proof = "sparkle_fixture"
 description = "Bad Sparkle EdDSA signature refuses install and leaves the prior version intact."
 
 [[updater_matrix]]
 case = "interrupted_download"
-expected_version = "0.1.64"
+expected_version = "0.1.65"
 proof = "sparkle_fixture"
 description = "Interrupted download leaves the app usable and retryable."
 
 [[updater_matrix]]
 case = "try_again_repair"
-expected_version = "0.1.65"
+expected_version = "0.1.66"
 proof = "sparkle_fixture"
 description = "Try Again after a transient failure completes the same update."
 
 [[updater_matrix]]
 case = "offline_network"
-expected_version = "0.1.64"
+expected_version = "0.1.65"
 proof = "sparkle_fixture"
 description = "Offline network check avoids noisy alerts and leaves runtime running."
 
 [[updater_matrix]]
 case = "stale_sparkle_defaults"
-expected_version = "0.1.65"
+expected_version = "0.1.66"
 proof = "self_hosted_gui_update"
 description = "Stale Sparkle defaults are repaired before final feed restoration."
 
 [[updater_matrix]]
 case = "old_app_with_new_appcast"
-expected_version = "0.1.65"
+expected_version = "0.1.66"
 proof = "self_hosted_gui_update"
 description = "Previous public build updates through the new public appcast."
 
 [[updater_matrix]]
 case = "app_relaunch_recovery"
-expected_version = "0.1.65"
+expected_version = "0.1.66"
 proof = "self_hosted_gui_update"
 description = "Relaunch after update keeps menu, CLI, runtime, and local web steady."
 
 [[updater_matrix]]
 case = "login_restart_recovery"
-expected_version = "0.1.65"
+expected_version = "0.1.66"
 proof = "real_uninstall_reinstall"
 description = "Login/restart recovery preserves setup state and avoids runtime pause."
