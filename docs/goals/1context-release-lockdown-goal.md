@@ -22,13 +22,17 @@ templates and user content; it should not expose this release checklist at
 `/goal` or copy it into `wiki-site/current`. Evidence and checklist updates now
 belong in this docs file and companion files under `docs/goals/`.
 
-Current status as of 2026-05-13: the release-lockdown work is active again.
-The development goal is correctly repo-local under `docs/goals/`, updater
-policy now lives behind a pure reducer, local and GitHub CI proof passed on
-commit `3877739`, and the self-hosted Mac runner is online and idle again.
-GitHub latest is still `v0.1.62`; the next unblocked proof step is to publish
-the signed/notarized `v0.1.63` repair release, audit the public assets, then
-dispatch and collect the self-hosted `0.1.62 -> 0.1.63` update proof.
+Current status as of 2026-05-13: `v0.1.63` is published as the mandatory
+updater-health repair. The public release assets passed the latest/download
+audit, and the self-hosted Mac proof updated an installed `0.1.62` app to
+`0.1.63` through the public Sparkle feed, then held steady for 120 seconds.
+The remaining release-systems gap is that the protected release workflow can
+reach the self-hosted runner but that runner account cannot currently see the
+Developer ID identity or Sparkle EdDSA key, so `v0.1.63` was published with the
+local production release path from the `paulhan` keychain. The next proof step
+is to repair that runner credential visibility, then continue the `0.1.64` /
+`0.1.65` release train using the same public-asset audit and real-Mac update
+proof pattern.
 
 1Context should behave like a professional macOS app whose job is to remember
 user-directed work. The app is not a shy utility hiding its needs. When a
@@ -1081,10 +1085,20 @@ Descartes: release delivery and CI proof closure.
   the tag cannot be cut without them.
   Evidence: commit `92e77f0` (`Lock down Sparkle release flywheel`) is pushed
   to `origin/main`, and GitHub CI passed for that SHA.
-- [ ] Run the GitHub release workflow on `v0.1.63`, then verify the hosted
-  release audit passes against the public latest appcast.
-- [ ] Dispatch the self-hosted Mac proof for `0.1.62 -> 0.1.63` and download
+- [x] Publish `v0.1.63`, then verify the hosted release audit passes against
+  the public latest appcast.
+  Evidence: `v0.1.63` was published at
+  <https://github.com/hapticasensorics/1context/releases/tag/v0.1.63>; local
+  production packaging signed, notarized, and stapled the app and DMG.
+  `scripts/audit-github-release-assets.sh v0.1.63` passed against the public
+  latest appcast, versioned DMG, stable `1Context.dmg`, and checksums. Note:
+  the protected release workflow reached the runner but failed on missing
+  runner-visible signing/Sparkle credentials; that credential repair remains
+  open under the `0.1.65` release-delivery plan.
+- [x] Dispatch the self-hosted Mac proof for `0.1.62 -> 0.1.63` and download
   the evidence artifact.
+  Evidence: run `25778409591` passed, and its artifact is downloaded under
+  `dist/self-hosted-run-25778409591/`.
 
 Ramanujan: shipped wiki and product-surface closure.
 
@@ -1272,13 +1286,19 @@ Rawls maximal updater plan:
 
 Descartes maximal release-delivery plan:
 
-- [x] Configure hosted release signing/notarization/Sparkle secrets or move the
-  production release workflow to the self-hosted Mac runner; do not allow a
-  hosted workflow that is structurally unable to release.
-  Evidence: GitHub repo secrets are empty, so `.github/workflows/release.yml`
-  now runs the notarized production release on the protected self-hosted Mac
-  runner and uses the runner keychain/Sparkle key path instead of missing
-  hosted secrets. `actionlint` passed.
+- [x] Move the production release workflow to the protected self-hosted Mac
+  runner instead of pretending hosted GitHub runners can sign/notarize without
+  local credentials.
+  Evidence: `.github/workflows/release.yml` targets
+  `self-hosted`, `macOS`, `ARM64`, and `onecontext-update-runner`, guarded by
+  the `onecontext-update-runner` environment. `actionlint` passed.
+- [ ] Repair self-hosted release-runner credential visibility so the release
+  workflow can publish without a local manual upload fallback.
+  Current finding: release run `25778208043` got past checkout, Caddy install,
+  and tool-version checks, then failed in `Check local release credentials`
+  because the runner account could not see a Developer ID Application identity
+  or the Sparkle EdDSA key for `com.haptica.1context.sparkle`. The local
+  `paulhan` keychain can see both and produced the `v0.1.63` release.
 - [x] Keep release workflow execution tag-only and fail before packaging unless
   `GITHUB_REF == refs/tags/v$(VERSION)`.
   Evidence: `.github/workflows/release.yml` checks the tag before package
@@ -1328,8 +1348,27 @@ Descartes maximal release-delivery plan:
   Evidence: `pauls-macbook-air-1context-update` is `online`, `busy=false`,
   with labels `self-hosted`, `macOS`, `ARM64`, and
   `onecontext-update-runner`.
-- [ ] Tag and run the `v0.1.63` release workflow, audit `latest/download`, then
-  dispatch and download the self-hosted `0.1.62 -> 0.1.63` proof.
+- [x] Remove release-workflow dependence on runner-global Caddy installation.
+  Evidence: `.github/workflows/release.yml` now installs Caddy when missing
+  before the tool-version preflight; release run `25778208043` passed the
+  Caddy install and tool-version steps.
+- [x] Publish and audit signed/notarized `v0.1.63` release assets.
+  Evidence: the local production release path generated a notarized/stapled
+  app and DMG, uploaded `1Context-0.1.63-macos-arm64.dmg`, the versioned
+  checksum, stable `1Context.dmg`, stable checksum, and `appcast.xml` to
+  <https://github.com/hapticasensorics/1context/releases/tag/v0.1.63>.
+  `scripts/audit-github-release-assets.sh v0.1.63` passed with four
+  latest/download probes. Release DMG SHA-256:
+  `ebc41e863bf3b715633ec676fc2abddae291a6d5d9db68a9767bdc4375d4ac23`.
+- [x] Dispatch, pass, and download the self-hosted `0.1.62 -> 0.1.63` update
+  proof.
+  Evidence: GitHub Actions run `25778409591` passed. Artifact downloaded to
+  `dist/self-hosted-run-25778409591/`; `result.txt` records
+  `result=passed`, `old_version=0.1.62`, `new_version=0.1.63`,
+  `update_class=mandatory`, and the final feed as the public latest appcast.
+  `version-final.txt` records `plist=0.1.63` and `cli=0.1.63`; the log records
+  Sparkle replacing `0.1.62` with `0.1.63` within seven seconds and a
+  120-second steady-state proof.
 - [ ] Repeat the same public release audit and self-hosted proof pattern for
   the final `0.1.64 -> 0.1.65` hop.
 
@@ -1458,7 +1497,7 @@ Closed-loop proof plan:
   engine.
   Current finding: the public `hapticasensorics/homebrew-tap` cask still has
   `auto_updates true`, but it points at `0.1.51` while GitHub latest is
-  `0.1.62`; keep this open until the tap is updated or the final `0.1.65` cask
+  `0.1.63`; keep this open until the tap is updated or the final `0.1.65` cask
   audit proves Homebrew installs a Sparkle-capable baseline.
 - [x] Promote the updater check-noise repair into mandatory `0.1.63` release
   metadata.
@@ -1470,7 +1509,11 @@ Closed-loop proof plan:
   `scripts/check-version-consistency.sh`, `scripts/check-update-policy.sh`,
   `scripts/test-release-proof-request.sh`, and `scripts/test-upgrade-paths.sh`
   passed with the new `0.1.62 -> 0.1.63` proof inputs.
-- [ ] Prove remote Sparkle update into `0.1.63`.
+- [x] Prove remote Sparkle update into `0.1.63`.
+  Evidence: self-hosted run `25778409591` installed `0.1.62`, used the public
+  latest appcast, observed `plist=0.1.62 cli=0.1.62` at
+  `2026-05-13T04:32:22Z`, then observed `plist=0.1.63 cli=0.1.63` at
+  `2026-05-13T04:32:29Z`.
 
 ##### 0.1.64 Restart, Login, and Release Train Rehearsal
 
@@ -1481,13 +1524,16 @@ Closed-loop proof plan:
   explicitly stops remembering.
 - [ ] Run a full release rehearsal where the only accepted proof is installed
   app behavior after remote update.
-- [x] Configure the release workflow with signing/notarization secrets or move
+- [ ] Configure the release workflow with signing/notarization secrets or move
   production signing to the self-hosted Mac runner, so future blessed releases
   do not require a local manual upload fallback.
   Evidence: `.github/workflows/release.yml` now targets the protected
   self-hosted Mac runner for production release packaging/signing/notarization,
   and `actionlint`, `scripts/test-release-proof-request.sh`, and GitHub CI for
-  commit `92e77f0` passed.
+  commit `92e77f0` passed. Current gap: release run `25778208043` proved the
+  runner path starts but cannot yet see signing/Sparkle credentials, so this
+  stays open until the release workflow itself publishes a signed/notarized
+  release without local fallback.
 - [x] Validate and consolidate the release docs so stale professional-app
   milestone/checklist pages no longer compete with the current release runbook.
   Evidence: `docs/macos-release-runbook.md`, `docs/README.md`, and the updated
