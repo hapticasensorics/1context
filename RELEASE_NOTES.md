@@ -1,9 +1,9 @@
-# 1Context v0.1.67 Public Preview
+# 1Context v0.1.68 Public Preview
 
 This release includes:
 
-- `0.1.67` starts the release-factory train for faster dev, prototype,
-  private, and official release paths.
+- `0.1.68` proves the private release-factory update hop after `0.1.67`
+  established the private artifact lane.
 - Release policy now defines build channels, timing budgets, and private
   appcast facts in `release/release.toml`.
 - The old `release-train.sh package` path is deleted; official release builds
