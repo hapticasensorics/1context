@@ -1,14 +1,13 @@
-# 1Context v0.1.64 Public Preview
+# 1Context v0.1.65 Public Preview
 
 This release includes:
 
-- `0.1.64` is a mandatory release-workflow rehearsal.
-- The protected self-hosted release runner now has an explicit release keychain
-  preflight for Developer ID signing, Sparkle signing, and notarization.
-- The release workflow can build the signed/notarized app and publish the
-  Sparkle appcast assets without relying on a local manual upload fallback.
-- Mandatory updates remain quiet and policy-controlled.
+- `0.1.65` is the blessed professional-app release for this update train.
+- Releases now run through a manifest-driven protected release path with
+  signing, notarization, asset audit, runner attestation, and redacted evidence.
+- Mandatory Sparkle updates remain quiet and automatic.
 - Manual `Check for Updates` remains a normal user action.
+- The app keeps the existing memory runtime usable while update work happens.
 
 Install:
 

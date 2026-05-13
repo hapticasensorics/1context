@@ -83,11 +83,13 @@ grep -q "Release tree is dirty" "$TMP_DIR/dirty-tree.out"
 helper_repo="$TMP_DIR/helper-repo"
 mkdir -p "$helper_repo/scripts"
 git -C "$helper_repo" init -q
-cat > "$helper_repo/scripts/main.sh" <<'SH'
-#!/usr/bin/env bash
-ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-source "$ROOT/scripts/helper.sh"
-SH
+{
+  printf '%s\n' '#!/usr/bin/env bash'
+  # shellcheck disable=SC2016
+  printf '%s\n' 'ROOT="$(cd "$(dirname "$0")/.." && pwd)"'
+  # shellcheck disable=SC2016
+  printf '%s%s\n' 'source "$ROOT/scripts/' 'helper.sh"'
+} > "$helper_repo/scripts/main.sh"
 chmod +x "$helper_repo/scripts/main.sh"
 git -C "$helper_repo" add scripts/main.sh
 git -C "$helper_repo" -c user.name=Test -c user.email=test@example.com commit -qm init
