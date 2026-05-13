@@ -4,8 +4,10 @@ This is the current operating doc for shipping the 1Context macOS app.
 
 ## Current Truth
 
-- Current release candidate: `0.1.63`.
-- Latest public release before this cut: `0.1.62`.
+- Current release candidate: `0.1.66`.
+- Latest public release before this cut: `0.1.65`.
+- Release truth: `release/release.toml`; do not copy version, update class, or
+  appcast facts into docs or workflow inputs by hand.
 - Normal install channel: signed, notarized, stapled `1Context.dmg` from GitHub
   Releases.
 - Secondary install channel: Homebrew cask in `hapticasensorics/homebrew-tap`.
@@ -88,10 +90,12 @@ Update failed. Please contact support at paul@haptica.ai.
 
 ## Self-hosted Mac Proof
 
-The real-Mac update runner is an escalation gate, not a routine release step.
-Use it when the update hop itself matters: mandatory releases, Sparkle metadata
-changes, install/setup/LaunchAgent/local-web changes, update residue repairs, or
-launch candidates.
+The manifest decides when real-Mac proof is a release gate. If
+`release/release.toml` lists `self_hosted_gui_update` in `required_proofs`, the
+release is not blessed until the protected runner proves the hop and downloads
+its normalized proof JSON. Use the runner for mandatory releases, Sparkle
+metadata changes, install/setup/LaunchAgent/local-web changes, update residue
+repairs, or launch candidates.
 
 See [ci/self-hosted-mac-runner.md](ci/self-hosted-mac-runner.md).
 
@@ -102,8 +106,10 @@ Routine request:
 ./scripts/release-train.sh prove
 ```
 
-The wrapper resolves the new version, update class, public appcast URL, and
-mandatory old-version baseline from `release/release.toml`.
+The wrapper resolves the old version, new version, update class, public appcast
+URL, timeout budget, artifact retention, and required proof matrix from
+`release/release.toml`. The workflow dispatch form should ask only for a short
+human reason.
 
 ## Clean-machine Acceptance
 
@@ -121,5 +127,7 @@ not more planning docs:
 The normalized release proof should own this evidence. Keep any exploratory
 local checks temporary until they become `release-train.sh prove` proof JSON.
 
-Track detailed release-train work in
-[goals/1context-release-lockdown-goal.md](goals/1context-release-lockdown-goal.md).
+Track current release-train cleanup in
+[goals/1context-delete-bloat-goal.md](goals/1context-delete-bloat-goal.md).
+Older Sparkle transition evidence is archived at
+[goals/archive/1context-release-lockdown-goal.md](goals/archive/1context-release-lockdown-goal.md).

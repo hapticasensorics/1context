@@ -6,7 +6,6 @@ final class AppSetupTests: XCTestCase {
   func testBlockedSetupActionsUseSpecificSetupMessages() {
     XCTAssertEqual(OneContextBlockedSetupAction.openWiki.setupMessage, "Finish setup to open your wiki.")
     XCTAssertEqual(OneContextBlockedSetupAction.refreshWiki.setupMessage, "Finish setup to refresh your wiki.")
-    XCTAssertEqual(OneContextBlockedSetupAction.startRemembering.setupMessage, "Finish setup to start 1Context.")
   }
 
   func testSetupContinuationResumesOpenWikiOnceAfterSetup() {
@@ -19,17 +18,6 @@ final class AppSetupTests: XCTestCase {
     XCTAssertEqual(message, "Finish setup to open your wiki.")
     XCTAssertEqual(action, .openWiki)
     XCTAssertNil(secondAction)
-    XCTAssertNil(continuation.pendingAction)
-  }
-
-  func testSetupContinuationKeepsStartAsRuntimeIntentInsteadOfReplayingButtonPress() {
-    var continuation = OneContextSetupContinuation()
-
-    let message = continuation.block(.startRemembering)
-    let action = continuation.consumeResumableActionAfterSetup()
-
-    XCTAssertEqual(message, "Finish setup to start 1Context.")
-    XCTAssertNil(action)
     XCTAssertNil(continuation.pendingAction)
   }
 

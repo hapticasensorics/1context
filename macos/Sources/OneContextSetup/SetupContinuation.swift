@@ -3,7 +3,6 @@ import Foundation
 public enum OneContextBlockedSetupAction: String, Codable, Equatable, Sendable {
   case openWiki = "open_wiki"
   case refreshWiki = "refresh_wiki"
-  case startRemembering = "start_remembering"
 
   public var setupMessage: String {
     switch self {
@@ -11,8 +10,6 @@ public enum OneContextBlockedSetupAction: String, Codable, Equatable, Sendable {
       return "Finish setup to open your wiki."
     case .refreshWiki:
       return "Finish setup to refresh your wiki."
-    case .startRemembering:
-      return "Finish setup to start 1Context."
     }
   }
 
@@ -20,8 +17,6 @@ public enum OneContextBlockedSetupAction: String, Codable, Equatable, Sendable {
     switch self {
     case .openWiki, .refreshWiki:
       return true
-    case .startRemembering:
-      return false
     }
   }
 }

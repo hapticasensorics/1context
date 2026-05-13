@@ -6,42 +6,6 @@ on:
       proof_reason:
         description: "Why this update hop deserves the real-Mac proof runner."
         required: true
-      old_version:
-        description: "Installed version N to lay down before proving the staged update."
-        required: true
-        default: "0.1.65"
-      new_version:
-        description: "Expected version N+1. Defaults to the checked-out VERSION file."
-        required: false
-      staging_appcast_url:
-        description: "Sparkle appcast URL that the installed N app is built to use."
-        required: true
-      update_class:
-        description: "Expected Sparkle update class."
-        required: true
-        default: "mandatory"
-        type: choice
-        options:
-          - mandatory
-          - optional
-      old_tag:
-        description: "GitHub release tag for N. Defaults to v<old_version>."
-        required: false
-      old_dmg_url:
-        description: "Optional direct DMG URL for N. Use a staging-feed N build for pre-public proofs."
-        required: false
-      update_timeout_seconds:
-        description: "Max seconds to wait for Sparkle to replace the app."
-        required: true
-        default: "420"
-      steady_state_seconds:
-        description: "Post-update steady-state probe duration."
-        required: true
-        default: "120"
-      artifact_retention_days:
-        description: "Days to keep proof artifacts."
-        required: true
-        default: "21"
 
 permissions:
   contents: read
@@ -72,37 +36,30 @@ jobs:
 
       - uses: actions/checkout@v6
 
-      - name: Resolve expected new version
-        id: versions
+      - name: Resolve release manifest
+        id: manifest
         shell: bash
         run: |
-          new_version="${{ inputs.new_version }}"
-          if [[ -z "$new_version" ]]; then
-            new_version="$(tr -d '[:space:]' < VERSION)"
-          fi
-          echo "new_version=$new_version" >> "$GITHUB_OUTPUT"
+          eval "$(./scripts/release-manifest.py export-env)"
+          {
+            echo "previous_version=$ONECONTEXT_RELEASE_PREVIOUS_VERSION"
+            echo "version=$ONECONTEXT_RELEASE_VERSION"
+            echo "update_class=$ONECONTEXT_RELEASE_UPDATE_CLASS"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Prove update
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
           ONECONTEXT_UPDATE_RUNNER_I_UNDERSTAND_DESTRUCTIVE: "1"
-          ONECONTEXT_OLD_VERSION: ${{ inputs.old_version }}
-          ONECONTEXT_NEW_VERSION: ${{ steps.versions.outputs.new_version }}
-          ONECONTEXT_OLD_TAG: ${{ inputs.old_tag }}
-          ONECONTEXT_OLD_DMG_URL: ${{ inputs.old_dmg_url }}
-          ONECONTEXT_STAGING_APPCAST_URL: ${{ inputs.staging_appcast_url }}
           ONECONTEXT_UPDATE_PROOF_REASON: ${{ inputs.proof_reason }}
-          ONECONTEXT_EXPECTED_UPDATE_CLASS: ${{ inputs.update_class }}
-          ONECONTEXT_UPDATE_PROOF_TIMEOUT_SECONDS: ${{ inputs.update_timeout_seconds }}
-          ONECONTEXT_STEADY_STATE_SECONDS: ${{ inputs.steady_state_seconds }}
         run: ./scripts/release-train.sh prove --runner-execute
 
       - name: Upload update proof artifacts
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: self-hosted-mac-update-proof-${{ inputs.old_version }}-to-${{ steps.versions.outputs.new_version }}
+          name: self-hosted-mac-update-proof-${{ steps.manifest.outputs.previous_version }}-to-${{ steps.manifest.outputs.version }}
           path: dist/self-hosted-update-proof/**
           if-no-files-found: warn
-          retention-days: ${{ inputs.artifact_retention_days }}
+          retention-days: 21

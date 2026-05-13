@@ -60,9 +60,10 @@ Future memory publication must enter through explicit app-owned artifacts:
 - no alternate owner for the canonical local URL
 
 Development and operator planning documents belong under `docs/`, not in the
-installed user's wiki. In particular, the release-lockdown checklist that used
-to live at `/goal` is now `docs/goals/1context-release-lockdown-goal.md`; normal
-`wiki-site/current` publishes must not expose it as `/goal`.
+installed user's wiki. The active release cleanup goal is
+`docs/goals/1context-delete-bloat-goal.md`, and historical Sparkle lockdown
+evidence is archived under `docs/goals/archive/`; normal `wiki-site/current`
+publishes must not expose either as `/goal`.
 
 This cleanup is a product boundary decision first. The repo may still carry
 working-tree implementation hardening while we decide when to promote it into a

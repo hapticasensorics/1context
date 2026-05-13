@@ -123,10 +123,11 @@ Measurement:
   the old developer-port local-web mode, runtime path env overrides, detached
   LaunchAgent bypasses, fixture uninstall/RPC stress harnesses, local-web setup
   path env overrides, menu perf env logging, the remaining shipped
-  `ONECONTEXT_*` product env hooks, and the obsolete public lifecycle/setup
-  CLI: 17 files and 7,724
+  `ONECONTEXT_*` product env hooks, the obsolete public lifecycle/setup CLI,
+  manifest-only release proof/docs cleanup, and the persistent desired-state
+  pause: 17 files and 7,558
   nonblank lines, a
-  53,585-line / 87.4%
+  53,751-line / 87.67%
   reduction from the baseline.
   This passes the 24,523-line 60% reduction target.
 
@@ -148,8 +149,8 @@ tranche is to make production packaging/proof enter through
   derivation, release notes policy, and post-install message policy into
   `release/release.toml` plus `scripts/release-manifest.py`.
 - [x] Remove the release-manifest validation dependency on
-  `docs/goals/1context-release-lockdown-goal.md`; docs must not be release
-  truth.
+  `docs/goals/archive/1context-release-lockdown-goal.md`; docs must not be
+  release truth.
 - [x] Decide whether `release/release.schema.json` is enforced or deleted. If
   kept, schema validation must run in the normal release train.
 - [x] Delete the fallback homegrown TOML parser in `scripts/release-manifest.py`
@@ -207,6 +208,10 @@ env.
   into `scripts/release-train.sh audit` or `scripts/release-manifest.py`.
 - [x] Change `.github/workflows/self-hosted-mac-update-proof.yml` to enter
   through `scripts/release-train.sh prove`.
+- [x] Collapse the self-hosted proof workflow dispatch form to manifest-only
+  release facts: humans provide `proof_reason`, and `scripts/release-train.sh`
+  supplies old version, new version, update class, appcast URL, timeout budget,
+  artifact retention, and proof matrix from `release/release.toml`.
 - [x] Absorb or move `scripts/self-hosted-update-proof.sh` under an internal
   implementation path that is not documented as a release command.
 - [x] Delete `scripts/collect-release-lockdown-evidence.sh`.
@@ -263,6 +268,8 @@ scripts, and workflows for the deleted public script paths.
 - [x] Delete public `--no-redact` diagnostic output from the product CLI.
 - [x] Replace any remaining product test hooks with internal harness fixtures
   outside the shipped app surface.
+- [x] Delete persistent runtime desired-state pause behavior so the app keeps
+  trying to remember unless the user quits or uninstalls.
 
 Evidence, 2026-05-13: removed `ONECONTEXT_VERSION_OVERRIDE`,
 `ONECONTEXT_SKIP_APP_INSTALL_PROMPT`, `ONECONTEXT_APP_INSTALL_DESTINATION`,
@@ -319,6 +326,14 @@ scripts still use explicit release env vars as operator tooling. Proof:
 `./scripts/test-release-train.sh`,
 `cd memory-core && uv run --with pytest pytest`, `git diff --check`, and
 `rg -n "ONECONTEXT_[A-Z0-9_]+" macos/Sources` returning no matches.
+
+Evidence, 2026-05-13: removed the persistent runtime pause path: deleted the
+`desired-state` file path, menu Start/Stop item, desired-state monitor,
+`RuntimeIntent`, `requestStop`, `shouldAutoStartRuntime`, and setup
+`startRemembering` continuation. Quit and uninstall can still stop processes,
+but normal app launch/setup now converges toward remembering. Proof:
+`swift test --package-path macos`, `./scripts/test.sh`, and the negative
+desired-state source scan in `scripts/test.sh`.
 
 ### 6. Local Web And Permissions Cleanup
 
@@ -410,7 +425,7 @@ operator script internals and preflights Local Wiki setup with redacted
 scripts/test.sh scripts/test-release-app-product-https.sh
 scripts/release/internal/self-hosted-update-proof.sh`, negative `rg` over the
 deleted CLI functions, and `scripts/measure-shipped-app-lines.sh` reporting
-7,724 shipped-app nonblank lines.
+7,558 shipped-app nonblank lines after the desired-state deletion.
 
 ### 9. Wiki Chat And Provider Deletion
 
@@ -489,6 +504,10 @@ baseline.
 Evidence, 2026-05-13: after collapsing the public CLI to support-only commands,
 `scripts/measure-shipped-app-lines.sh` reports 7,724 nonblank shipped-app lines,
 a 53,585-line / 87.4% reduction from baseline.
+
+Evidence, 2026-05-13: after the manifest-only release cleanup and persistent
+desired-state deletion, `scripts/measure-shipped-app-lines.sh` reports 7,558
+nonblank shipped-app lines, a 53,751-line / 87.67% reduction from baseline.
 
 ### 11. Dead Code, Assets, And Docs
 
@@ -631,6 +650,16 @@ Evidence, 2026-05-13: refreshed the local annotated `v0.1.66` tag to the latest
 proof-wiring commit `bc6d8ce`, rebuilt the clean detached release worktree, and
 re-ran `./scripts/release-train.sh validate` plus
 `./scripts/release-train.sh prove --dry-run` from that tag.
+
+Evidence, 2026-05-13: archived the historical Sparkle lockdown goal under
+`docs/goals/archive/`, rewrote stale release docs around `0.1.66` and the
+manifest-only release train, collapsed `.github/workflows/self-hosted-mac-update-proof.yml`
+so the only manual workflow input is `proof_reason`, and changed
+`scripts/build-macos-app.sh` so updater UI copy and Sparkle feed URL come from
+`release/release.toml` instead of caller-provided update-copy env defaults.
+Proof: `bash -n`, `python3 -m py_compile scripts/release-manifest.py`, and
+`scripts/test-release-train.sh` negative checks for old workflow inputs,
+deleted release fact dispatch flags, and packaging update-copy env overrides.
 
 ### 13. Exit
 

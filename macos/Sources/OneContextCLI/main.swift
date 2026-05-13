@@ -90,7 +90,6 @@ struct OneContextCLI {
     }
 
     print("\nRuntime:")
-    print("  Desired State: \(readTrimmed(paths.desiredStatePath) ?? "missing")")
     switch health {
     case .success(let runtime):
       print("  Health: OK")

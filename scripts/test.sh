@@ -48,6 +48,17 @@ grep -q "Unknown wiki subcommand: status" "$STATE_DIR/wiki-old-status.out"
 "$BIN_DIR/1context" diagnose | grep -q "Local Web"
 "$BIN_DIR/1context" diagnose | grep -q "Bundled Caddy Path"
 "$BIN_DIR/1context" diagnose | grep -q "Current Has Health"
+if "$BIN_DIR/1context" diagnose | grep -q "Desired State"; then
+  echo "diagnose must not expose the deleted runtime desired-state pause path" >&2
+  exit 1
+fi
+if rg -n 'desiredStatePath|desired-state|startStopItem|toggleRuntime|requestStop|shouldAutoStartRuntime|RuntimeIntent|startRemembering' \
+  "$ROOT/macos/Sources" "$ROOT/macos/Tests" > "$STATE_DIR/desired-state-leftovers.out"
+then
+  cat "$STATE_DIR/desired-state-leftovers.out" >&2
+  echo "persistent runtime pause/desired-state code should be deleted" >&2
+  exit 1
+fi
 if "$BIN_DIR/1context" diagnose --no-redact >"$STATE_DIR/no-redact.out" 2>&1; then
   echo "diagnose --no-redact should not be public CLI surface" >&2
   exit 1

@@ -395,11 +395,6 @@ release_prove() {
   local workflow="${ONECONTEXT_RELEASE_PROOF_WORKFLOW:-self-hosted-mac-update-proof.yml}"
   local ref="$TAG"
   local proof_reason="manifest-driven $UPDATE_CLASS Sparkle proof for 1Context $VERSION"
-  local update_timeout_seconds="${ONECONTEXT_RELEASE_PROOF_UPDATE_TIMEOUT_SECONDS:-420}"
-  local steady_state_seconds="${ONECONTEXT_RELEASE_PROOF_STEADY_STATE_SECONDS:-120}"
-  local artifact_retention_days="${ONECONTEXT_RELEASE_PROOF_ARTIFACT_RETENTION_DAYS:-21}"
-  local old_tag="${ONECONTEXT_RELEASE_PROOF_OLD_TAG:-}"
-  local old_dmg_url="${ONECONTEXT_RELEASE_PROOF_OLD_DMG_URL:-}"
 
   while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -431,26 +426,6 @@ release_prove() {
         proof_reason="${2:?}"
         shift 2
         ;;
-      --old-tag)
-        old_tag="${2:?}"
-        shift 2
-        ;;
-      --old-dmg-url)
-        old_dmg_url="${2:?}"
-        shift 2
-        ;;
-      --update-timeout-seconds)
-        update_timeout_seconds="${2:?}"
-        shift 2
-        ;;
-      --steady-state-seconds)
-        steady_state_seconds="${2:?}"
-        shift 2
-        ;;
-      --artifact-retention-days)
-        artifact_retention_days="${2:?}"
-        shift 2
-        ;;
       *)
         fail "Unknown prove argument: $1"
         ;;
@@ -459,19 +434,25 @@ release_prove() {
 
   if [[ "$mode" == "runner-execute" ]]; then
     "$ROOT/scripts/check-release-manifest.sh" --require-clean
-    if [[ -n "${ONECONTEXT_OLD_VERSION:-}" && "$ONECONTEXT_OLD_VERSION" != "$PREVIOUS_VERSION" ]]; then
-      fail "Runner old_version (${ONECONTEXT_OLD_VERSION}) must match release/release.toml previous_version ($PREVIOUS_VERSION)."
-    fi
-    if [[ -n "${ONECONTEXT_NEW_VERSION:-}" && "$ONECONTEXT_NEW_VERSION" != "$VERSION" ]]; then
-      fail "Runner new_version (${ONECONTEXT_NEW_VERSION}) must match release/release.toml version ($VERSION)."
-    fi
-    if [[ -n "${ONECONTEXT_EXPECTED_UPDATE_CLASS:-}" && "$ONECONTEXT_EXPECTED_UPDATE_CLASS" != "$UPDATE_CLASS" ]]; then
-      fail "Runner update_class (${ONECONTEXT_EXPECTED_UPDATE_CLASS}) must match release/release.toml update_class ($UPDATE_CLASS)."
-    fi
-    export ONECONTEXT_OLD_VERSION="${ONECONTEXT_OLD_VERSION:-$PREVIOUS_VERSION}"
-    export ONECONTEXT_NEW_VERSION="${ONECONTEXT_NEW_VERSION:-$VERSION}"
-    export ONECONTEXT_STAGING_APPCAST_URL="${ONECONTEXT_STAGING_APPCAST_URL:-$PUBLIC_APPCAST_URL}"
-    export ONECONTEXT_EXPECTED_UPDATE_CLASS="${ONECONTEXT_EXPECTED_UPDATE_CLASS:-$UPDATE_CLASS}"
+    local forbidden_runner_env
+    for forbidden_runner_env in \
+      ONECONTEXT_OLD_VERSION \
+      ONECONTEXT_NEW_VERSION \
+      ONECONTEXT_OLD_TAG \
+      ONECONTEXT_OLD_DMG_URL \
+      ONECONTEXT_STAGING_APPCAST_URL \
+      ONECONTEXT_EXPECTED_UPDATE_CLASS \
+      ONECONTEXT_UPDATE_PROOF_TIMEOUT_SECONDS \
+      ONECONTEXT_STEADY_STATE_SECONDS
+    do
+      if [[ -n "${!forbidden_runner_env:-}" ]]; then
+        fail "Runner release facts must come from release/release.toml; unset $forbidden_runner_env."
+      fi
+    done
+    export ONECONTEXT_OLD_VERSION="$PREVIOUS_VERSION"
+    export ONECONTEXT_NEW_VERSION="$VERSION"
+    export ONECONTEXT_STAGING_APPCAST_URL="$PUBLIC_APPCAST_URL"
+    export ONECONTEXT_EXPECTED_UPDATE_CLASS="$UPDATE_CLASS"
     exec "$ROOT/scripts/release/internal/self-hosted-update-proof.sh"
   fi
 
@@ -498,20 +479,7 @@ release_prove() {
     --repo "$repo"
     --ref "$ref"
     -f "proof_reason=$proof_reason"
-    -f "old_version=$PREVIOUS_VERSION"
-    -f "new_version=$VERSION"
-    -f "staging_appcast_url=$PUBLIC_APPCAST_URL"
-    -f "update_class=$UPDATE_CLASS"
-    -f "update_timeout_seconds=$update_timeout_seconds"
-    -f "steady_state_seconds=$steady_state_seconds"
-    -f "artifact_retention_days=$artifact_retention_days"
   )
-  if [[ -n "$old_tag" ]]; then
-    cmd+=(-f "old_tag=$old_tag")
-  fi
-  if [[ -n "$old_dmg_url" ]]; then
-    cmd+=(-f "old_dmg_url=$old_dmg_url")
-  fi
 
   cat > "$transcript" <<SUMMARY
 release_proof_request:

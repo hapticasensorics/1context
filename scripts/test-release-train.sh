@@ -159,8 +159,23 @@ test ! -e "$ROOT/scripts/audit-github-release-assets.sh"
 test ! -e "$ROOT/scripts/self-hosted-update-proof.sh"
 test -x "$ROOT/scripts/release/internal/self-hosted-update-proof.sh"
 grep -q "./scripts/release-train.sh prove --runner-execute" "$ROOT/.github/workflows/self-hosted-mac-update-proof.yml"
+grep -q "proof_reason:" "$ROOT/.github/workflows/self-hosted-mac-update-proof.yml"
+if rg -n '^\s+(old_version|new_version|staging_appcast_url|update_class|old_tag|old_dmg_url|update_timeout_seconds|steady_state_seconds|artifact_retention_days):' \
+  "$ROOT/.github/workflows/self-hosted-mac-update-proof.yml" > "$TMP_DIR/proof-workflow-release-inputs.out"
+then
+  cat "$TMP_DIR/proof-workflow-release-inputs.out" >&2
+  echo "self-hosted proof workflow must expose proof_reason only; release facts come from release/release.toml." >&2
+  exit 1
+fi
 if grep -q "run: ./scripts/self-hosted-update-proof.sh" "$ROOT/.github/workflows/self-hosted-mac-update-proof.yml"; then
   echo "self-hosted workflow must enter proof execution through release-train.sh." >&2
+  exit 1
+fi
+if rg -n 'ONECONTEXT_(SPARKLE_FEED_URL|UPDATE_OPTIONAL_PROMPT_TITLE|UPDATE_OPTIONAL_PROMPT_BODY|UPDATE_FAILURE_TITLE|UPDATE_FAILURE_BODY|UPDATE_POST_INSTALL_MESSAGE_ENABLED|UPDATE_POST_INSTALL_TITLE|UPDATE_POST_INSTALL_BODY|SPARKLE_SHOW_RELEASE_NOTES_IN_UPDATE_WINDOW):-' \
+  "$ROOT/scripts/build-macos-app.sh" > "$TMP_DIR/build-update-env-overrides.out"
+then
+  cat "$TMP_DIR/build-update-env-overrides.out" >&2
+  echo "build-macos-app.sh must read updater UI policy from release/release.toml, not caller env defaults." >&2
   exit 1
 fi
 if rg -n '\b1context-cli (start|stop|quit|restart|status|logs|update|setup)\b|"\$CLI" (start|stop|quit|restart|status|logs|update|setup)\b|\$CLI (start|stop|quit|restart|status|logs|update|setup)\b' \
@@ -181,6 +196,11 @@ grep -q "old_version: $PREVIOUS_VERSION" "$TMP_DIR/prove-dry-run.out"
 grep -q "new_version: $VERSION" "$TMP_DIR/prove-dry-run.out"
 grep -q "workflow run self-hosted-mac-update-proof.yml" "$TMP_DIR/prove-dry-run.out"
 grep -q "proof_reason=fixture\\\\ proof" "$TMP_DIR/prove-dry-run.out"
+if grep -Eq -- '-f (old_version|new_version|staging_appcast_url|update_class|old_tag|old_dmg_url|update_timeout_seconds|steady_state_seconds|artifact_retention_days)=' "$TMP_DIR/prove-dry-run.out"; then
+  cat "$TMP_DIR/prove-dry-run.out" >&2
+  echo "release-train prove dispatch must pass only proof_reason to the workflow." >&2
+  exit 1
+fi
 
 if ONECONTEXT_RELEASE_EVIDENCE_DIR="$TMP_DIR/proof-evidence-bad-ref" \
   "$ROOT/scripts/release-train.sh" prove --dry-run --ref feature/nope > "$TMP_DIR/prove-bad-ref.out" 2>&1; then

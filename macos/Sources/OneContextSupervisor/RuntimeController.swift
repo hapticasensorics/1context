@@ -39,9 +39,9 @@ public final class RuntimeController {
       )
     case .failure(let error):
       return RuntimeSnapshot(
-        state: .stopped,
+        state: .needsAttention,
         lastErrorDescription: error.localizedDescription,
-        recommendedAction: "Start 1Context"
+        recommendedAction: "Open 1Context"
       )
     }
   }
@@ -56,7 +56,6 @@ public final class RuntimeController {
 
   public func start(startMenu: Bool) async throws -> (alreadyRunning: Bool, health: RuntimeHealth) {
     try ensureNormalUserLifecycle()
-    setStartDesired(true)
     if case .success(let health) = status() {
       if health.version == oneContextVersion {
         if startMenu { try await startMenuIfAvailable() }
@@ -78,7 +77,6 @@ public final class RuntimeController {
 
   public func requestStart(startMenu: Bool = true) async throws {
     try ensureNormalUserLifecycle()
-    setStartDesired(true)
     let current = status()
     if case .success(let health) = current, health.version == oneContextVersion {
       if startMenu { try await startMenuIfAvailable() }
@@ -95,29 +93,20 @@ public final class RuntimeController {
   }
 
   public func stop() async throws -> Bool {
-    try await stop(persistDesiredState: true)
+    try await stopRuntime()
   }
 
   public func stopForAppQuit() async throws -> Bool {
-    try await stop(persistDesiredState: false)
+    try await stopRuntime()
   }
 
-  private func stop(persistDesiredState: Bool) async throws -> Bool {
+  private func stopRuntime() async throws -> Bool {
     try ensureNormalUserLifecycle()
-    if persistDesiredState {
-      setStartDesired(false)
-    }
     let current = status()
     await launchAgent.stop()
     if case .failure = current { return false }
     try await waitForStopped()
     return true
-  }
-
-  public func requestStop() async throws {
-    try ensureNormalUserLifecycle()
-    setStartDesired(false)
-    await launchAgent.stop()
   }
 
   public func quit() async throws -> Bool {
@@ -146,21 +135,12 @@ public final class RuntimeController {
 
   public func restart(startMenu: Bool) async throws -> RuntimeHealth {
     try ensureNormalUserLifecycle()
-    setStartDesired(true)
     guard let daemon = findDaemonPath() else { throw RuntimeControlError.daemonNotFound }
 
     try await launchAgent.restart(daemonPath: daemon)
     let health = try await waitForRunning()
     if startMenu { try await startMenuIfAvailable() }
     return health
-  }
-
-  public func shouldAutoStartRuntime() -> Bool {
-    let paths = RuntimePaths.current()
-    guard let state = try? String(contentsOfFile: paths.desiredStatePath, encoding: .utf8) else {
-      return true
-    }
-    return state.trimmingCharacters(in: .whitespacesAndNewlines) != "stopped"
   }
 
   public func uninstall(deleteData: Bool = false) async throws {
@@ -227,16 +207,6 @@ public final class RuntimeController {
       try await Task.sleep(nanoseconds: 150_000_000)
     } while Date() < deadline
     throw RuntimeControlError.timedOut("1Context did not stop in time")
-  }
-
-  private func setStartDesired(_ desired: Bool) {
-    let paths = RuntimePaths.current()
-    do {
-      try RuntimePermissions.ensurePrivateDirectory(paths.appSupportDirectory)
-      try RuntimePermissions.writePrivateString(desired ? "running\n" : "stopped\n", toFile: paths.desiredStatePath)
-    } catch {
-      // Desired runtime state is advisory. Lifecycle commands should still proceed.
-    }
   }
 
   private func ensureNormalUserLifecycle() throws {

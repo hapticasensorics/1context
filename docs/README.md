@@ -31,8 +31,9 @@ that operators and contributors should use.
 
 - [Self-hosted Mac Runner](ci/self-hosted-mac-runner.md): protected real-Mac
   updater proof for release hops that need installed-app evidence.
-- [Release Lockdown Goal](goals/1context-release-lockdown-goal.md): historical
-  and current release-train checklist evidence.
+- [Archived Release Lockdown Goal](goals/archive/1context-release-lockdown-goal.md):
+  historical Sparkle-transition evidence. Current release work belongs in the
+  delete-bloat goal and the manifest-driven runbook.
 - [Goals Folder](goals/README.md): policy for keeping operator goals out of the
   installed user wiki.
 

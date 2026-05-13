@@ -6,7 +6,6 @@ public struct RuntimePaths {
   public let appSupportDirectory: URL
   public let configPath: String
   public let runDirectory: URL
-  public let desiredStatePath: String
   public let socketPath: String
   public let pidPath: String
   public let logDirectory: URL
@@ -30,7 +29,6 @@ public struct RuntimePaths {
     self.appSupportDirectory = appSupportDirectory
     self.configPath = appSupportDirectory.appendingPathComponent("config.json").path
     self.runDirectory = runDirectory
-    self.desiredStatePath = appSupportDirectory.appendingPathComponent("desired-state").path
     self.socketPath = socketPath ?? runDirectory.appendingPathComponent("1context.sock").path
     self.pidPath = runDirectory.appendingPathComponent("1contextd.pid").path
     self.logDirectory = logDirectory
@@ -96,7 +94,6 @@ public enum RuntimePermissions {
 
     for file in [
       paths.configPath,
-      paths.desiredStatePath,
       paths.socketPath,
       paths.pidPath,
       paths.logPath,

@@ -11,12 +11,12 @@ targets a custom runner label, references the protected
 `onecontext-update-runner` environment, and rejects refs outside `main`,
 `release/*`, `rc/*`, or `v*` tags.
 
-## Optional Release Gate
+## Manifest Release Gate
 
-The self-hosted Mac proof is optional by policy. It is not part of every update
-release and should not become a reflexive box to check. Normal releases can ship
-with hosted CI, release asset audit, appcast validation, and any local
-maintainer smoke that matches the change.
+The self-hosted Mac proof is controlled by `release/release.toml`. When the
+manifest lists `self_hosted_gui_update` in `required_proofs`, the release cannot
+be blessed until the protected runner produces normalized proof JSON and the
+release train downloads, redacts, and audits it.
 
 Use the real-Mac runner when the update hop itself is high signal:
 
@@ -31,9 +31,9 @@ Use the real-Mac runner when the update hop itself is high signal:
   meaningful macOS/runtime change.
 
 Skip it for routine copy, docs, cosmetic UI, release-note-only, or small
-non-updater patches unless the release owner explicitly wants the extra proof.
-Every workflow dispatch requires a `proof_reason`; use that as the approval
-receipt when deciding whether to spend the Mac cycle.
+non-updater patches unless the release owner explicitly adds the proof to the
+manifest. Every workflow dispatch requires a `proof_reason`; use that as the
+approval receipt when deciding whether to spend the Mac cycle.
 
 ## What It Runs
 
@@ -48,23 +48,19 @@ The release train dispatches the self-hosted proof job, which:
 1. Stops any existing 1Context processes.
 2. Clears disposable Sparkle/WebKit update caches while preserving
    `~/1Context` and `~/Library/Application Support/1Context`.
-3. Installs version N from a signed DMG into `/Applications/1Context.app`.
-4. Points the app at the staging appcast for N+1.
+3. Installs `previous_version` from the manifest into
+   `/Applications/1Context.app`.
+4. Uses the manifest appcast URL and update class for the update hop.
 5. Runs `scripts/prove-remote-sparkle-update.sh`.
 6. Runs `scripts/verify-macos-steady-state.sh`.
 7. Uploads evidence from `dist/self-hosted-update-proof/`.
 
-The self-hosted workflow validates the staged appcast against its dispatch
-inputs and the release manifest when it is running as part of the protected
-release train.
-
-The installed version N app must have `SUFeedURL` set to the same appcast URL
-used for the proof. Public release DMGs normally point at the public latest
-GitHub appcast. For a pre-public staging proof, pass `old_dmg_url` or
-`ONECONTEXT_OLD_DMG_PATH` for a version-N baseline DMG built with
-`ONECONTEXT_SPARKLE_FEED_URL=<staging_appcast_url>`. The script fails if the
-installed app feed does not match the requested proof feed, because otherwise it
-could accidentally prove production latest instead of the staging candidate.
+The self-hosted workflow validates the appcast against `release/release.toml`.
+The dispatch form deliberately accepts only `proof_reason`; old version, new
+version, update class, public appcast URL, timeout budget, and proof matrix all
+come from the manifest. If the installed version-N app does not point at the
+manifest appcast URL, the proof fails rather than silently proving a different
+update lane.
 
 That preservation is intentional. This is update CI, not clean-account setup CI:
 destroying app support would turn the proof into a Local Wiki Access permission
@@ -229,11 +225,9 @@ From GitHub UI:
 
 1. Actions -> Self-hosted Mac Update Proof.
 2. Run workflow from `main`, `release/*`, `rc/*`, or a `v*` tag.
-3. Enter a short `proof_reason`, old version N, staging appcast URL, expected
-   N+1 version if it differs from `VERSION`, and update class.
+3. Enter a short `proof_reason`.
 4. Approve the `onecontext-update-runner` environment only if the reason is
-   release-worthy, the staging appcast URL matches the intended candidate, and
-   the version-N DMG being installed is built to use that appcast URL.
+   release-worthy and `release/release.toml` names the intended candidate.
 
 The wrapper is equivalent to this lower-level `gh` call:
 
@@ -241,43 +235,14 @@ The wrapper is equivalent to this lower-level `gh` call:
 gh workflow run self-hosted-mac-update-proof.yml \
   --repo hapticasensorics/1context \
   --ref main \
-  -f proof_reason='mandatory updater policy change' \
-  -f old_version=0.1.60 \
-  -f new_version=0.1.61 \
-  -f staging_appcast_url=https://example.invalid/staging/appcast.xml \
-  -f update_class=mandatory
+  -f proof_reason='mandatory updater policy change'
 ```
-
-If the old DMG is not a normal GitHub release asset, pass it explicitly:
-
-```bash
-gh workflow run self-hosted-mac-update-proof.yml \
-  --repo hapticasensorics/1context \
-  --ref rc/0.1.61 \
-  -f proof_reason='staging candidate after Sparkle feed change' \
-  -f old_version=0.1.60 \
-  -f new_version=0.1.61 \
-  -f old_dmg_url=https://example.invalid/releases/1Context-0.1.60-macos-arm64.dmg \
-  -f staging_appcast_url=https://example.invalid/staging/appcast.xml \
-  -f update_class=mandatory
-```
-
-For a true pre-public staging proof, that explicit old DMG path/URL is usually
-required unless the public version-N app already points at the same staging
-appcast.
 
 The proof leaves `/Applications/1Context.app` at N+1 and healthy. By default it
 also requires the final installed app to point back at the public Sparkle feed
 (`https://github.com/hapticasensorics/1context/releases/latest/download/appcast.xml`).
-If a staging proof installs an app whose final `SUFeedURL` is a local or staging
-feed, the script tries to restore the public GitHub release for the same version
-before leaving the runner. This prevents a shared human-visible runner from
-later showing `Update failed.` because it is still pointed at a dead local
-appcast.
-
-For an intentionally staging-only runner, set
-`ONECONTEXT_UPDATE_RUNNER_ALLOW_NON_PUBLIC_FINAL_FEED=1` in the runner command
-or workflow environment and capture that decision in the proof reason.
+Temporary staging experiments belong in disposable local harnesses, not the
+protected manifest release proof.
 
 The next run will stop the app, reinstall N from DMG, clear disposable updater
 caches, and repeat.

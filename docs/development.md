@@ -126,14 +126,11 @@ patches can rely on hosted CI, release asset audit, appcast validation, and
 targeted maintainer smoke.
 
 When the release owner decides the Mac proof is warranted, use
-`scripts/release-train.sh prove` so `release/release.toml`, update class,
-old-version baseline, appcast URL, and the protected workflow inputs are
-resolved consistently. The version-N app installed by the proof must already
-have `SUFeedURL` set to the same appcast URL you pass. For a pre-public staging
-proof, pass the release-train proof inputs for a version-N baseline DMG built with
-`ONECONTEXT_SPARKLE_FEED_URL=<staging_appcast_url>`; otherwise the old app may
-check the public latest feed instead of the staging candidate, and the proof
-script will fail.
+`scripts/release-train.sh prove` so `release/release.toml` owns the update
+class, old-version baseline, appcast URL, and protected workflow dispatch. The
+version-N app installed by the proof must already have `SUFeedURL` set to the
+manifest appcast URL; rebuild the release artifact from the manifest instead of
+passing a one-off staging feed through workflow inputs.
 
 ```bash
 ./scripts/release-train.sh prove

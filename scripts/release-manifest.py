@@ -338,9 +338,37 @@ def validate_workflows(manifest: dict[str, Any], *, release_workflow: Path, proo
       raise ManifestError(f"Release workflow is missing runner label {label}.")
 
   proof_text = read_text(proof_workflow, "self-hosted proof workflow")
-  previous_version = string_value(manifest, "previous_version")
-  if f'default: "{previous_version}"' not in proof_text:
-    raise ManifestError(f"Self-hosted proof workflow old_version default must be {previous_version}.")
+  if "./scripts/release-train.sh prove --runner-execute" not in proof_text:
+    raise ManifestError("Self-hosted proof workflow must execute through release-train.sh prove --runner-execute.")
+  if "proof_reason:" not in proof_text:
+    raise ManifestError("Self-hosted proof workflow must require a proof_reason input.")
+  forbidden_inputs = (
+    "old_version:",
+    "new_version:",
+    "staging_appcast_url:",
+    "update_class:",
+    "old_tag:",
+    "old_dmg_url:",
+    "update_timeout_seconds:",
+    "steady_state_seconds:",
+    "artifact_retention_days:",
+  )
+  for fragment in forbidden_inputs:
+    if fragment in proof_text:
+      raise ManifestError(f"Self-hosted proof workflow must not expose release fact input {fragment}")
+  forbidden_envs = (
+    "ONECONTEXT_OLD_VERSION:",
+    "ONECONTEXT_NEW_VERSION:",
+    "ONECONTEXT_OLD_TAG:",
+    "ONECONTEXT_OLD_DMG_URL:",
+    "ONECONTEXT_STAGING_APPCAST_URL:",
+    "ONECONTEXT_EXPECTED_UPDATE_CLASS:",
+    "ONECONTEXT_UPDATE_PROOF_TIMEOUT_SECONDS:",
+    "ONECONTEXT_STEADY_STATE_SECONDS:",
+  )
+  for fragment in forbidden_envs:
+    if fragment in proof_text:
+      raise ManifestError(f"Self-hosted proof workflow must not pass manual release env {fragment}")
   for label in REQUIRED_RUNNER_LABELS:
     if label not in proof_text:
       raise ManifestError(f"Self-hosted proof workflow is missing runner label {label}.")

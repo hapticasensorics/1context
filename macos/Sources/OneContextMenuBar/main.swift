@@ -399,7 +399,6 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
   private var renderedUpdateAction: Selector?
   private var isCheckingForUpdates = false
   private var isRepairingRuntime = false
-  private var isRuntimeActionInFlight = false
   private var isWikiRefreshInFlight = false
   private var isLocalWebSetupInFlight = false
   private var isUninstallInFlight = false
@@ -408,7 +407,6 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
   private var isMenuOpen = false
   private var didOfferLocalWebSetupAtLaunch = false
   private var cachedRequiredSetupReady = false
-  private var runtimeToggleGeneration = 0
   private var setupReadinessPollingStartedAt: Date?
   private var setupReadinessPollingMessage: String?
   private var setupContinuation = OneContextSetupContinuation()
@@ -417,13 +415,9 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
   private var lastAlertShownAt: [String: Date] = [:]
   private var renderGeneration = 0
   private var lastRuntimeRefreshStartedAt: Date?
-  private var desiredStateSource: DispatchSourceFileSystemObject?
   private var setupReadinessTimer: Timer?
-  private var desiredStateDescriptor: Int32 = -1
-  private var desiredRuntimeIntent: RuntimeIntent = .running
   private let menu = NSMenu()
   private let stateItem = NSMenuItem(title: RuntimeState.checking.title, action: nil, keyEquivalent: "")
-  private let startStopItem = NSMenuItem(title: "Stop", action: #selector(toggleRuntime), keyEquivalent: "")
   private let openWikiItem = NSMenuItem(title: "Open Wiki", action: #selector(openWiki), keyEquivalent: "")
   private let refreshWikiItem = NSMenuItem(title: "Refresh Wiki", action: #selector(refreshWiki), keyEquivalent: "")
   private let settingsItem = NSMenuItem(title: "Settings", action: nil, keyEquivalent: "")
@@ -491,17 +485,6 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
     guard let appPath = Bundle.main.executableURL?.path else { return }
     Task.detached(priority: .utility) {
       try? await LaunchAgentManager().startMenu(appPath: appPath)
-    }
-  }
-
-  private func adoptLaunchRuntimeIntent() {
-    let paths = RuntimePaths.current()
-    do {
-      try RuntimePermissions.ensurePrivateDirectory(paths.appSupportDirectory)
-      try RuntimePermissions.writePrivateString("running\n", toFile: paths.desiredStatePath)
-      desiredRuntimeIntent = .running
-    } catch {
-      // Launch adoption is best-effort. The menu should still launch.
     }
   }
 
@@ -649,7 +632,6 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
       NSApp.terminate(nil)
       return
     }
-    adoptLaunchRuntimeIntent()
     registerMenuLaunchAgent()
     NSApp.setActivationPolicy(.accessory)
     statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
@@ -658,7 +640,6 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
     startAppUpdater()
     presentPostInstallUpdateMessageIfNeeded()
     refreshMenuItems()
-    startDesiredStateMonitor()
     scheduleLocalWebSetupRepairPrompt()
     refreshApplicationLifecycle(userInitiated: false, force: true)
     scheduleLocalWebEdgeStartupRetries()
@@ -718,7 +699,6 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
     menu.autoenablesItems = false
     stateItem.isEnabled = false
     menu.addItem(stateItem)
-    menu.addItem(startStopItem)
     menu.addItem(openWikiItem)
     menu.addItem(refreshWikiItem)
 
@@ -733,7 +713,7 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
     menu.addItem(quitItem)
     menu.delegate = self
 
-    for item in [stateItem, startStopItem, openWikiItem, refreshWikiItem, settingsItem, versionItem, setupItem, aboutItem, uninstallItem, updateItem, quitItem] {
+    for item in [stateItem, openWikiItem, refreshWikiItem, settingsItem, versionItem, setupItem, aboutItem, uninstallItem, updateItem, quitItem] {
       item.target = self
       item.isEnabled = true
     }
@@ -760,9 +740,6 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
       stateItem.title = stateTitle
       renderedStateTitle = stateTitle
     }
-    startStopItem.title = runtimeState == .running ? "Stop" : "Start"
-    startStopItem.action = #selector(toggleRuntime)
-    startStopItem.isEnabled = !isRuntimeActionInFlight
     refreshWikiItem.title = isWikiRefreshInFlight ? "Refreshing Wiki..." : "Refresh Wiki"
     refreshWikiItem.isEnabled = !isWikiRefreshInFlight
     let setupReady = cachedRequiredSetupReady
@@ -880,10 +857,6 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
       setRuntimeState(.needsSetup)
       return
     }
-    guard userInitiated || desiredRuntimeIntent == .running else {
-      setRuntimeState(.stopped)
-      return
-    }
     if !userInitiated && !force && !shouldRefreshRuntimeState() {
       return
     }
@@ -902,15 +875,6 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
         let health = try autoreleasepool {
           try UnixJSONRPCClient().health()
         }
-        let shouldShowRunning = await MainActor.run {
-          self.desiredRuntimeIntent == .running
-        }
-        guard shouldShowRunning else {
-          await MainActor.run {
-            self.setRuntimeState(.stopped)
-          }
-          return
-        }
         guard health.version == oneContextVersion else {
           _ = try await controller.restart(startMenu: false)
           await MainActor.run {
@@ -926,12 +890,6 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
       } catch let error as UnixSocketError {
         switch error {
         case .connectFailed, .emptyResponse:
-          guard userInitiated || controller.shouldAutoStartRuntime() else {
-            await MainActor.run {
-              self.setRuntimeState(.stopped)
-            }
-            return
-          }
           do {
             _ = try await controller.start(startMenu: false)
             await MainActor.run {
@@ -961,54 +919,6 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
     setRuntimeState(.needsAttention)
   }
 
-  private func startDesiredStateMonitor() {
-    Task.detached(priority: .utility) {
-      let intent = Self.readDesiredRuntimeIntentFromDisk()
-      await MainActor.run {
-        self.applyDesiredRuntimeIntent(intent)
-      }
-    }
-
-    let paths = RuntimePaths.current()
-    try? RuntimePermissions.ensurePrivateDirectory(paths.appSupportDirectory)
-    let descriptor = open(paths.appSupportDirectory.path, O_EVTONLY)
-    guard descriptor >= 0 else { return }
-
-    desiredStateDescriptor = descriptor
-    let source = DispatchSource.makeFileSystemObjectSource(
-      fileDescriptor: descriptor,
-      eventMask: [.write, .delete, .rename, .attrib, .extend],
-      queue: DispatchQueue.main
-    )
-    source.setEventHandler { [weak self] in
-      let intent = Self.readDesiredRuntimeIntentFromDisk()
-      self?.applyDesiredRuntimeIntent(intent)
-    }
-    source.setCancelHandler { [descriptor] in
-      close(descriptor)
-    }
-    desiredStateSource = source
-    source.resume()
-  }
-
-  private func applyDesiredRuntimeIntent(_ intent: RuntimeIntent) {
-    guard desiredRuntimeIntent != intent else { return }
-    desiredRuntimeIntent = intent
-    switch intent {
-    case .running:
-      setRuntimeState(.running, forceRender: true)
-      ensureRuntimeRunning(userInitiated: false, requiredSetupReady: cachedRequiredSetupReady)
-    case .stopped:
-      setRuntimeState(.stopped)
-    }
-  }
-
-  nonisolated private static func readDesiredRuntimeIntentFromDisk() -> RuntimeIntent {
-    let state = (try? String(contentsOfFile: RuntimePaths.current().desiredStatePath, encoding: .utf8))?
-      .trimmingCharacters(in: .whitespacesAndNewlines)
-    return state == "stopped" ? .stopped : .running
-  }
-
   @objc private func openUpdateFlow() {
     Task {
       await runAppUpdateFlow()
@@ -1033,44 +943,6 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
       }
       if !self.sparkleUpdater.checkForUpdates(self.updateItem) {
         self.presentAppUpdateSnapshot(snapshot)
-      }
-    }
-  }
-
-  @objc private func toggleRuntime() {
-    let targetIntent: RuntimeIntent = runtimeState == .running ? .stopped : .running
-    if targetIntent == .running, !cachedRequiredSetupReady {
-      showSetupWindow(forBlockedAction: .startRemembering)
-      return
-    }
-    desiredRuntimeIntent = targetIntent
-    runtimeToggleGeneration += 1
-    let generation = runtimeToggleGeneration
-    setRuntimeState(targetIntent == .running ? .running : .stopped, forceRender: true)
-
-    Task.detached(priority: .userInitiated) {
-      do {
-        let controller = RuntimeController()
-        if targetIntent == .running {
-          try await controller.requestStart(startMenu: false)
-          await MainActor.run {
-            guard generation == self.runtimeToggleGeneration else { return }
-            self.setRuntimeState(.running, forceRender: true)
-            self.startLocalWebEdge(requiredSetupReady: true)
-          }
-        } else {
-          try await controller.requestStop()
-          await MainActor.run {
-            guard generation == self.runtimeToggleGeneration else { return }
-            self.setRuntimeState(.stopped, forceRender: true)
-          }
-        }
-      } catch {
-        await MainActor.run {
-          guard generation == self.runtimeToggleGeneration else { return }
-          self.setRuntimeState(.needsAttention, forceRender: true)
-          self.presentMenuAlert("Could not \(targetIntent == .running ? "start" : "stop") 1Context.")
-        }
       }
     }
   }
@@ -1523,7 +1395,6 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
     isLocalWebSetupInFlight = false
     cachedRequiredSetupReady = readiness.requiredSetupReady
     recordWikiURL(readiness.setup.localWikiAccess.targetURL)
-    desiredRuntimeIntent = .running
     refreshMenuItems()
     updateSetupWindow(message: message)
     startRuntimeImmediatelyAfterSetup()
@@ -1541,8 +1412,6 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
         self.openWiki()
       case .refreshWiki:
         self.refreshWiki()
-      case .startRemembering:
-        break
       }
     }
   }
@@ -1683,7 +1552,6 @@ app.run()
 private enum RuntimeState {
   case checking
   case running
-  case stopped
   case needsSetup
   case needsAttention
 
@@ -1693,8 +1561,6 @@ private enum RuntimeState {
       return "1Context"
     case .running:
       return "1Context Remembering"
-    case .stopped:
-      return "1Context Stopped"
     case .needsSetup:
       return "1Context Needs Setup"
     case .needsAttention:
@@ -1707,11 +1573,6 @@ private enum UpdateState {
   case upToDate
   case available
   case mandatoryAvailable
-}
-
-private enum RuntimeIntent {
-  case running
-  case stopped
 }
 
 private struct WikiMenuSnapshot {
