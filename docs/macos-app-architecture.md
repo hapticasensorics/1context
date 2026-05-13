@@ -50,7 +50,7 @@ stateDiagram-v2
   WikiOpen --> PermissionsUI: setup later becomes stale or missing
 ```
 
-The required launch gate is Local Wiki Access because the app's primary wiki URL is `https://wiki.1context.localhost/your-context`. Future sensitive permissions should be added only with the feature that needs them, plus policy and tests for the exact user-facing prompt.
+The required launch gate is Local Wiki Access because the app's primary wiki URL is `https://localhost/your-context`. The branded alias `https://wiki.1context.localhost/your-context` is served for diagnostics and compatibility observation, but the app does not depend on it for readiness or browser-open behavior. Future sensitive permissions should be added only with the feature that needs them, plus policy and tests for the exact user-facing prompt.
 
 ## Smoke Policy
 

@@ -31,15 +31,29 @@ wiki content. The app registers or repairs that helper through native setup UI
 and macOS Login Items & Extensions approval. The same flow trusts the local
 Caddy CA in the user's login keychain. Uninstall removes both.
 
-The canonical product URL is:
+The default browser-open product URL is:
 
 ```text
-https://wiki.1context.localhost/your-context
+https://localhost/your-context
 ```
 
-High-port HTTP (`http://wiki.1context.localhost:<port>/your-context`) remains a
-test and development harness mode only. Product code should not silently fall
-back to it when the local HTTPS setup is missing.
+The branded alias `https://wiki.1context.localhost/your-context` is still served
+by Caddy and reported by diagnose, but product UI must not depend on that
+multi-label `.localhost` name for either app readiness or default browser-open
+behavior. Some macOS networking clients and browsers do not resolve it
+consistently.
+
+Browser-visible high-port HTTPS
+(`https://localhost:<port>/your-context` or
+`https://wiki.1context.localhost:<port>/your-context`) remains a test and
+development harness mode only. Product UI should not silently fall back to it
+when the local HTTPS setup is missing.
+
+The app's internal health probe uses literal loopback
+`https://127.0.0.1:<port>/__1context/health` against the user-owned Caddy edge.
+That keeps app readiness off local DNS entirely. Diagnose additionally probes
+`https://localhost/__1context/health` through the privileged proxy and the
+branded host health URL, but those probes are classified separately.
 
 The Swift daemon owns the local dynamic wiki API:
 
@@ -103,7 +117,7 @@ should still load, with dynamic API calls degrading cleanly.
 
 The local adapter must not leak into the web contract:
 
-- no browser-visible socket paths or loopback-only URLs
+- no browser-visible socket paths or high-port backend URLs
 - no Caddy-specific behavior required by browser JavaScript
 - no render-on-request behavior from API routes
 - local-only capabilities must be explicit in API capability responses

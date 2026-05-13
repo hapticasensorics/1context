@@ -115,6 +115,12 @@ final class AppSetupTests: XCTestCase {
       trustMode: setup.urlMode == LocalWebURLMode.localHTTPSPortless.rawValue ? "local-ca-required" : "none",
       privilegedBindRequired: setup.urlMode == LocalWebURLMode.localHTTPSPortless.rawValue,
       setup: setup,
+      readinessProbeURL: "https://127.0.0.1:39191/__1context/health",
+      readinessProbeHealth: setup.ready ? "not running" : "setup required",
+      privilegedProxyProbeURL: "https://localhost/__1context/health",
+      privilegedProxyProbeHealth: setup.ready ? "not running" : "setup required",
+      brandedProbeURL: "https://wiki.1context.localhost/__1context/health",
+      brandedProbeHealth: setup.ready ? "not running" : "setup required",
       apiURL: "http://127.0.0.1:39192/__1context/api/health",
       apiHealth: "not running",
       apiPort: 39192,
@@ -140,11 +146,11 @@ final class AppSetupTests: XCTestCase {
 
   private func localHTTPSSetup(ready: Bool, installedProxySHA256: String? = nil) -> LocalWebSetupSnapshot {
     LocalWebSetupSnapshot.localHTTPSPortless(
-      targetURL: "https://wiki.1context.localhost/your-context",
+      targetURL: LocalWebDefaults.defaultWikiURL,
       state: LocalWebSetupState(
         label: LocalWebSetupConstants.proxyLabel,
         targetHost: LocalWebDefaults.wikiHost,
-        targetURL: "https://wiki.1context.localhost/your-context",
+        targetURL: LocalWebDefaults.defaultWikiURL,
         backendHost: LocalWebDefaults.bindHost,
         backendPort: LocalWebDefaults.wikiPort,
         privilegedPort: LocalWebSetupConstants.privilegedHTTPSPort,
