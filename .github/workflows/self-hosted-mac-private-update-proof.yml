@@ -50,10 +50,14 @@ jobs:
       - name: Prove private update
         shell: bash
         env:
-          GH_TOKEN: ${{ secrets.ONECONTEXT_PRIVATE_RELEASE_TOKEN }}
+          ONECONTEXT_PRIVATE_RELEASE_TOKEN: ${{ secrets.ONECONTEXT_PRIVATE_RELEASE_TOKEN }}
           ONECONTEXT_UPDATE_RUNNER_I_UNDERSTAND_DESTRUCTIVE: "1"
           ONECONTEXT_UPDATE_PROOF_REASON: ${{ inputs.proof_reason }}
-        run: ./scripts/release-train.sh prove --channel private --runner-execute
+        run: |
+          if [[ -n "${ONECONTEXT_PRIVATE_RELEASE_TOKEN:-}" ]]; then
+            export GH_TOKEN="$ONECONTEXT_PRIVATE_RELEASE_TOKEN"
+          fi
+          ./scripts/release-train.sh prove --channel private --runner-execute
 
       - name: Upload private update proof artifacts
         if: always()
