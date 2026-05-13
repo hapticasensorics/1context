@@ -602,6 +602,17 @@ Proof: `./scripts/check-version-consistency.sh`,
 `./scripts/package-macos-smoke.sh`, `git diff --check`, and packaged
 `1context-cli --version` reporting `0.1.66`.
 
+Evidence, 2026-05-13: created local annotated tag `v0.1.66` and a clean
+detached release worktree at
+`/Users/paulhan/dev/1context-public-launch-release-0.1.66`. From that clean tag,
+`./scripts/release-train.sh validate` passed and
+`./scripts/release-train.sh package` produced signed, notarized, stapled, and
+validated artifacts: `dist/1Context-0.1.66-macos-arm64.dmg`,
+`dist/appcast.xml`, `dist/release-evidence/0.1.66/asset-manifest.json`,
+`runner-attestation.json`, and `redaction-report.json`. Proof also included
+`./scripts/release-train.sh prove --dry-run` from the clean tag and packaged
+`1context-cli --version` reporting `0.1.66`.
+
 ### 13. Exit
 
 - [x] No documented production release path exists except
@@ -625,5 +636,6 @@ Proof: `./scripts/check-version-consistency.sh`,
 
 ## Immediate Next Step
 
-Tag the clean `0.1.66` tree, then run the greenfield release train end to end:
-`validate`, `package`, `publish`, `prove`, `audit`, and `bless`.
+Push/publish the `v0.1.66` release when approved, then run the remaining
+greenfield release train stages from the clean tag: `publish`, `prove`, `audit`,
+and `bless`.
