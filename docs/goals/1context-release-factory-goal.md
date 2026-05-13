@@ -174,3 +174,8 @@ plugin tree. The factory must keep package-smoke checks that fail on
   `./scripts/test.sh`, `./scripts/release-train.sh validate --channel dev`,
   `./scripts/release-train.sh build --channel dev`, `./scripts/test-launch-agent-package.sh`,
   and `git diff --check`. The real dev factory build completed in 16 seconds.
+- 2026-05-13: Bumped the next honest train to `0.1.67` so current `main` no
+  longer pretends to be the already-cut `0.1.66` tag. Updated `VERSION`,
+  `Core.swift`, `RELEASE_NOTES.md`, the runbook, and `release/release.toml`.
+  Proof: `./scripts/release-manifest.py validate`, `./scripts/test-release-train.sh`,
+  `./scripts/test.sh`, `swift test --package-path macos`, and `git diff --check`.

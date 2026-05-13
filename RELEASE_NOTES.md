@@ -1,13 +1,18 @@
-# 1Context v0.1.66 Public Preview
+# 1Context v0.1.67 Public Preview
 
 This release includes:
 
-- `0.1.66` is the destructive cleanup release for the Sparkle-era app.
+- `0.1.67` starts the release-factory train for faster dev, prototype,
+  private, and official release paths.
+- Release policy now defines build channels, timing budgets, and private
+  appcast facts in `release/release.toml`.
+- The old `release-train.sh package` path is deleted; official release builds
+  use `release-train.sh build --channel official`.
 - The public CLI is now support-only: version, redacted diagnostics, uninstall,
   and local wiki URL.
 - Setup, app lifecycle, and updates are owned by the app UI and menu bar instead
   of old command-line control paths.
-- The shipped app bundle is much smaller after deleting obsolete compatibility
+- The shipped app bundle remains small after deleting obsolete compatibility
   code, test hooks, generated state, and source-checkout packaging assumptions.
 - Mandatory Sparkle updates remain quiet and automatic; manual `Check for
   Updates` remains a normal user action.
