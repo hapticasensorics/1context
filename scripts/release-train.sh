@@ -601,7 +601,6 @@ PY
 
   local work_dir
   work_dir="$(mktemp -d /tmp/1context-private-release-audit-XXXXXX)"
-  trap 'rm -rf "$work_dir"' RETURN
   gh release download "$TAG" --repo "$repo" --pattern appcast.xml --dir "$work_dir" --clobber >/dev/null
   gh release download "$TAG" --repo "$repo" --pattern "1Context-$VERSION-macos-$ARCH.dmg" --dir "$work_dir" --clobber >/dev/null
   gh release download "$TAG" --repo "$repo" --pattern "1Context-$VERSION-macos-$ARCH.dmg.sha256" --dir "$work_dir" --clobber >/dev/null
@@ -614,6 +613,7 @@ PY
   "$ROOT/scripts/redact-evidence.sh" "$EVIDENCE_DIR"
   "$ROOT/scripts/audit-evidence-redaction.sh" "$EVIDENCE_DIR"
   write_stage_timing "publish" "passed" "$stage_started"
+  rm -rf "$work_dir"
 }
 
 release_prove() {
