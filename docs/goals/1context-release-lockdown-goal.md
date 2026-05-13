@@ -22,11 +22,13 @@ templates and user content; it should not expose this release checklist at
 `/goal` or copy it into `wiki-site/current`. Evidence and checklist updates now
 belong in this docs file and companion files under `docs/goals/`.
 
-Current status: the product decision is captured, the old `/goal` material has
-been moved into docs, and the working tree contains local proof that normal wiki
-publication can exclude the development goal while preserving For You, Your
-Context, Projects, and Topics. This is intentionally parked as a documentation
-and boundary cleanup unless we decide to carry it through a full release cut.
+Current status as of 2026-05-13: the release-lockdown work is active again.
+The development goal is correctly repo-local under `docs/goals/`, updater
+policy now lives behind a pure reducer, local and GitHub CI proof passed on
+commit `3877739`, and the self-hosted Mac runner is online and idle again.
+GitHub latest is still `v0.1.62`; the next unblocked proof step is to publish
+the signed/notarized `v0.1.63` repair release, audit the public assets, then
+dispatch and collect the self-hosted `0.1.62 -> 0.1.63` update proof.
 
 1Context should behave like a professional macOS app whose job is to remember
 user-directed work. The app is not a shy utility hiding its needs. When a
@@ -1316,8 +1318,20 @@ Descartes maximal release-delivery plan:
   `ALLOW_UNNOTARIZED=1 NOTARIZE=0 GENERATE_SPARKLE_APPCAST=1
   ./scripts/package-macos-release.sh` passed and produced
   `dist/1Context-0.1.63-macos-arm64.dmg`.
-- [ ] Commit, push, tag, run the release workflow, audit `latest/download`,
-  then dispatch and download the self-hosted `0.1.64 -> 0.1.65` proof.
+- [x] Commit, push, and prove the updater reducer / DMG repair tranche in CI.
+  Evidence: commit `3877739` (`Formalize Sparkle updater reducer`) is pushed
+  to `main`; GitHub CI run `25777588050` passed, including version
+  consistency, Swift tests, `./scripts/test.sh`, upgrade paths, package
+  creation, and package smoke.
+- [x] Verify the self-hosted Mac proof runner is available before the release
+  proof step.
+  Evidence: `pauls-macbook-air-1context-update` is `online`, `busy=false`,
+  with labels `self-hosted`, `macOS`, `ARM64`, and
+  `onecontext-update-runner`.
+- [ ] Tag and run the `v0.1.63` release workflow, audit `latest/download`, then
+  dispatch and download the self-hosted `0.1.62 -> 0.1.63` proof.
+- [ ] Repeat the same public release audit and self-hosted proof pattern for
+  the final `0.1.64 -> 0.1.65` hop.
 
 Ramanujan maximal shipped-surface plan:
 
