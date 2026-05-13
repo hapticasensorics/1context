@@ -627,6 +627,11 @@ evidence directory before redaction/audit. Proof: `bash -n`, `./scripts/test.sh`
 `./scripts/release-train.sh prove --dry-run`, `git diff --check`, and a
 negative release-script scan for deleted public CLI control-plane commands.
 
+Evidence, 2026-05-13: refreshed the local annotated `v0.1.66` tag to the latest
+proof-wiring commit `bc6d8ce`, rebuilt the clean detached release worktree, and
+re-ran `./scripts/release-train.sh validate` plus
+`./scripts/release-train.sh prove --dry-run` from that tag.
+
 ### 13. Exit
 
 - [x] No documented production release path exists except
@@ -650,6 +655,6 @@ negative release-script scan for deleted public CLI control-plane commands.
 
 ## Immediate Next Step
 
-Refresh the local `v0.1.66` tag to the latest proof-wiring commit, push/publish
-the release when approved, then run the remaining greenfield release train
-stages from the clean tag: `publish`, `prove`, `audit`, and `bless`.
+Push/publish the `v0.1.66` release when approved, then run the remaining
+greenfield release train stages from the clean tag: `publish`, `prove`, `audit`,
+and `bless`.
