@@ -156,8 +156,13 @@ SPARKLE_DOWNLOAD_URL_PREFIX="https://github.com/hapticasensorics/1context/releas
 ```
 
 That command auto-detects the Developer ID Application identity, reads the
-Sparkle public EdDSA key from the release keychain account, signs and notarizes
-the app and DMG, then generates `dist/sparkle-updates/appcast.xml`.
+Sparkle public EdDSA key from the release keychain account or
+`ONECONTEXT_SPARKLE_PUBLIC_ED_KEY`, signs and notarizes the app and DMG, then
+generates `dist/sparkle-updates/appcast.xml`. For the protected self-hosted
+release workflow, `scripts/prepare-macos-release-keychain.sh` unlocks the
+dedicated release keychain and `scripts/check-macos-release-credentials.sh`
+preflights Developer ID signing, Sparkle signing, and the notary profile before
+any artifact is built.
 
 Release packaging validates that archives do not contain local owner/group
 metadata, AppleDouble files, local build paths, SwiftPM resource-bundle fallback

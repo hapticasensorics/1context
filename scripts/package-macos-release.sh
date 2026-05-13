@@ -5,6 +5,7 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 VERSION="${ONECONTEXT_VERSION:-$(tr -d '[:space:]' < "$ROOT/VERSION")}"
 ARCH="${ONECONTEXT_ARCH:-arm64}"
 DMG="$ROOT/dist/1Context-$VERSION-macos-$ARCH.dmg"
+CODESIGN_KEYCHAIN="${CODESIGN_KEYCHAIN:-${ONECONTEXT_RELEASE_KEYCHAIN:-}}"
 
 if [[ "${ONECONTEXT_USE_RELEASE_POLICY:-1}" == "1" ]]; then
   eval "$("$ROOT/scripts/update-policy.py" export-env)"
@@ -35,7 +36,11 @@ if [[ "${NOTARIZE:-1}" == "1" ]]; then
     echo "Set CODESIGN_IDENTITY before notarizing the release DMG." >&2
     exit 1
   fi
-  codesign --force --timestamp --sign "$CODESIGN_IDENTITY" "$DMG" >/dev/null
+  codesign_args=(--force --timestamp --sign "$CODESIGN_IDENTITY")
+  if [[ -n "$CODESIGN_KEYCHAIN" ]]; then
+    codesign_args+=(--keychain "$CODESIGN_KEYCHAIN")
+  fi
+  codesign "${codesign_args[@]}" "$DMG" >/dev/null
   codesign --verify --strict "$DMG" >/dev/null
   "$ROOT/scripts/notarize-macos-artifact.sh" "$DMG"
 fi

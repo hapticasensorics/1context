@@ -26,13 +26,14 @@ Current status as of 2026-05-13: `v0.1.63` is published as the mandatory
 updater-health repair. The public release assets passed the latest/download
 audit, and the self-hosted Mac proof updated an installed `0.1.62` app to
 `0.1.63` through the public Sparkle feed, then held steady for 120 seconds.
-The remaining release-systems gap is that the protected release workflow can
-reach the self-hosted runner but that runner account cannot currently see the
-Developer ID identity or Sparkle EdDSA key, so `v0.1.63` was published with the
-local production release path from the `paulhan` keychain. The next proof step
-is to repair that runner credential visibility, then continue the `0.1.64` /
-`0.1.65` release train using the same public-asset audit and real-Mac update
-proof pattern.
+The remaining release-systems gap is narrower now: `v0.1.63` was published with
+the local production release path from the `paulhan` keychain because the
+protected release workflow could reach the self-hosted runner but the runner
+account could not see signing/Sparkle credentials. The `haptica_release` runner
+now has a dedicated release keychain, GitHub environment variables/secrets point
+at that keychain and Sparkle signing material, and the workflow has explicit
+prepare/check steps. The next proof step is to make `0.1.64` publish through
+that release workflow, then continue to the final `0.1.65` public update proof.
 
 1Context should behave like a professional macOS app whose job is to remember
 user-directed work. The app is not a shy utility hiding its needs. When a
@@ -1298,7 +1299,15 @@ Descartes maximal release-delivery plan:
   and tool-version checks, then failed in `Check local release credentials`
   because the runner account could not see a Developer ID Application identity
   or the Sparkle EdDSA key for `com.haptica.1context.sparkle`. The local
-  `paulhan` keychain can see both and produced the `v0.1.63` release.
+  `paulhan` keychain can see both and produced the `v0.1.63` release. Repair
+  progress: the `haptica_release` runner account now has a dedicated
+  `/Users/haptica_release/Library/Keychains/1context-release.keychain-db`
+  release keychain with the Developer ID identity and `1context-notary`
+  profile verified over SSH, and the protected `onecontext-update-runner`
+  environment now has release-keychain and Sparkle signing variables/secrets.
+  The workflow now runs `scripts/prepare-macos-release-keychain.sh` and
+  `scripts/check-macos-release-credentials.sh`; keep this open until a tagged
+  release workflow publishes a signed/notarized release without local fallback.
 - [x] Keep release workflow execution tag-only and fail before packaging unless
   `GITHUB_REF == refs/tags/v$(VERSION)`.
   Evidence: `.github/workflows/release.yml` checks the tag before package
@@ -1530,10 +1539,10 @@ Closed-loop proof plan:
   Evidence: `.github/workflows/release.yml` now targets the protected
   self-hosted Mac runner for production release packaging/signing/notarization,
   and `actionlint`, `scripts/test-release-proof-request.sh`, and GitHub CI for
-  commit `92e77f0` passed. Current gap: release run `25778208043` proved the
-  runner path starts but cannot yet see signing/Sparkle credentials, so this
-  stays open until the release workflow itself publishes a signed/notarized
-  release without local fallback.
+  commit `92e77f0` passed. Repair progress: the runner has a dedicated release
+  keychain and the protected environment has the matching keychain/Sparkle
+  secrets. Current gap: this stays open until the release workflow itself
+  publishes a signed/notarized release without local fallback.
 - [x] Validate and consolidate the release docs so stale professional-app
   milestone/checklist pages no longer compete with the current release runbook.
   Evidence: `docs/macos-release-runbook.md`, `docs/README.md`, and the updated

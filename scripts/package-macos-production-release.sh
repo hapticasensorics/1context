@@ -4,10 +4,14 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 SPARKLE_ACCOUNT="${SPARKLE_KEY_ACCOUNT:-com.haptica.1context.sparkle}"
 GENERATE_KEYS="$ROOT/macos/.build/artifacts/sparkle/Sparkle/bin/generate_keys"
+CODESIGN_KEYCHAIN="${CODESIGN_KEYCHAIN:-${ONECONTEXT_RELEASE_KEYCHAIN:-}}"
 
 developer_id_identity() {
-  security find-identity -v -p codesigning \
-    | awk -F'"' '/Developer ID Application:/ { print $2; exit }'
+  if [[ -n "$CODESIGN_KEYCHAIN" ]]; then
+    security find-identity -v -p codesigning "$CODESIGN_KEYCHAIN"
+  else
+    security find-identity -v -p codesigning
+  fi | awk -F'"' '/Developer ID Application:/ { print $2; exit }'
 }
 
 sparkle_public_key() {

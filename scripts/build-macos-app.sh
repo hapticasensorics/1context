@@ -11,6 +11,7 @@ FRAMEWORKS_DIR="$CONTENTS_DIR/Frameworks"
 LAUNCH_DAEMONS_DIR="$CONTENTS_DIR/Library/LaunchDaemons"
 SIGNING_MODE="${ONECONTEXT_SIGNING_MODE:-adhoc}"
 IDENTITY="${CODESIGN_IDENTITY:-}"
+CODESIGN_KEYCHAIN="${CODESIGN_KEYCHAIN:-${ONECONTEXT_RELEASE_KEYCHAIN:-}}"
 VERSION="${ONECONTEXT_VERSION:-$(tr -d '[:space:]' < "$ROOT/VERSION")}"
 ARCH="${ONECONTEXT_ARCH:-arm64}"
 BUNDLE_IDENTIFIER="${ONECONTEXT_BUNDLE_IDENTIFIER:-com.haptica.1context}"
@@ -35,6 +36,22 @@ plist_escape() {
   value="${value//\"/&quot;}"
   value="${value//\'/&apos;}"
   printf '%s' "$value"
+}
+
+codesign_identity_available() {
+  if [[ -n "$CODESIGN_KEYCHAIN" ]]; then
+    security find-identity -v -p codesigning "$CODESIGN_KEYCHAIN" | grep -F "$IDENTITY" >/dev/null
+  else
+    security find-identity -v -p codesigning | grep -F "$IDENTITY" >/dev/null
+  fi
+}
+
+codesign_release() {
+  local args=(--force --options runtime --timestamp)
+  if [[ -n "$CODESIGN_KEYCHAIN" ]]; then
+    args+=(--keychain "$CODESIGN_KEYCHAIN")
+  fi
+  codesign "${args[@]}" "$@"
 }
 
 swift build --package-path "$MACOS_DIR" -c release --arch "$ARCH"
@@ -250,79 +267,49 @@ if [[ "$SIGNING_MODE" == "developer-id" ]]; then
     exit 1
   fi
 
-  if ! command -v codesign >/dev/null 2>&1 || ! security find-identity -v -p codesigning | grep -F "$IDENTITY" >/dev/null; then
+  if ! command -v codesign >/dev/null 2>&1 || ! codesign_identity_available; then
     echo "Developer ID identity not found: $IDENTITY" >&2
+    if [[ -n "$CODESIGN_KEYCHAIN" ]]; then
+      echo "Checked keychain: $CODESIGN_KEYCHAIN" >&2
+    fi
     exit 1
   fi
 
-  codesign \
-    --force \
-    --options runtime \
-    --timestamp \
+  codesign_release \
     --sign "$IDENTITY" \
     "$FRAMEWORKS_DIR/Sparkle.framework/Versions/B/Autoupdate" >/dev/null
-  codesign \
-    --force \
-    --options runtime \
-    --timestamp \
+  codesign_release \
     --sign "$IDENTITY" \
     "$FRAMEWORKS_DIR/Sparkle.framework/Versions/B/Updater.app" >/dev/null
-  codesign \
-    --force \
-    --options runtime \
-    --timestamp \
+  codesign_release \
     --sign "$IDENTITY" \
     "$FRAMEWORKS_DIR/Sparkle.framework/Versions/B/XPCServices/Downloader.xpc" >/dev/null
-  codesign \
-    --force \
-    --options runtime \
-    --timestamp \
+  codesign_release \
     --sign "$IDENTITY" \
     "$FRAMEWORKS_DIR/Sparkle.framework/Versions/B/XPCServices/Installer.xpc" >/dev/null
-  codesign \
-    --force \
-    --options runtime \
-    --timestamp \
+  codesign_release \
     --sign "$IDENTITY" \
     "$FRAMEWORKS_DIR/Sparkle.framework" >/dev/null
-  codesign \
-    --force \
-    --options runtime \
-    --timestamp \
+  codesign_release \
     --sign "$IDENTITY" \
     "$CADDY_BUNDLE_DIR/caddy" >/dev/null
-  codesign \
-    --force \
-    --options runtime \
-    --timestamp \
+  codesign_release \
     --entitlements "$MACOS_DIR/entitlements.plist" \
     --sign "$IDENTITY" \
     "$MACOS_APP_DIR/1context-cli" >/dev/null
-  codesign \
-    --force \
-    --options runtime \
-    --timestamp \
+  codesign_release \
     --entitlements "$MACOS_DIR/entitlements.plist" \
     --sign "$IDENTITY" \
     "$MACOS_APP_DIR/1contextd" >/dev/null
-  codesign \
-    --force \
-    --options runtime \
-    --timestamp \
+  codesign_release \
     --entitlements "$MACOS_DIR/entitlements.plist" \
     --sign "$IDENTITY" \
     "$RESOURCES_DIR/1context-local-web-proxy" >/dev/null
-  codesign \
-    --force \
-    --options runtime \
-    --timestamp \
+  codesign_release \
     --entitlements "$MACOS_DIR/entitlements.plist" \
     --sign "$IDENTITY" \
     "$MACOS_APP_DIR/1Context" >/dev/null
-  codesign \
-    --force \
-    --options runtime \
-    --timestamp \
+  codesign_release \
     --entitlements "$MACOS_DIR/entitlements.plist" \
     --sign "$IDENTITY" \
     "$APP_DIR" >/dev/null

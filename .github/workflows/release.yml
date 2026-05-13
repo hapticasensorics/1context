@@ -15,6 +15,14 @@ jobs:
     runs-on: [self-hosted, macOS, ARM64, onecontext-update-runner]
     timeout-minutes: 45
     environment: onecontext-update-runner
+    env:
+      CODESIGN_IDENTITY: ${{ vars.ONECONTEXT_CODESIGN_IDENTITY }}
+      ONECONTEXT_RELEASE_KEYCHAIN: ${{ vars.ONECONTEXT_RELEASE_KEYCHAIN }}
+      ONECONTEXT_RELEASE_KEYCHAIN_PASSWORD: ${{ secrets.ONECONTEXT_RELEASE_KEYCHAIN_PASSWORD }}
+      ONECONTEXT_SPARKLE_PUBLIC_ED_KEY: ${{ vars.ONECONTEXT_SPARKLE_PUBLIC_ED_KEY }}
+      SPARKLE_PRIVATE_ED_KEY: ${{ secrets.ONECONTEXT_SPARKLE_PRIVATE_ED_KEY }}
+      SPARKLE_KEY_ACCOUNT: ${{ vars.ONECONTEXT_SPARKLE_KEY_ACCOUNT }}
+      NOTARYTOOL_PROFILE: ${{ vars.ONECONTEXT_NOTARYTOOL_PROFILE }}
     steps:
       - uses: actions/checkout@v6
       - name: Install bundled web edge dependency
@@ -23,6 +31,8 @@ jobs:
             brew install caddy
           fi
           caddy version
+      - name: Prepare release keychain
+        run: ./scripts/prepare-macos-release-keychain.sh
       - name: Tool versions
         run: |
           swift --version
@@ -31,10 +41,7 @@ jobs:
           caddy version
           security find-identity -v -p codesigning
       - name: Check local release credentials
-        run: |
-          ./scripts/configure-macos-release-secrets.sh
-          security find-identity -v -p codesigning \
-            | grep -F "Developer ID Application:" >/dev/null
+        run: ./scripts/check-macos-release-credentials.sh
       - name: Check release version
         run: |
           version="$(tr -d '[:space:]' < VERSION)"

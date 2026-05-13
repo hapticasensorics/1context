@@ -152,6 +152,47 @@ If this becomes a permanent bench, prefer a user LaunchAgent only after the
 foreground runner has proven that Sparkle prompts, AppleScript, and screenshots
 still work in that session.
 
+## Release Publishing Credentials
+
+The update-proof workflow consumes already-built public DMGs and appcasts. The
+production `Release` workflow is narrower and more sensitive: it signs,
+notarizes, creates the GitHub release, uploads `1Context.dmg`, the versioned
+DMG, checksums, and `appcast.xml`, then audits the public `latest/download`
+assets.
+
+For that publishing job, the `haptica_release` account has a dedicated release
+keychain:
+
+```text
+/Users/haptica_release/Library/Keychains/1context-release.keychain-db
+```
+
+The protected GitHub environment `onecontext-update-runner` provides:
+
+- `ONECONTEXT_RELEASE_KEYCHAIN`: path to the release keychain.
+- `ONECONTEXT_RELEASE_KEYCHAIN_PASSWORD`: secret used only to unlock that
+  keychain during the job.
+- `ONECONTEXT_CODESIGN_IDENTITY`: the Developer ID Application identity.
+- `ONECONTEXT_SPARKLE_PUBLIC_ED_KEY`: the public Sparkle EdDSA key embedded in
+  the app bundle.
+- `ONECONTEXT_SPARKLE_PRIVATE_ED_KEY`: secret Sparkle EdDSA key used by
+  `generate_appcast`.
+- `ONECONTEXT_NOTARYTOOL_PROFILE`: the notarytool profile stored in the release
+  keychain.
+
+The workflow runs:
+
+```bash
+./scripts/prepare-macos-release-keychain.sh
+./scripts/check-macos-release-credentials.sh
+```
+
+before checking the tag or building artifacts. `prepare` unlocks only the
+explicit release keychain and adds it to the user keychain search list for the
+job. `check` fails early unless the runner can see Developer ID signing, Sparkle
+signing, and a working notary profile. Do not put these credentials in hosted
+GitHub runners or PR-triggered workflows.
+
 ## Required GitHub Guardrails
 
 Configure these before treating a green run as release proof:
@@ -161,8 +202,9 @@ Configure these before treating a green run as release proof:
 - Environment `onecontext-update-runner` exists and requires reviewer approval.
 - No workflow with `pull_request` or `pull_request_target` uses the
   `onecontext-update-runner` label.
-- Do not store signing, notarization, or Sparkle private-key secrets on this
-  runner. This job consumes already-built DMGs and appcasts.
+- Signing, notarization, and Sparkle private-key material is limited to the
+  protected release workflow and dedicated release keychain above. The update
+  proof job still consumes already-built DMGs and appcasts.
 
 ## Trigger A Proof Run
 

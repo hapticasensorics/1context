@@ -4,6 +4,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 ARTIFACT="${1:-$ROOT/dist/1Context.app}"
 PROFILE="${NOTARYTOOL_PROFILE:-1context-notary}"
+NOTARYTOOL_KEYCHAIN="${NOTARYTOOL_KEYCHAIN:-${ONECONTEXT_RELEASE_KEYCHAIN:-}}"
 TMPDIR="$(mktemp -d /tmp/1ctx-notary-XXXXXX)"
 
 cleanup() {
@@ -57,8 +58,15 @@ submit_to_notary() {
       exit 1
     fi
   else
-    if ! xcrun notarytool submit "$upload" --keychain-profile "$PROFILE" --wait; then
+    notary_args=(submit "$upload" --keychain-profile "$PROFILE" --wait)
+    if [[ -n "$NOTARYTOOL_KEYCHAIN" ]]; then
+      notary_args+=(--keychain "$NOTARYTOOL_KEYCHAIN")
+    fi
+    if ! xcrun notarytool "${notary_args[@]}"; then
       echo "Notarization failed for $upload using keychain profile '$PROFILE'." >&2
+      if [[ -n "$NOTARYTOOL_KEYCHAIN" ]]; then
+        echo "Checked keychain: $NOTARYTOOL_KEYCHAIN" >&2
+      fi
       echo "Create it with: xcrun notarytool store-credentials $PROFILE" >&2
       exit 1
     fi
