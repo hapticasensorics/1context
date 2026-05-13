@@ -17,10 +17,17 @@ jobs:
     environment: onecontext-update-runner
     steps:
       - uses: actions/checkout@v6
+      - name: Install bundled web edge dependency
+        run: |
+          if ! command -v caddy >/dev/null 2>&1; then
+            brew install caddy
+          fi
+          caddy version
       - name: Tool versions
         run: |
           swift --version
           xcodebuild -version
+          brew --version
           caddy version
           security find-identity -v -p codesigning
       - name: Check local release credentials
