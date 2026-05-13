@@ -268,6 +268,7 @@
           <span class="pill">Owner: Paul</span>
           <span class="pill">Default: silent mandatory updates</span>
           <span class="pill">Support: paul@haptica.ai</span>
+          <span class="pill">Examples are policy examples, not current version claims</span>
         </div>
       </div>
       <figure class="hero-shot">
@@ -366,7 +367,7 @@
           </tr>
           <tr>
             <td>Update failed</td>
-            <td>Simple support message. Keep old app usable.</td>
+            <td>Only after an update was found or install started and silent retries are exhausted. Keep old app usable.</td>
             <td>Update failed. Please contact support at paul@haptica.ai.</td>
           </tr>
           <tr>
@@ -377,7 +378,7 @@
           <tr>
             <td>Settings submenu</td>
             <td>Always shows the currently running app version.</td>
-            <td>Version 0.1.58</td>
+            <td>Version &lt;running app version&gt;</td>
           </tr>
         </tbody>
       </table>
@@ -419,8 +420,9 @@
           <li>If the release is mandatory, install immediately when available.</li>
           <li>Relaunch immediately after install.</li>
           <li>Do not show release notes, preflight explanation, or confirmation UI.</li>
+          <li>If an automatic check fails before any update is found or install begins, retry silently and do not show support UI.</li>
           <li>If update fails, keep the existing app running whenever possible.</li>
-          <li>Show only the approved support message on failure.</li>
+          <li>If an update was found or install began and then failed after retries, show only the approved support message.</li>
         </ul>
       </div>
     </section>
@@ -443,6 +445,7 @@
           <h3>Manual Check</h3>
           <ul>
             <li>User asks for update state from the menu.</li>
+            <li>If the app is current, a simple up-to-date message is allowed.</li>
             <li>If an optional update exists, show a small prompt.</li>
             <li>Install only if the user clicks Update.</li>
             <li>Use product copy, not technical updater copy.</li>

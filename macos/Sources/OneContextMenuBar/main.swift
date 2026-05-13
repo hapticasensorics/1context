@@ -180,16 +180,17 @@ private final class AppSetupWindowController: NSWindowController {
     )
     setRefreshButtonVisible(!snapshot.localWikiAccess.ready || isGrantingLocalWikiAccess)
 
-    let permissions = Dictionary(uniqueKeysWithValues: snapshot.sensitivePermissions.map { ($0.kind, $0) })
+    let permissions = Dictionary(uniqueKeysWithValues: snapshot.shippedPermissionRows.map { ($0.kind, $0) })
     renderSensitiveRow(screenRecordingRow, snapshot: permissions[.screenRecording])
     renderSensitiveRow(accessibilityRow, snapshot: permissions[.accessibility])
   }
 
   private func renderSensitiveRow(_ row: SetupRequirementRow, snapshot: PermissionSnapshot?) {
     guard let snapshot else {
-      row.render(status: .notRequired, action: nil)
+      row.isHidden = true
       return
     }
+    row.isHidden = false
     let status: SetupRequirementRow.Status
     switch snapshot.status {
     case .granted:
@@ -429,7 +430,6 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
   private var isUninstallInFlight = false
   private var isReadinessRefreshInFlight = false
   private var isSetupReadinessCheckInFlight = false
-  private var isPausingRuntimeForMandatoryUpdate = false
   private var isMenuOpen = false
   private var didOfferLocalWebSetupAtLaunch = false
   private var cachedRequiredSetupReady = false
@@ -464,7 +464,7 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
   private let perfLoggingEnabled = ProcessInfo.processInfo.environment["ONECONTEXT_MENU_PERF_LOG"] == "1"
   private let localWeb = CaddyManager()
   private let localWebQueue = DispatchQueue(label: "com.haptica.1context.menu.local-web")
-  private lazy var nativeUpdater = SparkleUpdateController()
+  private lazy var sparkleUpdater = SparkleUpdateController()
   private lazy var setupWindowController: AppSetupWindowController = {
     let controller = AppSetupWindowController()
     controller.onGrantLocalWikiAccess = { [weak self] in
@@ -720,7 +720,7 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
     statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
     configureStatusIcon()
     configureMenu()
-    startNativeUpdater()
+    startAppUpdater()
     presentPostInstallUpdateMessageIfNeeded()
     refreshMenuItems()
     if !smokeFixture {
@@ -811,15 +811,15 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
     statusItem.menu = menu
   }
 
-  private func startNativeUpdater() {
-    nativeUpdater.onUpdateInformationChanged = { [weak self] in
+  private func startAppUpdater() {
+    sparkleUpdater.onUpdateInformationChanged = { [weak self] in
       Task { @MainActor in
-        await self?.refreshNativeUpdateState()
+        await self?.refreshAppUpdateState()
       }
     }
-    nativeUpdater.checkForUpdatesInBackgroundOnLaunch()
+    sparkleUpdater.checkForUpdatesInBackgroundOnLaunch()
     Task { @MainActor in
-      await refreshNativeUpdateState()
+      await refreshAppUpdateState()
     }
   }
 
@@ -893,34 +893,12 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
     refreshMenuItems()
   }
 
-  private func refreshNativeUpdateState() async {
-    let snapshot = await nativeUpdater.snapshot(currentVersion: appVersion)
-    applyMandatoryUpdateRuntimePolicy(to: snapshot)
+  private func refreshAppUpdateState() async {
+    let snapshot = await sparkleUpdater.snapshot(currentVersion: appVersion)
     setUpdateState(Self.updateState(for: snapshot))
   }
 
-  private func applyMandatoryUpdateRuntimePolicy(to snapshot: NativeUpdateSnapshot) {
-    guard MandatoryUpdateRuntimePolicy.shouldPausePassiveRemembering(snapshot) else { return }
-    pauseRuntimeForMandatoryUpdate()
-  }
-
-  private func pauseRuntimeForMandatoryUpdate() {
-    guard !isPausingRuntimeForMandatoryUpdate else { return }
-    isPausingRuntimeForMandatoryUpdate = true
-    setRuntimeState(.needsUpdate, forceRender: true)
-
-    Task.detached(priority: .utility) {
-      _ = try? await RuntimeController().stopForAppQuit()
-      await MainActor.run {
-        self.isPausingRuntimeForMandatoryUpdate = false
-        if self.updateState == .mandatoryAvailable {
-          self.setRuntimeState(.needsUpdate, forceRender: true)
-        }
-      }
-    }
-  }
-
-  private nonisolated static func updateState(for snapshot: NativeUpdateSnapshot) -> UpdateState {
+  private nonisolated static func updateState(for snapshot: AppUpdateSnapshot) -> UpdateState {
     if snapshot.mandatoryUpdateAvailable {
       return .mandatoryAvailable
     }
@@ -1115,7 +1093,7 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
 
   @objc private func openUpdateFlow() {
     Task {
-      await runNativeUpdateFlow()
+      await runAppUpdateFlow()
     }
   }
 
@@ -1129,15 +1107,14 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
         self.refreshMenuItems()
       }
 
-      let snapshot = await self.nativeUpdater.snapshot(currentVersion: self.appVersion)
-      self.applyMandatoryUpdateRuntimePolicy(to: snapshot)
+      let snapshot = await self.sparkleUpdater.snapshot(currentVersion: self.appVersion)
       self.setUpdateState(Self.updateState(for: snapshot))
       guard snapshot.availability == .available else {
-        self.presentNativeUpdateSnapshot(snapshot)
+        self.presentAppUpdateSnapshot(snapshot)
         return
       }
-      if !self.nativeUpdater.checkForUpdates(self.updateItem) {
-        self.presentNativeUpdateSnapshot(snapshot)
+      if !self.sparkleUpdater.checkForUpdates(self.updateItem) {
+        self.presentAppUpdateSnapshot(snapshot)
       }
     }
   }
@@ -1184,41 +1161,25 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
     }
   }
 
-  private func showUpToDateMessage() {
-    presentMenuAlert("1Context up to date.")
-  }
-
-  private func confirmUpdate() -> Bool {
-    let alert = NSAlert()
-    alert.messageText = "Update 1Context?"
-    alert.informativeText = "1Context updates use the native app updater. The updater will verify the signed release, install it, and relaunch the app."
-    alert.icon = loadFishAlertIcon()
-    alert.addButton(withTitle: "Update")
-    alert.addButton(withTitle: "Cancel")
-    NSApp.activate(ignoringOtherApps: true)
-    return alert.runModal() == .alertFirstButtonReturn
-  }
-
-  private func runNativeUpdateFlow(snapshot existingSnapshot: NativeUpdateSnapshot? = nil) async {
-    let snapshot: NativeUpdateSnapshot
+  private func runAppUpdateFlow(snapshot existingSnapshot: AppUpdateSnapshot? = nil) async {
+    let snapshot: AppUpdateSnapshot
     if let existingSnapshot {
       snapshot = existingSnapshot
     } else {
-      snapshot = await nativeUpdater.snapshot(currentVersion: appVersion)
+      snapshot = await sparkleUpdater.snapshot(currentVersion: appVersion)
     }
     if snapshot.availability == .available {
-      if snapshot.mandatoryUpdateAvailable, nativeUpdater.checkForUpdatesAutomatically() {
+      if snapshot.mandatoryUpdateAvailable, sparkleUpdater.checkForUpdatesAutomatically() {
         return
       }
-      if nativeUpdater.checkForUpdates(updateItem) {
+      if sparkleUpdater.checkForUpdates(updateItem) {
         return
       }
     }
-    presentNativeUpdateSnapshot(snapshot)
+    presentAppUpdateSnapshot(snapshot)
   }
 
-  private func presentNativeUpdateSnapshot(_ snapshot: NativeUpdateSnapshot) {
-    applyMandatoryUpdateRuntimePolicy(to: snapshot)
+  private func presentAppUpdateSnapshot(_ snapshot: AppUpdateSnapshot) {
     setUpdateState(Self.updateState(for: snapshot))
     if snapshot.availability == .notConfigured {
       presentMenuAlert(snapshot.userFacingStatus)
@@ -1837,7 +1798,6 @@ private enum RuntimeState {
   case running
   case stopped
   case needsSetup
-  case needsUpdate
   case needsAttention
 
   var title: String {
@@ -1850,8 +1810,6 @@ private enum RuntimeState {
       return "1Context Stopped"
     case .needsSetup:
       return "1Context Needs Setup"
-    case .needsUpdate:
-      return "1Context Needs Update"
     case .needsAttention:
       return "1Context Sick"
     }

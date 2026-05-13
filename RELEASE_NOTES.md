@@ -1,18 +1,18 @@
-# 1Context v0.1.62 Public Preview
+# 1Context v0.1.63 Public Preview
 
 This release includes:
 
-- `0.1.62` is a mandatory failed-update supportability release.
-- Failed updates now show simple support copy instead of technical updater
-  details.
-- The failed-update window includes `Try Again` while keeping normal
-  `Check for Updates` behavior separate.
-- Mandatory failed-update smokes now cover missing assets, bad signatures,
-  broken appcasts, interrupted downloads, and runtime survival.
-- Release-lockdown diagnostics now classify healthy, needs setup, needs update,
-  failed update, and stopped-by-user states.
-- The release evidence bundle captures version, appcast, Sparkle state,
-  LaunchAgents, helper readiness, runtime health, wiki health, and recent logs.
+- `0.1.63` is a mandatory updater-health release.
+- Automatic update checks no longer show the support popup when no update was
+  found and no install started.
+- Automatic check-only failures retry silently and then stay quiet if the app is
+  already current.
+- Real failed update or install attempts still keep the old app usable and show
+  simple support copy after retries.
+- Manual `Check for Updates` remains a normal user action and can say
+  `1Context is up to date.`
+- Release proof now includes a broken-appcast check-only smoke that verifies no
+  support alert is shown.
 
 Install:
 

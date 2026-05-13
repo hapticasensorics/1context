@@ -9,6 +9,7 @@ import sys
 import tomllib
 import xml.etree.ElementTree as ET
 from pathlib import Path
+from urllib.parse import urlparse
 from typing import Any
 
 
@@ -17,6 +18,7 @@ DEFAULT_POLICY = ROOT / "release" / "update-policy.toml"
 DEFAULT_VERSION_FILE = ROOT / "VERSION"
 SCHEMA_VERSION = "1context.update-policy.v1"
 VERSION_RE = re.compile(r"^\d+\.\d+\.\d+$")
+SPARKLE_NS = "http://www.andymatuschak.org/xml-namespaces/sparkle"
 
 
 class PolicyError(Exception):
@@ -133,7 +135,7 @@ def validate_appcast(policy: dict[str, Any], appcast_path: Path) -> None:
     raise PolicyError(f"Appcast not found: {appcast_path}")
 
   root = ET.parse(appcast_path).getroot()
-  namespaces = {"sparkle": "http://www.andymatuschak.org/xml-namespaces/sparkle"}
+  namespaces = {"sparkle": SPARKLE_NS}
   item = root.find("./channel/item")
   if item is None:
     raise PolicyError("Appcast is missing channel/item.")
@@ -150,8 +152,53 @@ def validate_appcast(policy: dict[str, Any], appcast_path: Path) -> None:
   critical = item.find("sparkle:criticalUpdate", namespaces=namespaces)
   if update_class == "mandatory" and critical is None:
     raise PolicyError("Mandatory policy requires sparkle:criticalUpdate in appcast.")
+  critical_update_version = string_value(policy, "critical_update_version", required=False)
+  if update_class == "mandatory" and critical is not None:
+    appcast_critical_version = critical.attrib.get(f"{{{SPARKLE_NS}}}version", "")
+    if appcast_critical_version != critical_update_version:
+      raise PolicyError(
+        "Mandatory appcast criticalUpdate version "
+        f"{appcast_critical_version!r} does not match policy {critical_update_version!r}."
+      )
   if update_class == "optional" and critical is not None:
     raise PolicyError("Optional policy must not produce sparkle:criticalUpdate.")
+
+  minimum_autoupdate_version = string_value(policy, "minimum_autoupdate_version", required=False)
+  appcast_minimum_autoupdate = item.findtext("sparkle:minimumAutoupdateVersion", namespaces=namespaces) or ""
+  if update_class == "mandatory":
+    if appcast_minimum_autoupdate != minimum_autoupdate_version:
+      raise PolicyError(
+        "Mandatory appcast minimumAutoupdateVersion "
+        f"{appcast_minimum_autoupdate!r} does not match policy {minimum_autoupdate_version!r}."
+      )
+  elif appcast_minimum_autoupdate:
+    raise PolicyError("Optional appcast must not contain minimumAutoupdateVersion.")
+
+  enclosure = item.find("enclosure")
+  if enclosure is None:
+    raise PolicyError("Appcast is missing enclosure.")
+  enclosure_url = enclosure.attrib.get("url", "")
+  if not enclosure_url:
+    raise PolicyError("Appcast enclosure is missing url.")
+  expected_asset = f"1Context-{version}-macos-arm64.dmg"
+  parsed_enclosure_url = urlparse(enclosure_url)
+  enclosure_asset = Path(parsed_enclosure_url.path).name
+  if enclosure_asset != expected_asset:
+    raise PolicyError(f"Appcast enclosure asset {enclosure_asset!r} does not match {expected_asset!r}.")
+  expected_enclosure_url = (
+    f"https://github.com/{os.environ.get('ONECONTEXT_GITHUB_REPO', 'hapticasensorics/1context')}"
+    f"/releases/download/v{version}/{expected_asset}"
+  )
+  if enclosure_url != expected_enclosure_url:
+    raise PolicyError(
+      f"Appcast enclosure url {enclosure_url!r} does not match {expected_enclosure_url!r}."
+    )
+  enclosure_length = enclosure.attrib.get("length", "").strip()
+  if not enclosure_length.isdigit() or int(enclosure_length) <= 0:
+    raise PolicyError("Appcast enclosure must include a positive length.")
+  ed_signature = enclosure.attrib.get(f"{{{SPARKLE_NS}}}edSignature", "")
+  if not ed_signature.strip():
+    raise PolicyError("Appcast enclosure is missing sparkle:edSignature.")
 
   description = item.find("description")
   if not show_notes and description is not None and (description.text or "").strip():

@@ -1327,25 +1327,6 @@ def find_transition_contract(
     event_name: str,
     target_state: str,
 ) -> dict[str, Any]:
-    return _legacy_find_transition_contract(
-        system,
-        machine_id=machine_id,
-        scope=scope,
-        source_state=source_state,
-        event_name=event_name,
-        target_state=target_state,
-    )
-
-
-def _legacy_find_transition_contract(
-    system: MemorySystem,
-    *,
-    machine_id: str,
-    scope: str,
-    source_state: str,
-    event_name: str,
-    target_state: str,
-) -> dict[str, Any]:
     machine = compile_system_map(system)["state_machines"].get(machine_id)
     if not isinstance(machine, dict):
         raise MemoryTickError(f"state-machine {machine_id!r} is not available")

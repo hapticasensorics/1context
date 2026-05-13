@@ -38,7 +38,7 @@ This public preview is early, but the app shell is real and polished:
 - a private local wiki served in your browser
 - polished default pages, even before you have much content
 - Claude Code and Codex hooks that point agents at the live wiki
-- local files under `~/1Context/` that you can read and keep
+- user-owned local content under `~/1Context/` as it is created
 - no product telemetry and no upload of project data in this preview
 
 Memory collection and memory writing are still manual in this release. The
@@ -117,10 +117,10 @@ hooks while preserving `~/1Context` unless you choose `--delete-data`.
 
 ```text
 ~/1Context/
-  human-readable wiki files and user-owned content
+  user-created wiki files and user-owned content
 
 ~/Library/Application Support/1Context/
-  app/runtime state, config, indexes, and local web state
+  app/runtime state, config, indexes, shipped wiki shell, and local web state
 
 ~/Library/Logs/1Context/
   logs and debug/support information
@@ -130,7 +130,7 @@ hooks while preserving `~/1Context` unless you choose `--delete-data`.
 ```
 
 The public preview makes no product telemetry calls and does not upload project
-data. Native update checks are app-owned and use the signed Sparkle release
+data. App update checks are app-owned and use the signed Sparkle release
 feed.
 
 See [PERMISSIONS.md](PERMISSIONS.md) for the ownership, consent, and privacy
@@ -153,6 +153,8 @@ today, cloud later, same wiki pages and `/api/wiki/*` shape.
 
 Maintainer and contract details live in:
 
+- [Docs index](docs/README.md)
+- [macOS release runbook](docs/macos-release-runbook.md)
 - [Local web contract](docs/local-web-contract.md)
 - [Memory core contract](docs/memory-core-contract.md)
 - [Development and release notes](docs/development.md)

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from .evidence import WikiEvidenceResult, record_render_evidence
-from .families import WikiError, WikiFamily, discover_families, family_by_id
+from .families import WikiError, WikiFamily, discover_families, family_by_id, publishes_to_user_wiki
 from .manifest import MANIFEST_FILENAME, MANIFEST_SCHEMA_VERSION
 from .render import WikiRenderResult, render_family
 from .routes import RouteTable, RouteTarget, load_route_table
@@ -18,6 +18,7 @@ __all__ = [
     "discover_families",
     "family_by_id",
     "load_route_table",
+    "publishes_to_user_wiki",
     "record_render_evidence",
     "render_family",
 ]

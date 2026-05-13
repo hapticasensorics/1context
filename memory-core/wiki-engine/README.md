@@ -19,9 +19,11 @@ Imported into 1Context as a first-class memory-core subsystem. This package owns
 deterministic wiki rendering and generation; the Python `onectx` runtime owns
 ports, storage, state machines, jobs, evidence, and agent hiring.
 
-This first import intentionally keeps the e08 renderer standalone. The next
-step is adapting it from flat experiment paths to `wiki/menu/**/family.toml`
-family workspaces.
+The engine is now wired through the Python memory-core wiki commands. Python
+discovers `wiki/menu/**/family.toml` workspaces, calls
+`tools/render-to-dir.mjs`, writes `render-manifest.json`, and publishes the
+portable site files used by the macOS shell. The Node package remains private
+and renderer-focused until the storage-adapter and CLI boundaries are promoted.
 
 Current verification loop:
 
@@ -30,6 +32,8 @@ npm install
 npm test
 node tools/render-to-dir.mjs tests/fixtures/for-you-2026-04-26.md /tmp/1context-wiki-engine-fixture
 node tools/render-to-dir.mjs tests/fixtures/basic.talk /tmp/1context-wiki-engine-talk-fixture
+uv run --project .. 1context-memory-core wiki list --json
+uv run --project .. 1context-memory-core wiki render --json
 ```
 
 Talk convention banners are loaded from source frontmatter via
@@ -49,7 +53,7 @@ wiki-engine/
 ├── docs/architecture.md  ← layered model + key types
 ├── README.md             ← you are here
 ├── SCOPE.md              ← engine vs content boundary
-├── ROADMAP.md            ← P1–P7
+├── ROADMAP.md            ← current renderer/package priorities
 └── CHANGELOG.md          ← SemVer track
 ```
 

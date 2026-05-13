@@ -88,11 +88,11 @@
       "sha256": "a75fe0cb5e3d19978ecd8dfabef35a3aac58fe1e457bdb38ac244e2f733c2684"
     },
     {
-      "bytes": 3030,
+      "bytes": 3014,
       "content_type": "text/markdown",
       "path": "wiki/menu/10-for-you/20-your-context/source/your-context.md",
       "role": "source_canonical_private",
-      "sha256": "7197bff25737da5cadcab647231f92edb7e1b94a1027a5304109bba92ccd5b8e"
+      "sha256": "06da2f7c5d8499467a1cd51d515d3ae782304200ed916ea6e166d425567d999e"
     },
     {
       "bytes": 382,
@@ -134,7 +134,7 @@
     {
       "input_path": "wiki/menu/10-for-you/20-your-context/source/your-context.md",
       "stderr": "",
-      "stdout": "\u2713 your-context: 41540 bytes \u2192 /Users/paulhan/dev/1context-public-launch/memory-core/wiki/menu/10-for-you/20-your-context/generated/your-context.html"
+      "stdout": "\u2713 your-context: 41506 bytes \u2192 /Users/paulhan/dev/1context-public-launch/memory-core/wiki/menu/10-for-you/20-your-context/generated/your-context.html"
     },
     {
       "input_path": "wiki/menu/10-for-you/20-your-context/talk/your-context.talk",
@@ -146,19 +146,19 @@
   "outputs": [
     {
       "audience_tier": "public",
-      "bytes": 41560,
+      "bytes": 41526,
       "content_type": "text/html",
       "path": "wiki/menu/10-for-you/20-your-context/generated/your-context.html",
       "role": "generated_output",
-      "sha256": "e21c51b7a3a216e456727f804e3f74fc71e887f20475540e621527263dd48702"
+      "sha256": "46d03f91ed2aafeccfc09757c1ff2ca1789dbd1637f9a70de767afad7a3e89a7"
     },
     {
       "audience_tier": "public",
-      "bytes": 3030,
+      "bytes": 3014,
       "content_type": "text/markdown",
       "path": "wiki/menu/10-for-you/20-your-context/generated/your-context.md",
       "role": "generated_output",
-      "sha256": "7197bff25737da5cadcab647231f92edb7e1b94a1027a5304109bba92ccd5b8e"
+      "sha256": "06da2f7c5d8499467a1cd51d515d3ae782304200ed916ea6e166d425567d999e"
     },
     {
       "audience_tier": "public",
@@ -177,7 +177,7 @@
       "sha256": "0fd038240e65f2881fb36fa6a51d8f41293d580c51bc1f681396638e799a67b6"
     }
   ],
-  "rendered_at": "2026-05-07T01:30:21Z",
+  "rendered_at": "2026-05-10T05:10:47Z",
   "routes": [
     {
       "kind": "latest_family_html",
@@ -216,7 +216,7 @@
           "exists": true,
           "path": "wiki/menu/10-for-you/20-your-context/source/your-context.md",
           "selected_for_render": true,
-          "sha256": "7197bff25737da5cadcab647231f92edb7e1b94a1027a5304109bba92ccd5b8e"
+          "sha256": "06da2f7c5d8499467a1cd51d515d3ae782304200ed916ea6e166d425567d999e"
         },
         "public": {
           "exists": false,

@@ -1,49 +1,57 @@
 # Roadmap
 
-## Update Checks
+1Context is a signed macOS app with a private local wiki, app-owned setup,
+Sparkle updates, uninstall support, and a bounded memory-core bridge. The next
+work is less about adding basic app plumbing and more about proving the release
+flywheel and turning the memory system on safely.
 
-1Context is moving to app-native updates. The shipped product should update from
-the signed app without launching Terminal or depending on a package manager.
+## Release Flywheel
 
-Current path:
+- Keep shipping through the signed, notarized DMG and Homebrew cask channels.
+- Keep Sparkle as the in-app update engine and `1context-cli` as the support and
+  automation surface.
+- Finish real installed-app proof for update hops, restart/login recovery,
+  setup repair, non-destructive uninstall, and controlled delete-data uninstall.
+- Use the self-hosted Mac runner for mandatory updates, Sparkle metadata
+  changes, LaunchAgent/local-web changes, repair releases, and launch-candidate
+  rehearsals.
+- Keep release class, updater copy, failure copy, post-install messaging, and
+  menu behavior under the founder-controlled update policy.
 
-- Native updater diagnostics live in `OneContextUpdate`.
-- The menu bar update command is app-owned and ready for a Sparkle adapter.
-- Release packaging produces a signed `.app`, DMG, bundled CLI, daemon, Caddy,
-  memory-core resources, and local HTTPS helper.
+## Permissions And Setup
 
-This avoids tying a core product feature to the user's shell or package-manager
-state.
+- Treat Local Wiki Access as required setup for the current product.
+- Request future sensitive permissions only from app-owned setup or permissions
+  surfaces, at the moment a shipped feature needs them.
+- Make blocked actions open the relevant permission or setup flow instead of
+  failing silently.
+- Keep setup state live: if permissions or local HTTPS are already granted, the
+  app should recognize that without requiring a manual recheck.
 
-Future path:
+## Wiki And Memory
 
-- Add Sparkle for signed appcast updates.
-- Keep `1context update` as a CLI support path that invokes the same app-owned
-  updater domain where possible.
-- Support stable/beta channels, minimum supported versions, security notices,
-  and release notes.
+- Keep the installed wiki focused on user-facing system-shell pages and
+  user-owned content. Development goals and operator checklists live in `docs/`.
+- Preserve the clean boundary between `~/1Context` user content and app-owned
+  generated or shipped wiki state under Application Support.
+- Turn on passive capture and memory writing only behind explicit product
+  permission decisions and deterministic proof.
+- Promote the memory-core subprocess bridge from status/wiki proof toward
+  durable project memory, talk-page proposals, and librarian flows.
 
-## Packaging
+## Cloud And Sharing
 
-- macOS public preview ships as a signed DMG containing `1Context.app`.
-- Apple Silicon and macOS 13 Ventura or newer are required.
-- The app owns setup, local web, runtime startup, and update checks.
-- `1contextd` remains internal implementation plumbing.
+- Keep browser code on relative `/api/wiki/*` routes so local and future cloud
+  hosting share the same contract.
+- Add cloud wiki sharing only after the local ownership and consent model stays
+  clear.
+- Avoid coupling agent hooks or browser pages to developer ports, source
+  checkouts, or machine-specific paths.
 
-## Uninstall
+## Current Sources
 
-Uninstall should be understandable from the app era: quit the app, remove the
-bundle, and optionally remove user-owned data and app-owned helper state.
-
-Future path:
-
-- Add `1context uninstall` for friendly app/runtime removal.
-- Add `1context uninstall --delete-data` for full local data cleanup.
-- Add an app-facing cleanup path for Local Wiki Access, LaunchAgents, and future
-  ServiceManagement helper state.
-
-## Product Runtime
-
-The public repo currently validates installation, menu-bar control, local runtime lifecycle, and update plumbing.
-
-The deeper context engine, project memory, wiki generation, MCP surfaces, and capture flows are still in active development.
+- Release operations: [docs/macos-release-runbook.md](docs/macos-release-runbook.md)
+- Update policy: [docs/update_policy.html](docs/update_policy.html)
+- App boundaries: [docs/macos-app-architecture.md](docs/macos-app-architecture.md)
+- Local web contract: [docs/local-web-contract.md](docs/local-web-contract.md)
+- Permissions contract: [PERMISSIONS.md](PERMISSIONS.md)

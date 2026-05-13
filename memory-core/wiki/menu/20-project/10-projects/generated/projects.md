@@ -59,5 +59,4 @@ projects. Stable patterns may also belong in [Your Context](/your-context) or
 
 - [For You](/for-you)
 - [Your Context](/your-context)
-- [Goal](/goal)
 - [Topics](/topics)

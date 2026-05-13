@@ -88,11 +88,11 @@
       "sha256": "a75fe0cb5e3d19978ecd8dfabef35a3aac58fe1e457bdb38ac244e2f733c2684"
     },
     {
-      "bytes": 1935,
+      "bytes": 1919,
       "content_type": "text/markdown",
       "path": "wiki/menu/30-topics/10-topics/source/topics.md",
       "role": "source_canonical_private",
-      "sha256": "1cc3487faca22fc104889b9ea3cb0094c2846558f05f27c622f70ca8ffc3abb6"
+      "sha256": "25edba3880187f60e7cd0e3b39cb908d3ade47c06009f60214d24b1f1d0f41a9"
     },
     {
       "bytes": 386,
@@ -134,7 +134,7 @@
     {
       "input_path": "wiki/menu/30-topics/10-topics/source/topics.md",
       "stderr": "",
-      "stdout": "\u2713 topics: 39822 bytes \u2192 /Users/paulhan/dev/1context-public-launch/memory-core/wiki/menu/30-topics/10-topics/generated/topics.html"
+      "stdout": "\u2713 topics: 39788 bytes \u2192 /Users/paulhan/dev/1context-public-launch/memory-core/wiki/menu/30-topics/10-topics/generated/topics.html"
     },
     {
       "input_path": "wiki/menu/30-topics/10-topics/talk/topics.talk",
@@ -146,19 +146,19 @@
   "outputs": [
     {
       "audience_tier": "public",
-      "bytes": 39842,
+      "bytes": 39808,
       "content_type": "text/html",
       "path": "wiki/menu/30-topics/10-topics/generated/topics.html",
       "role": "generated_output",
-      "sha256": "59208b105ebf5e58974c906808ca904162aba2ebbe109b73fbfc3dad36bca122"
+      "sha256": "9d5fbdbb883c686e48560ce5ecf0e65eeffffb8649d1055a5ae24e7bcdee4197"
     },
     {
       "audience_tier": "public",
-      "bytes": 1935,
+      "bytes": 1919,
       "content_type": "text/markdown",
       "path": "wiki/menu/30-topics/10-topics/generated/topics.md",
       "role": "generated_output",
-      "sha256": "1cc3487faca22fc104889b9ea3cb0094c2846558f05f27c622f70ca8ffc3abb6"
+      "sha256": "25edba3880187f60e7cd0e3b39cb908d3ade47c06009f60214d24b1f1d0f41a9"
     },
     {
       "audience_tier": "public",
@@ -177,7 +177,7 @@
       "sha256": "87c6411d6f41e97efa068710c630a341fdd3bf05ef8440cbf3e5e42d6a9c3dc6"
     }
   ],
-  "rendered_at": "2026-05-07T01:30:22Z",
+  "rendered_at": "2026-05-10T05:10:47Z",
   "routes": [
     {
       "kind": "latest_family_html",
@@ -216,7 +216,7 @@
           "exists": true,
           "path": "wiki/menu/30-topics/10-topics/source/topics.md",
           "selected_for_render": true,
-          "sha256": "1cc3487faca22fc104889b9ea3cb0094c2846558f05f27c622f70ca8ffc3abb6"
+          "sha256": "25edba3880187f60e7cd0e3b39cb908d3ade47c06009f60214d24b1f1d0f41a9"
         },
         "public": {
           "exists": false,

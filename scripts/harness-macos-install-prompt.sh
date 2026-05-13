@@ -22,7 +22,6 @@ echo "Launching install prompt with temporary destination:"
 echo "  $DESTINATION"
 
 ONECONTEXT_APP_INSTALL_DESTINATION="$DESTINATION" \
-ONECONTEXT_NO_UPDATE_CHECK=1 \
 "$MENU" >"$LOG" 2>&1 &
 MENU_PID=$!
 

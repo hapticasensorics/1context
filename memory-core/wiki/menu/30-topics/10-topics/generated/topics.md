@@ -71,5 +71,4 @@ customers, vendors, or collaboration boundaries.
 
 - [For You](/for-you)
 - [Your Context](/your-context)
-- [Goal](/goal)
 - [Projects](/projects)

@@ -59,8 +59,18 @@ The Python memory core owns rendering:
 
 - creates or updates wiki source scaffolds
 - renders markdown into themed static HTML and local static JSON artifacts
+- ships only user-facing template/system wiki pages in public release builds
 - never starts a long-lived web server in public release
 - never owns the canonical local URL
+
+Development and operator planning documents belong under `docs/`, not in the
+installed user's wiki. In particular, the release-lockdown checklist that used
+to live at `/goal` is now `docs/goals/1context-release-lockdown-goal.md`; normal
+`wiki-site/current` publishes must not expose it as `/goal`.
+
+This cleanup is a product boundary decision first. The repo may still carry
+working-tree implementation hardening while we decide when to promote it into a
+signed release, but release packages should converge on the rule above.
 
 ## Serving Invariant
 
@@ -115,6 +125,7 @@ daemon state, not through separate hook plugin releases.
 
 - No Python HTTP server in public release.
 - No direct serving from memory-core generated directories.
+- No development/operator goal pages in the installed user wiki.
 - No user-installed Caddy dependency; release artifacts bundle Caddy.
 - No port fallback for the canonical product URL.
 - No root-owned process reads user wiki files or memory content.

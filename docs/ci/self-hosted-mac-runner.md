@@ -166,6 +166,31 @@ Configure these before treating a green run as release proof:
 
 ## Trigger A Proof Run
 
+Prefer the repo wrapper so release proof becomes muscle memory instead of a
+hand-filled form. It reads `VERSION` and `release/update-policy.toml`, infers the
+mandatory old-version baseline from `minimum_autoupdate_version`, validates the
+trusted ref shape, and prints the exact `gh workflow run` command before doing
+anything:
+
+```bash
+./scripts/request-release-proof.sh --dry-run
+```
+
+After the release assets and appcast are uploaded, dispatch and watch the proof:
+
+```bash
+./scripts/request-release-proof.sh \
+  --dispatch \
+  --watch \
+  --download-artifacts \
+  --ref v$(cat VERSION) \
+  --proof-reason "routine mandatory release proof for $(cat VERSION)"
+```
+
+For optional releases, or any policy without `minimum_autoupdate_version`, pass
+`--old-version` explicitly. For staging feeds, pass `--appcast-url` and usually
+`--old-dmg-url` for a version-N app built to use that same feed.
+
 From GitHub UI:
 
 1. Actions -> Self-hosted Mac Update Proof.
@@ -176,7 +201,7 @@ From GitHub UI:
    release-worthy, the staging appcast URL matches the intended candidate, and
    the version-N DMG being installed is built to use that appcast URL.
 
-From `gh`:
+The wrapper is equivalent to this lower-level `gh` call:
 
 ```bash
 gh workflow run self-hosted-mac-update-proof.yml \

@@ -3,6 +3,11 @@
 A working sketch — concrete enough to start building against,
 loose enough to revise as we discover constraints.
 
+Current integration note: the Python memory-core runtime owns
+`wiki/menu/**/family.toml` discovery, policy filtering, evidence, route records,
+and site publication. The Node wiki-engine owns deterministic rendering of the
+source or talk inputs it is given.
+
 ## Layered model
 
 ```
@@ -67,7 +72,20 @@ interface Adapter {
 }
 ```
 
-## Build flow
+## Current build flow
+
+1. Python discovers wiki families from `wiki/menu/**/family.toml`.
+2. For each family, Python selects source and talk inputs according to family
+   policy.
+3. Python invokes `wiki-engine/tools/render-to-dir.mjs` for each selected input.
+4. The engine emits themed HTML, clean markdown twins, route helper files, and
+   static browser assets.
+5. Python writes `render-manifest.json` with family, engine, input, output,
+   tier-source, route, and check records.
+6. Python records render evidence and writes portable site files for the local
+   macOS web shell.
+
+## Future adapter build flow
 
 1. **Discovery.** Adapter `listPages()` → set of slugs to render.
 2. **Read.** For each slug, adapter `readPage(slug)` → `Page` with
@@ -100,6 +118,6 @@ interface Adapter {
 - Do we expose the `Adapter` interface in TypeScript and let
   third-party adapters be regular npm packages? Probably yes — that's
   how MkDocs, Docusaurus, etc. handle plugins.
-- How does dev mode (hot reload) interact with adapters? For
-  static-md, file watcher. For PuterDB, polling or webhooks. The
-  adapter interface needs an optional `subscribe()` method.
+- How does dev mode (hot reload) interact with adapters? For static markdown,
+  a file watcher is enough. Other adapters may need polling or webhooks. The
+  adapter interface probably needs an optional `subscribe()` method.

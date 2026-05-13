@@ -5,7 +5,13 @@ from pathlib import Path
 
 from onectx.wiki.cli import render_stats_dashboard
 from onectx.wiki.routes import load_route_table
-from onectx.wiki.site import WIKI_STATS_FILENAME, build_wiki_stats, load_wiki_stats, write_site_files
+from onectx.wiki.site import (
+    WIKI_STATS_FILENAME,
+    build_site_manifest,
+    build_wiki_stats,
+    load_wiki_stats,
+    write_site_files,
+)
 
 
 def test_wiki_stats_count_sources_talk_and_links(tmp_path: Path) -> None:
@@ -80,6 +86,24 @@ def test_route_table_includes_rendered_talk_pages(tmp_path: Path) -> None:
     assert "/example.talk.html" in routes
 
 
+def test_user_wiki_publication_policy_excludes_operator_families(tmp_path: Path) -> None:
+    make_family(tmp_path)
+    make_operator_goal_family(tmp_path)
+
+    all_routes = load_route_table(tmp_path).routes
+    user_routes = load_route_table(tmp_path, family_ids={"example"}).routes
+    manifest = build_site_manifest(tmp_path)
+    stats = build_wiki_stats(tmp_path)
+
+    assert "/goal" in all_routes
+    assert "/goal" not in user_routes
+    assert [family["id"] for family in manifest["families"]] == ["example"]
+    assert "/goal" not in {route["route"] for route in manifest["routes"]}
+    assert "goal" not in {page["family_id"] for page in manifest["pages"]}
+    assert stats["totals"]["families"] == 1
+    assert [family["id"] for family in stats["families"]] == ["example"]
+
+
 def test_write_site_files_writes_stats_file(tmp_path: Path) -> None:
     make_family(tmp_path)
     source = tmp_path / "wiki" / "menu" / "10-group" / "10-example" / "source" / "example.md"
@@ -149,6 +173,49 @@ def make_family(root: Path) -> None:
                 'dir = "generated"',
                 "",
             ]
+        ),
+        encoding="utf-8",
+    )
+
+
+def make_operator_goal_family(root: Path) -> None:
+    family = root / "wiki" / "menu" / "10-group" / "20-goal"
+    generated = family / "generated"
+    generated.mkdir(parents=True)
+    (family / "source").mkdir()
+    (family / "family.toml").write_text(
+        "\n".join(
+            [
+                'id = "goal"',
+                'label = "Goal"',
+                'route = "/goal"',
+                'menu_group = "group"',
+                'menu_order = 20',
+                "",
+                "[source]",
+                'dir = "source"',
+                "",
+                "[generated]",
+                'dir = "generated"',
+                "",
+                "[policies]",
+                "publish_to_user_wiki = false",
+                'audience = "operator"',
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    (family / "source" / "goal.md").write_text("# Goal\n\nInternal release checklist.\n", encoding="utf-8")
+    (generated / "goal.html").write_text("<h1>Goal</h1>", encoding="utf-8")
+    (generated / "goal.md").write_text("# Goal\n\nInternal release checklist.\n", encoding="utf-8")
+    (generated / "render-manifest.json").write_text(
+        json.dumps(
+            {
+                "family": {"id": "goal"},
+                "routes": [{"route": "/goal", "output_path": "goal.html", "kind": "html"}],
+                "outputs": [{"path": "goal.html"}, {"path": "goal.md"}],
+            }
         ),
         encoding="utf-8",
     )

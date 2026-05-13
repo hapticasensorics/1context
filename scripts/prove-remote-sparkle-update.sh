@@ -258,7 +258,7 @@ assert_no_unwanted_update_ui() {
     return
   fi
   if grep -Eiq \
-    'Update 1Context\?|Install Update|Install and Relaunch|release notes|verify the signed release|installer|relaunch the app' \
+    'Update 1Context\?|Install Update|Install and Relaunch|Update failed|Please contact support|release notes|verify the signed release|installer|relaunch the app' \
     "$evidence_file"; then
     echo "Unexpected user-facing update UI during $phase. Evidence: $evidence_file" >&2
     exit 1

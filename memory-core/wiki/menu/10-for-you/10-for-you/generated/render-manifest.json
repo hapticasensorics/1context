@@ -89,11 +89,11 @@
       "sha256": "a75fe0cb5e3d19978ecd8dfabef35a3aac58fe1e457bdb38ac244e2f733c2684"
     },
     {
-      "bytes": 2324,
+      "bytes": 2308,
       "content_type": "text/markdown",
       "path": "wiki/menu/10-for-you/10-for-you/source/for-you.md",
       "role": "source_canonical_private",
-      "sha256": "7b33bd2b34bc9865f72a77236105529635aef04dc2c8222bff93f69e577530e5"
+      "sha256": "bc66154093be47058cf4ed8e00d5d7168fef01bd2cb4a95bb74234f23c89fd6b"
     },
     {
       "bytes": 481,
@@ -135,7 +135,7 @@
     {
       "input_path": "wiki/menu/10-for-you/10-for-you/source/for-you.md",
       "stderr": "",
-      "stdout": "\u2713 for-you: 64313 bytes \u2192 /Users/paulhan/dev/1context-public-launch/memory-core/wiki/menu/10-for-you/10-for-you/generated/for-you-2026-04-29.html\n  + 1 section sub-page(s) \u2192 /Users/paulhan/dev/1context-public-launch/memory-core/wiki/menu/10-for-you/10-for-you/generated/for-you-2026-04-29/\n  family/latest: for-you \u2192 for-you-2026-04-29 (2026-04-29)\n  family/index:  for-you-index.json (member registered)"
+      "stdout": "\u2713 for-you: 64279 bytes \u2192 /Users/paulhan/dev/1context-public-launch/memory-core/wiki/menu/10-for-you/10-for-you/generated/for-you-2026-04-29.html\n  + 1 section sub-page(s) \u2192 /Users/paulhan/dev/1context-public-launch/memory-core/wiki/menu/10-for-you/10-for-you/generated/for-you-2026-04-29/\n  family/latest: for-you \u2192 for-you-2026-04-29 (2026-04-29)\n  family/index:  for-you-index.json (member registered)"
     },
     {
       "input_path": "wiki/menu/10-for-you/10-for-you/talk/for-you-2026-04-29.talk",
@@ -171,19 +171,19 @@
     },
     {
       "audience_tier": "public",
-      "bytes": 64351,
+      "bytes": 64317,
       "content_type": "text/html",
       "path": "wiki/menu/10-for-you/10-for-you/generated/for-you-2026-04-29.html",
       "role": "generated_output",
-      "sha256": "d9a480a4267dd77202037def5d7ba394deb5ff338472b0716281cd8fee47a0c1"
+      "sha256": "79fd42f77165728091763905d5dba8f3ed7167ecc971166605a4fe2071adfe24"
     },
     {
       "audience_tier": "public",
-      "bytes": 2324,
+      "bytes": 2308,
       "content_type": "text/markdown",
       "path": "wiki/menu/10-for-you/10-for-you/generated/for-you-2026-04-29.md",
       "role": "generated_output",
-      "sha256": "7b33bd2b34bc9865f72a77236105529635aef04dc2c8222bff93f69e577530e5"
+      "sha256": "bc66154093be47058cf4ed8e00d5d7168fef01bd2cb4a95bb74234f23c89fd6b"
     },
     {
       "audience_tier": "public",
@@ -216,7 +216,7 @@
       "sha256": "3bcf30d831eeb4ddb3636db66d3b2df096528d550df6cc1078e455e63ecba7ba"
     }
   ],
-  "rendered_at": "2026-05-07T01:30:21Z",
+  "rendered_at": "2026-05-13T01:24:57Z",
   "routes": [
     {
       "kind": "latest_family_html",
@@ -261,7 +261,7 @@
           "exists": true,
           "path": "wiki/menu/10-for-you/10-for-you/source/for-you.md",
           "selected_for_render": true,
-          "sha256": "7b33bd2b34bc9865f72a77236105529635aef04dc2c8222bff93f69e577530e5"
+          "sha256": "bc66154093be47058cf4ed8e00d5d7168fef01bd2cb4a95bb74234f23c89fd6b"
         },
         "public": {
           "exists": false,

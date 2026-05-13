@@ -12,6 +12,7 @@
     "excluded": [
       "canonical source markdown",
       "private/internal outputs",
+      "operator/development families",
       "talk folders",
       "raw markdown payloads",
       "render manifests"
@@ -107,34 +108,6 @@
       "template_version": "local-private-shell@0.1.0"
     },
     {
-      "curator_prompt": "wiki/menu/20-project/20-goal/talk/goal.talk/_curator.md",
-      "generated_dir": "wiki/menu/20-project/20-goal/generated",
-      "id": "goal",
-      "jobs": {
-        "curator": "memory.wiki.goal_curator"
-      },
-      "kind": "professional_app_goal",
-      "label": "Goal",
-      "manifest_path": "wiki/menu/20-project/20-goal/family.toml",
-      "menu_group": "project",
-      "menu_group_label": "Project",
-      "menu_group_order": 20,
-      "menu_order": 20,
-      "path": "wiki/menu/20-project/20-goal",
-      "policies": {
-        "agent_editable": true,
-        "generated_editable": false,
-        "operator_editable": true
-      },
-      "route": "/goal",
-      "source_dir": "wiki/menu/20-project/20-goal/source",
-      "source_primary": "wiki/menu/20-project/20-goal/source/goal.md",
-      "talk_conventions": "wiki/menu/20-project/20-goal/talk/goal.talk/_conventions.md",
-      "talk_dir": "wiki/menu/20-project/20-goal/talk",
-      "talk_primary": "wiki/menu/20-project/20-goal/talk/goal.talk",
-      "template_version": "local-private-shell@0.1.0"
-    },
-    {
       "curator_prompt": "",
       "generated_dir": "wiki/menu/30-topics/10-topics/generated",
       "id": "topics",
@@ -163,7 +136,7 @@
       "template_version": "local-private-shell@0.1.0"
     }
   ],
-  "generated_at": "2026-05-10T04:55:09Z",
+  "generated_at": "2026-05-13T01:24:57Z",
   "pages": [
     {
       "excerpt": "# For You This is the working surface 1Context keeps close to the present. It should feel useful even before memory has accumulated: a quiet place to see what the system is ready to preserve, where agents should propose additions, and which durable pages those additions may eventually update. ## How This Page Works For You is a rolling private page. As 1Context observes repeated work, decisions, corrections, and open loops, memory agents should promote concise summaries here ...",
@@ -215,10 +188,6 @@
           "label": "Your Context"
         },
         {
-          "href": "/goal",
-          "label": "Goal"
-        },
-        {
           "href": "/projects",
           "label": "Projects"
         },
@@ -229,7 +198,7 @@
       ],
       "path": "wiki/menu/10-for-you/10-for-you/generated/for-you-2026-04-29.md",
       "route": "/for-you-2026-04-29",
-      "sha256": "7b33bd2b34bc9865f72a77236105529635aef04dc2c8222bff93f69e577530e5",
+      "sha256": "bc66154093be47058cf4ed8e00d5d7168fef01bd2cb4a95bb74234f23c89fd6b",
       "slug": "for-you-2026-04-29",
       "source": "generated_markdown",
       "summary": "Your current 1Context front page: a private rolling surface for recent work, open loops, and the next memory that should be promoted.",
@@ -269,51 +238,6 @@
       "title": "Today"
     },
     {
-      "excerpt": "# Goal 1Context should behave like a professional macOS app whose job is to remember user-directed work. The app is not a shy utility hiding its needs. When a feature needs setup or permission to do the thing the user asked for, 1Context should say so, open the right flow, and finish the job. ## Permission Doctrine Use permissions directly and honestly. 1Context creates memory from user action, local work, and passive monitoring surfaces, so permissions are part of the produc...",
-      "family_id": "goal",
-      "family_label": "Goal",
-      "frontmatter": {
-        "access": "private",
-        "agent_view_enabled": true,
-        "copy_buttons_enabled": true,
-        "footer_enabled": true,
-        "last_updated": "2026-05-10",
-        "section": "project",
-        "slug": "goal",
-        "status": "published",
-        "summary": "The professional app bar for 1Context: permission flows, update discipline, and the behaviors that must feel reliable before broad release.",
-        "talk_enabled": true,
-        "title": "Goal",
-        "toc_enabled": true
-      },
-      "id": "page_7fde9aa079d694b47d42",
-      "links": [
-        {
-          "href": "/for-you",
-          "label": "For You"
-        },
-        {
-          "href": "/your-context",
-          "label": "Your Context"
-        },
-        {
-          "href": "/projects",
-          "label": "Projects"
-        },
-        {
-          "href": "/topics",
-          "label": "Topics"
-        }
-      ],
-      "path": "wiki/menu/20-project/20-goal/generated/goal.md",
-      "route": "/goal",
-      "sha256": "28f2154cbbcbb6b7e9eb38d2ff256d9c6fa15a22bbb04e31d85add2f0aa599f9",
-      "slug": "goal",
-      "source": "generated_markdown",
-      "summary": "The professional app bar for 1Context: permission flows, update discipline, and the behaviors that must feel reliable before broad release.",
-      "title": "Goal"
-    },
-    {
       "excerpt": "# Projects Projects is the memory system's map of active work. It should help a future session answer: what exists, what state it is in, what changed recently, and where the next useful action probably lives. ## Active No active projects have been promoted yet. For agents: add a project when it has a stable name, a working directory or artifact trail, and enough recent evidence that future sessions would benefit from a durable pointer. ## Paused Or Blocked No paused or blocke...",
       "family_id": "projects",
       "family_label": "Projects",
@@ -349,17 +273,13 @@
           "label": "Your Context"
         },
         {
-          "href": "/goal",
-          "label": "Goal"
-        },
-        {
           "href": "/topics",
           "label": "Topics"
         }
       ],
       "path": "wiki/menu/20-project/10-projects/generated/projects.md",
       "route": "/projects",
-      "sha256": "3e26958761c9a728cf50a65dc3ee06cfdc5ff38b9b7238a339c76a85a2366988",
+      "sha256": "f20f5048b7a42c5ee612686d57dad617af7aac44efe89ae9002e8ccff00d7f83",
       "slug": "projects",
       "source": "generated_markdown",
       "summary": "The private index of work 1Context can recognize, resume, and connect across sessions.",
@@ -393,17 +313,13 @@
           "label": "Your Context"
         },
         {
-          "href": "/goal",
-          "label": "Goal"
-        },
-        {
           "href": "/projects",
           "label": "Projects"
         }
       ],
       "path": "wiki/menu/30-topics/10-topics/generated/topics.md",
       "route": "/topics",
-      "sha256": "1cc3487faca22fc104889b9ea3cb0094c2846558f05f27c622f70ca8ffc3abb6",
+      "sha256": "25edba3880187f60e7cd0e3b39cb908d3ade47c06009f60214d24b1f1d0f41a9",
       "slug": "topics",
       "source": "generated_markdown",
       "summary": "The private index of named subjects, concepts, tools, people, and organizations 1Context notices over time.",
@@ -433,10 +349,6 @@
           "label": "For You"
         },
         {
-          "href": "/goal",
-          "label": "Goal"
-        },
-        {
           "href": "/projects",
           "label": "Projects"
         },
@@ -447,7 +359,7 @@
       ],
       "path": "wiki/menu/10-for-you/20-your-context/generated/your-context.md",
       "route": "/your-context",
-      "sha256": "7197bff25737da5cadcab647231f92edb7e1b94a1027a5304109bba92ccd5b8e",
+      "sha256": "06da2f7c5d8499467a1cd51d515d3ae782304200ed916ea6e166d425567d999e",
       "slug": "your-context",
       "source": "generated_markdown",
       "summary": "The durable private orientation page for how you work, what you prefer, and what collaborators should remember across sessions.",
@@ -509,38 +421,6 @@
       "kind": "generated_output",
       "path": "wiki/menu/10-for-you/10-for-you/generated/for-you-2026-04-29/today.html",
       "route": "/for-you-2026-04-29/today.html",
-      "source": "manifest_output"
-    },
-    {
-      "content_type": "text/html; charset=utf-8",
-      "family_id": "goal",
-      "kind": "latest_family_html",
-      "path": "wiki/menu/20-project/20-goal/generated/goal.html",
-      "route": "/goal",
-      "source": "latest_for_family.json"
-    },
-    {
-      "content_type": "text/html; charset=utf-8",
-      "family_id": "goal",
-      "kind": "generated_output",
-      "path": "wiki/menu/20-project/20-goal/generated/goal.html",
-      "route": "/goal.html",
-      "source": "manifest_output"
-    },
-    {
-      "content_type": "text/html; charset=utf-8",
-      "family_id": "goal",
-      "kind": "html",
-      "path": "wiki/menu/20-project/20-goal/generated/goal.talk.html",
-      "route": "/goal.talk",
-      "source": "generated_output"
-    },
-    {
-      "content_type": "text/html; charset=utf-8",
-      "family_id": "goal",
-      "kind": "generated_output",
-      "path": "wiki/menu/20-project/20-goal/generated/goal.talk.html",
-      "route": "/goal.talk.html",
       "source": "manifest_output"
     },
     {
@@ -643,12 +523,12 @@
   "schema_version": "wiki.site-manifest.v1",
   "stats": {
     "by_source": {
-      "generated_markdown": 6
+      "generated_markdown": 5
     },
     "families": [
       {
         "archived_talk_entries": 0,
-        "bytes": 160750,
+        "bytes": 160684,
         "generated_files": 11,
         "generated_files_by_extension": {
           "(none)": 1,
@@ -659,7 +539,7 @@
         "generated_markdown_pages": 2,
         "id": "for-you",
         "label": "For You",
-        "links": 10,
+        "links": 9,
         "menu_group": "for-you",
         "path": "wiki/menu/10-for-you/10-for-you",
         "route": "/for-you",
@@ -671,7 +551,7 @@
       },
       {
         "archived_talk_entries": 0,
-        "bytes": 97884,
+        "bytes": 97818,
         "generated_files": 5,
         "generated_files_by_extension": {
           ".html": 2,
@@ -681,7 +561,7 @@
         "generated_markdown_pages": 1,
         "id": "your-context",
         "label": "Your Context",
-        "links": 4,
+        "links": 3,
         "menu_group": "for-you",
         "path": "wiki/menu/10-for-you/20-your-context",
         "route": "/your-context",
@@ -693,7 +573,7 @@
       },
       {
         "archived_talk_entries": 0,
-        "bytes": 92781,
+        "bytes": 92715,
         "generated_files": 5,
         "generated_files_by_extension": {
           ".html": 2,
@@ -703,7 +583,7 @@
         "generated_markdown_pages": 1,
         "id": "projects",
         "label": "Projects",
-        "links": 6,
+        "links": 5,
         "menu_group": "project",
         "path": "wiki/menu/20-project/10-projects",
         "route": "/projects",
@@ -715,29 +595,7 @@
       },
       {
         "archived_talk_entries": 0,
-        "bytes": 274081,
-        "generated_files": 5,
-        "generated_files_by_extension": {
-          ".html": 2,
-          ".json": 1,
-          ".md": 2
-        },
-        "generated_markdown_pages": 1,
-        "id": "goal",
-        "label": "Goal",
-        "links": 4,
-        "menu_group": "project",
-        "path": "wiki/menu/20-project/20-goal",
-        "route": "/goal",
-        "routes": 4,
-        "source_pages": 1,
-        "talk_entries": 1,
-        "talk_folders": 1,
-        "words": 0
-      },
-      {
-        "archived_talk_entries": 0,
-        "bytes": 93119,
+        "bytes": 93053,
         "generated_files": 5,
         "generated_files_by_extension": {
           ".html": 2,
@@ -747,7 +605,7 @@
         "generated_markdown_pages": 1,
         "id": "topics",
         "label": "Topics",
-        "links": 4,
+        "links": 3,
         "menu_group": "topics",
         "path": "wiki/menu/30-topics/10-topics",
         "route": "/topics",
@@ -758,163 +616,147 @@
         "words": 0
       }
     ],
-    "generated_at": "2026-05-10T04:55:09Z",
+    "generated_at": "2026-05-13T01:24:57Z",
     "generated_files_by_extension": {
       "(none)": 1,
-      ".html": 11,
-      ".json": 7,
-      ".md": 12
+      ".html": 9,
+      ".json": 6,
+      ".md": 10
     },
     "links": {
       "anchors": 0,
       "broken_internal": 0,
       "broken_internal_routes": [],
       "external": 0,
-      "internal": 28,
+      "internal": 20,
       "top_destinations": [
         {
-          "count": 7,
+          "count": 6,
           "route": "/topics",
           "title": "Topics"
         },
         {
-          "count": 7,
+          "count": 6,
           "route": "/your-context",
           "title": "Your Context"
         },
         {
-          "count": 6,
+          "count": 5,
           "route": "/projects",
           "title": "Projects"
         },
         {
-          "count": 4,
+          "count": 3,
           "route": "/for-you",
           "title": "for-you"
-        },
-        {
-          "count": 4,
-          "route": "/goal",
-          "title": "Goal"
         }
       ]
     },
     "routes_by_kind": {
-      "generated_output": 11,
-      "html": 7,
-      "latest_family_html": 5
+      "generated_output": 9,
+      "html": 6,
+      "latest_family_html": 4
     },
     "schema_version": "wiki.stats.v1",
     "source_corpus": {
-      "events": 273,
+      "events": 342,
       "sessions": 0
     },
     "story": {
       "behind_the_scenes": {
-        "agent_debate_words": 274,
+        "agent_debate_words": 217,
         "captured_days": 0
       },
       "compression": {
-        "events_per_reader_page": 46,
+        "events_per_reader_page": 68,
         "events_per_reader_word": 0
       },
       "connections": {
         "external_links": 0,
-        "internal_links": 28,
-        "links": 28,
+        "internal_links": 20,
+        "links": 20,
         "top_destinations": [
           {
-            "count": 7,
+            "count": 6,
             "route": "/topics",
             "title": "Topics"
           },
           {
-            "count": 7,
+            "count": 6,
             "route": "/your-context",
             "title": "Your Context"
           },
           {
-            "count": 6,
+            "count": 5,
             "route": "/projects",
             "title": "Projects"
           },
           {
-            "count": 4,
+            "count": 3,
             "route": "/for-you",
             "title": "for-you"
-          },
-          {
-            "count": 4,
-            "route": "/goal",
-            "title": "Goal"
           }
         ]
       },
       "coverage": {
         "days": 0,
-        "events": 273,
+        "events": 342,
         "sessions": 0
       },
       "families": [
         {
           "id": "for-you",
           "label": "For You",
-          "links": 10,
-          "words": 0
-        },
-        {
-          "id": "goal",
-          "label": "Goal",
-          "links": 4,
+          "links": 9,
           "words": 0
         },
         {
           "id": "projects",
           "label": "Projects",
-          "links": 6,
+          "links": 5,
           "words": 0
         },
         {
           "id": "topics",
           "label": "Topics",
-          "links": 4,
+          "links": 3,
           "words": 0
         },
         {
           "id": "your-context",
           "label": "Your Context",
-          "links": 4,
+          "links": 3,
           "words": 0
         }
       ],
-      "headline": "273 events condensed into 6 pages.",
+      "headline": "342 events condensed into 5 pages.",
       "reading": {
         "estimated_reading_minutes": 0,
-        "reader_pages": 6,
+        "reader_pages": 5,
         "reader_words": 0,
-        "reading_surfaces": 6,
+        "reading_surfaces": 5,
         "total_indexed_words": 0
       }
     },
     "totals": {
       "archived_talk_entries": 0,
       "broken_internal_links": 0,
-      "bytes": 718615,
-      "content_pages": 6,
+      "bytes": 444270,
+      "content_pages": 5,
       "external_links": 0,
-      "families": 5,
-      "generated_files": 31,
-      "generated_markdown_pages": 6,
-      "internal_links": 28,
-      "links": 28,
-      "render_manifests": 5,
-      "routes": 23,
-      "source_markdown_files": 5,
-      "source_pages": 5,
-      "talk_entries": 5,
-      "talk_folders": 5,
-      "talk_words": 274,
-      "words": 8964
+      "families": 4,
+      "generated_files": 26,
+      "generated_markdown_pages": 5,
+      "internal_links": 20,
+      "links": 20,
+      "render_manifests": 4,
+      "routes": 19,
+      "source_markdown_files": 4,
+      "source_pages": 4,
+      "talk_entries": 4,
+      "talk_folders": 4,
+      "talk_words": 217,
+      "words": 1092
     }
   },
   "wiki": {

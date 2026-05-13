@@ -1,19 +1,14 @@
 import Foundation
 import OneContextCore
 
-public enum NativeUpdaterImplementation: String, Codable, Sendable {
-  case sparkle
-}
-
-public enum NativeUpdaterAvailability: String, Codable, Sendable {
+public enum AppUpdateAvailability: String, Codable, Sendable {
   case available
   case notConfigured = "not_configured"
   case unavailable
 }
 
-public struct NativeUpdateSnapshot: Codable, Equatable, Sendable {
-  public let implementation: NativeUpdaterImplementation
-  public let availability: NativeUpdaterAvailability
+public struct AppUpdateSnapshot: Codable, Equatable, Sendable {
+  public let availability: AppUpdateAvailability
   public let currentVersion: String
   public let latestVersion: String?
   public let feedURL: String?
@@ -21,7 +16,7 @@ public struct NativeUpdateSnapshot: Codable, Equatable, Sendable {
   public let automaticChecksEnabled: Bool?
   public let automaticDownloadsEnabled: Bool?
   public let scheduledCheckInterval: TimeInterval?
-  public let appLocation: NativeUpdaterAppLocation?
+  public let appLocation: AppUpdateLocation?
   public let updateAvailable: Bool
   public let mandatoryUpdateAvailable: Bool
   public let minimumUpdateVersion: String?
@@ -31,8 +26,7 @@ public struct NativeUpdateSnapshot: Codable, Equatable, Sendable {
   public let nextAction: String
 
   public init(
-    implementation: NativeUpdaterImplementation,
-    availability: NativeUpdaterAvailability,
+    availability: AppUpdateAvailability,
     currentVersion: String,
     latestVersion: String?,
     feedURL: String? = nil,
@@ -40,7 +34,7 @@ public struct NativeUpdateSnapshot: Codable, Equatable, Sendable {
     automaticChecksEnabled: Bool? = nil,
     automaticDownloadsEnabled: Bool? = nil,
     scheduledCheckInterval: TimeInterval? = nil,
-    appLocation: NativeUpdaterAppLocation? = nil,
+    appLocation: AppUpdateLocation? = nil,
     updateAvailable: Bool,
     mandatoryUpdateAvailable: Bool = false,
     minimumUpdateVersion: String? = nil,
@@ -49,7 +43,6 @@ public struct NativeUpdateSnapshot: Codable, Equatable, Sendable {
     userFacingStatus: String,
     nextAction: String
   ) {
-    self.implementation = implementation
     self.availability = availability
     self.currentVersion = currentVersion
     self.latestVersion = latestVersion
@@ -69,21 +62,7 @@ public struct NativeUpdateSnapshot: Codable, Equatable, Sendable {
   }
 }
 
-public protocol NativeUpdater {
-  func snapshot(currentVersion: String) async -> NativeUpdateSnapshot
-}
-
-public enum MandatoryUpdateRuntimePolicy {
-  public static func shouldPausePassiveRemembering(_ snapshot: NativeUpdateSnapshot) -> Bool {
-    false
-  }
-
-  public static func startBlockedMessage(_ snapshot: NativeUpdateSnapshot) -> String {
-    "1Context will keep remembering while the updater retries."
-  }
-}
-
-public enum NativeUpdaterAppLocation: String, Codable, Equatable, Sendable {
+public enum AppUpdateLocation: String, Codable, Equatable, Sendable {
   case applications
   case appBundleOutsideApplications = "app_bundle_outside_applications"
   case commandLineTool = "command_line_tool"
@@ -107,26 +86,26 @@ public enum NativeUpdaterAppLocation: String, Codable, Equatable, Sendable {
   }
 }
 
-public struct NativeUpdaterAppContext: Codable, Equatable, Sendable {
+public struct AppUpdateContext: Codable, Equatable, Sendable {
   public let bundleURL: URL?
   public let executableURL: URL?
-  public let location: NativeUpdaterAppLocation
+  public let location: AppUpdateLocation
 
   public init(
     bundleURL: URL?,
     executableURL: URL?,
-    location: NativeUpdaterAppLocation? = nil
+    location: AppUpdateLocation? = nil
   ) {
     self.bundleURL = bundleURL
     self.executableURL = executableURL
     self.location = location ?? Self.classify(bundleURL: bundleURL, executableURL: executableURL)
   }
 
-  public static func current(bundle: Bundle = .main) -> NativeUpdaterAppContext {
-    NativeUpdaterAppContext(bundleURL: bundle.bundleURL, executableURL: bundle.executableURL)
+  public static func current(bundle: Bundle = .main) -> AppUpdateContext {
+    AppUpdateContext(bundleURL: bundle.bundleURL, executableURL: bundle.executableURL)
   }
 
-  public static func classify(bundleURL: URL?, executableURL: URL? = nil) -> NativeUpdaterAppLocation {
+  public static func classify(bundleURL: URL?, executableURL: URL? = nil) -> AppUpdateLocation {
     guard let bundleURL else {
       return executableURL == nil ? .unknown : .commandLineTool
     }
@@ -378,7 +357,7 @@ public enum PostInstallUpdateMessageGate {
 }
 
 public struct SparkleUpdateDriverSnapshot: Codable, Equatable, Sendable {
-  public let availability: NativeUpdaterAvailability
+  public let availability: AppUpdateAvailability
   public let latestVersion: String?
   public let updateAvailable: Bool
   public let mandatoryUpdateAvailable: Bool
@@ -389,7 +368,7 @@ public struct SparkleUpdateDriverSnapshot: Codable, Equatable, Sendable {
   public let nextAction: String
 
   public init(
-    availability: NativeUpdaterAvailability,
+    availability: AppUpdateAvailability,
     latestVersion: String?,
     updateAvailable: Bool,
     mandatoryUpdateAvailable: Bool = false,
@@ -418,14 +397,14 @@ public protocol SparkleUpdateDriver: Sendable {
   ) async -> SparkleUpdateDriverSnapshot
 }
 
-public struct SparkleNativeUpdater: NativeUpdater, Sendable {
+public struct SparkleUpdateSnapshotProvider: Sendable {
   public let configuration: SparkleUpdaterConfiguration
-  public let appContext: NativeUpdaterAppContext
+  public let appContext: AppUpdateContext
   private let driver: any SparkleUpdateDriver
 
   public init(
     configuration: SparkleUpdaterConfiguration = .current(),
-    appContext: NativeUpdaterAppContext = .current(),
+    appContext: AppUpdateContext = .current(),
     driver: any SparkleUpdateDriver
   ) {
     self.configuration = configuration
@@ -433,10 +412,9 @@ public struct SparkleNativeUpdater: NativeUpdater, Sendable {
     self.driver = driver
   }
 
-  public func snapshot(currentVersion: String = oneContextVersion) async -> NativeUpdateSnapshot {
+  public func snapshot(currentVersion: String = oneContextVersion) async -> AppUpdateSnapshot {
     guard configuration.isConfigured else {
-      return NativeUpdateSnapshot(
-        implementation: .sparkle,
+      return AppUpdateSnapshot(
         availability: .notConfigured,
         currentVersion: currentVersion,
         latestVersion: nil,
@@ -455,8 +433,7 @@ public struct SparkleNativeUpdater: NativeUpdater, Sendable {
     }
 
     guard appContext.location.canInstallAppUpdates else {
-      return NativeUpdateSnapshot(
-        implementation: .sparkle,
+      return AppUpdateSnapshot(
         availability: .unavailable,
         currentVersion: currentVersion,
         latestVersion: nil,
@@ -478,8 +455,7 @@ public struct SparkleNativeUpdater: NativeUpdater, Sendable {
       currentVersion: currentVersion,
       configuration: configuration
     )
-    return NativeUpdateSnapshot(
-      implementation: .sparkle,
+    return AppUpdateSnapshot(
       availability: driverSnapshot.availability,
       currentVersion: currentVersion,
       latestVersion: driverSnapshot.latestVersion,
@@ -500,11 +476,10 @@ public struct SparkleNativeUpdater: NativeUpdater, Sendable {
   }
 }
 
-public enum NativeUpdateDiagnostics {
-  public static func render(_ snapshot: NativeUpdateSnapshot) -> [String] {
+public enum AppUpdateDiagnostics {
+  public static func render(_ snapshot: AppUpdateSnapshot) -> [String] {
     var lines = [
-      "  Native Updater: \(display(snapshot.availability))",
-      "  Implementation: \(snapshot.implementation.rawValue)",
+      "  App Updater: \(display(snapshot.availability))",
       "  Current Version: \(snapshot.currentVersion)",
       "  Latest Version: \(snapshot.latestVersion ?? "unknown")",
       "  Update Available: \(snapshot.updateAvailable ? "yes" : "no")",
@@ -540,7 +515,7 @@ public enum NativeUpdateDiagnostics {
     return lines
   }
 
-  private static func display(_ availability: NativeUpdaterAvailability) -> String {
+  private static func display(_ availability: AppUpdateAvailability) -> String {
     switch availability {
     case .available:
       return "available"

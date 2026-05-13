@@ -88,19 +88,21 @@ if [[ -d "$ROOT/memory-core" ]]; then
     --noacl \
     "$ROOT/memory-core" \
     "$RESOURCES_DIR/memory-core"
-  rm -rf \
-    "$RESOURCES_DIR/memory-core/.venv" \
-    "$RESOURCES_DIR/memory-core/.pytest_cache" \
-    "$RESOURCES_DIR/memory-core/memory/runtime" \
+	  rm -rf \
+	    "$RESOURCES_DIR/memory-core/.venv" \
+	    "$RESOURCES_DIR/memory-core/.pytest_cache" \
+	    "$RESOURCES_DIR/memory-core/memory/runtime" \
     "$RESOURCES_DIR/memory-core/storage/lakestore/artifacts.lance" \
     "$RESOURCES_DIR/memory-core/storage/lakestore/documents.lance" \
     "$RESOURCES_DIR/memory-core/storage/lakestore/events.lance" \
-    "$RESOURCES_DIR/memory-core/storage/lakestore/evidence.lance" \
-    "$RESOURCES_DIR/memory-core/storage/lakestore/sessions.lance" \
-    "$RESOURCES_DIR/memory-core/wiki-engine/node_modules"
-  find "$RESOURCES_DIR/memory-core" -type d -name __pycache__ -prune -exec rm -rf {} +
-  chmod +x "$RESOURCES_DIR/memory-core/bin/1context-memory-core"
-fi
+	    "$RESOURCES_DIR/memory-core/storage/lakestore/evidence.lance" \
+	    "$RESOURCES_DIR/memory-core/storage/lakestore/sessions.lance" \
+	    "$RESOURCES_DIR/memory-core/wiki-engine/node_modules"
+	  find "$RESOURCES_DIR/memory-core" -type d -name __pycache__ -prune -exec rm -rf {} +
+	  find "$RESOURCES_DIR/memory-core/wiki/menu" -path '*/generated/render-manifest.json' -type f -delete
+	  find "$RESOURCES_DIR/memory-core/wiki/menu" -path '*/generated/*.md' -type f -delete
+	  chmod +x "$RESOURCES_DIR/memory-core/bin/1context-memory-core"
+	fi
 
 ICONSET="$ROOT/dist/AppIcon.iconset"
 rm -rf "$ICONSET"

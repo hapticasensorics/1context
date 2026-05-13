@@ -37,8 +37,28 @@ final class WikiSitePublisherTests: XCTestCase {
     XCTAssertTrue(logText.contains("wiki ensure --json"))
     XCTAssertTrue(logText.contains("wiki render --no-evidence --json"))
     XCTAssertFalse(logText.contains("wiki render for-you --no-evidence --json"))
-    XCTAssertTrue(fileManager.fileExists(atPath: siteRoot.appendingPathComponent("current/goal.html").path))
     XCTAssertTrue(fileManager.fileExists(atPath: siteRoot.appendingPathComponent("current/your-context.html").path))
+    XCTAssertFalse(fileManager.fileExists(atPath: siteRoot.appendingPathComponent("current/goal.html").path))
+    XCTAssertFalse(fileManager.fileExists(atPath: siteRoot.appendingPathComponent("current/goal.md").path))
+    XCTAssertFalse(fileManager.fileExists(atPath: siteRoot.appendingPathComponent("current/your-context.md").path))
+    XCTAssertFalse(fileManager.fileExists(atPath: siteRoot.appendingPathComponent("current/render-manifest.json").path))
+
+    let manifestURL = siteRoot.appendingPathComponent("current/publish-manifest.json")
+    let manifestData = try Data(contentsOf: manifestURL)
+    let manifest = try XCTUnwrap(JSONSerialization.jsonObject(with: manifestData) as? [String: Any])
+    let files = try XCTUnwrap(manifest["files"] as? [String])
+    XCTAssertTrue(files.contains("your-context.html"))
+    XCTAssertTrue(files.contains("api/wiki/site.json"))
+    XCTAssertFalse(files.contains("goal.html"))
+    XCTAssertFalse(files.contains("goal.md"))
+    XCTAssertFalse(files.contains("your-context.md"))
+    XCTAssertFalse(files.contains("render-manifest.json"))
+    for publishedFile in files {
+      XCTAssertFalse(publishedFile.hasPrefix("/"), publishedFile)
+      XCTAssertFalse(publishedFile.contains(root.path), publishedFile)
+      XCTAssertFalse(publishedFile.contains("/Users/"), publishedFile)
+      XCTAssertFalse(publishedFile.contains("/dev/1context-public-launch"), publishedFile)
+    }
   }
 
   private var fileManager: FileManager { .default }
@@ -60,10 +80,10 @@ final class WikiSitePublisherTests: XCTestCase {
   private func writePublishableBundle(root: URL) throws -> URL {
     let bundle = root.appendingPathComponent("bundle", isDirectory: true)
     let forYou = bundle.appendingPathComponent("wiki/menu/10-for-you/10-for-you", isDirectory: true)
-    let goal = bundle.appendingPathComponent("wiki/menu/20-project/20-goal", isDirectory: true)
+    let operatorGoal = bundle.appendingPathComponent("wiki/menu/99-operator/10-goal", isDirectory: true)
     try fileManager.createDirectory(at: bundle.appendingPathComponent("bin", isDirectory: true), withIntermediateDirectories: true)
     try fileManager.createDirectory(at: forYou, withIntermediateDirectories: true)
-    try fileManager.createDirectory(at: goal, withIntermediateDirectories: true)
+    try fileManager.createDirectory(at: operatorGoal, withIntermediateDirectories: true)
     try fileManager.createDirectory(at: bundle.appendingPathComponent("wiki-engine/theme/css", isDirectory: true), withIntermediateDirectories: true)
     try fileManager.createDirectory(at: bundle.appendingPathComponent("wiki-engine/theme/js", isDirectory: true), withIntermediateDirectories: true)
     try fileManager.createDirectory(at: bundle.appendingPathComponent("wiki-engine/tools", isDirectory: true), withIntermediateDirectories: true)
@@ -75,7 +95,15 @@ final class WikiSitePublisherTests: XCTestCase {
     try "render\n".write(to: bundle.appendingPathComponent("wiki-engine/tools/render-to-dir.mjs"), atomically: true, encoding: .utf8)
     try "render\n".write(to: bundle.appendingPathComponent("src/onectx/wiki/render.py"), atomically: true, encoding: .utf8)
     try "id = \"for-you\"\n".write(to: forYou.appendingPathComponent("family.toml"), atomically: true, encoding: .utf8)
-    try "id = \"goal\"\n".write(to: goal.appendingPathComponent("family.toml"), atomically: true, encoding: .utf8)
+    try """
+    id = "goal"
+    label = "Goal"
+    route = "/goal"
+
+    [policies]
+    publish_to_user_wiki = false
+    audience = "operator"
+    """.write(to: operatorGoal.appendingPathComponent("family.toml"), atomically: true, encoding: .utf8)
 
     let executable = bundle.appendingPathComponent("bin/1context-memory-core")
     try """
@@ -84,12 +112,14 @@ final class WikiSitePublisherTests: XCTestCase {
     if [ -n "$log" ]; then printf '%s\\n' "$*" >> "$log"; fi
     root="$(cd "$(dirname "$0")/.." && pwd)"
     if [ "$1" = "wiki" ] && [ "$2" = "render" ]; then
-      mkdir -p "$root/wiki/menu/10-for-you/10-for-you/generated" "$root/wiki/menu/20-project/20-goal/generated" "$root/wiki/generated"
+      mkdir -p "$root/wiki/menu/10-for-you/10-for-you/generated" "$root/wiki/menu/99-operator/10-goal/generated" "$root/wiki/generated"
       printf '{"for-you":{"slug":"for-you-2026-05-09"}}\\n' > "$root/wiki/menu/10-for-you/10-for-you/generated/latest_for_family.json"
       printf '<html>For You</html>\\n' > "$root/wiki/menu/10-for-you/10-for-you/generated/for-you-2026-05-09.html"
       printf '<html>Your Context</html>\\n' > "$root/wiki/menu/10-for-you/10-for-you/generated/your-context.html"
-      printf '<html>Goal</html>\\n' > "$root/wiki/menu/20-project/20-goal/generated/goal.html"
-      printf '# Goal\\n' > "$root/wiki/menu/20-project/20-goal/generated/goal.md"
+      printf '# Your Context\\n' > "$root/wiki/menu/10-for-you/10-for-you/generated/your-context.md"
+      printf '{"source":"/Users/paulhan/dev/1context-public-launch"}\\n' > "$root/wiki/menu/10-for-you/10-for-you/generated/render-manifest.json"
+      printf '<html>Goal</html>\\n' > "$root/wiki/menu/99-operator/10-goal/generated/goal.html"
+      printf '# Goal\\n' > "$root/wiki/menu/99-operator/10-goal/generated/goal.md"
       printf '{"schema_version":"test"}\\n' > "$root/wiki/generated/site-manifest.json"
       printf '{"schema_version":"test"}\\n' > "$root/wiki/generated/content-index.json"
       printf '{"schema_version":"test"}\\n' > "$root/wiki/generated/wiki-stats.json"

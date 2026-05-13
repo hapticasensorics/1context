@@ -26,7 +26,6 @@ trap cleanup EXIT
 pkill -x 1Context >/dev/null 2>&1 || true
 
 ONECONTEXT_APP_INSTALL_DESTINATION="$DESTINATION" \
-ONECONTEXT_NO_UPDATE_CHECK=1 \
 "$MENU" >"$LOG" 2>&1 &
 MENU_PID=$!
 

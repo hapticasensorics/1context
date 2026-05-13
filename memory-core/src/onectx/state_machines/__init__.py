@@ -234,9 +234,6 @@ class Machine:
             payload["reads"] = read_list
         self._signals.append(payload)
 
-    def on(self, event_spec: EventSpec | str) -> "RuleBuilder":
-        return RuleBuilder(self, coerce_event(event_spec))
-
     def from_(self, scope: ScopeSpec | str, state: str, *, key: str | None = None) -> "SourceRuleBuilder":
         return SourceRuleBuilder(self, target(scope, state, key=key))
 

@@ -78,6 +78,22 @@ public struct PermissionSnapshot: Codable, Equatable, Sendable {
   }
 }
 
+public enum PermissionReadinessModel {
+  public static let shippedSetupKinds: [PermissionKind] = []
+
+  public static func shippedSetupSnapshots(
+    from snapshots: [PermissionSnapshot]
+  ) -> [PermissionSnapshot] {
+    snapshots.filter { snapshot in
+      shippedSetupKinds.contains(snapshot.kind)
+    }
+  }
+
+  public static func isShippedSetupPermission(_ kind: PermissionKind) -> Bool {
+    shippedSetupKinds.contains(kind)
+  }
+}
+
 public protocol PermissionChecking: Sendable {
   func snapshot(for kind: PermissionKind) -> PermissionSnapshot
 }

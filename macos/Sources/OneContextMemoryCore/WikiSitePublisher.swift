@@ -170,7 +170,7 @@ public final class WikiSitePublisher {
   }
 
   private func publishedResult(current: URL) throws -> WikiSitePublishResult {
-    let files = allFiles(under: current)
+    let files = relativeFilePaths(under: current)
     return WikiSitePublishResult(
       currentDirectory: current.path,
       entrypoint: "/your-context",
@@ -185,7 +185,7 @@ public final class WikiSitePublisher {
       "published_at": ISO8601DateFormatter().string(from: Date()),
       "entrypoint": "/your-context",
       "source_slug": slug,
-      "files": allFiles(under: siteRoot).map { $0.path }
+      "files": relativeFilePaths(under: siteRoot)
     ]
     try writeJSON(payload, to: siteRoot.appendingPathComponent("publish-manifest.json"))
   }
@@ -265,6 +265,9 @@ public final class WikiSitePublisher {
       else {
         return nil
       }
+      guard familyPublishesToUserWiki(manifest: url) else {
+        return nil
+      }
       return url.deletingLastPathComponent()
     }.sorted { $0.path < $1.path }
   }
@@ -278,7 +281,62 @@ public final class WikiSitePublisher {
   private func isPublicGeneratedFile(_ url: URL) -> Bool {
     let name = url.lastPathComponent.lowercased()
     if name == ".gitignore" || name == "render-manifest.json" { return false }
-    return !name.contains(".private.") && !name.contains(".internal.")
+    if name.contains(".private.") || name.contains(".internal.") { return false }
+    let allowedExtensions: Set<String> = [
+      "html", "json",
+      "css", "js", "map",
+      "png", "jpg", "jpeg", "gif", "webp", "svg", "ico",
+      "woff", "woff2", "txt"
+    ]
+    return allowedExtensions.contains(url.pathExtension.lowercased())
+  }
+
+  private func familyPublishesToUserWiki(manifest: URL) -> Bool {
+    guard let text = try? String(contentsOf: manifest, encoding: .utf8) else {
+      return true
+    }
+    var inPolicies = false
+    var publishToUserWiki: Bool?
+    var audience = ""
+
+    for rawLine in text.split(separator: "\n", omittingEmptySubsequences: false) {
+      let uncommented = rawLine
+        .split(separator: "#", maxSplits: 1, omittingEmptySubsequences: false)
+        .first
+        .map(String.init) ?? ""
+      let line = uncommented.trimmingCharacters(in: .whitespacesAndNewlines)
+      guard !line.isEmpty else { continue }
+      if line.hasPrefix("[") && line.hasSuffix("]") {
+        inPolicies = line == "[policies]"
+        continue
+      }
+      guard inPolicies else { continue }
+      let parts = line.split(separator: "=", maxSplits: 1, omittingEmptySubsequences: false)
+      guard parts.count == 2 else { continue }
+      let key = parts[0].trimmingCharacters(in: .whitespacesAndNewlines)
+      let value = normalizePolicyValue(String(parts[1]))
+      if key == "publish_to_user_wiki" {
+        if ["0", "false", "no", "off"].contains(value) {
+          publishToUserWiki = false
+        } else if ["1", "true", "yes", "on"].contains(value) {
+          publishToUserWiki = true
+        } else {
+          publishToUserWiki = false
+        }
+      } else if key == "audience" || key == "publish_audience" {
+        audience = value
+      }
+    }
+
+    if publishToUserWiki == false { return false }
+    return !["dev", "development", "operator", "control", "internal"].contains(audience)
+  }
+
+  private func normalizePolicyValue(_ value: String) -> String {
+    value
+      .trimmingCharacters(in: .whitespacesAndNewlines)
+      .trimmingCharacters(in: CharacterSet(charactersIn: "\"'"))
+      .lowercased()
   }
 
   private func copyIfPresent(_ source: URL, to destination: URL) throws {
@@ -311,7 +369,7 @@ public final class WikiSitePublisher {
     try RuntimePermissions.writePrivateData(data + Data("\n".utf8), to: destination)
   }
 
-  private func allFiles(under root: URL) -> [URL] {
+  private func relativeFilePaths(under root: URL) -> [String] {
     guard let enumerator = fileManager.enumerator(at: root, includingPropertiesForKeys: [.isRegularFileKey]) else {
       return []
     }
@@ -322,8 +380,8 @@ public final class WikiSitePublisher {
       else {
         return nil
       }
-      return URL(fileURLWithPath: relative)
-    }.sorted { $0.path < $1.path }
+      return relative
+    }.sorted()
   }
 
   private func sha256Hex(_ data: Data) -> String {

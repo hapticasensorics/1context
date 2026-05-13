@@ -12,7 +12,8 @@ flowchart TD
   CLI["1context CLI\nsupport + automation"] --> Setup
   Setup --> LocalWeb["OneContextLocalWeb\nwiki server + diagnostics"]
   Setup --> Permissions["OneContextPermissions\nTCC permission snapshots"]
-  App --> Update["OneContextUpdate\nnative app updater adapter"]
+  App --> SparkleUpdate["OneContextSparkleUpdate\nSparkle controller + user driver"]
+  SparkleUpdate --> Update["OneContextUpdate\npolicy + update snapshots"]
   LocalWeb --> Caddy["bundled Caddy\nuser-owned HTTPS backend"]
   LocalWeb --> Proxy["OneContextLocalWebProxy\nSMAppService privileged helper"]
   Proxy --> Port443["127.0.0.1 + ::1 :443"]
@@ -27,7 +28,8 @@ flowchart TD
 - `OneContextPermissions`: owns macOS privacy permission snapshots such as Screen Recording and Accessibility.
 - `OneContextLocalWeb`: owns Caddy configuration, local HTTPS diagnostics, certificate trust installation, and ServiceManagement registration.
 - `OneContextLocalWebProxy`: stays intentionally tiny. It only binds the privileged local HTTPS port and forwards bytes to the user-owned Caddy backend.
-- `OneContextUpdate`: owns native app update state. Sparkle is contained behind this boundary so menu and CLI callers do not depend on updater framework details.
+- `OneContextUpdate`: owns update policy parsing, appcast configuration snapshots, user-facing update strings, post-install message gates, and CLI-readable update diagnostics.
+- `OneContextSparkleUpdate`: owns the Sparkle framework controller and user driver used by the menu app. Mandatory/optional behavior lives here, backed by the policy values from `OneContextUpdate`.
 - `OneContextCLI`: supports diagnostics, automation, and repair. It should route users back to the app-owned permissions/setup surface when required setup is missing.
 
 ## Setup Policy

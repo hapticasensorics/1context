@@ -9,7 +9,7 @@ from typing import Any
 
 from ..storage import LakeStore
 from ..storage import list_tables as storage_list_tables
-from .families import WikiFamily, discover_families, format_path
+from .families import WikiFamily, discover_families, format_path, publishes_to_user_wiki
 from .render import source_inputs
 from .routes import RouteTable, load_route_table
 
@@ -27,8 +27,8 @@ LINK_RE = re.compile(r"\[([^\]]+)\]\(([^)]+)\)")
 
 def build_site_manifest(root: Path | str) -> dict[str, Any]:
     root = Path(root).resolve()
-    families = discover_families(root)
-    table = load_route_table(root)
+    families = user_wiki_families(root)
+    table = load_route_table(root, family_ids=[family.id for family in families])
     pages = content_pages(root, families, table)
     stats = build_wiki_stats(root, families=families, table=table, pages=pages)
     return {
@@ -43,7 +43,14 @@ def build_site_manifest(root: Path | str) -> dict[str, Any]:
         "stats": stats,
         "content_policy": {
             "included": ["public generated page metadata and excerpts"],
-            "excluded": ["canonical source markdown", "private/internal outputs", "talk folders", "raw markdown payloads", "render manifests"],
+            "excluded": [
+                "canonical source markdown",
+                "private/internal outputs",
+                "operator/development families",
+                "talk folders",
+                "raw markdown payloads",
+                "render manifests",
+            ],
         },
         "pages": pages,
         "chat": {
@@ -128,10 +135,15 @@ def build_wiki_stats(
     pages: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     root = Path(root).resolve()
-    families = families if families is not None else discover_families(root)
-    table = table if table is not None else load_route_table(root)
+    families = families if families is not None else user_wiki_families(root)
+    table = table if table is not None else load_route_table(
+        root,
+        family_ids=[family.id for family in families],
+    )
     pages = pages if pages is not None else content_pages(root, families, table)
-    generated_files = tuple(sorted(path for path in (root / "wiki" / "menu").glob("**/generated/**/*") if path.is_file()))
+    generated_files = tuple(
+        sorted(path for family in families for path in family.generated_dir.glob("**/*") if path.is_file())
+    )
     talk_folders = tuple(sorted(path for family in families for path in talk_folder_paths(family)))
     talk_entries = tuple(sorted(path for folder in talk_folders for path in talk_entry_paths(folder, archived=False)))
     archived_talk_entries = tuple(sorted(path for folder in talk_folders for path in talk_entry_paths(folder, archived=True)))
@@ -484,6 +496,8 @@ def content_pages(root: Path, families: tuple[WikiFamily, ...], table: RouteTabl
     pages: list[dict[str, Any]] = []
     seen: set[str] = set()
     for family in families:
+        if not publishes_to_user_wiki(family):
+            continue
         for path in sorted(family.generated_dir.glob("**/*.md")):
             if not public_generated_markdown(path):
                 continue
@@ -497,6 +511,10 @@ def content_pages(root: Path, families: tuple[WikiFamily, ...], table: RouteTabl
             add_page(pages, seen, page)
 
     return sorted(pages, key=lambda item: (item.get("family_id", ""), item.get("route", ""), item.get("path", "")))
+
+
+def user_wiki_families(root: Path | str) -> tuple[WikiFamily, ...]:
+    return tuple(family for family in discover_families(root) if publishes_to_user_wiki(family))
 
 
 def add_page(pages: list[dict[str, Any]], seen: set[str], page: dict[str, Any]) -> None:

@@ -1,12 +1,12 @@
 schema_version = "1context.update-policy.v1"
-version = "0.1.62"
+version = "0.1.63"
 update_class = "mandatory"
 approved_by = "paul"
-reason = "mandatory_failed_update_supportability"
-reason_detail = "0.1.62 blesses the failed-update supportability and diagnostic evidence path: failed updates show simple support copy, retain operator diagnostics, keep the old app launchable, support Try Again, and preserve the memory runtime."
-minimum_autoupdate_version = "0.1.61"
+reason = "mandatory_updater_check_noise_repair"
+reason_detail = "0.1.63 fixes automatic updater check-only failures that could show the support popup while the app was already current, keeps real failed update/install supportability, and preserves quiet mandatory update behavior."
+minimum_autoupdate_version = "0.1.62"
 minimum_update_version = ""
-critical_update_version = "0.1.62"
+critical_update_version = "0.1.63"
 
 [ui]
 show_release_notes_in_update_window = false

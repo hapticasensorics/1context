@@ -1,11 +1,12 @@
 ---
-title: Goal
-slug: goal
-section: project
+title: 1Context Release Lockdown Goal
+slug: 1context-release-lockdown-goal
+section: development
 access: private
 summary: "The professional app bar for 1Context: permission flows, update discipline, and the behaviors that must feel reliable before broad release."
-status: published
-last_updated: 2026-05-10
+status: development-doc
+last_updated: 2026-05-13
+former_wiki_route: /goal
 toc_enabled: true
 talk_enabled: true
 agent_view_enabled: true
@@ -13,7 +14,19 @@ copy_buttons_enabled: true
 footer_enabled: true
 ---
 
-# Goal
+# 1Context Release Lockdown Goal
+
+Product boundary note: this is now a development/operator document, not a
+shipped local-wiki page. The user-facing installed wiki should show clean
+templates and user content; it should not expose this release checklist at
+`/goal` or copy it into `wiki-site/current`. Evidence and checklist updates now
+belong in this docs file and companion files under `docs/goals/`.
+
+Current status: the product decision is captured, the old `/goal` material has
+been moved into docs, and the working tree contains local proof that normal wiki
+publication can exclude the development goal while preserving For You, Your
+Context, Projects, and Topics. This is intentionally parked as a documentation
+and boundary cleanup unless we decide to carry it through a full release cut.
 
 1Context should behave like a professional macOS app whose job is to remember
 user-directed work. The app is not a shy utility hiding its needs. When a
@@ -164,10 +177,12 @@ failure.
 
 ### Baseline
 
-- [x] `/goal` exists as a first-class wiki family with source, generated page,
-  talk page, and route-table coverage.
-- [x] `/goal` is linked from For You, Your Context, Projects, and Topics.
-- [x] The live local wiki can serve `/goal` and `/goal.talk`.
+- [x] The professional-app goal exists as a repo-local development document
+  under `docs/goals/`.
+- [x] The installed user wiki does not treat the development goal as a shipped
+  wiki family, route, or generated asset.
+- [x] For You, Your Context, Projects, and Topics remain the shipped
+  user-facing wiki template pages.
 
 ### Permission Flow
 
@@ -188,8 +203,8 @@ failure.
   flag.
 - [x] Menu and diagnostics can distinguish normal updates from mandatory
   updates.
-- [x] Mandatory update state blocks new passive remembering starts and pauses a
-  running passive monitor until Sparkle can install the update.
+- [x] Mandatory update state keeps the memory runtime usable while Sparkle
+  installs or retries; update failure does not stop remembering.
 - [x] A local appcast smoke proves an older installed app moves to the blessed
   version and relaunches.
 
@@ -276,8 +291,8 @@ artifacts, or a flapping passive runtime survive.
   real release train: versioned DMG, `1Context.dmg`, checksum, and `appcast.xml`.
 - Stale docs no longer present `v0.1.51` or tarball releases as the current
   release truth.
-- `/goal` itself is rendered and visible in the live local wiki with this
-  checklist.
+- The release-lockdown checklist is visible in repo docs, and the live local
+  wiki remains reserved for user-facing templates and user content.
 
 #### Checklist
 
@@ -321,19 +336,25 @@ artifacts, or a flapping passive runtime survive.
 
 ##### Documentation Cleanup
 
-- [x] Refresh professional-app docs so `0.1.55` is historical current truth and
-  `0.1.56` is the active steady-state cleanup goal.
+- [x] Refresh professional-app docs so old train versions are historical
+  evidence and the current release-lockdown train points at the latest proved
+  release.
 - [x] Keep older `0.1.50` to `0.1.55` evidence as history, not current baseline
   language.
 - [x] Confirm stale `Install and Relaunch` and manual `Check Again` language is
   used only when describing old evidence or fixed bugs.
 
-##### Live Wiki Proof
+##### Goal Document Proof
 
-- [x] Render the updated `goal` wiki family from source.
-- [x] Publish or patch the live local wiki so `/goal` shows this checklist.
-- [x] Verify `/goal#0.1.56_Steady_State_and_Design_Cleanup` in the local
-  browser or with a saved HTML/status artifact.
+- [x] Preserve the release-lockdown checklist as a repo-local development
+  document.
+- [x] Remove the development goal from the normal shipped wiki surface.
+- [x] Add working-tree tests that prove the development goal is not copied or
+  indexed into the normal user wiki.
+  Evidence so far: focused Swift wiki tests, Python wiki policy tests, the full
+  local smoke, and an unsigned package smoke passed in the working tree. Final
+  release proof is intentionally deferred until this cleanup is promoted into a
+  release build.
 
 ### 0.1.56 to 0.1.65 Finish-It Release Flywheel
 
@@ -367,23 +388,25 @@ Each release in this train must answer four questions:
   automatically, and the original action continues when safe.
 - Failed update and stale helper cases leave the old app usable with a clear
   user-facing support message and detailed operator logs.
-- The release docs, `/goal`, GitHub workflow, release policy manifest, public
-  release notes, appcast, and live local wiki all agree on what the current
-  blessed version is and whether it is mandatory or optional.
+- The release docs, this release-lockdown goal document, GitHub workflow,
+  release policy manifest, public release notes, appcast, and live local wiki
+  all agree on what the current blessed version is and whether it is mandatory
+  or optional.
 - Release notes never appear in the updater window unless the founder-controlled
   policy explicitly allows it.
 - Menu bar evidence proves `Check for Updates` when current, a pending update
   action when an update is available, and Settings shows the currently running
   version number.
 - New findings discovered during closed-loop testing are immediately folded
-  back into `/goal` as either checked evidence, an unchecked repair item, or an
-  explicit deferred release-train item.
+  back into this goal document as either checked evidence, an unchecked repair
+  item, or an explicit deferred release-train item.
 
 #### Version Train
 
 ##### 0.1.56 Release Workflow and Steady State
 
-- [x] Add `/goal` checklist for steady-state cleanup and release workflow drift.
+- [x] Add release-lockdown checklist for steady-state cleanup and release
+  workflow drift.
 - [x] Add reusable installed-app steady-state verifier.
 - [x] Prove installed `0.1.55` remains healthy over repeated probes.
 - [x] Update GitHub release workflow to publish DMG/appcast assets instead of
@@ -423,13 +446,10 @@ Each release in this train must answer four questions:
 - [x] Make `/goal` updates durable while an older installed app is still
   republishing its bundled wiki. Repo render alone is not enough if live
   `wiki refresh` can overwrite the served page with older bundled content.
-  Evidence: `WikiSitePublisher` now refresh-renders every wiki family instead
-  of only `for-you`; `scripts/publish-goal-to-installed-wiki.sh` renders the
-  repo goal, patches the installed app-support memory core, refreshes the
-  installed app from that patched core, and verifies the live
-  `https://wiki.1context.localhost/goal` marker. The focused
-  `OneContextMemoryCoreTests` suite covers the all-family refresh behavior, and
-  the script passed against this installed `0.1.60` app.
+  Historical evidence: this was the previous operator path for keeping the live
+  development checklist visible. It is now retired because the development goal
+  does not belong in the installed user wiki. The current product rule is that
+  release-lockdown work stays in `docs/goals/`.
 - [x] Run the updated GitHub release workflow or equivalent scripted release
   path end to end for a real release.
   Evidence: equivalent scripted production releases have been run for
@@ -543,10 +563,10 @@ Each release in this train must answer four questions:
   `Please contact support at paul@haptica.ai.`
 - [x] Move real failed-update proof out of the `0.1.59` policy-plumbing bucket
   and into `0.1.62 Failed Update and Supportability Proof`.
-  Partial evidence: `MandatoryUpdateRuntimePolicy` no longer pauses passive
-  remembering for mandatory updates and Swift tests cover that behavior. The
-  remaining broken-appcast, missing-asset, bad-signature, and interrupted
-  download checks stay open under `0.1.62`.
+  Evidence: the old mandatory-update runtime-pause compatibility hook was
+  removed after the policy settled that failed or pending updates should keep
+  the memory process usable. The broken-appcast, missing-asset, bad-signature,
+  and interrupted-download checks are covered under `0.1.62`.
 - [x] Add policy-controlled post-install message plumbing with default title
   `1Context Improved!`, disabled by default unless the manifest enables it.
   Evidence: `UpdateUserFacingPolicy` parses post-install copy from `Info.plist`;
@@ -666,8 +686,8 @@ Each release in this train must answer four questions:
   `scripts/test-launch-agent-package.sh`. The new upgrade-path test checks the
   destructive proof guard, update-class validation, mandatory no-UI assertions,
   and the staging-feed match guard. The package smoke checks the signed app
-  shape, LaunchDaemon plist, required executables, and bundled generated
-  `/goal` assets.
+  shape, LaunchDaemon plist, required executables, and the absence of
+  development `/goal` assets in the bundled user wiki.
 - [x] Restore this Mac to the current public release after the staged proof.
   Evidence: `/Applications/1Context.app` was reinstalled from GitHub release
   `v0.1.60`, reports version `0.1.60`, points back at
@@ -713,7 +733,7 @@ Each release in this train must answer four questions:
   appcast proof.
   Evidence: `PostInstallUpdateMessageGate` now drives a launch-based one-shot
   post-install message when policy enables it and the app detects a version
-  change. `NativeUpdaterTests` cover default-hidden, first-launch-hidden, and
+  change. `AppUpdateStateTests` cover default-hidden, first-launch-hidden, and
   show-once behavior. The local Sparkle fixture
   `dist/sparkle-local-smoke/post-install-message-0.1.61/evidence/` passed with
   `result=passed`; `post-install-message.txt` records
@@ -783,32 +803,14 @@ Each release in this train must answer four questions:
   Evidence: `scripts/build-macos-app.sh` writes
   `SUVerifyUpdateBeforeExtraction = true`; the local Sparkle smoke and package
   smoke assert the key is present in the built app.
-- [x] Add a broken-appcast failed-update retry smoke for a mandatory Sparkle
-  update.
-  Evidence: `scripts/smoke-sparkle-local-appcast.sh` supports
-  `ONECONTEXT_SPARKLE_SMOKE_FAILURE_CASE=broken_appcast`, corrupts the served
-  appcast XML after first generating and validating a mandatory appcast, then
-  can repair the feed while the controlled failure alert is open and click
-  `Try Again`.
-- [x] Prove the broken-appcast user-facing failed-update path stays simple and
-  includes a manual retry button.
-  Evidence:
-  `dist/sparkle-local-smoke/broken-appcast-retry-0.1.61/evidence/failure-message.txt`
-  records `title=Update failed.`, the support body, `buttons=Try Again, OK`,
-  and `action=try_again`; `failure-accessibility.txt` contains only the
-  controlled title/body and those two buttons.
-- [x] Prove clicking `Try Again` after a failed appcast check re-runs the update
-  check after the failed Sparkle cycle and can complete the update.
-  Evidence:
-  `dist/sparkle-local-smoke/broken-appcast-retry-0.1.61/evidence/result.txt`
-  records `retry_after_failure=1` and `retried_cli_version=0.1.61.901` after
-  starting from `old_version=0.1.61.900`.
-- [x] Prove the broken-appcast failed update retains operator evidence without
-  exposing it to the user.
-  Evidence: `appcast-corruption.txt` records the deliberate XML corruption,
-  `retry-repair.txt` records the feed repair before `Try Again`, and
-  `http-server.log` records the failed-cycle appcast fetches followed by the
-  successful retry appcast and DMG fetch.
+- [x] Reclassify broken-appcast as an automatic check-only failure, not a
+  failed update.
+  Evidence: the older `0.1.61` broken-appcast retry proof showed the support
+  alert and `Try Again`, but the `0.1.62` overnight reports proved that was too
+  noisy when no update had been found or installed. Current policy now treats a
+  broken feed before update discovery as silent retry plus operator evidence,
+  while real download, signature, extraction, or install failures still use the
+  controlled support alert after retries.
 - [x] Keep the normal menu `Check for Updates` path separate from failed-update
   retry behavior.
   Evidence: `SparkleUpdateController` retries the same check mode only after
@@ -953,12 +955,383 @@ Each release in this train must answer four questions:
   check window`, while `version-before.txt` records `plist=0.1.62`,
   `cli=0.1.62`, and the public GitHub appcast feed. The captured desktop
   screenshot shows the normal `1Context is up to date.` alert.
+- [x] Add bounded silent self-retry before showing the failed-update support
+  popup.
+  Evidence: `SparkleUpdateController` now gives automatic mandatory update
+  failures a larger silent retry budget and manual checks a shorter one before
+  the controlled `Update failed.` / support alert can appear. No-update and
+  cancelled-update errors still resolve quietly. Focused
+  `SparkleUpdateControllerTests` cover retry disposition, retry budgets, ignored
+  benign errors, and the final Try Again / OK support alert shape; the remote
+  Sparkle proof harness now also fails mandatory success proofs if `Update
+  failed` or `Please contact support` appears in captured UI text.
+- [x] Fix the `0.1.62` overnight false support alert when the app is already
+  current.
+  Evidence: this Mac was running installed `0.1.62`, the live GitHub appcast
+  also pointed at `0.1.62`, and clicking `Try Again` cleared into the normal
+  current-state check instead of finding a real update. The code now separates
+  automatic check-only failures from failed update/install attempts:
+  check-only failures retry silently and then stay quiet, while attempted
+  install failures still show the controlled support alert after retries.
+  `SparkleUpdateControllerTests.testAutomaticCheckFailuresWithoutAttemptedInstallRetryThenStayQuiet`
+  covers the policy, and
+  `dist/sparkle-local-smoke/broken-appcast-check-only-0.1.62/evidence/result.txt`
+  proves a corrupted automatic appcast produced no support alert for 25 seconds,
+  fetched the appcast through the first retry window, and left
+  `installed_cli_version=0.1.62.900`.
+- [x] Add a public release asset propagation gate for the appcast enclosure.
+  Evidence: `scripts/audit-github-release-assets.sh` now parses the published
+  `appcast.xml`, follows the exact DMG enclosure URL, downloads it through the
+  public URL, verifies the advertised byte length, and checks the downloaded
+  SHA-256 against the GitHub release checksum. The hosted release workflow runs
+  that audit twice with a 60-second interval after uploading release assets, so
+  the appcast is not treated as updater-ready until the public DMG URL is stable.
+
+##### 0.1.63 Bug-Hunt Closure Goal
+
+Outcome: close the three `0.1.63` bug-hunt buckets before publishing the
+mandatory release. The release is not ready just because the false support alert
+is quieter; it is ready when updater state, release delivery, and shipped wiki
+content are all proven by tests or release artifacts.
+
+Done when:
+
+- Rawls' updater finding is closed by an explicit Sparkle update-session model,
+  automatic checks use the intended background path, and lifecycle tests cover
+  check-only failures, found-update failures, manual checks, stale retries, and
+  Try Again.
+- Descartes' release-delivery finding is closed by tag-only release workflow
+  execution, strict appcast policy validation, latest/download appcast
+  propagation proof, reliable self-hosted proof dispatch/watch selection, and
+  tracked release-proof scripts.
+- Ramanujan's shipped-surface finding is closed by package and local-web
+  allowlists that prevent development goal leakage, generated markdown source,
+  render manifests, and local developer paths from shipping or being served.
+- The remaining perception cleanup is either fixed or consciously deferred:
+  diagnostics redaction, future permission CLI noise, and dead runtime-pause
+  remnants.
+
+Rawls: updater state-machine closure.
+
+- [x] Capture Rawls' stronger recommendation in the goal: model update sessions
+  explicitly instead of relying on loose booleans.
+  Evidence: Rawls' completed bug-hunt note calls for an
+  `AppManagedSparkleUpdateSession` with mode, phase, retry budget, update-found,
+  download, offered-install, install-began, and user-initiated state.
+- [x] Repair the immediate blocker where a critical update discovered through a
+  delegate callback could later be treated as check-only.
+  Evidence: `SparkleUpdateController` now records critical update discovery and
+  install-begin callbacks as update attempts, and
+  `SparkleUpdateControllerTests.testAutomaticCriticalUpdateFoundCountsAsUpdateAttemptForLaterFailures`
+  plus
+  `testAutomaticOptionalUpdateFoundDoesNotTurnCheckFailureIntoFailedInstall`
+  passed.
+- [ ] Replace the remaining loose updater booleans with an
+  `AppManagedSparkleUpdateSession` type and phase enum.
+- [ ] Route automatic launch checks and silent retries through
+  `checkForUpdatesInBackground()` while preserving manual menu checks through
+  `checkForUpdates()`.
+- [ ] Add lifecycle-level tests for automatic check-only failure, automatic
+  critical-update-found failure, manual no-update, manual feed/download failure,
+  stale retry isolation, and user-requested Try Again budget reset.
+- [ ] Extend the local Sparkle smoke so `broken_appcast` covers the full silent
+  retry horizon or uses test-only retry delays, and add a separate automatic
+  critical-update failure smoke proving the support alert still appears after
+  retries.
+
+Descartes: release delivery and CI proof closure.
+
+- [x] Make the release workflow fail early unless it runs from the exact
+  `v$(VERSION)` tag.
+  Evidence: `.github/workflows/release.yml` now requires
+  `GITHUB_REF == refs/tags/v${version}` and `actionlint` passed.
+- [x] Strengthen policy validation so mandatory appcasts must carry the minimum
+  autoupdate version, an enclosure, a positive length, and an EdDSA signature.
+  Evidence: `scripts/update-policy.py` validates these fields and
+  `scripts/test-update-policy.sh` passed.
+- [x] Add a latest/download appcast propagation gate to the release asset audit.
+  Evidence: `scripts/audit-github-release-assets.sh` now fetches the public
+  `latest/download/appcast.xml`, validates it, compares it to the tag appcast,
+  and retries within the configured release-audit probe window.
+- [x] Make release-proof watch selection less race-prone.
+  Evidence: `scripts/request-release-proof.sh --watch` records dispatch time and
+  filters workflow-dispatch runs by created time plus ref before watching.
+- [x] Prove the local `0.1.63` appcast preflight with the real Sparkle public
+  key.
+  Evidence: local packaging produced `dist/sparkle-updates/appcast.xml` for
+  `0.1.63` with `sparkle:minimumAutoupdateVersion` of `0.1.62`,
+  `sparkle:criticalUpdate`, and a `sparkle:edSignature`; the packaged app
+  `Info.plist` contains the real public key and public latest feed URL.
+- [ ] Commit and push the release-proof scripts and release-workflow gates so
+  the tag cannot be cut without them.
+- [ ] Run the GitHub release workflow on `v0.1.63`, then verify the hosted
+  release audit passes against the public latest appcast.
+- [ ] Dispatch the self-hosted Mac proof for `0.1.62 -> 0.1.63` and download
+  the evidence artifact.
+
+Ramanujan: shipped wiki and product-surface closure.
+
+- [x] Prevent generated markdown and render manifests from being served through
+  the local wiki seed or publisher path.
+  Evidence: `WikiSitePublisher` and `CaddyManager` now use public generated-file
+  allowlists, and focused `OneContextLocalWebTests` plus
+  `OneContextMemoryCoreTests` passed.
+- [x] Prevent generated markdown, render manifests, the development goal family,
+  and local developer paths from shipping in the packaged app wiki surface.
+  Evidence: `scripts/build-macos-app.sh` prunes generated markdown and
+  `render-manifest.json`; `scripts/test-launch-agent-package.sh` fails on those
+  files, `/goal` assets, or local developer paths. The ad-hoc `0.1.63` package
+  and package smoke passed.
+- [ ] Apply local-web setup diagnostics redaction consistently to every rendered
+  setup line, not only the main `diagnose` output.
+- [ ] Make default `1context permissions` output match shipped setup rows, with
+  future Screen Recording and Accessibility details behind `diagnose` or an
+  explicit `--all`.
+- [ ] Remove the stale `isPausingRuntimeForMandatoryUpdate` remnant after the
+  updater-session refactor confirms there is no live pause path.
+
+##### 0.1.65 Maximal Update Surface Closure
+
+Goal: use the three bug-hunt lanes as the release bar for a no-shim,
+no-backwards-compatibility cleanup. `0.1.65` should not preserve old update
+paths, old wiki leakage behavior, old permission noise, or old proof shortcuts.
+It should replace them with a smaller professional surface and prove that
+surface through real app, release, and self-hosted update evidence.
+
+Compatibility stance:
+
+- We do not keep compatibility code for pre-Sparkle updater paths.
+- We do not keep compatibility behavior for the development `/goal` wiki route
+  inside the installed user wiki.
+- We do not keep CLI/setup behavior that exposes future permissions as if they
+  are shipped requirements.
+- We do not keep release workflow paths that can appear green without a signed,
+  notarized, public-appcast-valid release.
+- We do not keep retry/update behavior that depends on ambiguous global flags
+  when an explicit session state machine can own the truth.
+
+Done when:
+
+- A mandatory `0.1.65` release can update an installed `0.1.64` app through the
+  public Sparkle feed without user click-through, release notes, or false failed
+  update UI.
+- A real failed update attempt retries silently, keeps the current app usable,
+  and only then shows `Update failed. Please contact support at
+  paul@haptica.ai.` with `Try Again` and `OK`.
+- A check-only appcast/feed/network failure retries silently and never turns
+  into a support alert when no update was found and no download or install
+  began.
+- The public GitHub release, latest appcast, versioned DMG, stable
+  `1Context.dmg`, checksums, `Info.plist`, release policy, and installed app
+  version all agree on `0.1.65`.
+- The bundled and served user wiki contain only user-facing templates/assets:
+  no development goal family, generated markdown source, render manifests,
+  local developer paths, or absolute publish-manifest paths.
+- Default user commands and setup surfaces stay product-clean: no future
+  permission noise, no unredacted setup paths, and no mandatory-update runtime
+  pause remnants.
+- Closed-loop evidence exists for local unit tests, package smoke, appcast
+  validation, local Sparkle smokes, hosted release audit, self-hosted Mac
+  update proof, and GUI screenshots or accessibility captures of the relevant
+  user-visible update/setup states.
+
+Version train:
+
+- `0.1.63` is the triage and guardrail baseline: findings captured, immediate
+  false-alert and package-leak fixes started, release-proof gates made visible.
+- `0.1.64` is the destructive refactor build: remove shims, land the explicit
+  updater session state machine, tighten CLI/setup/product surfaces, and extend
+  deterministic proof.
+- `0.1.65` is the public proof release: signed/notarized mandatory update,
+  public release audit, self-hosted Mac update proof, and final installed-app
+  screenshots/evidence.
+
+Rawls maximal updater plan:
+
+- [x] Replace `AppManagedSparkleUserDriver` loose booleans with an
+  `AppManagedSparkleUpdateSession` value and phase enum. Required phases:
+  `checking`, `updateFound`, `downloadStarted`, `readyToInstall`,
+  `installing`, `finished`, and `failed`.
+  Evidence: `SparkleUpdateController` now stores an
+  `AppManagedSparkleUpdateSession` with explicit phase, session ID, retry
+  budget, update-found, download, ready-to-install, installing, failure, and
+  retry-request state. Focused proof:
+  `swift test --package-path macos --filter SparkleUpdateControllerTests`
+  passed 19 tests.
+- [x] Give every update session a generation ID; delayed retry tasks must carry
+  the generation and be ignored if a newer session exists.
+  Evidence: `AppManagedSparkleFailureRetryRequest` carries
+  `sourceSessionID`; `prepareForFailureRetry` rejects stale retry requests when
+  another session has started. Test
+  `testStaleRetryCannotOverwriteNewerSession` passed.
+- [x] Track whether the failure is check-only, update-found, download-started,
+  install-offered, or install-begun from session state rather than inferred
+  flags.
+  Evidence: session state now owns `updateWasFound`,
+  `criticalUpdateWasFound`, `downloadBegan`, `installWasOffered`, and
+  `installBegan`; `failureRepresentsUpdateAttempt` is derived from that state.
+  Tests cover critical update found, optional update found, download, install,
+  and check-only failure classification.
+- [x] Use `checkForUpdatesInBackground()` for launch checks and silent retries;
+  reserve `checkForUpdates()` for explicit menu/user actions only.
+  Evidence: automatic launch checks and automatic retry checks now call
+  Sparkle's background API; manual menu checks continue to call
+  `checkForUpdates()`. Test `testCheckInvocationMatchesUserIntent` passed.
+- [x] Keep manual `Check for Updates` behavior normal: up-to-date message when
+  current, optional update prompt when optional update is available, controlled
+  support alert only after manual failure retry budget is exhausted.
+  Evidence: `SparkleUpdateControllerTests` covers manual no-update/cancel
+  silence, optional update prompting, shorter manual retry budget, and final
+  controlled failure presentation; full Swift tests passed.
+- [x] Add lifecycle tests that drive the session model through automatic
+  check-only failure, automatic critical-update-found failure, manual no-update,
+  manual feed/download failure, stale retry isolation, and user-requested
+  `Try Again` budget reset.
+  Evidence: focused updater tests cover automatic check-only silence,
+  automatic critical update found, manual no-update/non-mandatory policy,
+  manual shorter retry budget, stale retry isolation, user-requested retry
+  budget reset, and final controlled support-alert policy. Remaining GUI smoke
+  coverage stays open below.
+- [x] Add local Sparkle smokes with test-short retry delays for full-horizon
+  check-only silence and full-horizon attempted-update failure presentation.
+  Evidence: `ONECONTEXT_SPARKLE_AUTOMATIC_RETRY_DELAYS_SECONDS` now shortens
+  the hidden smoke retry horizon. Local smokes passed for broken-appcast
+  check-only silence
+  (`dist/sparkle-local-smoke/20260512-182905/evidence`), attempted missing-DMG
+  failure with runtime survival
+  (`dist/sparkle-local-smoke/20260512-183003/evidence`), mandatory success
+  (`dist/sparkle-local-smoke/20260512-183158/evidence`), and `Try Again`
+  repair (`dist/sparkle-local-smoke/20260512-183523/evidence`).
+- [ ] Run one long, real-delay Sparkle smoke before `0.1.65` if the short-delay
+  smoke is the only automated proof of the retry horizon.
+
+Descartes maximal release-delivery plan:
+
+- [x] Configure hosted release signing/notarization/Sparkle secrets or move the
+  production release workflow to the self-hosted Mac runner; do not allow a
+  hosted workflow that is structurally unable to release.
+  Evidence: GitHub repo secrets are empty, so `.github/workflows/release.yml`
+  now runs the notarized production release on the protected self-hosted Mac
+  runner and uses the runner keychain/Sparkle key path instead of missing
+  hosted secrets. `actionlint` passed.
+- [x] Keep release workflow execution tag-only and fail before packaging unless
+  `GITHUB_REF == refs/tags/v$(VERSION)`.
+  Evidence: `.github/workflows/release.yml` checks the tag before package
+  construction and `actionlint` passed.
+- [x] Extend `update-policy.py` so mandatory appcasts validate
+  `sparkle:criticalUpdate` version, expected GitHub release enclosure host and
+  path, minimum autoupdate version, positive length, and EdDSA signature.
+  Evidence: `scripts/update-policy.py` now rejects wrong critical-update
+  versions, non-`hapticasensorics/1context` GitHub release URLs, stale minimum
+  autoupdate versions, missing enclosure data, missing length, and missing
+  EdDSA signatures. Proof: `scripts/test-update-policy.sh` and
+  `scripts/check-update-policy.sh --appcast dist/sparkle-updates/appcast.xml`
+  passed.
+- [x] Add negative fixtures for wrong critical version, foreign enclosure host,
+  missing signature, missing enclosure, missing length, and stale
+  minimum-autoupdate version.
+  Evidence: `scripts/test-update-policy.sh` now includes negative appcast
+  fixtures for wrong critical version, foreign enclosure URL, missing
+  signature, missing length, and stale minimum autoupdate version.
+- [x] Extend `audit-github-release-assets.sh` to download and checksum both the
+  appcast versioned enclosure and stable `1Context.dmg`, then prove the stable
+  installer matches the versioned DMG.
+  Evidence: `scripts/audit-github-release-assets.sh` now downloads
+  `1Context.dmg.sha256`, checks it matches the versioned DMG checksum, fetches
+  public latest `1Context.dmg`, and verifies its byte length and SHA-256 against
+  the appcast enclosure. Syntax proof: `bash -n` passed.
+- [x] Add mocked `request-release-proof.sh --watch --download-artifacts` tests
+  so the wrapper cannot watch the wrong workflow run.
+  Evidence: `scripts/test-release-proof-request.sh` passed after adding a
+  mocked watch/download path, artifact proof, `--download-artifacts` requires
+  `--watch`, and ambiguous matching workflow runs fail closed.
+- [ ] Commit, push, tag, run the release workflow, audit `latest/download`,
+  then dispatch and download the self-hosted `0.1.64 -> 0.1.65` proof.
+
+Ramanujan maximal shipped-surface plan:
+
+- [x] Change `WikiSitePublisher` publish manifests to record relative paths
+  only, and add tests that fail on home/repo paths in `publish-manifest.json`.
+  Evidence: `WikiSitePublisherTests` passed after asserting
+  `publish-manifest.json` contains only relative public files and no `/goal`,
+  generated markdown, render manifest, `/Users`, or repo paths.
+- [x] Redact local-web setup diagnostics everywhere they render, including
+  `diagnose` and `setup local-web status/install/repair/uninstall`.
+  Evidence: `LocalWebTests.testLocalHTTPSSetupDiagnosticsRedactEmbeddedPaths`
+  passed, `LocalWebSetupDiagnostics.render` now accepts a redactor, and the CLI
+  applies it to diagnose, permissions/setup, and setup local-web commands.
+- [x] Change default `1context permissions` output to shipped setup rows only;
+  keep future Screen Recording/Accessibility details behind `diagnose` or
+  explicit `permissions --all`.
+  Evidence: `AppSetupTests` passed after default diagnostics hid future
+  Screen Recording/Accessibility rows and the explicit diagnostics path showed
+  them.
+- [x] Remove `isPausingRuntimeForMandatoryUpdate` and any remaining mandatory
+  update pause language from live code.
+  Evidence: `scripts/test-menu-lifecycle-deterministic.sh` now fails if the
+  stale pause flag comes back, and the script passed.
+- [x] Extend package smoke to scan packaged root wiki JSON and publish manifests
+  for `/goal`, local paths, generated markdown, render manifests, and absolute
+  source paths.
+  Evidence: `scripts/test-launch-agent-package.sh` now scans packaged root wiki
+  JSON plus any `publish-manifest.json` files for development goal routes,
+  generated markdown, render manifests, and absolute/local paths; the package
+  smoke passed against the current `dist/1Context.app`.
+- [ ] Run the package smoke against the final `0.1.65` app bundle and attach the
+  evidence path to this goal.
+
+Closed-loop proof plan:
+
+- [x] `swift test --package-path macos` passes after the updater-session
+  refactor and shipped-surface cleanup.
+  Evidence: `swift test --package-path macos` passed, 125 tests.
+- [x] `cd memory-core && uv run --with pytest pytest` passes after wiki manifest
+  and family-surface changes.
+  Evidence: `uv run --with pytest pytest` passed, 98 tests.
+- [x] `./scripts/test.sh`, `./scripts/test-upgrade-paths.sh`,
+  `./scripts/test-update-policy.sh`, and `actionlint` pass.
+  Evidence: all four passed, and `git diff --check` passed.
+- [x] Local ad-hoc package proof passes:
+  `ALLOW_UNNOTARIZED=1 NOTARIZE=0 GENERATE_SPARKLE_APPCAST=1
+  ./scripts/package-macos-release.sh`, followed by
+  `./scripts/test-launch-agent-package.sh` and appcast policy validation.
+  Evidence: the ad-hoc package/appcast proof passed after injecting the
+  keychain-backed Sparkle public key into the local build; package smoke and
+  `scripts/check-update-policy.sh --appcast dist/sparkle-updates/appcast.xml`
+  passed.
+- [x] Local Sparkle smokes prove automatic mandatory success, check-only
+  silence, attempted-update failure after retries, and `Try Again`.
+  Evidence: local Sparkle smokes passed for mandatory success, broken-appcast
+  check-only silence, missing-DMG failure after retries with runtime survival,
+  and `Try Again` repair.
+- [ ] GUI smoke proves manual Check for Updates shows the normal current-state
+  message when the app is already up to date.
+- [ ] Hosted or self-hosted release workflow publishes signed/notarized
+  `v0.1.65` assets and `scripts/audit-github-release-assets.sh v0.1.65` passes
+  against public latest URLs.
+- [ ] Self-hosted Mac proof updates `0.1.64 -> 0.1.65`, verifies no support
+  alert during success, captures post-update steady state, and downloads the
+  artifact bundle into `dist/self-hosted-run-*`.
+- [ ] GUI/accessibility evidence captures the menu version, Settings version,
+  manual Check for Updates current-state message, and absence of release notes
+  or installer click-through for mandatory update success.
 
 ##### 0.1.63 Permission Flywheel and Clean-Machine Acceptance
 
-- [ ] Define the permission readiness model for future Screen Recording and
+- [x] Define the permission readiness model for future Screen Recording and
   Accessibility surfaces without making the CLI the accidental permission owner.
-- [ ] Add native setup rows for permission-dependent shipped surfaces only.
+  Evidence: `PermissionReadinessModel` now centralizes which sensitive
+  permissions are shipped setup requirements. Its first shipped set is empty,
+  so Screen Recording and Accessibility can be diagnosed without becoming
+  required setup rows before their capture surfaces ship. The focused proof
+  `swift test --package-path macos --filter 'PermissionDiagnosticsTests|AppSetupTests'`
+  passed.
+- [x] Add native setup rows for permission-dependent shipped surfaces only.
+  Evidence: the setup window now renders `snapshot.shippedPermissionRows`
+  instead of every diagnostic sensitive-permission snapshot, and hides future
+  permission rows until the readiness model marks them shipped.
+  `scripts/test-menu-lifecycle-deterministic.sh` asserts this UI contract and
+  passed.
 - [ ] Prove blocked action opens the relevant permission/setup flow.
 - [ ] Prove granted state is detected automatically without manual Check Again.
 - [ ] Run clean-machine checklist from DMG install through setup, wiki open,
@@ -974,6 +1347,16 @@ Each release in this train must answer four questions:
   step.
 - [ ] Prove Homebrew remains an install channel and Sparkle remains the update
   engine.
+- [x] Promote the updater check-noise repair into mandatory `0.1.63` release
+  metadata.
+  Evidence: `VERSION`, `Core.swift`, `RELEASE_NOTES.md`, and
+  `release/update-policy.toml` now declare `0.1.63`; the policy marks it
+  `mandatory`, sets `minimum_autoupdate_version = "0.1.62"`, sets
+  `critical_update_version = "0.1.63"`, keeps updater release notes hidden, and
+  describes the release as an updater-health repair for false support alerts.
+  `scripts/check-version-consistency.sh`, `scripts/check-update-policy.sh`,
+  `scripts/test-release-proof-request.sh`, and `scripts/test-upgrade-paths.sh`
+  passed with the new `0.1.62 -> 0.1.63` proof inputs.
 - [ ] Prove remote Sparkle update into `0.1.63`.
 
 ##### 0.1.64 Restart, Login, and Release Train Rehearsal
@@ -988,8 +1371,45 @@ Each release in this train must answer four questions:
 - [ ] Configure the release workflow with signing/notarization secrets or move
   production signing to the self-hosted Mac runner, so future blessed releases
   do not require a local manual upload fallback.
-- [ ] Validate `/goal`, release docs, release policy manifest, public release
-  notes, appcast, GitHub release assets, and installed app version all agree.
+- [x] Validate and consolidate the release docs so stale professional-app
+  milestone/checklist pages no longer compete with the current release runbook.
+  Evidence: `docs/macos-release-runbook.md`, `docs/README.md`, and the updated
+  `ROADMAP.md`.
+- [x] Remove old updater compatibility surfaces now that Sparkle is the update
+  path.
+  Evidence: setup/readiness no longer imports or stores update state,
+  `OneContextRuntimeSupport` no longer re-exports update APIs, the old
+  `MandatoryUpdateRuntimePolicy`, `NativeUpdater` protocol, implementation tag,
+  and `probeForUpdateInformation` path are gone, and update code now uses
+  `AppUpdateState`/`SparkleUpdateController` names. Proof:
+  `swift test --package-path macos`, `./scripts/test.sh`, `git diff --check`,
+  and `ALLOW_UNNOTARIZED=1 NOTARIZE=0 ./scripts/package-macos-release.sh`
+  passed.
+- [x] Remove broader stale release/update overhead after the Sparkle and
+  local-web policy settled.
+  Evidence: the old Caddy URL-mode experiment and app-only notarization wrapper
+  scripts were deleted, the dead CLI `maybeCheckForUpdate` no-op and
+  `ONECONTEXT_NO_UPDATE_CHECK` harness plumbing were removed, uninstall command
+  smoke now runs inside `./scripts/test.sh`, the unscoped state-machine
+  `machine.on(...).to(...)` compatibility shim was removed, and the remaining
+  low-reference GUI/release harnesses are intentionally listed in
+  `docs/macos-release-runbook.md`.
+  Proof: stale-reference search has no old updater/setup doc hits except
+  negative assertions in remote update proof, the script reference sweep has no
+  zero-reference shell scripts, `./scripts/test.sh`, `./scripts/test-upgrade-paths.sh`,
+  `swift test --package-path macos`, `cd memory-core && uv run --with pytest pytest`,
+  and `git diff --check` passed.
+- [x] Make the self-hosted release proof request routine instead of a hand-built
+  `gh workflow run` ritual.
+  Evidence: `scripts/request-release-proof.sh` resolves `VERSION`,
+  `release/update-policy.toml`, mandatory `minimum_autoupdate_version`, the
+  public appcast URL, trusted ref, and workflow inputs, supports dry-run,
+  dispatch, watch, and artifact download modes, and is covered by
+  `scripts/test-release-proof-request.sh`, `scripts/test-upgrade-paths.sh`, and
+  `./scripts/test.sh`.
+- [ ] Validate this release-lockdown goal doc, release policy manifest, public
+  release notes, appcast, GitHub release assets, and installed app version all
+  agree before the final `0.1.64` rehearsal.
 - [ ] Prove menu bar and Settings screenshots match the policy after rehearsal.
 - [ ] Prove remote Sparkle update into `0.1.64`.
 
@@ -1004,8 +1424,8 @@ Each release in this train must answer four questions:
   mandatory vs optional, no updater release notes by default, concise optional
   prompt, simple failed-update support message, optional `1Context Improved!`
   post-install message, menu update action, and Settings version number.
-- [ ] Close this `/goal` section with evidence paths and any intentionally
-  deferred future permissions work.
+- [ ] Close this release-lockdown goal section with evidence paths and any
+  intentionally deferred future permissions work.
 
 ## See Also
 

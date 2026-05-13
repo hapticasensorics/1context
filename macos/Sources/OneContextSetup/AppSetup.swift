@@ -1,7 +1,6 @@
 import Foundation
 import OneContextLocalWeb
 import OneContextPermissions
-import OneContextUpdate
 
 public struct OneContextAppSetupSnapshot: Codable, Equatable, Sendable {
   public let localWikiAccess: LocalWebSetupSnapshot
@@ -17,6 +16,10 @@ public struct OneContextAppSetupSnapshot: Codable, Equatable, Sendable {
 
   public var requiredSummary: String {
     localWikiAccess.ready ? "1Context setup is complete." : localWikiAccess.blockingSummary
+  }
+
+  public var shippedPermissionRows: [PermissionSnapshot] {
+    PermissionReadinessModel.shippedSetupSnapshots(from: sensitivePermissions)
   }
 
   public init(
@@ -38,7 +41,6 @@ public struct OneContextAppReadinessSnapshot: Codable, Equatable, Sendable {
   public let state: OneContextAppReadinessState
   public let setup: OneContextAppSetupSnapshot
   public let localWeb: LocalWebSnapshot
-  public let nativeUpdate: NativeUpdateSnapshot?
 
   public var requiredSetupReady: Bool {
     setup.requiredReady
@@ -62,13 +64,11 @@ public struct OneContextAppReadinessSnapshot: Codable, Equatable, Sendable {
   public init(
     state: OneContextAppReadinessState,
     setup: OneContextAppSetupSnapshot,
-    localWeb: LocalWebSnapshot,
-    nativeUpdate: NativeUpdateSnapshot?
+    localWeb: LocalWebSnapshot
   ) {
     self.state = state
     self.setup = setup
     self.localWeb = localWeb
-    self.nativeUpdate = nativeUpdate
   }
 }
 
@@ -97,20 +97,17 @@ public enum OneContextAppSetup {
 public enum OneContextAppReadiness {
   public static func current(
     localWeb: CaddyManager = CaddyManager(),
-    checkSensitivePermissionsInCurrentProcess: Bool = false,
-    nativeUpdate: NativeUpdateSnapshot? = nil
+    checkSensitivePermissionsInCurrentProcess: Bool = false
   ) -> OneContextAppReadinessSnapshot {
     snapshot(
       localWebDiagnostics: localWeb.diagnostics(),
-      checkSensitivePermissionsInCurrentProcess: checkSensitivePermissionsInCurrentProcess,
-      nativeUpdate: nativeUpdate
+      checkSensitivePermissionsInCurrentProcess: checkSensitivePermissionsInCurrentProcess
     )
   }
 
   public static func snapshot(
     localWebDiagnostics: LocalWebDiagnostics,
-    checkSensitivePermissionsInCurrentProcess: Bool = false,
-    nativeUpdate: NativeUpdateSnapshot? = nil
+    checkSensitivePermissionsInCurrentProcess: Bool = false
   ) -> OneContextAppReadinessSnapshot {
     let setup = OneContextAppSetup.snapshot(
       localWikiAccess: localWebDiagnostics.setup,
@@ -127,24 +124,33 @@ public enum OneContextAppReadiness {
     return OneContextAppReadinessSnapshot(
       state: state,
       setup: setup,
-      localWeb: localWebDiagnostics.snapshot,
-      nativeUpdate: nativeUpdate
+      localWeb: localWebDiagnostics.snapshot
     )
   }
 }
 
 public enum OneContextAppSetupDiagnostics {
-  public static func render(_ snapshot: OneContextAppSetupSnapshot) -> [String] {
+  public static func render(
+    _ snapshot: OneContextAppSetupSnapshot,
+    includeFutureSensitivePermissions: Bool = false,
+    redact: (String) -> String = { $0 }
+  ) -> [String] {
     var lines = [
       "Local Wiki Access: \(snapshot.localWikiStatus)",
       "Local Wiki URL: \(snapshot.localWikiAccess.targetURL)"
     ]
-    lines.append(contentsOf: LocalWebSetupDiagnostics.render(snapshot.localWikiAccess).map {
+    lines.append(contentsOf: LocalWebSetupDiagnostics.render(snapshot.localWikiAccess, redact: redact).map {
       $0.trimmingCharacters(in: .whitespaces)
     })
+    let permissionRows = includeFutureSensitivePermissions
+      ? snapshot.sensitivePermissions
+      : snapshot.shippedPermissionRows
+    guard !permissionRows.isEmpty else {
+      return lines
+    }
     lines.append("")
     lines.append("Sensitive Permissions:")
-    lines.append(contentsOf: PermissionDiagnostics.render(snapshot.sensitivePermissions).map {
+    lines.append(contentsOf: PermissionDiagnostics.render(permissionRows).map {
       $0.trimmingCharacters(in: .whitespaces)
     })
     return lines
@@ -153,17 +159,13 @@ public enum OneContextAppSetupDiagnostics {
 
 public enum OneContextAppReadinessDiagnostics {
   public static func render(_ snapshot: OneContextAppReadinessSnapshot) -> [String] {
-    var lines = [
+    [
       "App Readiness: \(display(snapshot.state))",
       "Required Setup: \(snapshot.requiredSetupReady ? "ready" : "needs setup")",
       "Setup Summary: \(snapshot.requiredSetupSummary)",
       "Local Wiki: \(snapshot.localWeb.running ? "reachable" : snapshot.localWeb.health)",
       "Local Wiki URL: \(snapshot.localWeb.url)"
     ]
-    if let nativeUpdate = snapshot.nativeUpdate {
-      lines.append("Native Update: \(nativeUpdate.availability.rawValue)")
-    }
-    return lines
   }
 
   private static func display(_ state: OneContextAppReadinessState) -> String {

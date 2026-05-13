@@ -24,6 +24,7 @@ FAILURE_TITLE="${ONECONTEXT_SPARKLE_SMOKE_FAILURE_TITLE:-Update failed.}"
 FAILURE_BODY="${ONECONTEXT_SPARKLE_SMOKE_FAILURE_BODY:-Please contact support at paul@haptica.ai.}"
 RETRY_AFTER_FAILURE="${ONECONTEXT_SPARKLE_SMOKE_RETRY_AFTER_FAILURE:-0}"
 PROVE_RUNTIME_SURVIVES_FAILURE="${ONECONTEXT_SPARKLE_SMOKE_PROVE_RUNTIME_SURVIVES_FAILURE:-0}"
+SILENT_FAILURE_WATCH_SECONDS="${ONECONTEXT_SPARKLE_SMOKE_SILENT_FAILURE_WATCH_SECONDS:-25}"
 GENERATE_APPCAST="$ROOT/macos/.build/artifacts/sparkle/Sparkle/bin/generate_appcast"
 
 if [[ -n "$FAILURE_CASE" &&
@@ -118,6 +119,7 @@ DOWNLOAD_PREFIX="http://127.0.0.1:$PORT/"
   echo "failure_body=$FAILURE_BODY"
   echo "retry_after_failure=$RETRY_AFTER_FAILURE"
   echo "prove_runtime_survives_failure=$PROVE_RUNTIME_SURVIVES_FAILURE"
+  echo "silent_failure_watch_seconds=$SILENT_FAILURE_WATCH_SECONDS"
   echo "runtime_wiki_port=$RUNTIME_WIKI_PORT"
   echo "runtime_wiki_api_port=$RUNTIME_WIKI_API_PORT"
   echo "runtime_socket_path=$RUNTIME_SOCKET_PATH"
@@ -231,6 +233,14 @@ APPLESCRIPT
 
 repair_failure_for_retry() {
   case "$FAILURE_CASE" in
+    missing_asset)
+      cp "$NEW_DMG" "$UPDATES_DIR/$(basename "$NEW_DMG")"
+      {
+        echo "restored missing DMG before clicking Try Again"
+        echo "dmg=$UPDATES_DIR/$(basename "$NEW_DMG")"
+        echo "sha256_repaired=$(shasum -a 256 "$UPDATES_DIR/$(basename "$NEW_DMG")" | awk '{ print $1 }')"
+      } > "$EVIDENCE_DIR/retry-repair.txt"
+      ;;
     broken_appcast)
       cp "$EVIDENCE_DIR/appcast-before-corruption.xml" "$APPCAST"
       {
@@ -254,7 +264,6 @@ run_smoke_cli() {
     ONECONTEXT_LOG_DIR="$STATE_DIR/Logs/1Context" \
     ONECONTEXT_CACHE_DIR="$STATE_DIR/Caches/1Context" \
     ONECONTEXT_SOCKET_PATH="$RUNTIME_SOCKET_PATH" \
-    ONECONTEXT_NO_UPDATE_CHECK=1 \
     ONECONTEXT_WIKI_URL_MODE=high-port-http \
     ONECONTEXT_WIKI_PORT="$RUNTIME_WIKI_PORT" \
     ONECONTEXT_WIKI_API_PORT="$RUNTIME_WIKI_API_PORT" \
@@ -376,6 +385,28 @@ wait_for_failure_message() {
       echo "Timed out waiting for failure message '$FAILURE_TITLE' / '$FAILURE_BODY'." >&2
       echo "Evidence: $EVIDENCE_DIR" >&2
       return 1
+    fi
+    sleep 1
+  done
+}
+
+watch_for_no_failure_message() {
+  local deadline=$(( "$(date +%s)" + SILENT_FAILURE_WATCH_SECONDS ))
+  local attempt=0
+  while true; do
+    attempt=$((attempt + 1))
+    local accessibility="$EVIDENCE_DIR/silent-failure-accessibility-$attempt.txt"
+    capture_accessibility "$accessibility"
+    capture_screenshot "$EVIDENCE_DIR/silent-failure-desktop-$attempt.png"
+    cp "$accessibility" "$EVIDENCE_DIR/silent-failure-accessibility.txt"
+    cp "$EVIDENCE_DIR/silent-failure-desktop-$attempt.png" "$EVIDENCE_DIR/silent-failure-desktop.png"
+    if grep -Fq "$FAILURE_TITLE" "$accessibility" ||
+      grep -Fq "$FAILURE_BODY" "$accessibility"; then
+      echo "Automatic check-only failure unexpectedly showed support UI. Evidence: $accessibility" >&2
+      return 1
+    fi
+    if (( "$(date +%s)" >= deadline )); then
+      return 0
     fi
     sleep 1
   done
@@ -577,6 +608,34 @@ APP_PID="$!"
 echo "$APP_PID" > "$EVIDENCE_DIR/initial-app.pid"
 
 if [[ -n "$FAILURE_CASE" ]]; then
+  if [[ "$FAILURE_CASE" == "broken_appcast" ]]; then
+    if [[ "$RETRY_AFTER_FAILURE" == "1" ]]; then
+      echo "broken_appcast is an automatic check-only failure and should not expose Try Again UI." >&2
+      exit 1
+    fi
+    watch_for_no_failure_message
+    wait_for_version "$OLD_VERSION"
+    FAILED_CLI_VERSION="$("$INSTALL_APP/Contents/MacOS/1context-cli" --version)"
+    echo "$FAILED_CLI_VERSION" > "$EVIDENCE_DIR/silent-failure-cli-version.txt"
+    if [[ "$FAILED_CLI_VERSION" != "$OLD_VERSION" ]]; then
+      echo "Expected broken appcast check-only failure to leave CLI version $OLD_VERSION, got $FAILED_CLI_VERSION." >&2
+      exit 1
+    fi
+    {
+      echo "result=passed"
+      echo "failure_case=$FAILURE_CASE"
+      echo "observed=no support alert for automatic check-only failure"
+      echo "old_version=$OLD_VERSION"
+      echo "attempted_new_version=$NEW_VERSION"
+      echo "feed_url=$FEED_URL"
+      echo "appcast=$APPCAST"
+      echo "installed_cli_version=$FAILED_CLI_VERSION"
+      echo "watch_seconds=$SILENT_FAILURE_WATCH_SECONDS"
+    } > "$EVIDENCE_DIR/result.txt"
+    log "passed $FAILURE_CASE silent check-only proof; evidence at $EVIDENCE_DIR"
+    cleanup_app
+    exit 0
+  fi
   wait_for_failure_message
   if [[ "$PROVE_RUNTIME_SURVIVES_FAILURE" == "1" ]]; then
     finish_runtime_survival_proof

@@ -245,7 +245,10 @@ public struct LocalWebSetupSnapshot: Codable, Equatable, Sendable {
 }
 
 public enum LocalWebSetupDiagnostics {
-  public static func render(_ snapshot: LocalWebSetupSnapshot) -> [String] {
+  public static func render(
+    _ snapshot: LocalWebSetupSnapshot,
+    redact: (String) -> String = { $0 }
+  ) -> [String] {
     var lines = [
       "  Setup Ready: \(snapshot.ready ? "yes" : "no")",
       "  Setup Target: \(snapshot.targetURL)"
@@ -257,8 +260,8 @@ public enum LocalWebSetupDiagnostics {
       lines.append("    User Consent Required: \(requirement.userConsentRequired ? "yes" : "no")")
       lines.append("    Admin Authorization Required: \(requirement.adminAuthorizationRequired ? "yes" : "no")")
       lines.append("    Reversible By Uninstall: \(requirement.reversibleByUninstall ? "yes" : "no")")
-      lines.append("    Details: \(requirement.details)")
-      lines.append("    Next Action: \(requirement.nextAction)")
+      lines.append("    Details: \(redact(requirement.details))")
+      lines.append("    Next Action: \(redact(requirement.nextAction))")
     }
     return lines
   }
@@ -398,7 +401,7 @@ public struct CaddyConfig: Equatable, Sendable {
           reverse_proxy \(apiBindHost):\(apiPort)
         }
 
-        try_files {path} {path}.html {path}/index.html /index.html
+        try_files {path} {path}.html {path}/index.html
         file_server
       }
     }
@@ -446,7 +449,7 @@ public struct CaddyConfig: Equatable, Sendable {
           reverse_proxy \(apiBindHost):\(apiPort)
         }
 
-        try_files {path} {path}.html {path}/index.html /index.html
+        try_files {path} {path}.html {path}/index.html
         file_server
       }
     }
@@ -958,6 +961,9 @@ public final class CaddyManager: @unchecked Sendable {
       else {
         return nil
       }
+      guard familyPublishesToUserWiki(manifest: url) else {
+        return nil
+      }
       let generated = url.deletingLastPathComponent().appendingPathComponent("generated", isDirectory: true)
       return fileManager.fileExists(atPath: generated.path) ? generated : nil
     }.sorted { $0.path < $1.path }
@@ -989,13 +995,71 @@ public final class CaddyManager: @unchecked Sendable {
     }
     for case let source as URL in enumerator {
       guard (try? source.resourceValues(forKeys: [.isRegularFileKey]).isRegularFile) == true else { continue }
-      let name = source.lastPathComponent.lowercased()
-      guard name != ".gitignore", name != "render-manifest.json", !name.contains(".private."), !name.contains(".internal.") else {
-        continue
-      }
+      guard shouldCopyPublicGeneratedSeedFile(source) else { continue }
       let relative = relativePath(source, from: generated)
       try copyIfPresent(source, to: siteRoot.appendingPathComponent(relative))
     }
+  }
+
+  private func shouldCopyPublicGeneratedSeedFile(_ source: URL) -> Bool {
+    let name = source.lastPathComponent.lowercased()
+    if name == ".gitignore" || name == "render-manifest.json" { return false }
+    if name.contains(".private.") || name.contains(".internal.") { return false }
+    let allowedExtensions: Set<String> = [
+      "html", "json",
+      "css", "js", "map",
+      "png", "jpg", "jpeg", "gif", "webp", "svg", "ico",
+      "woff", "woff2", "txt"
+    ]
+    return allowedExtensions.contains(source.pathExtension.lowercased())
+  }
+
+  private func familyPublishesToUserWiki(manifest: URL) -> Bool {
+    guard let text = try? String(contentsOf: manifest, encoding: .utf8) else {
+      return true
+    }
+    var inPolicies = false
+    var publishToUserWiki: Bool?
+    var audience = ""
+
+    for rawLine in text.split(separator: "\n", omittingEmptySubsequences: false) {
+      let uncommented = rawLine
+        .split(separator: "#", maxSplits: 1, omittingEmptySubsequences: false)
+        .first
+        .map(String.init) ?? ""
+      let line = uncommented.trimmingCharacters(in: .whitespacesAndNewlines)
+      guard !line.isEmpty else { continue }
+      if line.hasPrefix("[") && line.hasSuffix("]") {
+        inPolicies = line == "[policies]"
+        continue
+      }
+      guard inPolicies else { continue }
+      let parts = line.split(separator: "=", maxSplits: 1, omittingEmptySubsequences: false)
+      guard parts.count == 2 else { continue }
+      let key = parts[0].trimmingCharacters(in: .whitespacesAndNewlines)
+      let value = normalizePolicyValue(String(parts[1]))
+      if key == "publish_to_user_wiki" {
+        if ["0", "false", "no", "off"].contains(value) {
+          publishToUserWiki = false
+        } else if ["1", "true", "yes", "on"].contains(value) {
+          publishToUserWiki = true
+        } else {
+          publishToUserWiki = false
+        }
+      } else if key == "audience" || key == "publish_audience" {
+        audience = value
+      }
+    }
+
+    if publishToUserWiki == false { return false }
+    return !["dev", "development", "operator", "control", "internal"].contains(audience)
+  }
+
+  private func normalizePolicyValue(_ value: String) -> String {
+    value
+      .trimmingCharacters(in: .whitespacesAndNewlines)
+      .trimmingCharacters(in: CharacterSet(charactersIn: "\"'"))
+      .lowercased()
   }
 
   private func copySeedSiteJSON(from core: URL, to siteRoot: URL) throws {

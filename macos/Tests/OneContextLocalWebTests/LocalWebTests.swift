@@ -28,7 +28,8 @@ final class LocalWebTests: XCTestCase {
       try XCTUnwrap(text.range(of: "@wikiDynamicApi path")?.lowerBound),
       try XCTUnwrap(text.range(of: "try_files {path}")?.lowerBound)
     )
-    XCTAssertTrue(text.contains("try_files {path} {path}.html {path}/index.html /index.html"))
+    XCTAssertTrue(text.contains("try_files {path} {path}.html {path}/index.html"))
+    XCTAssertFalse(text.contains("try_files {path} {path}.html {path}/index.html /index.html"))
     XCTAssertTrue(text.contains("file_server"))
     XCTAssertTrue(text.contains("reverse_proxy 127.0.0.1:39192"))
     XCTAssertFalse(text.contains("rewrite /api/wiki/search /api/wiki/search.json"))
@@ -203,7 +204,7 @@ final class LocalWebTests: XCTestCase {
     }
   }
 
-  func testPlaceholderSiteSeedsAllBundledWikiFamilies() throws {
+  func testPlaceholderSiteSeedsUserFacingBundledWikiFamilies() throws {
     let root = temporaryRoot()
     let paths = testRuntimePaths(root: root)
     let web = LocalWebPaths(runtimePaths: paths)
@@ -214,13 +215,34 @@ final class LocalWebTests: XCTestCase {
 
     try manager.ensurePlaceholderSite()
 
-    let goal = web.wikiCurrent.appendingPathComponent("goal.html")
     XCTAssertTrue(FileManager.default.fileExists(atPath: web.wikiCurrent.appendingPathComponent("your-context.html").path))
     XCTAssertTrue(FileManager.default.fileExists(atPath: web.wikiCurrent.appendingPathComponent("for-you.html").path))
     XCTAssertTrue(FileManager.default.fileExists(atPath: web.wikiCurrent.appendingPathComponent("projects.html").path))
     XCTAssertTrue(FileManager.default.fileExists(atPath: web.wikiCurrent.appendingPathComponent("topics.html").path))
-    XCTAssertTrue(FileManager.default.fileExists(atPath: goal.path))
-    XCTAssertTrue(try String(contentsOf: goal, encoding: .utf8).contains("Permission Doctrine"))
+    XCTAssertFalse(FileManager.default.fileExists(atPath: web.wikiCurrent.appendingPathComponent("goal.html").path))
+    XCTAssertFalse(FileManager.default.fileExists(atPath: web.wikiCurrent.appendingPathComponent("goal.md").path))
+    XCTAssertFalse(FileManager.default.fileExists(atPath: web.wikiCurrent.appendingPathComponent("your-context.md").path))
+    XCTAssertFalse(FileManager.default.fileExists(atPath: web.wikiCurrent.appendingPathComponent("render-manifest.json").path))
+  }
+
+  func testPlaceholderSiteSkipsOperatorPolicySeedFamilies() throws {
+    let root = temporaryRoot()
+    let bundle = try writeSeedBundleWithOperatorGoal(root: root)
+    let paths = testRuntimePaths(root: root)
+    let web = LocalWebPaths(runtimePaths: paths)
+    let manager = CaddyManager(runtimePaths: paths, environment: [
+      "ONECONTEXT_WIKI_URL_MODE": "high-port-http",
+      "ONECONTEXT_MEMORY_CORE_BUNDLE_DIR": bundle.path
+    ])
+
+    try manager.ensurePlaceholderSite()
+
+    XCTAssertTrue(FileManager.default.fileExists(atPath: web.wikiCurrent.appendingPathComponent("your-context.html").path))
+    XCTAssertTrue(FileManager.default.fileExists(atPath: web.wikiCurrent.appendingPathComponent("for-you.html").path))
+    XCTAssertFalse(FileManager.default.fileExists(atPath: web.wikiCurrent.appendingPathComponent("goal.html").path))
+    XCTAssertFalse(FileManager.default.fileExists(atPath: web.wikiCurrent.appendingPathComponent("goal.md").path))
+    XCTAssertFalse(FileManager.default.fileExists(atPath: web.wikiCurrent.appendingPathComponent("your-context.md").path))
+    XCTAssertFalse(FileManager.default.fileExists(atPath: web.wikiCurrent.appendingPathComponent("render-manifest.json").path))
   }
 
   func testLocalHTTPSSetupSnapshotReflectsInstalledProxyAndTrust() {
@@ -303,6 +325,21 @@ final class LocalWebTests: XCTestCase {
     XCTAssertFalse(snapshot.ready)
     XCTAssertEqual(snapshot.blockingSummary, "Local web setup required: Local HTTPS helper")
     XCTAssertTrue(snapshot.requirements.first?.details.contains("Proxy current: no") == true)
+  }
+
+  func testLocalHTTPSSetupDiagnosticsRedactEmbeddedPaths() {
+    let snapshot = localHTTPSSetupSnapshot(
+      sourceProxySHA256: "NEW",
+      installedProxySHA256: "OLD"
+    )
+
+    let text = LocalWebSetupDiagnostics.render(snapshot) {
+      $0.replacingOccurrences(of: "/tmp/1Context", with: "$ONECONTEXT_SYSTEM")
+    }.joined(separator: "\n")
+
+    XCTAssertFalse(text.contains("/tmp/1Context"))
+    XCTAssertTrue(text.contains("$ONECONTEXT_SYSTEM/LaunchDaemons/proxy.plist"))
+    XCTAssertTrue(text.contains("$ONECONTEXT_SYSTEM/System/local-web-root.sha256"))
   }
 
   func testLocalHTTPSSetupAppReplacementDetectsStaleProxyAndRepairRestoresReadiness() {
@@ -450,6 +487,35 @@ final class LocalWebTests: XCTestCase {
       .deletingLastPathComponent()
       .deletingLastPathComponent()
       .deletingLastPathComponent()
+  }
+
+  private func writeSeedBundleWithOperatorGoal(root: URL) throws -> URL {
+    let bundle = root.appendingPathComponent("bundle-memory-core", isDirectory: true)
+    let forYou = bundle.appendingPathComponent("wiki/menu/10-for-you/10-for-you", isDirectory: true)
+    let goal = bundle.appendingPathComponent("wiki/menu/99-operator/10-goal", isDirectory: true)
+    try FileManager.default.createDirectory(at: forYou.appendingPathComponent("generated", isDirectory: true), withIntermediateDirectories: true)
+    try FileManager.default.createDirectory(at: goal.appendingPathComponent("generated", isDirectory: true), withIntermediateDirectories: true)
+    try FileManager.default.createDirectory(at: bundle.appendingPathComponent("wiki-engine/theme/css", isDirectory: true), withIntermediateDirectories: true)
+    try FileManager.default.createDirectory(at: bundle.appendingPathComponent("wiki-engine/theme/js", isDirectory: true), withIntermediateDirectories: true)
+    try "body {}\n".write(to: bundle.appendingPathComponent("wiki-engine/theme/css/theme.css"), atomically: true, encoding: .utf8)
+    try "window.__onecontext = true;\n".write(to: bundle.appendingPathComponent("wiki-engine/theme/js/enhance.js"), atomically: true, encoding: .utf8)
+    try "id = \"for-you\"\n".write(to: forYou.appendingPathComponent("family.toml"), atomically: true, encoding: .utf8)
+    try """
+    id = "goal"
+    label = "Goal"
+    route = "/goal"
+
+    [policies]
+    publish_to_user_wiki = false
+    audience = "operator"
+    """.write(to: goal.appendingPathComponent("family.toml"), atomically: true, encoding: .utf8)
+    try "<html>Your Context</html>\n".write(to: forYou.appendingPathComponent("generated/your-context.html"), atomically: true, encoding: .utf8)
+    try "# Your Context\n".write(to: forYou.appendingPathComponent("generated/your-context.md"), atomically: true, encoding: .utf8)
+    try "{\"source\":\"/Users/paulhan/dev/1context-public-launch\"}\n".write(to: forYou.appendingPathComponent("generated/render-manifest.json"), atomically: true, encoding: .utf8)
+    try "<html>For You</html>\n".write(to: forYou.appendingPathComponent("generated/for-you-2026-05-10.html"), atomically: true, encoding: .utf8)
+    try "<html>Goal</html>\n".write(to: goal.appendingPathComponent("generated/goal.html"), atomically: true, encoding: .utf8)
+    try "# Goal\n".write(to: goal.appendingPathComponent("generated/goal.md"), atomically: true, encoding: .utf8)
+    return bundle
   }
 
   private func writeJSON(_ payload: [String: Any], to url: URL) throws {

@@ -11,8 +11,10 @@ trap cleanup EXIT
 
 mkdir -p "$OUT_DIR"
 
-swift build --package-path "$ROOT/macos" >/dev/null
-BIN_DIR="$(swift build --package-path "$ROOT/macos" --show-bin-path)"
+if [[ -z "${BIN_DIR:-}" ]]; then
+  swift build --package-path "$ROOT/macos" >/dev/null
+  BIN_DIR="$(swift build --package-path "$ROOT/macos" --show-bin-path)"
+fi
 CLI="$BIN_DIR/1context"
 
 "$CLI" --help | grep -q "1context uninstall \\[--delete-data\\] \\[--keep-app\\]"

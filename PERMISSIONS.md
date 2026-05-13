@@ -12,7 +12,13 @@ User content lives under:
 ~/1Context/
 ```
 
-This root is for human-readable wiki files and user-owned content. The user should be able to read, edit, delete, back up, sync, or inspect it with normal user tools. 1Context must not make this directory root-owned or opaque.
+This root is for user-created wiki files and user-owned content. The user should
+be able to read, edit, delete, back up, sync, or inspect it with normal user
+tools. 1Context must not make this directory root-owned or opaque.
+
+A fresh install may show polished default wiki pages even while `~/1Context/` is
+empty. Those shipped system-shell pages are app-owned templates and generated
+runtime state, not user-authored content.
 
 ### Runtime Owns
 
@@ -33,6 +39,11 @@ sockets:     0600
 ```
 
 This includes config, sockets, pid files, queues, indexes, caches, and logs. The runtime should repair these permissions on startup.
+
+The installed local wiki publication, including shipped template pages and the
+current static site served by Caddy, belongs here. Runtime-generated wiki state
+must remain separate from durable user-authored content unless the product
+explicitly promotes it into `~/1Context/`.
 
 Memory-core adapter state lives under:
 

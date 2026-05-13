@@ -1,7 +1,7 @@
 import XCTest
 @testable import OneContextUpdate
 
-final class NativeUpdaterTests: XCTestCase {
+final class AppUpdateStateTests: XCTestCase {
   func testSparkleConfigurationRequiresFeedAndPublicKey() {
     let empty = SparkleUpdaterConfiguration(infoDictionary: [:])
     XCTAssertFalse(empty.isConfigured)
@@ -164,7 +164,7 @@ final class NativeUpdaterTests: XCTestCase {
   }
 
   func testAppLocationClassifiesApplicationsBundleAsInstallable() {
-    let context = NativeUpdaterAppContext(
+    let context = AppUpdateContext(
       bundleURL: URL(fileURLWithPath: "/Applications/1Context.app", isDirectory: true),
       executableURL: URL(fileURLWithPath: "/Applications/1Context.app/Contents/MacOS/1Context")
     )
@@ -174,7 +174,7 @@ final class NativeUpdaterTests: XCTestCase {
   }
 
   func testAppLocationClassifiesDownloadsBundleAsOutsideApplications() {
-    let context = NativeUpdaterAppContext(
+    let context = AppUpdateContext(
       bundleURL: URL(fileURLWithPath: "/Users/paul/Downloads/1Context.app", isDirectory: true),
       executableURL: URL(fileURLWithPath: "/Users/paul/Downloads/1Context.app/Contents/MacOS/1Context")
     )
@@ -184,7 +184,7 @@ final class NativeUpdaterTests: XCTestCase {
   }
 
   func testAppLocationClassifiesSwiftPMExecutableAsCommandLineTool() {
-    let context = NativeUpdaterAppContext(
+    let context = AppUpdateContext(
       bundleURL: URL(fileURLWithPath: "/Users/paul/dev/1context-public-launch/.build/debug/1context"),
       executableURL: URL(fileURLWithPath: "/Users/paul/dev/1context-public-launch/.build/debug/1context")
     )
@@ -194,9 +194,9 @@ final class NativeUpdaterTests: XCTestCase {
   }
 
   func testSparkleUpdaterReportsNotConfiguredState() async {
-    let updater = SparkleNativeUpdater(
+    let updater = SparkleUpdateSnapshotProvider(
       configuration: SparkleUpdaterConfiguration(feedURL: nil, publicEdKey: nil),
-      appContext: NativeUpdaterAppContext(
+      appContext: AppUpdateContext(
         bundleURL: URL(fileURLWithPath: "/Applications/1Context.app", isDirectory: true),
         executableURL: nil
       ),
@@ -205,7 +205,6 @@ final class NativeUpdaterTests: XCTestCase {
 
     let snapshot = await updater.snapshot(currentVersion: "0.1.49")
 
-    XCTAssertEqual(snapshot.implementation, .sparkle)
     XCTAssertEqual(snapshot.availability, .notConfigured)
     XCTAssertEqual(snapshot.appLocation, .applications)
     XCTAssertEqual(snapshot.configurationComplete, false)
@@ -215,9 +214,9 @@ final class NativeUpdaterTests: XCTestCase {
   }
 
   func testSparkleUpdaterRequiresApplicationsLocationBeforeCallingDriver() async {
-    let updater = SparkleNativeUpdater(
+    let updater = SparkleUpdateSnapshotProvider(
       configuration: .testConfigured,
-      appContext: NativeUpdaterAppContext(
+      appContext: AppUpdateContext(
         bundleURL: URL(fileURLWithPath: "/Users/paul/Downloads/1Context.app", isDirectory: true),
         executableURL: nil
       ),
@@ -235,7 +234,7 @@ final class NativeUpdaterTests: XCTestCase {
   }
 
   func testSparkleUpdaterUsesDriverSnapshotWhenConfiguredAndInstalled() async {
-    let updater = SparkleNativeUpdater(
+    let updater = SparkleUpdateSnapshotProvider(
       configuration: .testConfigured,
       appContext: .testApplicationsApp,
       driver: FakeSparkleDriver.availableUpdate
@@ -254,7 +253,7 @@ final class NativeUpdaterTests: XCTestCase {
   }
 
   func testSparkleUpdaterSurfacesMandatoryUpdateMetadata() async {
-    let updater = SparkleNativeUpdater(
+    let updater = SparkleUpdateSnapshotProvider(
       configuration: .testConfigured,
       appContext: .testApplicationsApp,
       driver: FakeSparkleDriver.mandatoryUpdate
@@ -269,53 +268,8 @@ final class NativeUpdaterTests: XCTestCase {
     XCTAssertEqual(snapshot.userFacingStatus, "1Context 0.1.51 is a mandatory update.")
   }
 
-  func testMandatoryUpdateRuntimePolicyKeepsRememberingDuringMandatoryUpdates() {
-    let mandatory = NativeUpdateSnapshot(
-      implementation: .sparkle,
-      availability: .available,
-      currentVersion: "0.1.50",
-      latestVersion: "0.1.51",
-      updateAvailable: true,
-      mandatoryUpdateAvailable: true,
-      canInstallFromCurrentProcess: true,
-      userFacingStatus: "1Context 0.1.51 is a mandatory update.",
-      nextAction: "Install from the app."
-    )
-    let normal = NativeUpdateSnapshot(
-      implementation: .sparkle,
-      availability: .available,
-      currentVersion: "0.1.50",
-      latestVersion: "0.1.51",
-      updateAvailable: true,
-      mandatoryUpdateAvailable: false,
-      canInstallFromCurrentProcess: true,
-      userFacingStatus: "1Context 0.1.51 is available.",
-      nextAction: "Install from the app."
-    )
-    let unavailable = NativeUpdateSnapshot(
-      implementation: .sparkle,
-      availability: .unavailable,
-      currentVersion: "0.1.50",
-      latestVersion: nil,
-      updateAvailable: false,
-      mandatoryUpdateAvailable: true,
-      canInstallFromCurrentProcess: false,
-      userFacingStatus: "Move 1Context to Applications to install app updates.",
-      nextAction: "Open 1Context from /Applications/1Context.app."
-    )
-
-    XCTAssertFalse(MandatoryUpdateRuntimePolicy.shouldPausePassiveRemembering(mandatory))
-    XCTAssertEqual(
-      MandatoryUpdateRuntimePolicy.startBlockedMessage(mandatory),
-      "1Context will keep remembering while the updater retries."
-    )
-    XCTAssertFalse(MandatoryUpdateRuntimePolicy.shouldPausePassiveRemembering(normal))
-    XCTAssertFalse(MandatoryUpdateRuntimePolicy.shouldPausePassiveRemembering(unavailable))
-  }
-
-  func testNativeUpdateDiagnosticsRenderStableLines() {
-    let snapshot = NativeUpdateSnapshot(
-      implementation: .sparkle,
+  func testAppUpdateDiagnosticsRenderStableLines() {
+    let snapshot = AppUpdateSnapshot(
       availability: .available,
       currentVersion: "0.1.49",
       latestVersion: "0.1.50",
@@ -325,27 +279,26 @@ final class NativeUpdaterTests: XCTestCase {
       nextAction: "Install from the app."
     )
 
-    let lines = NativeUpdateDiagnostics.render(snapshot)
+    let lines = AppUpdateDiagnostics.render(snapshot)
 
-    XCTAssertEqual(lines[0], "  Native Updater: available")
-    XCTAssertEqual(lines[1], "  Implementation: sparkle")
-    XCTAssertEqual(lines[2], "  Current Version: 0.1.49")
-    XCTAssertEqual(lines[3], "  Latest Version: 0.1.50")
-    XCTAssertEqual(lines[4], "  Update Available: yes")
-    XCTAssertEqual(lines[5], "  Mandatory Update: no")
-    XCTAssertEqual(lines[6], "  Can Install Here: yes")
-    XCTAssertEqual(lines[7], "  Status: 1Context 0.1.50 is available.")
-    XCTAssertEqual(lines[8], "  Next Action: Install from the app.")
+    XCTAssertEqual(lines[0], "  App Updater: available")
+    XCTAssertEqual(lines[1], "  Current Version: 0.1.49")
+    XCTAssertEqual(lines[2], "  Latest Version: 0.1.50")
+    XCTAssertEqual(lines[3], "  Update Available: yes")
+    XCTAssertEqual(lines[4], "  Mandatory Update: no")
+    XCTAssertEqual(lines[5], "  Can Install Here: yes")
+    XCTAssertEqual(lines[6], "  Status: 1Context 0.1.50 is available.")
+    XCTAssertEqual(lines[7], "  Next Action: Install from the app.")
   }
 
-  func testNativeUpdateDiagnosticsIncludeSparkleContextWhenPresent() async {
-    let snapshot = await SparkleNativeUpdater(
+  func testAppUpdateDiagnosticsIncludeSparkleContextWhenPresent() async {
+    let snapshot = await SparkleUpdateSnapshotProvider(
       configuration: .testConfigured,
       appContext: .testApplicationsApp,
       driver: FakeSparkleDriver.noUpdate
     ).snapshot(currentVersion: "0.1.49")
 
-    let lines = NativeUpdateDiagnostics.render(snapshot)
+    let lines = AppUpdateDiagnostics.render(snapshot)
 
     XCTAssertTrue(lines.contains("  App Location: Applications"))
     XCTAssertTrue(lines.contains("  Configuration: complete"))
@@ -407,8 +360,8 @@ private extension SparkleUpdaterConfiguration {
   )
 }
 
-private extension NativeUpdaterAppContext {
-  static let testApplicationsApp = NativeUpdaterAppContext(
+private extension AppUpdateContext {
+  static let testApplicationsApp = AppUpdateContext(
     bundleURL: URL(fileURLWithPath: "/Applications/1Context.app", isDirectory: true),
     executableURL: URL(fileURLWithPath: "/Applications/1Context.app/Contents/MacOS/1Context")
   )

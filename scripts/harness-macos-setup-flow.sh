@@ -22,7 +22,6 @@ launchctl unsetenv ONECONTEXT_SHOW_SETUP_ON_LAUNCH >/dev/null 2>&1 || true
 
 echo "Launching 1Context setup window..."
 ONECONTEXT_SHOW_SETUP_ON_LAUNCH=1 \
-ONECONTEXT_NO_UPDATE_CHECK=1 \
 ONECONTEXT_SKIP_APP_INSTALL_PROMPT=1 \
 ONECONTEXT_MENU_PERF_LOG=1 \
 "$MENU" >/tmp/1context-setup-harness-menu.log 2>&1 &

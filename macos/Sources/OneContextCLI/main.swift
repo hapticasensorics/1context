@@ -44,8 +44,8 @@ struct OneContextCLI {
         try rejectUnknownArguments(allowed: ["--follow"])
         try logs()
       case "permissions":
-        try rejectUnknownArguments()
-        printRequiredSetup()
+        try rejectUnknownArguments(allowed: ["--all"])
+        printRequiredSetup(includeFutureSensitivePermissions: args.contains("--all"))
       case "update":
         try rejectUnknownArguments()
         try await update()
@@ -77,7 +77,6 @@ struct OneContextCLI {
     Public macOS preview.
     https://github.com/hapticasensorics/1context
     """)
-    await maybeCheckForUpdate()
   }
 
   static func printHelp() {
@@ -96,7 +95,7 @@ struct OneContextCLI {
       1context diagnose [--no-redact]
       1context debug [--no-redact]
       1context logs [--follow]
-      1context permissions
+      1context permissions [--all]
       1context update
       1context uninstall [--delete-data] [--keep-app]
       1context setup local-web <status|install|repair|uninstall>
@@ -113,11 +112,6 @@ struct OneContextCLI {
     if let first = unknown.first {
       throw CLIError.unknownArgument(first)
     }
-  }
-
-  static func maybeCheckForUpdate() async {
-    // Native update checks are app-owned. The CLI stays quiet until that
-    // adapter is configured.
   }
 
   static func printDebug(controller: RuntimeController, error: Error?) async {
@@ -217,8 +211,8 @@ struct OneContextCLI {
   }
 
   static func update() async throws {
-    let snapshot = await nativeUpdateSnapshot(currentVersion: effectiveCurrentVersion())
-    for line in NativeUpdateDiagnostics.render(snapshot) {
+    let snapshot = await appUpdateSnapshot(currentVersion: oneContextVersion)
+    for line in AppUpdateDiagnostics.render(snapshot) {
       print(line.trimmingCharacters(in: .whitespaces))
     }
     guard snapshot.availability == .available else {
@@ -293,9 +287,7 @@ struct OneContextCLI {
     print("  App Bundle: /Applications/1Context.app")
     print("  App Version: \(appVersion() ?? "not installed")")
 
-    let readiness = OneContextAppReadiness.current(
-      nativeUpdate: await nativeUpdateSnapshot(currentVersion: oneContextVersion)
-    )
+    let readiness = OneContextAppReadiness.current()
     print("\nApp Readiness:")
     for line in OneContextAppReadinessDiagnostics.render(readiness) {
       print("  \(line)")
@@ -327,13 +319,8 @@ struct OneContextCLI {
     printLaunchAgent(label: LaunchAgentManager.menuLabel, redact: redact)
 
     print("\nUpdate:")
-    let updateSnapshot: NativeUpdateSnapshot
-    if let nativeUpdate = readiness.nativeUpdate {
-      updateSnapshot = nativeUpdate
-    } else {
-      updateSnapshot = await nativeUpdateSnapshot(currentVersion: oneContextVersion)
-    }
-    for line in NativeUpdateDiagnostics.render(updateSnapshot) {
+    let updateSnapshot = await appUpdateSnapshot(currentVersion: oneContextVersion)
+    for line in AppUpdateDiagnostics.render(updateSnapshot) {
       print(line)
     }
 
@@ -356,7 +343,7 @@ struct OneContextCLI {
     print("  URL Mode: \(diagnostics.urlMode)")
     print("  Trust Mode: \(diagnostics.trustMode)")
     print("  Privileged Bind Required: \(yesNo(diagnostics.privilegedBindRequired))")
-    for line in LocalWebSetupDiagnostics.render(diagnostics.setup) {
+    for line in LocalWebSetupDiagnostics.render(diagnostics.setup, redact: { displayPath($0, redact: redact) }) {
       print(line)
     }
     print("  API Health: \(diagnostics.apiHealth)")
@@ -384,14 +371,18 @@ struct OneContextCLI {
     print("  Current Has Health: \(yesNo(diagnostics.currentSiteHasHealth))")
   }
 
-  static func printRequiredSetup() {
+  static func printRequiredSetup(includeFutureSensitivePermissions: Bool = false) {
     print("1Context Setup\n")
     let readiness = OneContextAppReadiness.current()
     for line in OneContextAppReadinessDiagnostics.render(readiness) {
       print(line)
     }
     print("")
-    for line in OneContextAppSetupDiagnostics.render(readiness.setup) {
+    for line in OneContextAppSetupDiagnostics.render(
+      readiness.setup,
+      includeFutureSensitivePermissions: includeFutureSensitivePermissions,
+      redact: { displayPath($0, redact: true) }
+    ) {
       print(line)
     }
   }
@@ -477,7 +468,7 @@ struct OneContextCLI {
     switch args[2] {
     case "status":
       print("1Context Local HTTPS Setup\n")
-      for line in LocalWebSetupDiagnostics.render(installer.status()) {
+      for line in LocalWebSetupDiagnostics.render(installer.status(), redact: { displayPath($0, redact: true) }) {
         print(line.trimmingCharacters(in: .whitespaces))
       }
     case "install":
@@ -485,7 +476,7 @@ struct OneContextCLI {
       print("macOS may ask you to grant 1Context network permissions.")
       let result = try installer.install()
       print("\nLocal HTTPS setup complete.")
-      for line in LocalWebSetupDiagnostics.render(result.setup) {
+      for line in LocalWebSetupDiagnostics.render(result.setup, redact: { displayPath($0, redact: true) }) {
         print(line.trimmingCharacters(in: .whitespaces))
       }
       if let localWeb = result.localWeb {
@@ -496,7 +487,7 @@ struct OneContextCLI {
       print("macOS may ask you to grant 1Context network permissions.")
       let result = try installer.install()
       print("\nLocal HTTPS setup repaired.")
-      for line in LocalWebSetupDiagnostics.render(result.setup) {
+      for line in LocalWebSetupDiagnostics.render(result.setup, redact: { displayPath($0, redact: true) }) {
         print(line.trimmingCharacters(in: .whitespaces))
       }
       if let localWeb = result.localWeb {
@@ -506,7 +497,7 @@ struct OneContextCLI {
       print("Removing 1Context local HTTPS setup...")
       let result = try installer.uninstall()
       print("\nLocal HTTPS setup removed.")
-      for line in LocalWebSetupDiagnostics.render(result.setup) {
+      for line in LocalWebSetupDiagnostics.render(result.setup, redact: { displayPath($0, redact: true) }) {
         print(line.trimmingCharacters(in: .whitespaces))
       }
     default:
@@ -939,7 +930,9 @@ struct OneContextCLI {
   static func displayPath(_ value: String, redact: Bool) -> String {
     guard redact else { return value }
     let home = FileManager.default.homeDirectoryForCurrentUser.path
-    return value.replacingOccurrences(of: home, with: "~")
+    return value
+      .replacingOccurrences(of: home, with: "~")
+      .replacingOccurrences(of: NSTemporaryDirectory(), with: "$TMPDIR/")
   }
 
   static func yesNo(_ value: Bool) -> String {
@@ -956,15 +949,11 @@ struct OneContextCLI {
     return try? JSONSerialization.jsonObject(with: data) as? [String: Any]
   }
 
-  static func effectiveCurrentVersion() -> String {
-    ProcessInfo.processInfo.environment["ONECONTEXT_TEST_CURRENT_VERSION"] ?? oneContextVersion
-  }
-
-  static func nativeUpdateSnapshot(currentVersion: String) async -> NativeUpdateSnapshot {
+  static func appUpdateSnapshot(currentVersion: String) async -> AppUpdateSnapshot {
     let appBundleURL = installedAppBundleURL()
-    return await SparkleNativeUpdater(
+    return await SparkleUpdateSnapshotProvider(
       configuration: SparkleUpdaterConfiguration(appBundleURL: appBundleURL),
-      appContext: NativeUpdaterAppContext(
+      appContext: AppUpdateContext(
         bundleURL: appBundleURL,
         executableURL: appBundleURL.appendingPathComponent("Contents/MacOS/1Context")
       ),

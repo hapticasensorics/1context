@@ -44,7 +44,6 @@ assert_url_contains() {
   grep -q "$expected" <<<"$output"
 }
 
-export ONECONTEXT_NO_UPDATE_CHECK=1
 export ONECONTEXT_SKIP_APP_INSTALL_PROMPT=1
 export no_proxy="wiki.1context.localhost,localhost,127.0.0.1,::1"
 export NO_PROXY="$no_proxy"

@@ -18,6 +18,21 @@ final class PermissionDiagnosticsTests: XCTestCase {
     XCTAssertTrue(snapshots.allSatisfy { $0.owner.bundleIdentifier == "com.haptica.1context" })
   }
 
+  func testReadinessModelHasNoShippedSensitiveSetupRowsUntilFeatureShips() {
+    let snapshots = PermissionReporter(
+      checker: MacOSPermissionChecker(
+        owner: .mainApp,
+        currentBundleIdentifier: nil,
+        checkCurrentProcess: false
+      )
+    ).snapshots()
+
+    XCTAssertEqual(PermissionReadinessModel.shippedSetupKinds, [])
+    XCTAssertEqual(PermissionReadinessModel.shippedSetupSnapshots(from: snapshots), [])
+    XCTAssertFalse(PermissionReadinessModel.isShippedSetupPermission(.screenRecording))
+    XCTAssertFalse(PermissionReadinessModel.isShippedSetupPermission(.accessibility))
+  }
+
   func testPermissionDiagnosticsRenderStableOwnerAndNextAction() {
     let snapshot = PermissionSnapshot(
       kind: .screenRecording,

@@ -76,6 +76,29 @@ assert_url_contains() {
   return 1
 }
 
+assert_url_not_contains() {
+  local url="$1"
+  local unexpected="$2"
+  local response status output
+  if ! response="$(curl --silent --show-error --max-time 3 --write-out $'\n%{http_code}' "$url")"; then
+    echo "Could not fetch URL while checking absence of '$unexpected': $url" >&2
+    return 1
+  fi
+  status="${response##*$'\n'}"
+  output="${response%$'\n'*}"
+  if [[ "$status" == "404" ]]; then
+    return 0
+  fi
+  if [[ ! "$status" =~ ^2[0-9][0-9]$ ]]; then
+    echo "Expected 2xx or 404 while checking absence of '$unexpected', saw $status: $url" >&2
+    return 1
+  fi
+  if grep -q "$unexpected" <<<"$output"; then
+    echo "Expected URL not to contain '$unexpected': $url" >&2
+    return 1
+  fi
+}
+
 wait_for_runtime_running() {
   for _ in {1..60}; do
     if "$BIN_DIR/1context" status >/tmp/1ctx-test-status-running.$$ 2>&1 \
@@ -116,7 +139,6 @@ export ONECONTEXT_USER_CONTENT_DIR="$STATE_DIR/1Context"
 export ONECONTEXT_LAUNCH_AGENT_DISABLED=1
 export ONECONTEXT_LOG_DIR="$STATE_DIR/Logs/1Context"
 export ONECONTEXT_CACHE_DIR="$STATE_DIR/Caches/1Context"
-export ONECONTEXT_NO_UPDATE_CHECK=1
 export ONECONTEXT_CLAUDE_SETTINGS_PATH="$STATE_DIR/.claude/settings.json"
 export ONECONTEXT_CODEX_CONFIG_PATH="$STATE_DIR/.codex/config.toml"
 export ONECONTEXT_AGENT_ALLOW_ENV_OVERRIDES=1
@@ -134,6 +156,7 @@ WIKI_TEST_API_URL="http://127.0.0.1:$ONECONTEXT_WIKI_API_PORT"
 "$ROOT/scripts/check-version-consistency.sh"
 "$ROOT/scripts/check-update-policy.sh"
 "$ROOT/scripts/test-update-policy.sh"
+"$ROOT/scripts/test-release-proof-request.sh"
 "$ROOT/scripts/test-menu-lifecycle-deterministic.sh"
 "$BIN_DIR/1context" | grep -q "1Context $VERSION"
 test "$("$BIN_DIR/1context" --version)" = "$VERSION"
@@ -146,6 +169,7 @@ test "$("$BIN_DIR/1context" --version)" = "$VERSION"
 "$BIN_DIR/1context" --help | grep -q "1context agent statusline --provider <claude|codex>"
 "$BIN_DIR/1context" --help | grep -q "1context memory-core"
 "$BIN_DIR/1context" --help | grep -q "1context wiki <local-url|refresh>"
+BIN_DIR="$BIN_DIR" "$ROOT/scripts/test-macos-uninstall-command.sh"
 if "$BIN_DIR/1context" wiki status >"$STATE_DIR/wiki-old-status.out" 2>&1; then
   echo "old wiki status command should fail" >&2
   exit 1
@@ -214,13 +238,12 @@ assert_url_contains "$WIKI_TEST_URL/for-you" "For You"
 assert_url_contains "$WIKI_TEST_URL/for-you.talk" "Talk Conventions"
 assert_url_contains "$WIKI_TEST_URL/for-you.talk" "How to use this talk page"
 assert_url_contains "$WIKI_TEST_URL/projects" "Projects"
-assert_url_contains "$WIKI_TEST_URL/goal" "Goal"
-assert_url_contains "$WIKI_TEST_URL/goal" "Permission Doctrine"
 assert_url_contains "$WIKI_TEST_URL/topics" "Topics"
 assert_url_contains "$WIKI_TEST_URL/your-context.talk" "Talk"
 assert_url_contains "$WIKI_TEST_URL/projects.talk" "Talk"
-assert_url_contains "$WIKI_TEST_URL/goal.talk" "Talk"
 assert_url_contains "$WIKI_TEST_URL/topics.talk" "Talk"
+assert_url_not_contains "$WIKI_TEST_URL/goal" "Permission Doctrine"
+assert_url_not_contains "$WIKI_TEST_URL/goal.talk" "Permission Doctrine"
 if curl --fail --silent "$WIKI_TEST_URL/for-you" | grep -Eq "stub|empty: populated|<!-- empty"; then
   echo "published For You should not expose raw stubs" >&2
   exit 1

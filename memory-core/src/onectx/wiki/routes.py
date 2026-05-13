@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -53,13 +54,29 @@ class RouteTable:
         }
 
 
-def load_route_table(root: Path | str) -> RouteTable:
+def load_route_table(root: Path | str, *, family_ids: Iterable[str] | None = None) -> RouteTable:
     root = Path(root).resolve()
     routes: dict[str, RouteTarget] = {}
-    manifests = tuple(sorted((root / "wiki" / "menu").glob(f"**/generated/{MANIFEST_FILENAME}")))
-    for manifest_path in manifests:
+    allowed = set(family_ids) if family_ids is not None else None
+    manifests: list[Path] = []
+    for manifest_path in sorted((root / "wiki" / "menu").glob(f"**/generated/{MANIFEST_FILENAME}")):
+        if allowed is not None and manifest_family_id(manifest_path) not in allowed:
+            continue
+        manifests.append(manifest_path)
         add_manifest_routes(root, routes, manifest_path)
-    return RouteTable(root=root, routes=routes, manifests=manifests)
+    return RouteTable(root=root, routes=routes, manifests=tuple(manifests))
+
+
+def manifest_family_id(manifest_path: Path) -> str:
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return manifest_path.parent.parent.name
+
+    family = manifest.get("family", {})
+    if not isinstance(family, dict):
+        return manifest_path.parent.parent.name
+    return str(family.get("id") or manifest_path.parent.parent.name)
 
 
 def add_manifest_routes(root: Path, routes: dict[str, RouteTarget], manifest_path: Path) -> None:

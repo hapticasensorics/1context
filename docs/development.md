@@ -3,16 +3,20 @@
 This document holds the maintainer details that used to make the README feel
 like an engineering manual. The README should stay product-first.
 
+Start with [README.md](README.md) for the docs map. For release operations, use
+[macOS Release Runbook](macos-release-runbook.md) as the current source of
+truth; this file keeps the supporting engineering details.
+
 ## Local Files
 
 1Context keeps user-owned content and app machinery separate:
 
 ```text
 ~/1Context/
-  human-readable wiki files and user-owned content
+  user-created wiki files and user-owned content
 
 ~/Library/Application Support/1Context/
-  app/runtime state, config, indexes, sockets, queues, and local web state
+  app/runtime state, config, indexes, sockets, queues, shipped wiki shell, and local web state
 
 ~/Library/Logs/1Context/
   logs and debug/support information
@@ -27,8 +31,9 @@ privacy contract used by the runtime and installer.
 ## Privacy
 
 The public preview makes no product telemetry calls and does not upload project
-data. Native update diagnostics and Sparkle live behind `OneContextUpdate` so
-setup, runtime, menu, and CLI callers all see the same app-owned update state.
+data. Update policy, appcast diagnostics, and CLI-readable update snapshots live
+in `OneContextUpdate`; the actual Sparkle framework driver lives in
+`OneContextSparkleUpdate`. Setup and runtime readiness do not carry update state.
 
 ## Agent Integrations
 
@@ -128,9 +133,10 @@ inspect `~/Library/Logs/1Context/menu.log`:
 ONECONTEXT_MENU_PERF_LOG=1 open /Applications/1Context.app
 ```
 
-For updater work, keep tests on the native updater adapter and release feed.
-`1context update`, menu update, and diagnostics should all report the same
-app-owned update state.
+For updater work, keep tests on update policy, appcast configuration, the
+Sparkle controller, and the release feed. `1context update`, menu update, and
+diagnostics should all report the same app-owned update state without involving
+setup readiness.
 
 ## Release Packaging
 
@@ -154,8 +160,9 @@ Sparkle public EdDSA key from the release keychain account, signs and notarizes
 the app and DMG, then generates `dist/sparkle-updates/appcast.xml`.
 
 Release packaging validates that archives do not contain local owner/group
-metadata, AppleDouble files, local build paths, or SwiftPM resource-bundle
-fallback paths.
+metadata, AppleDouble files, local build paths, SwiftPM resource-bundle fallback
+paths, generated wiki render manifests, or generated markdown source files in
+the bundled user-wiki surface.
 
 When `NOTARIZE=1`, packaging signs and notarizes both layers:
 
@@ -180,23 +187,24 @@ repair releases after update residue, and launch-candidate milestones. Routine
 patches can rely on hosted CI, release asset audit, appcast validation, and
 targeted maintainer smoke.
 
-When the release owner decides the Mac proof is warranted, dispatch the protected
-workflow with a concrete reason. The version-N app installed by the proof must
-already have `SUFeedURL` set to the same appcast URL you pass here. For a
-pre-public staging proof, use `old_dmg_url` for a version-N baseline DMG built
-with `ONECONTEXT_SPARKLE_FEED_URL=<staging_appcast_url>`; otherwise the old app
-may check the public latest feed instead of the staging candidate, and the proof
+When the release owner decides the Mac proof is warranted, use the wrapper so
+`VERSION`, `release/update-policy.toml`, update class, old-version baseline,
+appcast URL, and the protected workflow inputs are resolved consistently. The
+version-N app installed by the proof must already have `SUFeedURL` set to the
+same appcast URL you pass. For a pre-public staging proof, pass `--old-dmg-url`
+for a version-N baseline DMG built with
+`ONECONTEXT_SPARKLE_FEED_URL=<staging_appcast_url>`; otherwise the old app may
+check the public latest feed instead of the staging candidate, and the proof
 script will fail.
 
 ```bash
-gh workflow run self-hosted-mac-update-proof.yml \
-  --repo hapticasensorics/1context \
-  --ref main \
-  -f proof_reason='mandatory updater policy change' \
-  -f old_version=0.1.60 \
-  -f new_version=0.1.61 \
-  -f staging_appcast_url=https://example.invalid/staging/appcast.xml \
-  -f update_class=mandatory
+./scripts/request-release-proof.sh --dry-run
+./scripts/request-release-proof.sh \
+  --dispatch \
+  --watch \
+  --download-artifacts \
+  --ref v$(cat VERSION) \
+  --proof-reason "routine mandatory release proof for $(cat VERSION)"
 ```
 
 To clear local release outputs before packaging:

@@ -292,7 +292,7 @@ def build():
     m = Machine("example", version="0.1.0")
     day = m.scope("day", key="date", states=["pending", "running", "complete"])
 
-    m.on(event("day.started")).to(
+    m.from_(day, "pending").on(event("day.started")).to(
         day,
         "running",
         do=sequence(
@@ -414,10 +414,8 @@ machine.from_(cycle, "ingesting").on(event("memory.events.ready")).to(
 )
 ```
 
-The older `machine.on(...).to(...)` shorthand still compiles for compatibility,
-but production verification treats missing sources on scoped transitions as a
-failure. Generated Mermaid diagrams use the explicit `source` field and only
-fall back to inference for older IR.
+Transitions without explicit sources are unsupported. Generated Mermaid diagrams
+use the explicit `source` field.
 
 ## Production Verification
 

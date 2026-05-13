@@ -47,7 +47,7 @@ let package = Package(
     ),
     .target(
       name: "OneContextSetup",
-      dependencies: ["OneContextLocalWeb", "OneContextPermissions", "OneContextUpdate"]
+      dependencies: ["OneContextLocalWeb", "OneContextPermissions"]
     ),
     .target(
       name: "OneContextAgent",
@@ -71,14 +71,13 @@ let package = Package(
         "OneContextCore",
         "OneContextPlatform",
         "OneContextProtocol",
-        "OneContextUpdate",
         "OneContextPermissions",
         "OneContextSupervisor"
       ]
     ),
     .executableTarget(
       name: "OneContextCLI",
-      dependencies: ["OneContextRuntimeSupport", "OneContextAgent", "OneContextInstall", "OneContextLocalWeb", "OneContextMemoryCore", "OneContextSetup"]
+      dependencies: ["OneContextRuntimeSupport", "OneContextAgent", "OneContextInstall", "OneContextLocalWeb", "OneContextMemoryCore", "OneContextSetup", "OneContextUpdate"]
     ),
     .executableTarget(
       name: "OneContextDaemon",
@@ -89,7 +88,7 @@ let package = Package(
     ),
     .executableTarget(
       name: "OneContextMenuBar",
-      dependencies: ["OneContextRuntimeSupport", "OneContextAgent", "OneContextInstall", "OneContextLocalWeb", "OneContextPermissions", "OneContextSetup", "OneContextSparkleUpdate"],
+      dependencies: ["OneContextRuntimeSupport", "OneContextAgent", "OneContextInstall", "OneContextLocalWeb", "OneContextPermissions", "OneContextSetup", "OneContextUpdate", "OneContextSparkleUpdate"],
       exclude: ["Resources"],
       linkerSettings: [
         .unsafeFlags(["-Xlinker", "-rpath", "-Xlinker", "@executable_path/../Frameworks"])

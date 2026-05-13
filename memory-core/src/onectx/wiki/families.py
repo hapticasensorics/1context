@@ -83,6 +83,17 @@ def family_by_id(root: Path | str, family_id: str) -> WikiFamily:
     raise WikiError(f"unknown wiki family {family_id!r}")
 
 
+def publishes_to_user_wiki(family: WikiFamily) -> bool:
+    """Return whether a family belongs in the installed user's normal wiki."""
+
+    if not policy_bool(family, "publish_to_user_wiki", default=True):
+        return False
+    audience = str(
+        family.policies.get("audience") or family.policies.get("publish_audience") or ""
+    ).strip().lower()
+    return audience not in {"dev", "development", "operator", "control", "internal"}
+
+
 def load_family_manifest(root: Path, manifest_path: Path) -> WikiFamily:
     raw = read_toml(manifest_path)
     family_path = manifest_path.parent
@@ -170,6 +181,23 @@ def parse_int(value: Any, default: int) -> int:
         return int(value)
     except (TypeError, ValueError) as exc:
         raise WikiError(f"wiki menu order must be an integer, got {value!r}") from exc
+
+
+def policy_bool(family: WikiFamily, key: str, *, default: bool) -> bool:
+    value = family.policies.get(key)
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, int):
+        return bool(value)
+    if isinstance(value, str):
+        normalized = value.strip().lower()
+        if normalized in {"1", "true", "yes", "on"}:
+            return True
+        if normalized in {"0", "false", "no", "off"}:
+            return False
+    raise WikiError(f"{family.manifest_path} [policies].{key} must be a boolean, got {value!r}")
 
 
 def format_optional_path(path: Path | None, root: Path | None) -> str:

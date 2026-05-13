@@ -84,6 +84,44 @@ final class AppSetupTests: XCTestCase {
     XCTAssertEqual(readiness.menuTitle, "1Context Ready")
   }
 
+  func testFutureSensitivePermissionsDoNotBecomeSetupRowsBeforeFeatureShips() {
+    let setup = OneContextAppSetup.snapshot(
+      localWikiAccess: LocalWebSetupSnapshot.highPortHTTP(targetURL: "http://127.0.0.1:39191/your-context")
+    )
+
+    XCTAssertEqual(setup.sensitivePermissions.map(\.kind), [.screenRecording, .accessibility])
+    XCTAssertEqual(setup.shippedPermissionRows, [])
+    XCTAssertTrue(setup.requiredReady)
+  }
+
+  func testDefaultSetupDiagnosticsHideFutureSensitivePermissions() {
+    let setup = OneContextAppSetup.snapshot(
+      localWikiAccess: LocalWebSetupSnapshot.highPortHTTP(targetURL: "http://127.0.0.1:39191/your-context")
+    )
+
+    let text = OneContextAppSetupDiagnostics.render(setup).joined(separator: "\n")
+
+    XCTAssertTrue(text.contains("Local Wiki Access: Granted"))
+    XCTAssertFalse(text.contains("Sensitive Permissions:"))
+    XCTAssertFalse(text.contains("Screen Recording"))
+    XCTAssertFalse(text.contains("Accessibility"))
+  }
+
+  func testExplicitSetupDiagnosticsCanShowFutureSensitivePermissions() {
+    let setup = OneContextAppSetup.snapshot(
+      localWikiAccess: LocalWebSetupSnapshot.highPortHTTP(targetURL: "http://127.0.0.1:39191/your-context")
+    )
+
+    let text = OneContextAppSetupDiagnostics.render(
+      setup,
+      includeFutureSensitivePermissions: true
+    ).joined(separator: "\n")
+
+    XCTAssertTrue(text.contains("Sensitive Permissions:"))
+    XCTAssertTrue(text.contains("Screen Recording"))
+    XCTAssertTrue(text.contains("Accessibility"))
+  }
+
   func testReadinessNeedsSetupWhenProxyBinaryIsStaleAfterAppUpdate() {
     let readiness = OneContextAppReadiness.snapshot(
       localWebDiagnostics: diagnostics(
