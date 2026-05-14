@@ -379,3 +379,13 @@ plugin tree. The factory must keep package-smoke checks that fail on
   helper remains, active docs point at internal proof engines only, `bash -n`
   passes over the moved scripts, `./scripts/test-release-train.sh` passes, and
   `git diff --check` passes.
+- 2026-05-13: Prepared the official public hop as `0.1.65 -> 0.1.70` instead
+  of reusing the preview-channel `0.1.68 -> 0.1.69` previous version. The first
+  local official build attempt exposed a factory bug: missing local
+  `1context-notary` credentials made notarization fail, but the timing wrapper
+  returned success after recording failed substeps. Fixed `time_release_step`
+  so any failed subprocess fails the release stage immediately. Proof:
+  `./scripts/test-release-train.sh`, `./scripts/test.sh`, `bash -n
+  scripts/release-train.sh`, and `git diff --check`. The official build remains
+  unproven until it runs from `v0.1.70` on a runner with notarization
+  credentials.

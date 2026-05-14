@@ -341,10 +341,11 @@ time_release_step() {
   if "$@"; then
     write_step_timing "$stage" "$step" "passed" "$started_epoch"
     return 0
+  else
+    exit_code=$?
+    write_step_timing "$stage" "$step" "failed" "$started_epoch"
+    return "$exit_code"
   fi
-  exit_code=$?
-  write_step_timing "$stage" "$step" "failed" "$started_epoch"
-  return "$exit_code"
 }
 
 collect_downloaded_proof_results() {
