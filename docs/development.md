@@ -129,12 +129,6 @@ passing a one-off staging feed through workflow inputs.
 ./scripts/release-train.sh prove
 ```
 
-To clear local release outputs before packaging:
-
-```bash
-./scripts/clean-release-artifacts.sh
-```
-
 To notarize a built release artifact directly, first configure a `notarytool`
 keychain profile. Direct DMG notarization expects the DMG to already be signed:
 

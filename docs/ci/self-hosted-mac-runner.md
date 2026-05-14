@@ -51,8 +51,8 @@ The release train dispatches the self-hosted proof job, which:
 3. Installs `previous_version` from the manifest into
    `/Applications/1Context.app`.
 4. Uses the manifest appcast URL and update class for the update hop.
-5. Runs `scripts/prove-remote-sparkle-update.sh`.
-6. Runs `scripts/verify-macos-steady-state.sh`.
+5. Runs `scripts/release/internal/prove-remote-sparkle-update.sh`.
+6. Runs `scripts/release/internal/verify-macos-steady-state.sh`.
 7. Uploads evidence from `dist/self-hosted-update-proof/`.
 
 The self-hosted workflow validates the appcast against `release/release.toml`.

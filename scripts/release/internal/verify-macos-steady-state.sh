@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
 APP="${ONECONTEXT_APP:-/Applications/1Context.app}"
 CLI="$APP/Contents/MacOS/1context-cli"
 LABEL_RUNTIME="com.haptica.1context"

@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
 # shellcheck disable=SC1091
-source "$ROOT/scripts/lib-gui-evidence.sh"
+source "$ROOT/scripts/release/internal/lib-gui-evidence.sh"
 APP="${ONECONTEXT_INSTALLED_APP:-/Applications/1Context.app}"
 APPCAST_URL="${ONECONTEXT_REMOTE_APPCAST_URL:-https://github.com/hapticasensorics/1context/releases/latest/download/appcast.xml}"
 APPCAST_GITHUB_REPO="${ONECONTEXT_REMOTE_APPCAST_GITHUB_REPO:-}"

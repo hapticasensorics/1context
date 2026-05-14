@@ -3,7 +3,7 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
 # shellcheck disable=SC1091
-source "$ROOT/scripts/lib-gui-evidence.sh"
+source "$ROOT/scripts/release/internal/lib-gui-evidence.sh"
 APP="${ONECONTEXT_INSTALLED_APP:-/Applications/1Context.app}"
 ARCH="${ONECONTEXT_ARCH:-arm64}"
 REPO="${ONECONTEXT_GITHUB_REPO:-hapticasensorics/1context}"
@@ -516,14 +516,14 @@ ONECONTEXT_UPDATE_PROOF_TIMEOUT_SECONDS="$TIMEOUT_SECONDS" \
 ONECONTEXT_UPDATE_PROOF_POLL_SECONDS="$POLL_SECONDS" \
 ONECONTEXT_REMOTE_UPDATE_VALIDATE_REPO_POLICY="${ONECONTEXT_REMOTE_UPDATE_VALIDATE_REPO_POLICY:-0}" \
 ONECONTEXT_REMOTE_UPDATE_EVIDENCE_DIR="$EVIDENCE_DIR/update-proof" \
-  "$ROOT/scripts/prove-remote-sparkle-update.sh"
+  "$ROOT/scripts/release/internal/prove-remote-sparkle-update.sh"
 
 log "running post-update steady-state proof"
 ONECONTEXT_APP="$APP" \
 ONECONTEXT_STEADY_STATE_SECONDS="$STEADY_STATE_SECONDS" \
 ONECONTEXT_STEADY_STATE_INTERVAL_SECONDS="$STEADY_STATE_INTERVAL_SECONDS" \
 ONECONTEXT_STEADY_STATE_EVIDENCE_DIR="$EVIDENCE_DIR/steady-state" \
-  "$ROOT/scripts/verify-macos-steady-state.sh"
+  "$ROOT/scripts/release/internal/verify-macos-steady-state.sh"
 
 ensure_final_app_uses_public_feed
 prove_already_current_manual_check

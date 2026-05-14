@@ -135,7 +135,7 @@ plugin tree. The factory must keep package-smoke checks that fail on
   path override when it reappears.
 - [x] Add a no-shim scan that fails on runtime root bypasses, old release
   wrappers, `package` release commands, and deleted update-policy names.
-- [ ] Delete or internalize stale release scripts that are not factory commands.
+- [x] Delete or internalize stale release scripts that are not factory commands.
 - [x] Rewrite stale docs so active docs mention factory commands only.
 
 ### Bundled Dependency Boundary
@@ -345,7 +345,7 @@ plugin tree. The factory must keep package-smoke checks that fail on
   records the menu process list and accepts either a launchd-owned menu PID or a
   live `/Applications/1Context.app/Contents/MacOS/1Context` process plus a
   loaded menu LaunchAgent. Harness proof: `bash -n
-  scripts/verify-macos-steady-state.sh`, `./scripts/test-release-train.sh`,
+  scripts/release/internal/verify-macos-steady-state.sh`, `./scripts/test-release-train.sh`,
   `./scripts/test.sh`, and `git diff --check`.
 - 2026-05-13: Private proof run `25835624162` passed on the self-hosted Mac
   runner after the steady-state harness accepted Sparkle-relaunched menu
@@ -370,3 +370,12 @@ plugin tree. The factory must keep package-smoke checks that fail on
   `./scripts/release-manifest.py validate`, private-channel `export-env`
   showing `ONECONTEXT_RELEASE_BUDGET_ADVISORY=0`, `./scripts/test-release-train.sh`,
   and `git diff --check`.
+- 2026-05-13: Internalized the remaining top-level proof engines. Moved
+  `lib-gui-evidence.sh`, `prove-remote-sparkle-update.sh`, and
+  `verify-macos-steady-state.sh` under `scripts/release/internal/`, updated the
+  self-hosted proof runner and tests to call those internal paths, and deleted
+  the stale `scripts/clean-release-artifacts.sh` helper instead of preserving
+  another release-shaped public command. Proof: no runnable top-level proof
+  helper remains, active docs point at internal proof engines only, `bash -n`
+  passes over the moved scripts, `./scripts/test-release-train.sh` passes, and
+  `git diff --check` passes.
