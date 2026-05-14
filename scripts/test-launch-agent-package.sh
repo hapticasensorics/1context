@@ -63,5 +63,6 @@ if grep -R -a -n -E '/opt/homebrew|/usr/local/Cellar|/Cellar/caddy' "$APP" >/tmp
   cat /tmp/1context-package-homebrew-paths.txt >&2
   exit 1
 fi
+"$ROOT/scripts/audit-macos-app-dependencies.sh" "$APP"
 
 echo "Packaged LaunchAgent smoke passed."

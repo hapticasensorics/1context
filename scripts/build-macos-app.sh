@@ -357,6 +357,7 @@ if [[ "$ONECONTEXT_RELEASE_CHANNEL" != "dev" ]]; then
     exit 1
   fi
   rm -f "$homebrew_path_report"
+  "$ROOT/scripts/audit-macos-app-dependencies.sh" "$APP_DIR"
 fi
 
 echo "$APP_DIR"

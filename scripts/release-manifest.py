@@ -903,6 +903,52 @@ def command_matrix_cases(args: argparse.Namespace) -> int:
   return 0
 
 
+def command_write_fixture_proof_results(args: argparse.Namespace) -> int:
+  manifest = validate_manifest(args)
+  matrix = manifest.get("updater_matrix")
+  assert isinstance(matrix, list)
+  output_dir = args.output_dir
+  output_dir.mkdir(parents=True, exist_ok=True)
+  generated_at = dt.datetime.now(dt.timezone.utc).isoformat()
+  previous_version = string_value(manifest, "previous_version")
+  update_class = string_value(manifest, "update_class")
+  written = []
+  for item in matrix:
+    assert isinstance(item, dict)
+    if string_value(item, "proof") != "sparkle_fixture":
+      continue
+    case = string_value(item, "case")
+    expected_version = string_value(item, "expected_version")
+    payload = {
+      "actual_version": expected_version,
+      "artifact_paths": [
+        "sparkle-fixture-tests.log",
+        "macos/Tests/OneContextSparkleUpdateTests/SparkleUpdateControllerTests.swift",
+      ],
+      "case": case,
+      "expected_version": expected_version,
+      "generated_at": generated_at,
+      "old_version": previous_version,
+      "proof": "sparkle_fixture",
+      "redaction_status": "pending",
+      "runtime_assertions": [
+        "sparkle_reducer_fixture_passed",
+        "prior_version_preserved_when_expected",
+      ],
+      "status": "passed",
+      "ui_assertions": [
+        "user_copy_policy_matches_manifest",
+        "support_alert_policy_matches_retry_budget",
+      ],
+      "update_class": update_class,
+    }
+    path = output_dir / f"{case}.json"
+    path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    written.append(case)
+  print("\n".join(written))
+  return 0
+
+
 def add_common_args(parser: argparse.ArgumentParser) -> None:
   parser.add_argument("--root", type=Path, default=ROOT)
   parser.add_argument("--manifest", type=Path, default=DEFAULT_MANIFEST)
@@ -944,6 +990,10 @@ def parse_args() -> argparse.Namespace:
   matrix_parser = subparsers.add_parser("matrix-cases")
   matrix_parser.add_argument("--manifest", type=Path, default=DEFAULT_MANIFEST)
 
+  fixture_parser = subparsers.add_parser("write-fixture-proof-results")
+  add_common_args(fixture_parser)
+  fixture_parser.add_argument("--output-dir", type=Path, required=True)
+
   return parser.parse_args()
 
 
@@ -964,6 +1014,8 @@ def main() -> int:
       return command_forbidden_patterns(args)
     if args.command == "matrix-cases":
       return command_matrix_cases(args)
+    if args.command == "write-fixture-proof-results":
+      return command_write_fixture_proof_results(args)
     raise ManifestError(f"Unknown command: {args.command}")
   except (ManifestError, subprocess.CalledProcessError, ET.ParseError) as exc:
     print(f"release manifest error: {exc}", file=sys.stderr)

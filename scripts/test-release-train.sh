@@ -95,6 +95,22 @@ fi
 ONECONTEXT_RELEASE_MANIFEST_FORCE_SIMPLE_TOML=1 "$ROOT/scripts/release-manifest.py" validate
 test "$("$ROOT/scripts/release-manifest.py" matrix-cases | wc -l | tr -d '[:space:]')" = "13"
 "$ROOT/scripts/release-manifest.py" matrix-cases | grep -q "^login_restart_recovery$"
+"$ROOT/scripts/release-manifest.py" write-fixture-proof-results --output-dir "$TMP_DIR/fixture-proof-results" > "$TMP_DIR/fixture-proof-results.out"
+test "$(find "$TMP_DIR/fixture-proof-results" -name '*.json' | wc -l | tr -d '[:space:]')" = "7"
+grep -q "^optional_prompt$" "$TMP_DIR/fixture-proof-results.out"
+grep -q '"proof": "sparkle_fixture"' "$TMP_DIR/fixture-proof-results/optional_prompt.json"
+grep -q '"status": "passed"' "$TMP_DIR/fixture-proof-results/bad_signature.json"
+mkdir -p "$TMP_DIR/BadDependency.app/Contents/MacOS"
+cat > "$TMP_DIR/BadDependency.app/Contents/MacOS/bad-python" <<'SCRIPT'
+#!/opt/homebrew/bin/python3
+print("not a distributable dependency")
+SCRIPT
+chmod +x "$TMP_DIR/BadDependency.app/Contents/MacOS/bad-python"
+if "$ROOT/scripts/audit-macos-app-dependencies.sh" "$TMP_DIR/BadDependency.app" > "$TMP_DIR/bad-dependency-audit.out" 2>&1; then
+  echo "app dependency audit must reject Homebrew-hosted script interpreters." >&2
+  exit 1
+fi
+grep -q "host package managers or language runtimes" "$TMP_DIR/bad-dependency-audit.out"
 "$ROOT/scripts/release-manifest.py" export-env --channel dev | grep -q "ONECONTEXT_RELEASE_CHANNEL=dev"
 "$ROOT/scripts/release-manifest.py" export-env --channel dev | grep -q "ONECONTEXT_RELEASE_BUDGET_ADVISORY=1"
 "$ROOT/scripts/release-manifest.py" export-env --channel private | grep -q "ONECONTEXT_RELEASE_CHANNEL_APPCAST=private"

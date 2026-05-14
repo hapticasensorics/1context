@@ -40,6 +40,10 @@ manifest and evidence bundle.
   that creates a distributable `.app` or `.dmg`. Dev builds can use a developer
   machine; prototype, private, and official builds must use bundled, pinned, or
   release-owned inputs.
+- No hidden dynamic-library or script-interpreter dependency on host package
+  managers or language runtimes in distributable app bundles. The package audit
+  must inspect Mach-O linkages and executable shebangs, not just grep readable
+  resource files.
 - No human-interpreted success for official releases. Official bless needs
   machine-readable proof JSON, timing JSON, asset manifests, runner attestations,
   redaction reports, and real-Mac GUI evidence.
@@ -150,6 +154,9 @@ plugin tree. The factory must keep package-smoke checks that fail on
 - [x] Add package smoke checks that reject `/opt/homebrew`, `/usr/local/Cellar`,
   host Caddy paths, repo checkout paths, and unbundled runtime-library
   references in the generated `.app` and DMG.
+- [x] Add Mach-O dynamic-library and executable-shebang auditing for
+  distributable `.app` bundles so hidden Homebrew, Python, Node, npm, uv, or
+  local-library dependencies fail before a `.dmg` is accepted.
 - [x] Add a release-factory scan that fails if active release workflows or
   non-dev package scripts contain `brew install`, `brew --prefix`, or
   `command -v caddy`.
@@ -187,7 +194,7 @@ plugin tree. The factory must keep package-smoke checks that fail on
   `ONECONTEXT_PRIVATE_GITHUB_REPO` or token side channel.
 - [x] Private release creates private update assets and proves update on at
   least one non-primary Mac.
-- [ ] Official release proves public Sparkle update on the protected runner.
+- [x] Official release proves public Sparkle update on the protected runner.
 - [ ] Official release proves install, update, uninstall without data deletion,
   reinstall, and controlled delete-data in a throwaway account.
 
@@ -205,7 +212,7 @@ plugin tree. The factory must keep package-smoke checks that fail on
 - [x] `scripts/release-train.sh build --channel dev` passes within target time.
 - [x] `scripts/release-train.sh build --channel prototype` passes within target time.
 - [x] `scripts/release-train.sh build --channel private` passes within target time.
-- [ ] `scripts/release-train.sh build --channel official` passes within target time.
+- [x] `scripts/release-train.sh build --channel official` passes within target time.
 - [x] Private proof passes on the self-hosted Mac runner.
 - [ ] Official proof, audit, and bless pass from a clean tag.
 - [x] Prototype, private, and official build evidence proves no Homebrew or host
@@ -405,3 +412,33 @@ plugin tree. The factory must keep package-smoke checks that fail on
   secret, but preflight must check the same credential set before expensive
   work starts. Fixed `.github/workflows/release.yml` so credential preflight
   receives `secrets.ONECONTEXT_SPARKLE_PRIVATE_ED_KEY`.
+- 2026-05-13: Protected official release run `25836611212` passed from tag
+  `v0.1.70` in 2 minutes 43 seconds. The workflow validated the manifest,
+  prepared the release keychain, passed credential preflight, built signed and
+  notarized official artifacts, uploaded GitHub release assets, and passed the
+  public asset audit. Independent audit proof:
+  `ONECONTEXT_RELEASE_AUDIT_PROBES=1 ./scripts/release-train.sh audit --channel
+  official` passed; public latest appcast now advertises mandatory `0.1.70`
+  with `sparkle:minimumAutoupdateVersion` `0.1.65`, and both versioned and
+  stable DMG downloads passed checksum/size validation.
+- 2026-05-13: Official real-Mac update proof run `25836730311` passed through
+  `release-train.sh prove --channel official`, proving the public `0.1.65 ->
+  0.1.70` mandatory Sparkle hop on the protected runner in 2 minutes 49
+  seconds. Downloaded proof evidence lives at
+  `/tmp/1ctx-release-factory-official-070-proof-dispatch`; normalized proof
+  JSON passed for `mandatory_automatic_success`, `already_current_manual_check`,
+  `app_relaunch_recovery`, `old_app_with_new_appcast`, and
+  `stale_sparkle_defaults`, with no release-notes prompt, installer
+  click-through, support alert, or runtime pause.
+- 2026-05-13: Added release-factory support for fixture-owned updater matrix
+  proof results. `release-train.sh prove` now runs the focused
+  `OneContextSparkleUpdateTests` fixture suite after real-Mac artifacts
+  download, then asks `release-manifest.py write-fixture-proof-results` to emit
+  normalized JSON for the seven `sparkle_fixture` cases. This leaves only the
+  `login_restart_recovery` / real uninstall-reinstall proof missing before
+  `release-train.sh bless` can pass the full matrix.
+- 2026-05-13: Tightened the shipped dependency boundary beyond path greps.
+  Added `scripts/audit-macos-app-dependencies.sh`, wired it into non-dev app
+  builds and package smoke, and added a regression test that rejects an
+  executable script whose shebang points at Homebrew Python. Local proof:
+  `./scripts/audit-macos-app-dependencies.sh dist/1Context.app` passed.

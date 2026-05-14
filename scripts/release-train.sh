@@ -365,6 +365,13 @@ collect_downloaded_proof_results() {
   done < "$list_file"
 }
 
+write_sparkle_fixture_proof_results() {
+  local test_log="$EVIDENCE_DIR/sparkle-fixture-tests.log"
+  mkdir -p "$EVIDENCE_DIR"
+  time_release_step "prove" "run_sparkle_fixture_tests" sh -c 'swift test --package-path "$1" --filter OneContextSparkleUpdateTests > "$2" 2>&1' sh "$ROOT/macos" "$test_log"
+  time_release_step "prove" "write_sparkle_fixture_results" "$ROOT/scripts/release-manifest.py" write-fixture-proof-results --output-dir "$PROOF_RESULTS_DIR"
+}
+
 audit_public_release_assets() (
   set -euo pipefail
 
@@ -944,6 +951,7 @@ PY
   time_release_step "prove" "download_proof_artifacts" sh -c 'gh run download "$1" --repo "$2" --dir "$3" | tee -a "$4"' sh "$run_id" "$repo" "$artifact_dir" "$transcript"
   echo "artifact_dir=$artifact_dir" | tee -a "$transcript"
   time_release_step "prove" "collect_proof_results" collect_downloaded_proof_results "$artifact_dir"
+  write_sparkle_fixture_proof_results
   write_release_evidence "prove"
   time_release_step "prove" "redact_evidence" "$ROOT/scripts/redact-evidence.sh" "$EVIDENCE_DIR"
   time_release_step "prove" "audit_evidence_redaction" "$ROOT/scripts/audit-evidence-redaction.sh" "$EVIDENCE_DIR"
