@@ -2,7 +2,7 @@
 
 Status: active
 Owner: Codex
-Target train: 0.1.67 through 0.1.79 unless the manifest says otherwise
+Target train: 0.1.67 through 0.1.80 unless the manifest says otherwise
 
 ## Purpose
 
@@ -51,6 +51,10 @@ manifest and evidence bundle.
 - No human-interpreted success for official releases. Official bless needs
   machine-readable proof JSON, timing JSON, asset manifests, runner attestations,
   redaction reports, and real-Mac GUI evidence.
+- Updates must not require manual sudo or a fresh Local Wiki Access grant for an
+  already setup user. Admin authorization belongs to first setup, setup repair,
+  or reinstall/delete-data proof, and any such prompt must be captured as setup
+  evidence instead of counted as update success.
 
 ## Target Times
 
@@ -68,7 +72,7 @@ gets slower, the timing artifact must explain the cost.
 - Official signed/notarized assets plus public audit: under 4 minutes.
 - Official standard proof and bless: under 6 minutes.
 - Official destructive uninstall/reinstall/delete-data proof and bless: under 10
-  minutes until the first full 0.1.79 measurement replaces this provisional cap.
+  minutes until the first full 0.1.80 measurement replaces this provisional cap.
 
 If a target is unrealistic, the release evidence should say why with stage timings
 instead of hiding the cost in a giant shell log.
@@ -544,8 +548,9 @@ plugin tree. The factory must keep package-smoke checks that fail on
   the same GUI lane it is validating.
 - 2026-05-13: Official `v0.1.78` proved the public Sparkle hop itself worked
   quickly, but the self-hosted proof then failed steady-state because it asked
-  runtime/local-web to be healthy before running the existing setup restoration
-  lane. `v0.1.79` moves setup restoration immediately after update success and
-  before steady-state, records `setup-after-update` evidence, and gives the
-  protected runner an explicit optional admin-authorization secret hook for the
-  real macOS setup prompt instead of relying on a hidden manual password step.
+  runtime/local-web to be healthy before establishing a setup-ready baseline.
+  `v0.1.80` restores setup before the Sparkle update, then proves the update
+  preserves setup without another grant. The protected runner can use an
+  explicit optional admin-authorization secret only for first setup and
+  reinstall/delete-data proof prompts, not to hide a sudo requirement during
+  normal updates.

@@ -15,7 +15,7 @@ public enum ProcessPrivilegePolicy {
 }
 
 public enum OneContextVersion {
-  public static let fallback = "0.1.79"
+  public static let fallback = "0.1.80"
 
   public static func current(
     bundle: Bundle = .main,

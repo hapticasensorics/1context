@@ -630,12 +630,13 @@ results = [
     "runtime_assertions": [
       "no_runtime_pause",
       "final_installed_version_matches_expected",
-      "setup_restored_after_update",
+      "baseline_setup_ready_before_update",
+      "setup_survived_update_without_regrant",
       "public_feed_restored",
     ],
     "artifact_paths": [
+      "setup-before-update",
       "update-proof",
-      "setup-after-update",
       "steady-state",
       "version-final.txt",
       "self-hosted-update-proof.log",
@@ -765,6 +766,9 @@ clear_disposable_update_state
 install_old_app "$old_dmg"
 rm -f "$old_dmg"
 
+log "restoring baseline setup before update proof"
+restore_setup_via_gui "$EVIDENCE_DIR/setup-before-update"
+
 log "running staged Sparkle update proof"
 ONECONTEXT_INSTALLED_APP="$APP" \
 ONECONTEXT_REMOTE_APPCAST_URL="$APPCAST_URL" \
@@ -777,9 +781,6 @@ ONECONTEXT_UPDATE_PROOF_TIMEOUT_SECONDS="$TIMEOUT_SECONDS" \
 ONECONTEXT_UPDATE_PROOF_POLL_SECONDS="$POLL_SECONDS" \
 ONECONTEXT_REMOTE_UPDATE_EVIDENCE_DIR="$EVIDENCE_DIR/update-proof" \
   "$ROOT/scripts/release/internal/prove-remote-sparkle-update.sh"
-
-log "restoring setup after update before steady-state proof"
-restore_setup_via_gui "$EVIDENCE_DIR/setup-after-update"
 
 log "running post-update steady-state proof"
 ONECONTEXT_APP="$APP" \
