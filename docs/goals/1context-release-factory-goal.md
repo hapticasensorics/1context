@@ -2,7 +2,7 @@
 
 Status: active
 Owner: Codex
-Target train: 0.1.67 through 0.1.84 unless the manifest says otherwise
+Target train: 0.1.67 through 0.1.85 unless the manifest says otherwise
 
 ## Purpose
 
@@ -579,3 +579,10 @@ plugin tree. The factory must keep package-smoke checks that fail on
   harness passed both the stuck-prompt repair case and the ready-state no-op
   case; the remaining closure step is a full official tagged proof carrying
   this fix.
+- 2026-05-14: Official `v0.1.84` proved the public Sparkle update,
+  post-update steady state, manual already-current check, and login/restart
+  recovery, then exposed a different full-proof gap: the destructive
+  uninstall/reinstall lane hung inside `1context-cli uninstall` while macOS
+  waited for certificate-trust authorization. `v0.1.85` wraps CLI uninstall
+  commands in a scoped admin-approval monitor and removes the helper's
+  always-on focused-password fallback.

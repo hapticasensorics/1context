@@ -242,6 +242,7 @@ approve_admin_authorization_prompt() {
   osascript <<'APPLESCRIPT'
 set runnerPassword to system attribute "ONECONTEXT_UPDATE_RUNNER_ADMIN_PASSWORD"
 if runnerPassword is "" then return "no runner admin password configured"
+set allowFocusedFallback to system attribute "ONECONTEXT_ALLOW_FOCUSED_PASSWORD_FALLBACK"
 
 tell application "System Events"
   set candidateProcesses to {"SecurityAgent", "CoreServicesUIAgent", "System Settings", "1Context"}
@@ -331,14 +332,15 @@ tell application "System Events"
       end tell
     end if
   end repeat
-  -- macOS authorization sheets can be frontmost but not enumerable through
-  -- the normal AX process tree on the runner. This helper is only called right
-  -- after clicking the app's setup Grant button, so a focused keystroke fallback
-  -- is scoped to setup restoration rather than normal Sparkle updates.
-  keystroke runnerPassword
-  delay 0.2
-  key code 36
-  return "submitted admin authorization prompt through focused fallback"
+  if allowFocusedFallback is "1" then
+    -- macOS authorization sheets can be frontmost but not enumerable through
+    -- the normal AX process tree on the runner. Keep this fallback opt-in so
+    -- background proof loops never type the password into an unrelated field.
+    keystroke runnerPassword
+    delay 0.2
+    key code 36
+    return "submitted admin authorization prompt through focused fallback"
+  end if
 end tell
 
 return "no admin authorization prompt found"

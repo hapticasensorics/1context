@@ -110,6 +110,51 @@ run_installed_cli() {
     "$(installed_cli)" "$@"
 }
 
+run_installed_cli_with_admin_approval() {
+  local output="$1"
+  shift
+  local approval_dir="${output%.txt}-admin-approval"
+  local timeout_seconds="${ONECONTEXT_CLI_ADMIN_APPROVAL_TIMEOUT_SECONDS:-180}"
+  mkdir -p "$approval_dir"
+  : > "$output"
+
+  log "running 1context-cli $* with admin prompt approval"
+  run_installed_cli "$@" >"$output" 2>&1 &
+  local command_pid=$!
+  local deadline
+  deadline=$(($(date +%s) + timeout_seconds))
+  local attempt=0
+  local status=0
+  while kill -0 "$command_pid" >/dev/null 2>&1; do
+    attempt=$((attempt + 1))
+    local processes="$approval_dir/processes-$attempt.txt"
+    local accessibility="$approval_dir/accessibility-$attempt.txt"
+    ps -axo pid,ppid,user,stat,command |
+      awk '/SecurityAgent|security[[:space:]]+(remove-trusted-cert|delete-certificate|add-trusted-cert)/ && !/awk/ { print }' \
+        > "$processes" || true
+    capture_accessibility "$accessibility" || true
+    if grep -Eiq 'Certificate Trust Settings|Enter your password|Update Settings|SecurityAgent|security wants|make changes' "$accessibility" ||
+      [[ -s "$processes" ]]; then
+      capture_windows "$approval_dir/windows-$attempt.txt" || true
+      capture_screenshot "$approval_dir/desktop-$attempt.png" || true
+      approve_admin_authorization_prompt >"$approval_dir/approve-$attempt.txt" 2>&1 || true
+      sleep 1
+      capture_accessibility "$approval_dir/accessibility-after-approve-$attempt.txt" || true
+    fi
+    if (( "$(date +%s)" >= deadline )); then
+      capture_windows "$approval_dir/windows-timeout.txt" || true
+      capture_accessibility "$approval_dir/accessibility-timeout.txt" || true
+      capture_screenshot "$approval_dir/desktop-timeout.png" || true
+      kill "$command_pid" >/dev/null 2>&1 || true
+      wait "$command_pid" >/dev/null 2>&1 || true
+      fail "Timed out waiting for 1context-cli $* to finish while approving admin prompts. Evidence: $approval_dir"
+    fi
+    sleep 1
+  done
+  wait "$command_pid" || status=$?
+  return "$status"
+}
+
 write_versions() {
   local output="$1"
   {
@@ -554,7 +599,7 @@ prove_uninstall_reinstall() {
   printf 'preserve sentinel %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$preserved_sentinel"
   run_installed_cli diagnose > "$proof_dir/diagnose-before-uninstall.txt" 2>&1 || true
 
-  run_installed_cli uninstall > "$proof_dir/uninstall-keep-data.txt" 2>&1 || {
+  run_installed_cli_with_admin_approval "$proof_dir/uninstall-keep-data.txt" uninstall || {
     cat "$proof_dir/uninstall-keep-data.txt" >&2
     fail "Normal uninstall failed. Evidence: $proof_dir/uninstall-keep-data.txt"
   }
@@ -577,7 +622,7 @@ prove_uninstall_reinstall() {
   printf 'delete sentinel %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$delete_sentinel"
   printf 'keep sentinel %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$adjacent_sentinel"
 
-  run_installed_cli uninstall --delete-data --keep-app > "$proof_dir/uninstall-delete-data-keep-app.txt" 2>&1 || {
+  run_installed_cli_with_admin_approval "$proof_dir/uninstall-delete-data-keep-app.txt" uninstall --delete-data --keep-app || {
     cat "$proof_dir/uninstall-delete-data-keep-app.txt" >&2
     fail "Delete-data uninstall failed. Evidence: $proof_dir/uninstall-delete-data-keep-app.txt"
   }

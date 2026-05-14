@@ -1,13 +1,15 @@
-# 1Context v0.1.84 Public Preview
+# 1Context v0.1.85 Public Preview
 
 This release includes:
 
-- `0.1.84` finishes the release-factory setup authorization repair. The
-  protected runner now targets the visible macOS Certificate Trust Settings
-  sheet, focuses the secure password field, sets the field value directly
-  through Accessibility, and clicks `Update Settings`.
-- A focused password-entry harness proves the exact setup prompt in isolation
-  before the slower release proof runs.
+- `0.1.85` finishes the release-factory uninstall/reinstall proof repair. The
+  protected runner now watches `1context-cli uninstall` for macOS certificate
+  trust authorization prompts and approves them while the CLI subprocess is
+  blocked.
+- The password helper no longer uses the broad focused-password fallback unless
+  it is explicitly enabled, so proof loops capture the prompt and retry through
+  scoped Accessibility actions instead of typing into an arbitrary focused
+  field.
 - The proof contract now explicitly preserves the product boundary: an already
   setup user should not need sudo or a fresh Local Wiki Access grant during an
   app update.
