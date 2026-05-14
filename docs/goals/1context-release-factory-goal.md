@@ -2,7 +2,7 @@
 
 Status: active
 Owner: Codex
-Target train: 0.1.67 through 0.1.77 unless the manifest says otherwise
+Target train: 0.1.67 through 0.1.78 unless the manifest says otherwise
 
 ## Purpose
 
@@ -68,7 +68,7 @@ gets slower, the timing artifact must explain the cost.
 - Official signed/notarized assets plus public audit: under 4 minutes.
 - Official standard proof and bless: under 6 minutes.
 - Official destructive uninstall/reinstall/delete-data proof and bless: under 10
-  minutes until the first full 0.1.77 measurement replaces this provisional cap.
+  minutes until the first full 0.1.78 measurement replaces this provisional cap.
 
 If a target is unrealistic, the release evidence should say why with stage timings
 instead of hiding the cost in a giant shell log.
@@ -536,3 +536,9 @@ plugin tree. The factory must keep package-smoke checks that fail on
   `v0.1.77` product fix makes app-owned lifecycle/setup guards reject only
   true root/euid 0 execution, with a regression test proving stale `SUDO_USER`
   does not block a normal logged-in user process.
+- 2026-05-13: Official `v0.1.77` then exposed that the proof still had a
+  human-clean-runner precondition: it failed immediately if the currently
+  installed runner app was not already setup-ready. That contradicts the
+  release-factory goal. `v0.1.78` records pre-run setup readiness as evidence
+  only; the proof owns installing the baseline app and restoring setup through
+  the same GUI lane it is validating.

@@ -24,7 +24,6 @@ STEADY_STATE_INTERVAL_SECONDS="${ONECONTEXT_STEADY_STATE_INTERVAL_SECONDS:-5}"
 LOGIN_RESTART_STEADY_STATE_SECONDS="${ONECONTEXT_LOGIN_RESTART_STEADY_STATE_SECONDS:-30}"
 UNINSTALL_REINSTALL_STEADY_STATE_SECONDS="${ONECONTEXT_UNINSTALL_REINSTALL_STEADY_STATE_SECONDS:-30}"
 RECOVERY_HEALTH_TIMEOUT_SECONDS="${ONECONTEXT_RECOVERY_HEALTH_TIMEOUT_SECONDS:-120}"
-RUNNER_SETUP_PREFLIGHT="${ONECONTEXT_RUNNER_SETUP_PREFLIGHT:-1}"
 ALLOW_NON_PUBLIC_FINAL_FEED="${ONECONTEXT_UPDATE_RUNNER_ALLOW_NON_PUBLIC_FINAL_FEED:-0}"
 RESTORE_PUBLIC_FINAL_FEED="${ONECONTEXT_UPDATE_RUNNER_RESTORE_PUBLIC_FINAL_FEED:-1}"
 RUN_UNINSTALL_REINSTALL_PROOF="${ONECONTEXT_RUN_UNINSTALL_REINSTALL_PROOF:-0}"
@@ -321,7 +320,6 @@ collect_host_snapshot() {
     echo "login_restart_steady_state_seconds=$LOGIN_RESTART_STEADY_STATE_SECONDS"
     echo "uninstall_reinstall_steady_state_seconds=$UNINSTALL_REINSTALL_STEADY_STATE_SECONDS"
     echo "recovery_health_timeout_seconds=$RECOVERY_HEALTH_TIMEOUT_SECONDS"
-    echo "runner_setup_preflight=$RUNNER_SETUP_PREFLIGHT"
     echo "allow_non_public_final_feed=$ALLOW_NON_PUBLIC_FINAL_FEED"
     echo "restore_public_final_feed=$RESTORE_PUBLIC_FINAL_FEED"
     echo "run_uninstall_reinstall_proof=$RUN_UNINSTALL_REINSTALL_PROOF"
@@ -337,26 +335,22 @@ collect_host_snapshot() {
   } > "$EVIDENCE_DIR/environment.txt"
 }
 
-preflight_runner_setup() {
-  if [[ "$RUNNER_SETUP_PREFLIGHT" != "1" ]]; then
-    log "skipping runner setup preflight"
+record_runner_setup_preflight() {
+  local cli
+  cli="$(installed_cli)"
+  log "recording runner Local Wiki setup readiness before proof reset"
+  if [[ ! -x "$cli" ]]; then
+    printf '%s\n' "no installed app before proof reset: $APP" > "$EVIDENCE_DIR/setup-preflight-diagnose.txt"
     return
   fi
 
-  local cli
-  cli="$(installed_cli)"
-  log "checking runner Local Wiki setup readiness"
-  if [[ ! -x "$cli" ]]; then
-    fail "Runner setup preflight requires an existing installed app at $APP. Install 1Context once as the runner user and complete Settings > Setup before update proof, or set ONECONTEXT_RUNNER_SETUP_PREFLIGHT=0 for an intentional first-run setup experiment."
-  fi
-
   local status_file="$EVIDENCE_DIR/setup-preflight-diagnose.txt"
-  if ! "$cli" diagnose > "$status_file" 2>&1; then
-    fail "Runner setup preflight diagnose failed. See $status_file."
+  if ! run_installed_cli diagnose > "$status_file" 2>&1; then
+    log "runner setup diagnose failed before proof reset; continuing because proof owns setup restoration"
+    return
   fi
-  if ! grep -q "Setup Ready: yes" "$status_file"; then
-    fail "Runner setup preflight failed: Local Wiki setup is not ready for the runner user. Open 1Context as that user, choose Settings > Setup, grant Local Wiki Access, approve the 1Context background item in System Settings, then rerun."
-  fi
+  grep -q "Setup Ready: yes" "$status_file" ||
+    log "runner setup is not ready before proof reset; continuing because proof owns setup restoration"
 }
 
 collect_final_logs() {
@@ -758,7 +752,7 @@ PY
 collect_host_snapshot
 "$ROOT/scripts/write-runner-attestation.sh" "$EVIDENCE_DIR/runner-attestation.json"
 write_versions "$EVIDENCE_DIR/version-before-runner-reset.txt"
-preflight_runner_setup
+record_runner_setup_preflight
 capture_process_state "before"
 download_old_dmg
 old_dmg="$DOWNLOADED_OLD_DMG"
