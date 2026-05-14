@@ -2,7 +2,7 @@
 
 Status: active
 Owner: Codex
-Target train: 0.1.67 through 0.1.73 unless the manifest says otherwise
+Target train: 0.1.67 through 0.1.74 unless the manifest says otherwise
 
 ## Purpose
 
@@ -55,15 +55,20 @@ manifest and evidence bundle.
 ## Target Times
 
 These targets measure elapsed wall time on an ordinary warmed runner unless noted.
-Human attention after kickoff should stay under five minutes.
+Human attention after kickoff should stay under five minutes. Targets should stay
+close to observed factory speed plus about one minute of guard band; if a lane
+gets slower, the timing artifact must explain the cost.
 
-- Dev warm build plus smoke: 30 to 90 seconds.
-- Dev cold build plus smoke: under 3 minutes.
-- Prototype signed DMG: 3 to 8 minutes warm, under 12 minutes cold.
-- Private signed/notarized release assets: 5 to 12 minutes.
-- Private proof on real Macs: 10 to 20 minutes elapsed, parallel and unattended.
-- Official signed/notarized assets: 8 to 15 minutes.
-- Official full proof and bless: 15 to 30 minutes P50, 45 minutes P95.
+- Dev warm build plus smoke: under 90 seconds.
+- Dev cold build plus smoke: under 2 minutes.
+- Prototype signed/notarized DMG: under 3 minutes warm, under 5 minutes cold.
+- Private signed/notarized release assets: under 4 minutes.
+- Private publish: under 30 seconds.
+- Private proof on real Macs: under 5 minutes elapsed, parallel and unattended.
+- Official signed/notarized assets plus public audit: under 4 minutes.
+- Official standard proof and bless: under 6 minutes.
+- Official destructive uninstall/reinstall/delete-data proof and bless: under 10
+  minutes until the first full 0.1.74 measurement replaces this provisional cap.
 
 If a target is unrealistic, the release evidence should say why with stage timings
 instead of hiding the cost in a giant shell log.
@@ -248,7 +253,8 @@ plugin tree. The factory must keep package-smoke checks that fail on
   --channel prototype` produced `dist/1Context-0.1.67-macos-arm64.dmg`, signed
   and notarized both the app and DMG, and wrote timing evidence at
   `/tmp/1ctx-release-factory-prototype-evidence/timings/build-prototype.json`.
-  Elapsed build time was 125 seconds, under the 720 second prototype budget.
+  Elapsed build time was 125 seconds, under the 3 minute warmed prototype
+  budget.
   `codesign --verify`, `spctl --assess`, and `./scripts/test-launch-agent-package.sh`
   passed. The prototype app has no `SUFeedURL`, and no new appcast was generated.
 - 2026-05-13: Proved the private asset build after fixing
@@ -293,7 +299,7 @@ plugin tree. The factory must keep package-smoke checks that fail on
   build. `ONECONTEXT_RELEASE_EVIDENCE_DIR=/tmp/1ctx-release-factory-prototype-no-brew-evidence
   ./scripts/release-train.sh build --channel prototype` produced signed,
   notarized, stapled `dist/1Context-0.1.68-macos-arm64.dmg` in 101 seconds,
-  under the 720 second prototype budget. Proof: `./scripts/test-release-train.sh`,
+  under the 3 minute warmed prototype budget. Proof: `./scripts/test-release-train.sh`,
   `./scripts/test.sh`, `swift test --package-path macos`, `./scripts/package-macos-smoke.sh`,
   `./scripts/test-launch-agent-package.sh`, `actionlint`, `git diff --check`,
   `codesign --verify --deep --strict dist/1Context.app`, `spctl --assess`, and
@@ -506,3 +512,12 @@ plugin tree. The factory must keep package-smoke checks that fail on
   `proof-results/real_uninstall_reinstall.json`. This is implemented and
   locally syntax/test verified, but the Channel Proof checkbox remains open
   until a protected official tagged proof run downloads and blesses that JSON.
+- 2026-05-13: Tightened release-factory speed targets to match measured
+  factory behavior plus about one minute of guard band instead of carrying old
+  12 to 45 minute budgets. The goal now targets prototype DMGs under 3 minutes,
+  private release assets under 4 minutes, private real-Mac proof under 5
+  minutes, official signed/notarized assets plus public audit under 4 minutes,
+  official standard proof plus bless under 6 minutes, and the first destructive
+  uninstall/reinstall proof under a provisional 10 minute cap. The same tighter
+  budgets are now encoded in `release/release.toml`, with private and official
+  channels still non-advisory.

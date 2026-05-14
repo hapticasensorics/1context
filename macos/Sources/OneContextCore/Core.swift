@@ -4,7 +4,7 @@ public let oneContextVersion = OneContextVersion.current()
 public let oneContextGitHubURL = URL(string: "https://github.com/hapticasensorics/1context")!
 
 public enum OneContextVersion {
-  public static let fallback = "0.1.73"
+  public static let fallback = "0.1.74"
 
   public static func current(
     bundle: Bundle = .main,

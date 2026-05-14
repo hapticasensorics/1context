@@ -102,8 +102,9 @@ installed_feed_url() {
   plutil -extract SUFeedURL raw "$APP/Contents/Info.plist" 2>/dev/null || true
 }
 
-installed_cli() {
-  printf '%s\n' "$APP/Contents/MacOS/1context-cli"
+run_installed_cli() {
+  env -u SUDO_USER -u SUDO_UID -u SUDO_GID -u SUDO_COMMAND \
+    "$APP/Contents/MacOS/1context-cli" "$@"
 }
 
 write_versions() {
@@ -494,9 +495,9 @@ prove_uninstall_reinstall() {
   local preserved_sentinel="$preserved_dir/preserved-after-normal-uninstall.txt"
   mkdir -p "$preserved_dir"
   printf 'preserve sentinel %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$preserved_sentinel"
-  "$APP/Contents/MacOS/1context-cli" diagnose > "$proof_dir/diagnose-before-uninstall.txt" 2>&1 || true
+  run_installed_cli diagnose > "$proof_dir/diagnose-before-uninstall.txt" 2>&1 || true
 
-  "$APP/Contents/MacOS/1context-cli" uninstall > "$proof_dir/uninstall-keep-data.txt" 2>&1 || {
+  run_installed_cli uninstall > "$proof_dir/uninstall-keep-data.txt" 2>&1 || {
     cat "$proof_dir/uninstall-keep-data.txt" >&2
     fail "Normal uninstall failed. Evidence: $proof_dir/uninstall-keep-data.txt"
   }
@@ -519,7 +520,7 @@ prove_uninstall_reinstall() {
   printf 'delete sentinel %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$delete_sentinel"
   printf 'keep sentinel %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$adjacent_sentinel"
 
-  "$APP/Contents/MacOS/1context-cli" uninstall --delete-data --keep-app > "$proof_dir/uninstall-delete-data-keep-app.txt" 2>&1 || {
+  run_installed_cli uninstall --delete-data --keep-app > "$proof_dir/uninstall-delete-data-keep-app.txt" 2>&1 || {
     cat "$proof_dir/uninstall-delete-data-keep-app.txt" >&2
     fail "Delete-data uninstall failed. Evidence: $proof_dir/uninstall-delete-data-keep-app.txt"
   }
@@ -534,7 +535,7 @@ prove_uninstall_reinstall() {
   ONECONTEXT_STEADY_STATE_INTERVAL_SECONDS="$STEADY_STATE_INTERVAL_SECONDS" \
   ONECONTEXT_STEADY_STATE_EVIDENCE_DIR="$proof_dir/steady-state-after-delete-data-restore" \
     "$ROOT/scripts/release/internal/verify-macos-steady-state.sh"
-  "$APP/Contents/MacOS/1context-cli" diagnose > "$proof_dir/diagnose-after-delete-data-restore.txt" 2>&1
+  run_installed_cli diagnose > "$proof_dir/diagnose-after-delete-data-restore.txt" 2>&1
 }
 
 write_proof_result() {

@@ -100,6 +100,7 @@ test "$("$ROOT/scripts/release-manifest.py" matrix-cases | wc -l | tr -d '[:spac
 "$ROOT/scripts/release-manifest.py" matrix-cases | grep -q "^real_uninstall_reinstall$"
 grep -q '"case": "login_restart_recovery"' "$ROOT/scripts/release/internal/self-hosted-update-proof.sh"
 grep -q '"case": "real_uninstall_reinstall"' "$ROOT/scripts/release/internal/self-hosted-update-proof.sh"
+grep -q "env -u SUDO_USER -u SUDO_UID -u SUDO_GID -u SUDO_COMMAND" "$ROOT/scripts/release/internal/self-hosted-update-proof.sh"
 "$ROOT/scripts/release-manifest.py" write-fixture-proof-results --output-dir "$TMP_DIR/fixture-proof-results" > "$TMP_DIR/fixture-proof-results.out"
 test "$(find "$TMP_DIR/fixture-proof-results" -name '*.json' | wc -l | tr -d '[:space:]')" = "7"
 grep -q "^optional_prompt$" "$TMP_DIR/fixture-proof-results.out"
