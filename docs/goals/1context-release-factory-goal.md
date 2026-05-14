@@ -393,6 +393,8 @@ plugin tree. The factory must keep package-smoke checks that fail on
   `25836351389` failed before credentials unlocked because the macOS runner
   executed `release-train.sh` with system Bash 3.2, which treats an empty array
   expansion under `set -u` as an unbound variable. Fixed the argument parser and
-  added a `/bin/bash scripts/release-train.sh validate --channel dev` regression
-  check. Proof: `/bin/bash scripts/release-train.sh validate --channel dev`,
+  then fixed the same empty-array pattern in default manifest loading after
+  retry run `25836445237` exposed it. Added `/bin/bash` regression checks for
+  both default and explicit-channel validation. Proof:
+  `/bin/bash scripts/release-train.sh validate --channel dev`,
   `./scripts/test-release-train.sh`, `./scripts/test.sh`, and `git diff --check`.

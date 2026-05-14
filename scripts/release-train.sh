@@ -86,11 +86,11 @@ sparkle_public_key() {
 }
 
 load_manifest_env() {
-  local channel_args=()
   if [[ -n "$CHANNEL_ARG" ]]; then
-    channel_args=(--channel "$CHANNEL_ARG")
+    eval "$("$ROOT/scripts/release-manifest.py" export-env --channel "$CHANNEL_ARG")"
+  else
+    eval "$("$ROOT/scripts/release-manifest.py" export-env)"
   fi
-  eval "$("$ROOT/scripts/release-manifest.py" export-env "${channel_args[@]}")"
   VERSION="$ONECONTEXT_RELEASE_VERSION"
   PREVIOUS_VERSION="$ONECONTEXT_RELEASE_PREVIOUS_VERSION"
   TAG="$ONECONTEXT_RELEASE_TAG"
