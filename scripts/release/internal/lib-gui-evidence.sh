@@ -43,6 +43,27 @@ tell application "System Events"
             set end of reportLines to "button" & tab & (name of buttonRef as text)
           end try
         end repeat
+        repeat with fieldRef in text fields of win
+          set fieldLine to "text-field"
+          try
+            set fieldLine to fieldLine & tab & "role=" & (role of fieldRef as text)
+          end try
+          try
+            set fieldLine to fieldLine & tab & "description=" & (description of fieldRef as text)
+          end try
+          try
+            set fieldLine to fieldLine & tab & "name=" & (name of fieldRef as text)
+          end try
+          try
+            set fieldPosition to position of fieldRef
+            set fieldLine to fieldLine & tab & "position=" & ((item 1 of fieldPosition) as text) & "," & ((item 2 of fieldPosition) as text)
+          end try
+          try
+            set fieldSize to size of fieldRef
+            set fieldLine to fieldLine & tab & "size=" & ((item 1 of fieldSize) as text) & "x" & ((item 2 of fieldSize) as text)
+          end try
+          set end of reportLines to fieldLine
+        end repeat
         repeat with groupRef in groups of win
           repeat with textRef in static texts of groupRef
             try
@@ -69,9 +90,13 @@ tell application "System Events"
           try
             set lineText to lineText & tab & "name=" & (name of elementRef as text)
           end try
-          try
-            set lineText to lineText & tab & "value=" & (value of elementRef as text)
-          end try
+          if lineText contains "role=AXTextField" or lineText contains "role=AXSecureTextField" then
+            set lineText to lineText & tab & "value=<redacted>"
+          else
+            try
+              set lineText to lineText & tab & "value=" & (value of elementRef as text)
+            end try
+          end if
           if lineText is not "" then set end of reportLines to lineText
         end repeat
       end repeat
@@ -226,6 +251,23 @@ tell application "System Events"
         set frontmost to true
         delay 0.2
         repeat with win in windows
+          try
+            set directFields to text fields of win
+            if (count of directFields) > 0 then
+              set passwordField to item -1 of directFields
+              click passwordField
+              delay 0.2
+              keystroke runnerPassword
+              delay 0.2
+              try
+                click button "Update Settings" of win
+              on error
+                key code 36
+              end try
+              return "submitted admin authorization prompt through direct text field"
+            end if
+          end try
+          set candidateFields to {}
           repeat with elementRef in entire contents of win
             try
               set elementRole to role of elementRef as text
@@ -238,14 +280,39 @@ tell application "System Events"
                 set elementName to name of elementRef as text
               end try
               if elementRole is "AXTextField" or elementRole is "AXSecureTextField" or elementDescription contains "password" or elementName contains "Password" then
-                click elementRef
-                keystroke runnerPassword
-                delay 0.2
-                key code 36
-                return "submitted admin authorization prompt"
+                set end of candidateFields to elementRef
               end if
             end try
           end repeat
+          if (count of candidateFields) > 0 then
+            set passwordField to item -1 of candidateFields
+            click passwordField
+            delay 0.2
+            keystroke runnerPassword
+            delay 0.2
+            try
+              click button "Update Settings" of win
+            on error
+              key code 36
+            end try
+            return "submitted admin authorization prompt through nested text field"
+          end if
+          try
+            set winPosition to position of win
+            set winSize to size of win
+            set clickX to (item 1 of winPosition) + ((item 1 of winSize) div 2)
+            set clickY to (item 2 of winPosition) + (((item 2 of winSize) * 68) div 100)
+            click at {clickX, clickY}
+            delay 0.2
+            keystroke runnerPassword
+            delay 0.2
+            try
+              click button "Update Settings" of win
+            on error
+              key code 36
+            end try
+            return "submitted admin authorization prompt through coordinate field"
+          end try
         end repeat
       end tell
     end if
