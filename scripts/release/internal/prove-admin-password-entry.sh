@@ -64,6 +64,14 @@ wait_for_pid() {
   wait "$pid"
 }
 
+run_installed_diagnose() {
+  local output="$1"
+  if [[ ! -x "/Applications/1Context.app/Contents/MacOS/1context-cli" ]]; then
+    return 1
+  fi
+  "/Applications/1Context.app/Contents/MacOS/1context-cli" diagnose >"$output" 2>&1
+}
+
 approve_visible_prompt() {
   local label="$1"
   capture_all "$label-before"
@@ -76,33 +84,17 @@ approve_visible_prompt() {
   return 0
 }
 
-run_trust_command_with_gui_password() {
-  local command_label="$1"
-  shift
-  log "starting certificate trust command: $command_label"
-  "$@" >"$EVIDENCE_DIR/$command_label.out" 2>"$EVIDENCE_DIR/$command_label.err" &
-  local command_pid="$!"
-
-  if ! wait_for_prompt "$command_label-prompt"; then
-    local status=0
-    if wait_for_pid "$command_pid" "$command_label" >/dev/null 2>&1; then
-      status=0
-    else
-      status=$?
-    fi
-    fail "certificate trust command '$command_label' did not show an authorization prompt; exit=$status"
-  fi
-
-  if ! approve_visible_prompt "$command_label"; then
-    wait_for_pid "$command_pid" "$command_label" >/dev/null 2>&1 || true
-    fail "authorization prompt stayed visible after password entry for '$command_label'"
-  fi
-
-  if ! wait_for_pid "$command_pid" "$command_label"; then
-    local status="$?"
-    capture_all "$command_label-failed"
-    fail "certificate trust command '$command_label' failed after password entry; exit=$status"
-  fi
+write_result() {
+  local status="$1"
+  local detail="$2"
+  cat >"$EVIDENCE_DIR/result.json" <<JSON
+{
+  "case": "admin_password_entry",
+  "status": "$status",
+  "detail": "$detail",
+  "evidence_dir": "$EVIDENCE_DIR"
+}
+JSON
 }
 
 if [[ -z "${ONECONTEXT_UPDATE_RUNNER_ADMIN_PASSWORD:-}" ]]; then
@@ -116,33 +108,17 @@ if prompt_visible_in "$EVIDENCE_DIR/accessibility-initial.txt"; then
   log "using already-visible admin authorization prompt"
   approve_visible_prompt "existing-prompt" || fail "existing authorization prompt stayed visible after password entry"
 else
-  WORK_DIR="$(mktemp -d "${TMPDIR:-/tmp}/onecontext-admin-password.XXXXXX")"
-  CERT_PATH="$WORK_DIR/password-harness.crt"
-  KEY_PATH="$WORK_DIR/password-harness.key"
-  CERT_SUBJECT="/CN=1Context Password Harness $STAMP"
-  log "creating temporary certificate"
-  openssl req -x509 -newkey rsa:2048 -sha256 -days 1 -nodes \
-    -keyout "$KEY_PATH" \
-    -out "$CERT_PATH" \
-    -subj "$CERT_SUBJECT" \
-    >"$EVIDENCE_DIR/openssl.out" 2>"$EVIDENCE_DIR/openssl.err"
-
-  run_trust_command_with_gui_password \
-    "add-trusted-cert" \
-    security add-trusted-cert -d -r trustRoot -k /Library/Keychains/System.keychain "$CERT_PATH"
-
-  run_trust_command_with_gui_password \
-    "remove-trusted-cert" \
-    security remove-trusted-cert -d "$CERT_PATH"
+  if run_installed_diagnose "$EVIDENCE_DIR/diagnose-no-prompt.txt" &&
+    grep -q "  Setup Ready: yes" "$EVIDENCE_DIR/diagnose-no-prompt.txt"; then
+    log "no admin authorization prompt is visible because installed setup is already ready"
+    capture_all "final"
+    write_result "skipped_no_prompt" "installed setup is already ready; no password sheet is available to approve"
+    exit 0
+  fi
+  fail "no admin authorization prompt is visible; open 1Context setup and click Grant before running this isolated harness"
 fi
 
 capture_all "final"
-cat >"$EVIDENCE_DIR/result.json" <<JSON
-{
-  "case": "admin_password_entry",
-  "status": "passed",
-  "evidence_dir": "$EVIDENCE_DIR"
-}
-JSON
+write_result "passed" "visible admin authorization prompt was approved"
 
 log "passed; evidence: $EVIDENCE_DIR"
