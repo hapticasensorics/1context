@@ -20,7 +20,11 @@ while [[ $# -gt 0 ]]; do
       ;;
   esac
 done
-set -- "${POSITIONAL_ARGS[@]}"
+if ((${#POSITIONAL_ARGS[@]})); then
+  set -- "${POSITIONAL_ARGS[@]}"
+else
+  set --
+fi
 
 usage() {
   cat <<'USAGE'

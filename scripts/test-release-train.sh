@@ -88,6 +88,7 @@ bash -n \
 python3 -m py_compile "$ROOT/scripts/release-manifest.py"
 
 "$ROOT/scripts/release-manifest.py" validate
+/bin/bash "$ROOT/scripts/release-train.sh" validate --channel dev >/dev/null
 ONECONTEXT_RELEASE_MANIFEST_FORCE_SIMPLE_TOML=1 "$ROOT/scripts/release-manifest.py" validate
 test "$("$ROOT/scripts/release-manifest.py" matrix-cases | wc -l | tr -d '[:space:]')" = "13"
 "$ROOT/scripts/release-manifest.py" matrix-cases | grep -q "^login_restart_recovery$"

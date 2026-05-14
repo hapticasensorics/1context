@@ -389,3 +389,10 @@ plugin tree. The factory must keep package-smoke checks that fail on
   scripts/release-train.sh`, and `git diff --check`. The official build remains
   unproven until it runs from `v0.1.70` on a runner with notarization
   credentials.
+- 2026-05-13: The first protected `v0.1.70` release workflow run
+  `25836351389` failed before credentials unlocked because the macOS runner
+  executed `release-train.sh` with system Bash 3.2, which treats an empty array
+  expansion under `set -u` as an unbound variable. Fixed the argument parser and
+  added a `/bin/bash scripts/release-train.sh validate --channel dev` regression
+  check. Proof: `/bin/bash scripts/release-train.sh validate --channel dev`,
+  `./scripts/test-release-train.sh`, `./scripts/test.sh`, and `git diff --check`.
