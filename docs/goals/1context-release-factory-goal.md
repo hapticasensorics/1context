@@ -185,7 +185,7 @@ plugin tree. The factory must keep package-smoke checks that fail on
 - [x] Private-channel release facts come from the manifest-owned
   `hapticasensorics/1context-preview-release` artifact repo, with no
   `ONECONTEXT_PRIVATE_GITHUB_REPO` or token side channel.
-- [ ] Private release creates private update assets and proves update on at
+- [x] Private release creates private update assets and proves update on at
   least one non-primary Mac.
 - [ ] Official release proves public Sparkle update on the protected runner.
 - [ ] Official release proves install, update, uninstall without data deletion,
@@ -201,12 +201,12 @@ plugin tree. The factory must keep package-smoke checks that fail on
 
 ### Exit Criteria
 
-- [ ] `scripts/release-train.sh validate` passes.
-- [ ] `scripts/release-train.sh build --channel dev` passes within target time.
-- [ ] `scripts/release-train.sh build --channel prototype` passes within target time.
-- [ ] `scripts/release-train.sh build --channel private` passes within target time.
+- [x] `scripts/release-train.sh validate` passes.
+- [x] `scripts/release-train.sh build --channel dev` passes within target time.
+- [x] `scripts/release-train.sh build --channel prototype` passes within target time.
+- [x] `scripts/release-train.sh build --channel private` passes within target time.
 - [ ] `scripts/release-train.sh build --channel official` passes within target time.
-- [ ] Private proof passes on the self-hosted Mac runner.
+- [x] Private proof passes on the self-hosted Mac runner.
 - [ ] Official proof, audit, and bless pass from a clean tag.
 - [x] Prototype, private, and official build evidence proves no Homebrew or host
   dependency was used to produce the shipped `.app` or DMG.
@@ -347,3 +347,16 @@ plugin tree. The factory must keep package-smoke checks that fail on
   loaded menu LaunchAgent. Harness proof: `bash -n
   scripts/verify-macos-steady-state.sh`, `./scripts/test-release-train.sh`,
   `./scripts/test.sh`, and `git diff --check`.
+- 2026-05-13: Private proof run `25835624162` passed on the self-hosted Mac
+  runner after the steady-state harness accepted Sparkle-relaunched menu
+  ownership. `release-train.sh prove --channel private` dispatched the
+  manifest-only workflow, approved the protected runner environment, downloaded
+  the proof artifacts, copied normalized proof JSON into
+  `/tmp/1ctx-release-factory-preview-069-proof-dispatch-2/proof-results`, and
+  wrote timing evidence at
+  `/tmp/1ctx-release-factory-preview-069-proof-dispatch-2/timings/prove-private.json`.
+  Evidence: `0.1.68 -> 0.1.69` update succeeded, elapsed proof dispatch was 214
+  seconds, the GitHub job completed in 2 minutes 50 seconds, redaction audit
+  passed, and proof cases `mandatory_automatic_success`,
+  `already_current_manual_check`, `app_relaunch_recovery`,
+  `old_app_with_new_appcast`, and `stale_sparkle_defaults` all passed.
