@@ -167,9 +167,9 @@ plugin tree. The factory must keep package-smoke checks that fail on
 ### Speed And Evidence
 
 - [x] Emit stage timing JSON for validate, build, publish, prove, audit, and bless.
-- [ ] Fail when a stage exceeds its manifest budget unless the channel marks the
+- [x] Fail when a stage exceeds its manifest budget unless the channel marks the
   budget as advisory.
-- [ ] Add a timing summary to release evidence so slow notarization, SwiftPM
+- [x] Add a timing summary to release evidence so slow notarization, SwiftPM
   fetch/build, DMG creation, upload, and runner proof are visible.
 - [ ] Keep expensive real-Mac proof parallel and unattended.
 
@@ -360,3 +360,13 @@ plugin tree. The factory must keep package-smoke checks that fail on
   passed, and proof cases `mandatory_automatic_success`,
   `already_current_manual_check`, `app_relaunch_recovery`,
   `old_app_with_new_appcast`, and `stale_sparkle_defaults` all passed.
+- 2026-05-13: Made speed evidence enforceable. Private and official channels
+  now have non-advisory manifest budgets, while dev and prototype remain
+  advisory for local iteration. `release-train.sh` writes step-level timing
+  records plus `timing-summary.json`, and `release-evidence.json` lists that
+  summary as required evidence. The summary exposes build, notarization, DMG,
+  appcast, publish/upload, proof dispatch/watch/download, redaction, audit, and
+  bless timing without requiring a human to read a shell transcript. Proof:
+  `./scripts/release-manifest.py validate`, private-channel `export-env`
+  showing `ONECONTEXT_RELEASE_BUDGET_ADVISORY=0`, `./scripts/test-release-train.sh`,
+  and `git diff --check`.

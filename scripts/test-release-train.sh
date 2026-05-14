@@ -92,8 +92,11 @@ ONECONTEXT_RELEASE_MANIFEST_FORCE_SIMPLE_TOML=1 "$ROOT/scripts/release-manifest.
 test "$("$ROOT/scripts/release-manifest.py" matrix-cases | wc -l | tr -d '[:space:]')" = "13"
 "$ROOT/scripts/release-manifest.py" matrix-cases | grep -q "^login_restart_recovery$"
 "$ROOT/scripts/release-manifest.py" export-env --channel dev | grep -q "ONECONTEXT_RELEASE_CHANNEL=dev"
+"$ROOT/scripts/release-manifest.py" export-env --channel dev | grep -q "ONECONTEXT_RELEASE_BUDGET_ADVISORY=1"
 "$ROOT/scripts/release-manifest.py" export-env --channel private | grep -q "ONECONTEXT_RELEASE_CHANNEL_APPCAST=private"
 "$ROOT/scripts/release-manifest.py" export-env --channel private | grep -q "ONECONTEXT_RELEASE_CHANNEL_ARTIFACT_REPO=hapticasensorics/1context-preview-release"
+"$ROOT/scripts/release-manifest.py" export-env --channel private | grep -q "ONECONTEXT_RELEASE_BUDGET_ADVISORY=0"
+"$ROOT/scripts/release-manifest.py" export-env --channel official | grep -q "ONECONTEXT_RELEASE_BUDGET_ADVISORY=0"
 test -f "$ROOT/release/tools/caddy/darwin-arm64/caddy-v2.11.2-darwin-arm64.tar.gz"
 test -f "$ROOT/release/tools/caddy/darwin-arm64/caddy-v2.11.2-darwin-arm64.tar.gz.sha256"
 (
@@ -232,7 +235,23 @@ ONECONTEXT_RELEASE_EVIDENCE_DIR="$TMP_DIR/build-evidence" \
   "$ROOT/scripts/release-train.sh" build --channel dev --dry-run \
   > "$TMP_DIR/build-dev-dry-run.out"
 test -f "$TMP_DIR/build-evidence/timings/build-dev.json"
+test -f "$TMP_DIR/build-evidence/timings/steps/build-dev-validate-preflight.json"
+test -f "$TMP_DIR/build-evidence/timing-summary.json"
 grep -q '"channel": "dev"' "$TMP_DIR/build-evidence/timings/build-dev.json"
+grep -q '"schema_version": "1context.release-timing-summary.v1"' "$TMP_DIR/build-evidence/timing-summary.json"
+grep -q '"timing_summary": "timing-summary.json"' "$TMP_DIR/build-evidence/release-evidence.json"
+python3 - "$TMP_DIR/build-evidence/timing-summary.json" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+summary = json.loads(Path(sys.argv[1]).read_text())
+assert summary["channel"] == "dev"
+assert summary["stage_count"] == 1
+assert summary["step_count"] >= 2
+assert summary["budget_exceeded_count"] == 0
+assert any(step["step"] == "validate_preflight" for step in summary["slowest_steps"])
+PY
 if "$ROOT/scripts/release-train.sh" package > "$TMP_DIR/package-command.out" 2>&1; then
   echo "release-train package must not remain as a compatibility shim." >&2
   exit 1
@@ -256,10 +275,12 @@ fi
 ONECONTEXT_RELEASE_EVIDENCE_DIR="$TMP_DIR/private-proof-evidence" \
   "$ROOT/scripts/release-train.sh" prove --channel private --dry-run --proof-reason "fixture private proof" \
   > "$TMP_DIR/private-prove-dry-run.out"
+test -f "$TMP_DIR/private-proof-evidence/timing-summary.json"
 grep -q "workflow run self-hosted-mac-private-update-proof.yml" "$TMP_DIR/private-prove-dry-run.out"
 grep -q "ref: main" "$TMP_DIR/private-prove-dry-run.out"
 grep -q "channel: private" "$TMP_DIR/private-prove-dry-run.out"
 grep -q "1context-preview-release/releases/latest/download/appcast.xml" "$TMP_DIR/private-prove-dry-run.out"
+grep -q '"budget_advisory": false' "$TMP_DIR/private-proof-evidence/timings/prove-private.json"
 if grep -Eq -- '-f (old_version|new_version|staging_appcast_url|update_class|old_tag|old_dmg_url|update_timeout_seconds|steady_state_seconds|artifact_retention_days|channel)=' "$TMP_DIR/private-prove-dry-run.out"; then
   cat "$TMP_DIR/private-prove-dry-run.out" >&2
   echo "private release-train prove dispatch must pass only proof_reason to the workflow." >&2

@@ -145,8 +145,98 @@ output.write_text(json.dumps({
     "asset_manifest": "asset-manifest.json",
     "redaction_report": "redaction-report.json",
     "runner_attestation": "runner-attestation.json",
+    "timing_summary": "timing-summary.json",
     "proof_results": "proof-results/*.json",
   },
+}, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+PY
+}
+
+write_timing_summary() {
+  local timing_dir="$EVIDENCE_DIR/timings"
+  local output="$EVIDENCE_DIR/timing-summary.json"
+  [[ -d "$timing_dir" ]] || return 0
+  python3 - "$timing_dir" "$output" "$VERSION" "$CHANNEL" <<'PY'
+import datetime as dt
+import json
+import sys
+from pathlib import Path
+
+timing_dir = Path(sys.argv[1])
+output = Path(sys.argv[2])
+version = sys.argv[3]
+channel = sys.argv[4]
+
+def load_json(path: Path) -> dict:
+  try:
+    data = json.loads(path.read_text(encoding="utf-8"))
+  except json.JSONDecodeError as exc:
+    raise SystemExit(f"invalid timing JSON {path}: {exc}") from exc
+  data["_path"] = str(path.relative_to(timing_dir.parent))
+  return data
+
+stage_records = [
+  load_json(path)
+  for path in sorted(timing_dir.glob("*.json"))
+  if path.name != "summary.json"
+]
+steps_dir = timing_dir / "steps"
+step_records = [
+  load_json(path)
+  for path in sorted(steps_dir.glob("*.json"))
+] if steps_dir.is_dir() else []
+
+def public_record(record: dict) -> dict:
+  return {
+    key: record[key]
+    for key in (
+      "_path",
+      "stage",
+      "step",
+      "channel",
+      "status",
+      "elapsed_seconds",
+      "budget_seconds",
+      "budget_advisory",
+      "budget_exceeded",
+      "started_at",
+      "ended_at",
+    )
+    if key in record
+  }
+
+all_records = stage_records + step_records
+budget_exceeded = [
+  public_record(record)
+  for record in all_records
+  if bool(record.get("budget_exceeded"))
+]
+failed = [
+  public_record(record)
+  for record in all_records
+  if str(record.get("status", "")).lower() not in {"passed", "dry-run"}
+]
+slowest_steps = sorted(
+  (public_record(record) for record in step_records),
+  key=lambda record: int(record.get("elapsed_seconds", 0)),
+  reverse=True,
+)[:8]
+
+output.write_text(json.dumps({
+  "schema_version": "1context.release-timing-summary.v1",
+  "version": version,
+  "channel": channel,
+  "generated_at": dt.datetime.now(dt.timezone.utc).isoformat(),
+  "stage_count": len(stage_records),
+  "step_count": len(step_records),
+  "stage_elapsed_seconds": sum(int(record.get("elapsed_seconds", 0)) for record in stage_records),
+  "step_elapsed_seconds": sum(int(record.get("elapsed_seconds", 0)) for record in step_records),
+  "budget_exceeded_count": len(budget_exceeded),
+  "failed_count": len(failed),
+  "budget_exceeded": budget_exceeded,
+  "failed": failed,
+  "stages": [public_record(record) for record in stage_records],
+  "slowest_steps": slowest_steps,
 }, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 PY
 }
@@ -193,9 +283,68 @@ output.write_text(json.dumps({
   "budget_exceeded": budget > 0 and elapsed > budget,
 }, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 PY
+  write_timing_summary
   if [[ "$advisory" != "1" && "$budget_seconds" =~ ^[0-9]+$ && "$budget_seconds" != "0" && "$elapsed_seconds" -gt "$budget_seconds" ]]; then
     fail "$stage exceeded ${budget_seconds}s budget for $CHANNEL channel (${elapsed_seconds}s)."
   fi
+}
+
+write_step_timing() {
+  local stage="$1"
+  local step="$2"
+  local status="$3"
+  local started_epoch="$4"
+  local ended_epoch elapsed_seconds slug output
+  ended_epoch="$(date +%s)"
+  elapsed_seconds=$((ended_epoch - started_epoch))
+  slug="$(printf '%s' "$step" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9]+/-/g; s/^-//; s/-$//')"
+  output="$EVIDENCE_DIR/timings/steps/$stage-$CHANNEL-$slug.json"
+  mkdir -p "$(dirname "$output")"
+  python3 - "$output" \
+    "${ONECONTEXT_RELEASE_STAGE_TIMING_SCHEMA:-1context.release-stage-timing.v1}" \
+    "$stage" "$step" "$CHANNEL" "$status" "$started_epoch" "$ended_epoch" \
+    "$elapsed_seconds" <<'PY'
+import datetime as dt
+import json
+import sys
+from pathlib import Path
+
+output = Path(sys.argv[1])
+started = int(sys.argv[7])
+ended = int(sys.argv[8])
+elapsed = int(sys.argv[9])
+output.write_text(json.dumps({
+  "schema_version": sys.argv[2],
+  "stage": sys.argv[3],
+  "step": sys.argv[4],
+  "channel": sys.argv[5],
+  "status": sys.argv[6],
+  "started_epoch": started,
+  "ended_epoch": ended,
+  "started_at": dt.datetime.fromtimestamp(started, dt.timezone.utc).isoformat(),
+  "ended_at": dt.datetime.fromtimestamp(ended, dt.timezone.utc).isoformat(),
+  "elapsed_seconds": elapsed,
+  "budget_seconds": 0,
+  "budget_advisory": True,
+  "budget_exceeded": False,
+}, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+PY
+  write_timing_summary
+}
+
+time_release_step() {
+  local stage="$1"
+  local step="$2"
+  shift 2
+  local started_epoch exit_code
+  started_epoch="$(date +%s)"
+  if "$@"; then
+    write_step_timing "$stage" "$step" "passed" "$started_epoch"
+    return 0
+  fi
+  exit_code=$?
+  write_step_timing "$stage" "$step" "failed" "$started_epoch"
+  return "$exit_code"
 }
 
 collect_downloaded_proof_results() {
@@ -430,9 +579,9 @@ release_build() {
 
   local stage_started
   stage_started="$(date +%s)"
-  release_validate
+  time_release_step "build" "validate_preflight" release_validate
   mkdir -p "$EVIDENCE_DIR"
-  "$ROOT/scripts/write-runner-attestation.sh" "$RUNNER_ATTESTATION"
+  time_release_step "build" "write_runner_attestation" "$ROOT/scripts/write-runner-attestation.sh" "$RUNNER_ATTESTATION"
   if [[ "$dry_run" == "1" ]]; then
     write_release_evidence "build-$CHANNEL-dry-run"
     write_stage_timing "build" "dry-run" "$stage_started"
@@ -455,46 +604,46 @@ release_build() {
       fail "No Sparkle public key found for account '$SPARKLE_ACCOUNT'. Run: CREATE_SPARKLE_KEY=1 scripts/configure-macos-release-secrets.sh"
     fi
   fi
-  "$ROOT/scripts/build-macos-app.sh"
+  time_release_step "build" "build_app_bundle" "$ROOT/scripts/build-macos-app.sh"
   if [[ "$CHANNEL" == "dev" ]]; then
     write_release_evidence "build-$CHANNEL"
-    "$ROOT/scripts/redact-evidence.sh" "$EVIDENCE_DIR"
-    "$ROOT/scripts/audit-evidence-redaction.sh" "$EVIDENCE_DIR"
+    time_release_step "build" "redact_evidence" "$ROOT/scripts/redact-evidence.sh" "$EVIDENCE_DIR"
+    time_release_step "build" "audit_evidence_redaction" "$ROOT/scripts/audit-evidence-redaction.sh" "$EVIDENCE_DIR"
     write_stage_timing "build" "passed" "$stage_started"
     return
   fi
 
   if [[ "$CHANNEL_NOTARIZE" == "1" ]]; then
-    "$ROOT/scripts/notarize-macos-artifact.sh" "$ROOT/dist/1Context.app"
+    time_release_step "build" "notarize_app_bundle" "$ROOT/scripts/notarize-macos-artifact.sh" "$ROOT/dist/1Context.app"
   fi
-  "$ROOT/scripts/create-macos-dmg.sh" "$ROOT/dist/1Context.app" "$DMG" >/dev/null
+  time_release_step "build" "create_dmg" "$ROOT/scripts/create-macos-dmg.sh" "$ROOT/dist/1Context.app" "$DMG" >/dev/null
   if [[ "$CHANNEL_SIGNING_MODE" == "developer-id" ]]; then
     codesign_args=(--force --timestamp --sign "$CODESIGN_IDENTITY")
     if [[ -n "$CODESIGN_KEYCHAIN" ]]; then
       codesign_args+=(--keychain "$CODESIGN_KEYCHAIN")
     fi
-    codesign "${codesign_args[@]}" "$DMG" >/dev/null
-    codesign --verify --strict "$DMG" >/dev/null
+    time_release_step "build" "sign_dmg" codesign "${codesign_args[@]}" "$DMG" >/dev/null
+    time_release_step "build" "verify_signed_dmg" codesign --verify --strict "$DMG" >/dev/null
   fi
   if [[ "$CHANNEL_NOTARIZE" == "1" ]]; then
-    "$ROOT/scripts/notarize-macos-artifact.sh" "$DMG"
-    "$ROOT/scripts/validate-macos-dmg.sh" "$DMG"
+    time_release_step "build" "notarize_dmg" "$ROOT/scripts/notarize-macos-artifact.sh" "$DMG"
+    time_release_step "build" "validate_dmg" "$ROOT/scripts/validate-macos-dmg.sh" "$DMG"
   else
-    ALLOW_UNNOTARIZED=1 "$ROOT/scripts/validate-macos-dmg.sh" "$DMG"
+    time_release_step "build" "validate_dmg" env ALLOW_UNNOTARIZED=1 "$ROOT/scripts/validate-macos-dmg.sh" "$DMG"
   fi
   if [[ "$CHANNEL_APPCAST" != "none" ]]; then
-    "$ROOT/scripts/generate-sparkle-appcast.sh" "$DMG"
-    "$ROOT/scripts/release-manifest.py" validate --appcast "$ROOT/dist/sparkle-updates/appcast.xml" --channel "$CHANNEL"
+    time_release_step "build" "generate_appcast" "$ROOT/scripts/generate-sparkle-appcast.sh" "$DMG"
+    time_release_step "build" "validate_appcast" "$ROOT/scripts/release-manifest.py" validate --appcast "$ROOT/dist/sparkle-updates/appcast.xml" --channel "$CHANNEL"
     if [[ "$CHANNEL" == "official" ]]; then
-      collect_release_assets
+      time_release_step "build" "collect_release_assets" collect_release_assets
     else
       mkdir -p "$ROOT/dist/$CHANNEL"
       cp "$ROOT/dist/sparkle-updates/appcast.xml" "$ROOT/dist/$CHANNEL/appcast.xml"
     fi
   fi
   write_release_evidence "build-$CHANNEL"
-  "$ROOT/scripts/redact-evidence.sh" "$EVIDENCE_DIR"
-  "$ROOT/scripts/audit-evidence-redaction.sh" "$EVIDENCE_DIR"
+  time_release_step "build" "redact_evidence" "$ROOT/scripts/redact-evidence.sh" "$EVIDENCE_DIR"
+  time_release_step "build" "audit_evidence_redaction" "$ROOT/scripts/audit-evidence-redaction.sh" "$EVIDENCE_DIR"
   write_stage_timing "build" "passed" "$stage_started"
 }
 
@@ -509,19 +658,20 @@ release_publish() {
     fail "publish --channel $CHANNEL is not wired yet; only official public publishing is active."
   fi
   require_tool gh
-  release_validate
-  ensure_tag_ref
+  time_release_step "publish" "validate_preflight" release_validate
+  time_release_step "publish" "ensure_tag_ref" ensure_tag_ref
   mkdir -p "$EVIDENCE_DIR"
   if [[ ! -f "$ASSET_MANIFEST" ]]; then
-    "$ROOT/scripts/release-manifest.py" write-asset-manifest --appcast "$ROOT/dist/appcast.xml" --output "$ASSET_MANIFEST"
+    time_release_step "publish" "write_asset_manifest" "$ROOT/scripts/release-manifest.py" write-asset-manifest --appcast "$ROOT/dist/appcast.xml" --output "$ASSET_MANIFEST"
   fi
-  "$ROOT/scripts/write-runner-attestation.sh" "$RUNNER_ATTESTATION"
+  time_release_step "publish" "write_runner_attestation" "$ROOT/scripts/write-runner-attestation.sh" "$RUNNER_ATTESTATION"
   write_release_evidence "publish-preflight"
-  "$ROOT/scripts/redact-evidence.sh" "$EVIDENCE_DIR"
-  "$ROOT/scripts/audit-evidence-redaction.sh" "$EVIDENCE_DIR"
-  gh release view "$TAG" >/dev/null 2>&1 || \
-    gh release create "$TAG" --title "1Context $TAG" --notes-file "$ROOT/RELEASE_NOTES.md"
-  gh release upload "$TAG" \
+  time_release_step "publish" "redact_preflight_evidence" "$ROOT/scripts/redact-evidence.sh" "$EVIDENCE_DIR"
+  time_release_step "publish" "audit_preflight_redaction" "$ROOT/scripts/audit-evidence-redaction.sh" "$EVIDENCE_DIR"
+  if ! gh release view "$TAG" >/dev/null 2>&1; then
+    time_release_step "publish" "create_github_release" gh release create "$TAG" --title "1Context $TAG" --notes-file "$ROOT/RELEASE_NOTES.md"
+  fi
+  time_release_step "publish" "upload_official_assets" gh release upload "$TAG" \
     "$ROOT/dist/1Context-$VERSION-macos-arm64.dmg" \
     "$ROOT/dist/1Context-$VERSION-macos-arm64.dmg.sha256" \
     "$ROOT/dist/$STABLE_DMG_NAME" \
@@ -529,10 +679,10 @@ release_publish() {
     "$ROOT/dist/appcast.xml" \
     "$ASSET_MANIFEST" \
     --clobber
-  audit_public_release_assets "$TAG"
+  time_release_step "publish" "audit_public_release_assets" audit_public_release_assets "$TAG"
   write_release_evidence "publish"
-  "$ROOT/scripts/redact-evidence.sh" "$EVIDENCE_DIR"
-  "$ROOT/scripts/audit-evidence-redaction.sh" "$EVIDENCE_DIR"
+  time_release_step "publish" "redact_evidence" "$ROOT/scripts/redact-evidence.sh" "$EVIDENCE_DIR"
+  time_release_step "publish" "audit_evidence_redaction" "$ROOT/scripts/audit-evidence-redaction.sh" "$EVIDENCE_DIR"
   write_stage_timing "publish" "passed" "$stage_started"
 }
 
@@ -545,13 +695,13 @@ release_publish_private() {
   local versioned_dmg="$ROOT/dist/1Context-$VERSION-macos-$ARCH.dmg"
   local versioned_sha="$private_dir/1Context-$VERSION-macos-$ARCH.dmg.sha256"
   require_tool gh
-  release_validate
+  time_release_step "publish" "validate_preflight" release_validate
   mkdir -p "$EVIDENCE_DIR" "$private_dir"
   [[ -f "$versioned_dmg" ]] || fail "Missing private release DMG: $versioned_dmg"
   [[ -f "$private_appcast" ]] || fail "Missing private appcast. Run: scripts/release-train.sh build --channel private"
-  "$ROOT/scripts/release-manifest.py" validate --channel private --appcast "$private_appcast"
-  shasum -a 256 "$versioned_dmg" > "$versioned_sha"
-  "$ROOT/scripts/write-runner-attestation.sh" "$RUNNER_ATTESTATION"
+  time_release_step "publish" "validate_private_appcast" "$ROOT/scripts/release-manifest.py" validate --channel private --appcast "$private_appcast"
+  time_release_step "publish" "write_private_checksum" sh -c 'shasum -a 256 "$1" > "$2"' sh "$versioned_dmg" "$versioned_sha"
+  time_release_step "publish" "write_runner_attestation" "$ROOT/scripts/write-runner-attestation.sh" "$RUNNER_ATTESTATION"
   python3 - "$private_asset_manifest" "$VERSION" "$TAG" "$versioned_dmg" "$versioned_sha" "$private_appcast" "$repo" <<'PY'
 import datetime as dt
 import hashlib
@@ -590,10 +740,11 @@ output.write_text(json.dumps({
 }, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 PY
 
-  gh release view "$TAG" --repo "$repo" >/dev/null 2>&1 || \
-    gh release create "$TAG" --repo "$repo" --target main --title "1Context $TAG private" \
+  if ! gh release view "$TAG" --repo "$repo" >/dev/null 2>&1; then
+    time_release_step "publish" "create_private_release" gh release create "$TAG" --repo "$repo" --target main --title "1Context $TAG private" \
       --notes "Private 1Context release-factory update assets for $TAG."
-  gh release upload "$TAG" --repo "$repo" \
+  fi
+  time_release_step "publish" "upload_private_assets" gh release upload "$TAG" --repo "$repo" \
     "$versioned_dmg" \
     "$versioned_sha" \
     "$private_appcast#appcast.xml" \
@@ -602,17 +753,14 @@ PY
 
   local work_dir
   work_dir="$(mktemp -d /tmp/1context-private-release-audit-XXXXXX)"
-  gh release download "$TAG" --repo "$repo" --pattern appcast.xml --dir "$work_dir" --clobber >/dev/null
-  gh release download "$TAG" --repo "$repo" --pattern "1Context-$VERSION-macos-$ARCH.dmg" --dir "$work_dir" --clobber >/dev/null
-  gh release download "$TAG" --repo "$repo" --pattern "1Context-$VERSION-macos-$ARCH.dmg.sha256" --dir "$work_dir" --clobber >/dev/null
-  "$ROOT/scripts/release-manifest.py" validate --channel private --appcast "$work_dir/appcast.xml"
-  (
-    cd "$work_dir"
-    shasum -a 256 --check "1Context-$VERSION-macos-$ARCH.dmg.sha256" >/dev/null
-  )
+  time_release_step "publish" "download_private_appcast" gh release download "$TAG" --repo "$repo" --pattern appcast.xml --dir "$work_dir" --clobber >/dev/null
+  time_release_step "publish" "download_private_dmg" gh release download "$TAG" --repo "$repo" --pattern "1Context-$VERSION-macos-$ARCH.dmg" --dir "$work_dir" --clobber >/dev/null
+  time_release_step "publish" "download_private_checksum" gh release download "$TAG" --repo "$repo" --pattern "1Context-$VERSION-macos-$ARCH.dmg.sha256" --dir "$work_dir" --clobber >/dev/null
+  time_release_step "publish" "audit_private_appcast" "$ROOT/scripts/release-manifest.py" validate --channel private --appcast "$work_dir/appcast.xml"
+  time_release_step "publish" "audit_private_checksum" sh -c 'cd "$1" && shasum -a 256 --check "$2" >/dev/null' sh "$work_dir" "1Context-$VERSION-macos-$ARCH.dmg.sha256"
   write_release_evidence "publish-private"
-  "$ROOT/scripts/redact-evidence.sh" "$EVIDENCE_DIR"
-  "$ROOT/scripts/audit-evidence-redaction.sh" "$EVIDENCE_DIR"
+  time_release_step "publish" "redact_evidence" "$ROOT/scripts/redact-evidence.sh" "$EVIDENCE_DIR"
+  time_release_step "publish" "audit_evidence_redaction" "$ROOT/scripts/audit-evidence-redaction.sh" "$EVIDENCE_DIR"
   write_stage_timing "publish" "passed" "$stage_started"
   rm -rf "$work_dir"
 }
@@ -706,16 +854,16 @@ release_prove() {
 
   if [[ "$mode" != "dry-run" ]]; then
     require_tool gh
-    release_validate
+    time_release_step "prove" "validate_preflight" release_validate
     if [[ "${CHANNEL_REQUIRES_TAG:-0}" == "1" ]]; then
-      ensure_tag_ref
+      time_release_step "prove" "ensure_tag_ref" ensure_tag_ref
     fi
   else
-    "$ROOT/scripts/release-manifest.py" validate --channel "$CHANNEL"
+    time_release_step "prove" "validate_preflight" "$ROOT/scripts/release-manifest.py" validate --channel "$CHANNEL"
   fi
 
   mkdir -p "$PROOF_RESULTS_DIR"
-  "$ROOT/scripts/write-runner-attestation.sh" "$RUNNER_ATTESTATION"
+  time_release_step "prove" "write_runner_attestation" "$ROOT/scripts/write-runner-attestation.sh" "$RUNNER_ATTESTATION"
   local transcript="$EVIDENCE_DIR/release-proof-request.txt"
   cmd=(
     gh workflow run "$workflow"
@@ -747,11 +895,11 @@ SUMMARY
     return
   fi
 
-  gh auth status --hostname github.com >/dev/null
+  time_release_step "prove" "gh_auth_status" gh auth status --hostname github.com >/dev/null
   local runs_before_json dispatch_started_at runs_json run_id artifact_dir
   runs_before_json="$(gh run list --repo "$repo" --workflow "$workflow" --event workflow_dispatch --limit 50 --json databaseId)"
   dispatch_started_at="$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
-  "${cmd[@]}" | tee -a "$transcript"
+  time_release_step "prove" "dispatch_workflow" sh -c 'transcript="$1"; shift; "$@" | tee -a "$transcript"' sh "$transcript" "${cmd[@]}"
   sleep 8
   runs_json="$(gh run list --repo "$repo" --workflow "$workflow" --event workflow_dispatch --limit 20 --json databaseId,url,status,conclusion,createdAt,headBranch)"
   run_id="$(
@@ -785,15 +933,15 @@ PY
     fail "Multiple new workflow_dispatch runs matched this request (${run_id#AMBIGUOUS:}); refusing to watch the wrong run."
   fi
   echo "watching_run_id=$run_id" | tee -a "$transcript"
-  gh run watch "$run_id" --repo "$repo" --exit-status | tee -a "$transcript"
+  time_release_step "prove" "watch_workflow" sh -c 'gh run watch "$1" --repo "$2" --exit-status | tee -a "$3"' sh "$run_id" "$repo" "$transcript"
   artifact_dir="$EVIDENCE_DIR/self-hosted-run-$run_id"
   mkdir -p "$artifact_dir"
-  gh run download "$run_id" --repo "$repo" --dir "$artifact_dir" | tee -a "$transcript"
+  time_release_step "prove" "download_proof_artifacts" sh -c 'gh run download "$1" --repo "$2" --dir "$3" | tee -a "$4"' sh "$run_id" "$repo" "$artifact_dir" "$transcript"
   echo "artifact_dir=$artifact_dir" | tee -a "$transcript"
-  collect_downloaded_proof_results "$artifact_dir"
+  time_release_step "prove" "collect_proof_results" collect_downloaded_proof_results "$artifact_dir"
   write_release_evidence "prove"
-  "$ROOT/scripts/redact-evidence.sh" "$EVIDENCE_DIR"
-  "$ROOT/scripts/audit-evidence-redaction.sh" "$EVIDENCE_DIR"
+  time_release_step "prove" "redact_evidence" "$ROOT/scripts/redact-evidence.sh" "$EVIDENCE_DIR"
+  time_release_step "prove" "audit_evidence_redaction" "$ROOT/scripts/audit-evidence-redaction.sh" "$EVIDENCE_DIR"
   write_stage_timing "prove" "passed" "$stage_started"
 }
 
@@ -803,10 +951,10 @@ release_audit() {
   if [[ "$CHANNEL" != "official" ]]; then
     fail "audit --channel $CHANNEL is not wired yet; only official public audit is active."
   fi
-  release_validate
-  audit_public_release_assets "$TAG"
+  time_release_step "audit" "validate_preflight" release_validate
+  time_release_step "audit" "audit_public_release_assets" audit_public_release_assets "$TAG"
   if [[ -d "$EVIDENCE_DIR" ]]; then
-    "$ROOT/scripts/audit-evidence-redaction.sh" "$EVIDENCE_DIR"
+    time_release_step "audit" "audit_evidence_redaction" "$ROOT/scripts/audit-evidence-redaction.sh" "$EVIDENCE_DIR"
   fi
   write_stage_timing "audit" "passed" "$stage_started"
 }
@@ -817,7 +965,7 @@ release_bless() {
   if [[ "$CHANNEL" != "official" ]]; then
     fail "bless --channel $CHANNEL is only valid for the official channel."
   fi
-  release_validate
+  time_release_step "bless" "validate_preflight" release_validate
   for required in "$RELEASE_EVIDENCE" "$ASSET_MANIFEST" "$RUNNER_ATTESTATION" "$EVIDENCE_DIR/redaction-report.json"; do
     [[ -f "$required" ]] || fail "Bless requires evidence file: $required"
   done
@@ -843,7 +991,7 @@ for path in sorted(proof_dir.glob("*.json")):
 if bad:
   raise SystemExit("proof result failures: " + "; ".join(bad))
 PY
-  "$ROOT/scripts/audit-evidence-redaction.sh" "$EVIDENCE_DIR"
+  time_release_step "bless" "audit_evidence_redaction" "$ROOT/scripts/audit-evidence-redaction.sh" "$EVIDENCE_DIR"
   write_release_evidence "bless"
   write_stage_timing "bless" "passed" "$stage_started"
   echo "release blessed: $TAG"
