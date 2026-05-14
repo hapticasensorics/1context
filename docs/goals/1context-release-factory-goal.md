@@ -398,3 +398,10 @@ plugin tree. The factory must keep package-smoke checks that fail on
   both default and explicit-channel validation. Proof:
   `/bin/bash scripts/release-train.sh validate --channel dev`,
   `./scripts/test-release-train.sh`, `./scripts/test.sh`, and `git diff --check`.
+- 2026-05-13: Protected release retry run `25836538883` passed manifest
+  validation and release-keychain preparation, then correctly failed credential
+  preflight because the workflow did not pass `SPARKLE_PRIVATE_ED_KEY` into
+  `scripts/check-macos-release-credentials.sh`. The build step already had the
+  secret, but preflight must check the same credential set before expensive
+  work starts. Fixed `.github/workflows/release.yml` so credential preflight
+  receives `secrets.ONECONTEXT_SPARKLE_PRIVATE_ED_KEY`.
