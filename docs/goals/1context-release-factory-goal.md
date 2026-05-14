@@ -2,7 +2,7 @@
 
 Status: active
 Owner: Codex
-Target train: 0.1.67 through 0.1.83 unless the manifest says otherwise
+Target train: 0.1.67 through 0.1.84 unless the manifest says otherwise
 
 ## Purpose
 
@@ -571,3 +571,11 @@ plugin tree. The factory must keep package-smoke checks that fail on
   process search but adds a focused keystroke fallback that runs only after the
   setup `Grant` click, so the runner can finish first-setup authorization
   without making the Sparkle update itself depend on sudo.
+- 2026-05-13: The isolated password harness proved why `v0.1.83` was still not
+  enough: AppleScript keystrokes could report success while the SecurityAgent
+  secure field stayed empty. `v0.1.84` updates the setup-only helper to
+  enumerate the visible text fields, focus the secure field, set its
+  Accessibility value directly, and then click `Update Settings`. The scoped
+  harness passed both the stuck-prompt repair case and the ready-state no-op
+  case; the remaining closure step is a full official tagged proof carrying
+  this fix.
