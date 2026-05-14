@@ -413,23 +413,34 @@ bootstrap_user_launch_agent() {
 
 wait_for_recovery_health() {
   local output_dir="$1"
+  local label="${2:-recovery}"
   local deadline
   deadline=$(($(date +%s) + RECOVERY_HEALTH_TIMEOUT_SECONDS))
   local attempt=0
   while true; do
     attempt=$((attempt + 1))
     local diagnose="$output_dir/diagnose-wait-$attempt.txt"
-    if "$APP/Contents/MacOS/1context-cli" diagnose > "$diagnose" 2>&1; then
+    if run_installed_cli diagnose > "$diagnose" 2>&1; then
       if grep -q "  Health: OK" "$diagnose" && grep -q "  Setup Ready: yes" "$diagnose"; then
         cp "$diagnose" "$output_dir/diagnose-ready.txt"
         return
       fi
     fi
     if (( "$(date +%s)" >= deadline )); then
-      fail "Timed out waiting for login/restart recovery health. Evidence: $output_dir"
+      fail "Timed out waiting for $label health. Evidence: $output_dir"
     fi
     sleep 2
   done
+}
+
+accessibility_has_button() {
+  local button_title="$1"
+  local report="$2"
+  awk -F '\t' -v title="$button_title" '
+    ($1 == "button" || $1 == "group-button") && $2 == title { found = 1 }
+    index($0, "role=AXButton") && index($0, "name=" title) { found = 1 }
+    END { exit found ? 0 : 1 }
+  ' "$report"
 }
 
 restore_setup_via_gui() {
@@ -437,26 +448,70 @@ restore_setup_via_gui() {
   mkdir -p "$output_dir"
   open "$APP" >/dev/null 2>&1 || true
   sleep 3
-  if "$APP/Contents/MacOS/1context-cli" diagnose > "$output_dir/diagnose-before-setup.txt" 2>&1 &&
+  if run_installed_cli diagnose > "$output_dir/diagnose-before-setup.txt" 2>&1 &&
     grep -q "  Setup Ready: yes" "$output_dir/diagnose-before-setup.txt"; then
     cp "$output_dir/diagnose-before-setup.txt" "$output_dir/diagnose-ready.txt"
     return
   fi
 
-  if ! click_settings_menu_item "Finish Setup..." >/dev/null 2>&1; then
-    click_settings_menu_item "Setup..." >/dev/null 2>&1 || true
-  fi
-  sleep 1
-  capture_windows "$output_dir/windows-setup.txt"
-  capture_accessibility "$output_dir/accessibility-setup.txt"
-  capture_screenshot "$output_dir/desktop-setup.png"
-  if grep -Fq "Grant" "$output_dir/accessibility-setup.txt"; then
-    click_window_button "Grant" >/dev/null 2>&1 || true
-  elif grep -Fq "Local Wiki Access is ready." "$output_dir/accessibility-setup.txt"; then
-    wait_for_recovery_health "$output_dir"
-    return
-  fi
-  wait_for_recovery_health "$output_dir"
+  local deadline
+  deadline=$(($(date +%s) + RECOVERY_HEALTH_TIMEOUT_SECONDS))
+  local attempt=0
+  local opened_setup=0
+  while true; do
+    attempt=$((attempt + 1))
+    local diagnose="$output_dir/diagnose-setup-$attempt.txt"
+    if run_installed_cli diagnose > "$diagnose" 2>&1; then
+      if grep -q "  Health: OK" "$diagnose" && grep -q "  Setup Ready: yes" "$diagnose"; then
+        cp "$diagnose" "$output_dir/diagnose-ready.txt"
+        return
+      fi
+      if grep -q "  Setup Ready: yes" "$diagnose"; then
+        wait_for_recovery_health "$output_dir" "setup restoration"
+        return
+      fi
+    fi
+
+    if [[ "$opened_setup" == "0" ]]; then
+      if ! click_settings_menu_item "Finish Setup..." >"$output_dir/open-finish-setup.txt" 2>&1; then
+        click_settings_menu_item "Setup..." >"$output_dir/open-setup.txt" 2>&1 || true
+      fi
+      opened_setup=1
+      sleep 1
+    fi
+
+    capture_windows "$output_dir/windows-setup-$attempt.txt"
+    capture_accessibility "$output_dir/accessibility-setup-$attempt.txt"
+    capture_screenshot "$output_dir/desktop-setup-$attempt.png"
+    cp "$output_dir/windows-setup-$attempt.txt" "$output_dir/windows-setup.txt"
+    cp "$output_dir/accessibility-setup-$attempt.txt" "$output_dir/accessibility-setup.txt"
+    cp "$output_dir/desktop-setup-$attempt.png" "$output_dir/desktop-setup.png"
+
+    if grep -Fq "Local Wiki Access is ready." "$output_dir/accessibility-setup-$attempt.txt"; then
+      wait_for_recovery_health "$output_dir" "setup restoration"
+      return
+    fi
+
+    if accessibility_has_button "Grant" "$output_dir/accessibility-setup-$attempt.txt"; then
+      click_window_button "Grant" >"$output_dir/click-grant-$attempt.txt" 2>&1 || true
+      sleep 3
+      capture_windows "$output_dir/windows-after-grant-$attempt.txt"
+      capture_accessibility "$output_dir/accessibility-after-grant-$attempt.txt"
+      capture_screenshot "$output_dir/desktop-after-grant-$attempt.png"
+    elif accessibility_has_button "Check Again" "$output_dir/accessibility-setup-$attempt.txt"; then
+      click_window_button "Check Again" >"$output_dir/click-check-again-$attempt.txt" 2>&1 || true
+      sleep 2
+    else
+      click_settings_menu_item "Finish Setup..." >"$output_dir/reopen-finish-setup-$attempt.txt" 2>&1 ||
+        click_settings_menu_item "Setup..." >"$output_dir/reopen-setup-$attempt.txt" 2>&1 || true
+      sleep 1
+    fi
+
+    if (( "$(date +%s)" >= deadline )); then
+      fail "Timed out waiting for setup restoration. Evidence: $output_dir"
+    fi
+    sleep 2
+  done
 }
 
 prove_login_restart_recovery() {
@@ -470,7 +525,7 @@ prove_login_restart_recovery() {
   bootstrap_user_launch_agent "com.haptica.1context"
   bootstrap_user_launch_agent "com.haptica.1context.menu"
   open "$APP" >/dev/null 2>&1 || true
-  wait_for_recovery_health "$recovery_dir"
+  wait_for_recovery_health "$recovery_dir" "login/restart recovery"
   write_versions "$recovery_dir/version-after-open.txt"
   ONECONTEXT_APP="$APP" \
   ONECONTEXT_STEADY_STATE_SECONDS="$LOGIN_RESTART_STEADY_STATE_SECONDS" \

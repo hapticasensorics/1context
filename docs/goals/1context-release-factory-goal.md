@@ -2,7 +2,7 @@
 
 Status: active
 Owner: Codex
-Target train: 0.1.67 through 0.1.75 unless the manifest says otherwise
+Target train: 0.1.67 through 0.1.76 unless the manifest says otherwise
 
 ## Purpose
 
@@ -68,7 +68,7 @@ gets slower, the timing artifact must explain the cost.
 - Official signed/notarized assets plus public audit: under 4 minutes.
 - Official standard proof and bless: under 6 minutes.
 - Official destructive uninstall/reinstall/delete-data proof and bless: under 10
-  minutes until the first full 0.1.75 measurement replaces this provisional cap.
+  minutes until the first full 0.1.76 measurement replaces this provisional cap.
 
 If a target is unrealistic, the release evidence should say why with stage timings
 instead of hiding the cost in a giant shell log.
@@ -521,3 +521,11 @@ plugin tree. The factory must keep package-smoke checks that fail on
   uninstall/reinstall proof under a provisional 10 minute cap. The same tighter
   budgets are now encoded in `release/release.toml`, with private and official
   channels still non-advisory.
+- 2026-05-13: Official `v0.1.75` proved that the public update path, manual
+  already-current check, login/restart recovery, and public asset audit are
+  fast and healthy, but the destructive uninstall/reinstall lane exposed a
+  setup automation gap: after reinstall, the runner could leave the app waiting
+  on the Local Wiki Access setup window. `v0.1.76` now hardens that lane by
+  foregrounding the setup window, clicking nested AppKit buttons, capturing
+  after each `Grant` action, looping through `Grant` / `Check Again`, and
+  failing with setup-specific evidence instead of a generic recovery timeout.

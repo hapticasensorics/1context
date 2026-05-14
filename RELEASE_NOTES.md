@@ -1,11 +1,11 @@
-# 1Context v0.1.75 Public Preview
+# 1Context v0.1.76 Public Preview
 
 This release includes:
 
-- `0.1.75` keeps the release factory moving after the public `0.1.74` train:
-  the release budgets now match measured factory speed plus a small guard band,
-  and the official proof runner can exercise real uninstall, reinstall,
-  delete-data, and setup restoration without inheriting sudo-only environment.
+- `0.1.76` keeps the release factory moving after the public `0.1.75` train:
+  the official proof runner now treats setup restoration as a closed-loop GUI
+  workflow, captures each `Grant` / `Check Again` action, and keeps checking
+  diagnose until Local Wiki Access and runtime health are actually restored.
 - Distributable `.app` and DMG builds reject Homebrew, host Caddy, local library
   links, and executable script interpreters that depend on developer-machine
   package managers or language runtimes.

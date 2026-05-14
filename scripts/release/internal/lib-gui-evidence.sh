@@ -7,7 +7,7 @@ tell application "System Events"
   set reportLines to {}
   repeat with proc in application processes
     set procName to name of proc
-    if procName contains "1Context" or procName contains "Sparkle" or procName contains "Updater" then
+    if procName contains "1Context" or procName contains "Sparkle" or procName contains "Updater" or procName contains "System Settings" then
       repeat with win in windows of proc
         set end of reportLines to procName & tab & (name of win) & tab & (description of win)
       end repeat
@@ -26,7 +26,7 @@ tell application "System Events"
   set reportLines to {}
   repeat with proc in application processes
     set procName to name of proc
-    if procName contains "1Context" or procName contains "Sparkle" or procName contains "Updater" then
+    if procName contains "1Context" or procName contains "Sparkle" or procName contains "Updater" or procName contains "System Settings" then
       set end of reportLines to "process=" & procName
       repeat with win in windows of proc
         set end of reportLines to "window=" & (name of win) & tab & (description of win)
@@ -184,11 +184,27 @@ tell application "System Events"
   repeat with proc in application processes
     set procName to name of proc
     if procName contains "1Context" then
+      set frontmost of proc to true
+      delay 0.2
       repeat with win in windows of proc
         try
           click button "$button_title" of win
-          return
+          return "clicked direct button $button_title"
         end try
+        repeat with elementRef in entire contents of win
+          try
+            if (role of elementRef as text) is "AXButton" then
+              set elementName to ""
+              try
+                set elementName to name of elementRef as text
+              end try
+              if elementName is "$button_title" then
+                click elementRef
+                return "clicked nested button $button_title"
+              end if
+            end if
+          end try
+        end repeat
       end repeat
     end if
   end repeat
