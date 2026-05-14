@@ -78,6 +78,7 @@ PY
 
 bash -n \
   "$ROOT/scripts/release-train.sh" \
+  "$ROOT/scripts/audit-macos-app-dependencies.sh" \
   "$ROOT/scripts/redact-evidence.sh" \
   "$ROOT/scripts/audit-evidence-redaction.sh" \
   "$ROOT/scripts/release/internal/lib-gui-evidence.sh" \
@@ -95,6 +96,7 @@ fi
 ONECONTEXT_RELEASE_MANIFEST_FORCE_SIMPLE_TOML=1 "$ROOT/scripts/release-manifest.py" validate
 test "$("$ROOT/scripts/release-manifest.py" matrix-cases | wc -l | tr -d '[:space:]')" = "13"
 "$ROOT/scripts/release-manifest.py" matrix-cases | grep -q "^login_restart_recovery$"
+grep -q '"case": "login_restart_recovery"' "$ROOT/scripts/release/internal/self-hosted-update-proof.sh"
 "$ROOT/scripts/release-manifest.py" write-fixture-proof-results --output-dir "$TMP_DIR/fixture-proof-results" > "$TMP_DIR/fixture-proof-results.out"
 test "$(find "$TMP_DIR/fixture-proof-results" -name '*.json' | wc -l | tr -d '[:space:]')" = "7"
 grep -q "^optional_prompt$" "$TMP_DIR/fixture-proof-results.out"

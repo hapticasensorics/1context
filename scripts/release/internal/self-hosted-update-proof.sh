@@ -21,6 +21,7 @@ TIMEOUT_SECONDS="${ONECONTEXT_UPDATE_PROOF_TIMEOUT_SECONDS:-420}"
 POLL_SECONDS="${ONECONTEXT_UPDATE_PROOF_POLL_SECONDS:-5}"
 STEADY_STATE_SECONDS="${ONECONTEXT_STEADY_STATE_SECONDS:-120}"
 STEADY_STATE_INTERVAL_SECONDS="${ONECONTEXT_STEADY_STATE_INTERVAL_SECONDS:-5}"
+LOGIN_RESTART_STEADY_STATE_SECONDS="${ONECONTEXT_LOGIN_RESTART_STEADY_STATE_SECONDS:-30}"
 RUNNER_SETUP_PREFLIGHT="${ONECONTEXT_RUNNER_SETUP_PREFLIGHT:-1}"
 ALLOW_NON_PUBLIC_FINAL_FEED="${ONECONTEXT_UPDATE_RUNNER_ALLOW_NON_PUBLIC_FINAL_FEED:-0}"
 RESTORE_PUBLIC_FINAL_FEED="${ONECONTEXT_UPDATE_RUNNER_RESTORE_PUBLIC_FINAL_FEED:-1}"
@@ -299,6 +300,7 @@ collect_host_snapshot() {
     echo "poll_seconds=$POLL_SECONDS"
     echo "steady_state_seconds=$STEADY_STATE_SECONDS"
     echo "steady_state_interval_seconds=$STEADY_STATE_INTERVAL_SECONDS"
+    echo "login_restart_steady_state_seconds=$LOGIN_RESTART_STEADY_STATE_SECONDS"
     echo "runner_setup_preflight=$RUNNER_SETUP_PREFLIGHT"
     echo "allow_non_public_final_feed=$ALLOW_NON_PUBLIC_FINAL_FEED"
     echo "restore_public_final_feed=$RESTORE_PUBLIC_FINAL_FEED"
@@ -376,6 +378,25 @@ prove_already_current_manual_check() {
     fi
     sleep 1
   done
+}
+
+prove_login_restart_recovery() {
+  log "proving login/restart-style recovery"
+  local recovery_dir="$EVIDENCE_DIR/login-restart-recovery"
+  mkdir -p "$recovery_dir"
+  write_versions "$recovery_dir/version-before.txt"
+  capture_process_state "login-restart-before"
+  stop_1context
+  capture_process_state "login-restart-stopped"
+  open "$APP"
+  sleep 8
+  write_versions "$recovery_dir/version-after-open.txt"
+  ONECONTEXT_APP="$APP" \
+  ONECONTEXT_STEADY_STATE_SECONDS="$LOGIN_RESTART_STEADY_STATE_SECONDS" \
+  ONECONTEXT_STEADY_STATE_INTERVAL_SECONDS="$STEADY_STATE_INTERVAL_SECONDS" \
+  ONECONTEXT_STEADY_STATE_EVIDENCE_DIR="$recovery_dir/steady-state" \
+    "$ROOT/scripts/release/internal/verify-macos-steady-state.sh"
+  capture_process_state "login-restart-after"
 }
 
 write_proof_result() {
@@ -485,6 +506,25 @@ results = [
       "version-final.txt",
     ],
   },
+  {
+    **base,
+    "case": "login_restart_recovery",
+    "ui_assertions": [
+      "app_reopened_without_setup_prompt",
+    ],
+    "runtime_assertions": [
+      "menu_recovered_after_stop_and_open",
+      "runtime_recovered_after_stop_and_open",
+      "local_web_ready_after_reopen",
+      "setup_ready_after_reopen",
+    ],
+    "artifact_paths": [
+      "login-restart-recovery",
+      "processes-login-restart-before.txt",
+      "processes-login-restart-stopped.txt",
+      "processes-login-restart-after.txt",
+    ],
+  },
 ]
 
 for result in results:
@@ -527,6 +567,7 @@ ONECONTEXT_STEADY_STATE_EVIDENCE_DIR="$EVIDENCE_DIR/steady-state" \
 
 ensure_final_app_uses_public_feed
 prove_already_current_manual_check
+prove_login_restart_recovery
 collect_final_logs
 write_proof_result
 

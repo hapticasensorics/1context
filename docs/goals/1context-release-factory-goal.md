@@ -442,3 +442,9 @@ plugin tree. The factory must keep package-smoke checks that fail on
   builds and package smoke, and added a regression test that rejects an
   executable script whose shebang points at Homebrew Python. Local proof:
   `./scripts/audit-macos-app-dependencies.sh dist/1Context.app` passed.
+- 2026-05-13: Added the missing real-Mac `login_restart_recovery` proof step to
+  the self-hosted update runner. After the update and already-current check,
+  the runner now stops 1Context, reopens the installed app, and runs the
+  steady-state verifier against menu, runtime, setup, and local web before it
+  emits `proof-results/login_restart_recovery.json`. This is wired but still
+  needs the next official tagged proof run before the exit box can be checked.
