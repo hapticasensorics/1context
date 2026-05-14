@@ -440,13 +440,14 @@ accessibility_has_button() {
 restore_setup_via_gui() {
   local output_dir="$1"
   mkdir -p "$output_dir"
-  open "$APP" >/dev/null 2>&1 || true
-  sleep 3
   if run_installed_cli diagnose > "$output_dir/diagnose-before-setup.txt" 2>&1 &&
     grep -q "  Setup Ready: yes" "$output_dir/diagnose-before-setup.txt"; then
     cp "$output_dir/diagnose-before-setup.txt" "$output_dir/diagnose-ready.txt"
     return
   fi
+
+  open "$APP" >/dev/null 2>&1 || true
+  sleep 3
 
   local deadline
   deadline=$(($(date +%s) + RECOVERY_HEALTH_TIMEOUT_SECONDS))

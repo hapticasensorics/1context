@@ -1,11 +1,14 @@
-# 1Context v0.1.80 Public Preview
+# 1Context v0.1.81 Public Preview
 
 This release includes:
 
-- `0.1.80` tightens the release factory after the public `0.1.78` proof showed
-  that Sparkle could update the app while the dirty runner still needed Local
-  Wiki setup. The proof now restores baseline setup before the update, then
-  requires the update to preserve setup without another grant.
+- `0.1.81` tightens the release factory after the public `0.1.80` proof showed
+  that the harness could accidentally launch the old app and consume the
+  mandatory update before the update proof started. Baseline setup is now
+  checked by the CLI first, so updates are proved as updates.
+- The proof contract now explicitly preserves the product boundary: an already
+  setup user should not need sudo or a fresh Local Wiki Access grant during an
+  app update.
 - The protected runner can use an explicit admin-authorization secret only for
   setup and reinstall proof prompts, so the release lane can automate the same
   first-setup macOS prompt a tester sees without making updates depend on sudo.

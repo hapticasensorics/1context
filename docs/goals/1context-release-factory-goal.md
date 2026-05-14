@@ -2,7 +2,7 @@
 
 Status: active
 Owner: Codex
-Target train: 0.1.67 through 0.1.80 unless the manifest says otherwise
+Target train: 0.1.67 through 0.1.81 unless the manifest says otherwise
 
 ## Purpose
 
@@ -72,7 +72,7 @@ gets slower, the timing artifact must explain the cost.
 - Official signed/notarized assets plus public audit: under 4 minutes.
 - Official standard proof and bless: under 6 minutes.
 - Official destructive uninstall/reinstall/delete-data proof and bless: under 10
-  minutes until the first full 0.1.80 measurement replaces this provisional cap.
+  minutes until the first full 0.1.81 measurement replaces this provisional cap.
 
 If a target is unrealistic, the release evidence should say why with stage timings
 instead of hiding the cost in a giant shell log.
@@ -554,3 +554,9 @@ plugin tree. The factory must keep package-smoke checks that fail on
   explicit optional admin-authorization secret only for first setup and
   reinstall/delete-data proof prompts, not to hide a sudo requirement during
   normal updates.
+- 2026-05-13: Official `v0.1.80` then exposed a harness ordering bug, not an
+  update sudo bug: the runner was setup-ready, but the setup helper opened the
+  old app, so the mandatory update completed before the update harness started
+  and the harness found `0.1.80` where it expected the old version. `v0.1.81`
+  checks setup readiness with the CLI before launching the old app. A
+  setup-ready baseline must enter the update proof still on the old version.
