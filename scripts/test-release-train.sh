@@ -81,6 +81,7 @@ bash -n \
   "$ROOT/scripts/redact-evidence.sh" \
   "$ROOT/scripts/audit-evidence-redaction.sh" \
   "$ROOT/scripts/lib-gui-evidence.sh" \
+  "$ROOT/scripts/prove-remote-sparkle-update.sh" \
   "$ROOT/scripts/release/internal/self-hosted-update-proof.sh" \
   "$ROOT/scripts/write-runner-attestation.sh" \
   "$ROOT/scripts/package-macos-smoke.sh"
@@ -188,6 +189,8 @@ if grep -q "run: ./scripts/self-hosted-update-proof.sh" "$ROOT/.github/workflows
   exit 1
 fi
 grep -q "./scripts/release-train.sh build --channel official" "$ROOT/.github/workflows/release.yml"
+grep -q "ONECONTEXT_REMOTE_APPCAST_GITHUB_REPO" "$ROOT/scripts/release-train.sh"
+grep -q "ONECONTEXT_REMOTE_APPCAST_GITHUB_REPO" "$ROOT/scripts/prove-remote-sparkle-update.sh"
 if rg -n --glob '!test-release-train.sh' 'release-train\.sh package|ONECONTEXT_RUNTIME_ROOT|dev-runtime-env|with-dev-runtime|release/update-policy' \
   "$ROOT/.github" "$ROOT/scripts" "$ROOT/docs/README.md" "$ROOT/docs/development.md" "$ROOT/docs/macos-release-runbook.md" "$ROOT/docs/ci/self-hosted-mac-runner.md" "$ROOT/release" \
   > "$TMP_DIR/no-shim-scan.out"

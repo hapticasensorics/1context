@@ -6,6 +6,7 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 source "$ROOT/scripts/lib-gui-evidence.sh"
 APP="${ONECONTEXT_INSTALLED_APP:-/Applications/1Context.app}"
 APPCAST_URL="${ONECONTEXT_REMOTE_APPCAST_URL:-https://github.com/hapticasensorics/1context/releases/latest/download/appcast.xml}"
+APPCAST_GITHUB_REPO="${ONECONTEXT_REMOTE_APPCAST_GITHUB_REPO:-}"
 EXPECTED_NEW_VERSION="${ONECONTEXT_EXPECTED_NEW_VERSION:-$(tr -d '[:space:]' < "$ROOT/VERSION")}"
 EXPECTED_OLD_VERSION="${ONECONTEXT_EXPECTED_OLD_VERSION:-}"
 EXPECTED_UPDATE_CLASS="${ONECONTEXT_EXPECTED_UPDATE_CLASS:-mandatory}"
@@ -48,6 +49,30 @@ mkdir -p "$EVIDENCE_DIR"
 
 log() {
   printf '[remote-update-proof] %s\n' "$*"
+}
+
+require_tool() {
+  if ! command -v "$1" >/dev/null 2>&1; then
+    echo "Missing required tool: $1" >&2
+    exit 1
+  fi
+}
+
+fetch_live_appcast() {
+  local output="$1"
+  if [[ -n "$APPCAST_GITHUB_REPO" ]]; then
+    require_tool gh
+    log "fetching live appcast through GitHub release assets for $APPCAST_GITHUB_REPO"
+    gh release download --repo "$APPCAST_GITHUB_REPO" --pattern appcast.xml --dir "$EVIDENCE_DIR" --clobber >/dev/null
+    [[ -f "$EVIDENCE_DIR/appcast.xml" ]] || {
+      echo "GitHub release download did not produce appcast.xml for $APPCAST_GITHUB_REPO." >&2
+      exit 1
+    }
+    mv "$EVIDENCE_DIR/appcast.xml" "$output"
+    return
+  fi
+
+  curl --fail --location --silent "$APPCAST_URL" > "$output"
 }
 
 write_versions() {
@@ -173,7 +198,7 @@ kick_update_check() {
 } > "$EVIDENCE_DIR/environment.txt"
 
 log "fetching live appcast"
-curl --fail --location --silent "$APPCAST_URL" > "$EVIDENCE_DIR/live-appcast.xml"
+fetch_live_appcast "$EVIDENCE_DIR/live-appcast.xml"
 validate_appcast "$EVIDENCE_DIR/live-appcast.xml"
 if [[ "${ONECONTEXT_REMOTE_UPDATE_VALIDATE_REPO_POLICY:-1}" == "1" ]]; then
   "$ROOT/scripts/release-manifest.py" validate --appcast "$EVIDENCE_DIR/live-appcast.xml"

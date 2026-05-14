@@ -274,3 +274,15 @@ plugin tree. The factory must keep package-smoke checks that fail on
   a bundle scan showing no `/opt/homebrew`, `/usr/local/Cellar`, or
   `/Cellar/caddy` paths. The prototype app has no `SUFeedURL`; the bundled Caddy
   reports `v2.11.2`.
+- 2026-05-13: Rebuilt and republished the private `0.1.68` assets from a clean
+  detached worktree at `38665b8` so the private channel also uses the
+  release-owned Caddy artifact. Private build evidence:
+  `/tmp/1ctx-release-factory-private-no-brew-build-evidence/timings/build-private.json`;
+  elapsed 152 seconds. Private publish evidence:
+  `dist/release-evidence/0.1.68/timings/publish-private.json`; elapsed 8
+  seconds. The private appcast downloaded back from
+  `hapticasensorics/1context-private-release` and validated. The first private
+  proof rerun reached old-DMG install, then failed because the remote update
+  harness fetched the private appcast with unauthenticated `curl`; fixed the
+  private runner path so it passes `ONECONTEXT_REMOTE_APPCAST_GITHUB_REPO` and
+  `prove-remote-sparkle-update.sh` downloads private appcasts through `gh`.
