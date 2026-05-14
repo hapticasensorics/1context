@@ -1,8 +1,8 @@
-# 1Context v0.1.74 Public Preview
+# 1Context v0.1.75 Public Preview
 
 This release includes:
 
-- `0.1.74` keeps the release factory moving after the public `0.1.73` train:
+- `0.1.75` keeps the release factory moving after the public `0.1.74` train:
   the release budgets now match measured factory speed plus a small guard band,
   and the official proof runner can exercise real uninstall, reinstall,
   delete-data, and setup restoration without inheriting sudo-only environment.

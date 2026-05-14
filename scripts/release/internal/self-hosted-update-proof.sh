@@ -102,9 +102,13 @@ installed_feed_url() {
   plutil -extract SUFeedURL raw "$APP/Contents/Info.plist" 2>/dev/null || true
 }
 
+installed_cli() {
+  printf '%s\n' "$APP/Contents/MacOS/1context-cli"
+}
+
 run_installed_cli() {
   env -u SUDO_USER -u SUDO_UID -u SUDO_GID -u SUDO_COMMAND \
-    "$APP/Contents/MacOS/1context-cli" "$@"
+    "$(installed_cli)" "$@"
 }
 
 write_versions() {
