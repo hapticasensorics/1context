@@ -368,15 +368,27 @@ def validate_release_factory(manifest: dict[str, Any]) -> None:
       if signing_mode != "developer-id" or not notarize:
         raise ManifestError("prototype channel must produce a Developer ID notarized DMG.")
     if name == "private":
+      tag = string_value(manifest, "tag")
+      artifact_repo = string_value(policy, "artifact_repo", required=False)
+      artifact_repo_visibility = string_value(policy, "artifact_repo_visibility", required=False)
+      appcast_authentication = string_value(policy, "appcast_authentication", required=False)
       private_appcast_url = string_value(policy, "private_appcast_url", required=False)
       private_download_url_prefix = string_value(policy, "private_download_url_prefix", required=False)
       private_link_url = string_value(policy, "private_link_url", required=False)
+      if not re.match(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$", artifact_repo):
+        raise ManifestError("private channel artifact_repo must be a GitHub owner/repo name.")
+      if artifact_repo_visibility != "public":
+        raise ManifestError("private channel artifact_repo_visibility must be public so Sparkle can fetch the appcast without auth.")
+      if appcast_authentication != "none":
+        raise ManifestError("private channel appcast_authentication must be none; shipped Sparkle feeds must be ordinary HTTPS.")
       if appcast != "private" or not private_appcast_url:
         raise ManifestError("private channel must define a private appcast URL.")
-      if private_download_url_prefix != f"https://github.com/hapticasensorics/1context-private-release/releases/download/{string_value(manifest, 'tag')}/":
-        raise ManifestError("private channel download prefix must be the private release tag URL.")
-      if private_link_url != f"https://github.com/hapticasensorics/1context-private-release/releases/tag/{string_value(manifest, 'tag')}":
-        raise ManifestError("private channel link URL must be the private release tag URL.")
+      if private_appcast_url != f"https://github.com/{artifact_repo}/releases/latest/download/appcast.xml":
+        raise ManifestError("private channel appcast URL must be the artifact repo latest appcast URL.")
+      if private_download_url_prefix != f"https://github.com/{artifact_repo}/releases/download/{tag}/":
+        raise ManifestError("private channel download prefix must be the artifact repo release tag URL.")
+      if private_link_url != f"https://github.com/{artifact_repo}/releases/tag/{tag}":
+        raise ManifestError("private channel link URL must be the artifact repo release tag URL.")
       if public_asset_mutation:
         raise ManifestError("private channel must not mutate public assets.")
       if signing_mode != "developer-id" or not notarize:
@@ -767,6 +779,7 @@ def env_for_manifest(manifest: dict[str, Any], manifest_path: Path, channel_name
     "ONECONTEXT_RELEASE_CHANNEL_APPCAST_URL": channel_appcast_url,
     "ONECONTEXT_RELEASE_CHANNEL_PUBLIC_ASSET_MUTATION": "1" if bool_value(channel_data, "public_asset_mutation") else "0",
     "ONECONTEXT_RELEASE_CHANNEL_PROOF": string_value(channel_data, "proof"),
+    "ONECONTEXT_RELEASE_CHANNEL_ARTIFACT_REPO": string_value(channel_data, "artifact_repo", required=False),
     "ONECONTEXT_RELEASE_BUDGET_ADVISORY": "1" if bool_value(channel_data, "budget_is_advisory") else "0",
     "ONECONTEXT_RELEASE_STAGE_TIMING_SCHEMA": string_value(factory, "stage_timing_schema"),
     "ONECONTEXT_SPARKLE_FEED_URL": channel_appcast_url,

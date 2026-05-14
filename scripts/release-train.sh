@@ -99,6 +99,7 @@ load_manifest_env() {
   CHANNEL_SIGNING_MODE="$ONECONTEXT_RELEASE_CHANNEL_SIGNING_MODE"
   CHANNEL_NOTARIZE="$ONECONTEXT_RELEASE_CHANNEL_NOTARIZE"
   CHANNEL_APPCAST="$ONECONTEXT_RELEASE_CHANNEL_APPCAST"
+  CHANNEL_ARTIFACT_REPO="$ONECONTEXT_RELEASE_CHANNEL_ARTIFACT_REPO"
   CHANNEL_PUBLIC_ASSET_MUTATION="$ONECONTEXT_RELEASE_CHANNEL_PUBLIC_ASSET_MUTATION"
   EVIDENCE_DIR="${ONECONTEXT_RELEASE_EVIDENCE_DIR:-$ROOT/dist/release-evidence/$VERSION}"
   PROOF_RESULTS_DIR="$EVIDENCE_DIR/proof-results"
@@ -537,7 +538,7 @@ release_publish() {
 
 release_publish_private() {
   local stage_started="$1"
-  local repo="${ONECONTEXT_PRIVATE_GITHUB_REPO:-hapticasensorics/1context-private-release}"
+  local repo="$CHANNEL_ARTIFACT_REPO"
   local private_dir="$ROOT/dist/private"
   local private_appcast="$private_dir/appcast.xml"
   local private_asset_manifest="$EVIDENCE_DIR/private-asset-manifest.json"
@@ -688,7 +689,7 @@ release_prove() {
     export ONECONTEXT_STAGING_APPCAST_URL="$ONECONTEXT_SPARKLE_FEED_URL"
     export ONECONTEXT_EXPECTED_UPDATE_CLASS="$UPDATE_CLASS"
     if [[ "$CHANNEL" == "private" ]]; then
-      export ONECONTEXT_GITHUB_REPO="${ONECONTEXT_PRIVATE_GITHUB_REPO:-hapticasensorics/1context-private-release}"
+      export ONECONTEXT_GITHUB_REPO="$CHANNEL_ARTIFACT_REPO"
       export ONECONTEXT_REMOTE_APPCAST_GITHUB_REPO="$ONECONTEXT_GITHUB_REPO"
       export ONECONTEXT_UPDATE_RUNNER_ALLOW_NON_PUBLIC_FINAL_FEED=1
       export ONECONTEXT_UPDATE_RUNNER_RESTORE_PUBLIC_FINAL_FEED=0

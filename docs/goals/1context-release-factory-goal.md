@@ -12,7 +12,10 @@ The factory must support four jobs without reviving old release bloat:
 
 - Dev build: local iteration that proves the app compiles and basic contracts hold.
 - Prototype copy: a DMG we can hand to a tester without mutating any public update feed.
-- Private release: signed, notarized assets and a private appcast for real-machine testing.
+- Private release: signed, notarized assets and a controlled tester appcast for
+  real-machine testing. The channel is private from the official-public-feed
+  perspective, but the installed app must be able to fetch the appcast and DMG
+  over unauthenticated HTTPS.
 - Official release: signed, notarized, public Sparkle assets with multi-machine proof and bless evidence.
 
 The goal is not to preserve compatibility with deleted release paths. The goal is to
@@ -28,7 +31,11 @@ manifest and evidence bundle.
 - No shipped source checkout, generated wiki source, dev goal, local path, or test
   harness artifact in the app bundle.
 - No repo-local runtime bypasses in product code.
-- No public appcast mutation for dev, prototype, or private builds.
+- No official public appcast mutation for dev, prototype, or private builds.
+- No authenticated update feed for tester Sparkle updates. A private GitHub repo
+  can hold operator-only evidence, but it cannot be the appcast origin unless
+  the shipped app also owns a real authentication design. For this release
+  factory, private-channel appcasts must be app-reachable over ordinary HTTPS.
 - No Homebrew, host `PATH`, or host-installed library dependency for any build
   that creates a distributable `.app` or `.dmg`. Dev builds can use a developer
   machine; prototype, private, and official builds must use bundled, pinned, or
@@ -86,8 +93,10 @@ docs, tests, and the command parser.
   no GitHub release, no public artifact mutation.
 - `prototype`: signed DMG suitable for passing around. No Sparkle appcast and no
   GitHub release mutation.
-- `private`: signed, notarized DMG plus private appcast and private evidence.
-  This can update tester machines, but it must not change the public latest feed.
+- `private`: signed, notarized DMG plus controlled tester appcast and private
+  evidence. This can update tester machines, but it must not change the
+  official public latest feed. The tester appcast may be unlisted, but it must
+  not require GitHub authentication from Sparkle.
 - `official`: signed, notarized DMG, public appcast, stable DMG, GitHub release
   assets, multi-machine proof, audit, and bless.
 
@@ -170,6 +179,12 @@ plugin tree. The factory must keep package-smoke checks that fail on
 - [x] Prototype build creates a pass-around DMG without appcast mutation.
 - [x] Private build and publish create private update assets without public
   appcast mutation.
+- [ ] Private-channel appcast and enclosure URLs are app-reachable over
+  unauthenticated HTTPS; a private GitHub repository is not accepted as the
+  Sparkle feed origin.
+- [x] Private-channel release facts come from the manifest-owned
+  `hapticasensorics/1context-preview-release` artifact repo, with no
+  `ONECONTEXT_PRIVATE_GITHUB_REPO` or token side channel.
 - [ ] Private release creates private update assets and proves update on at
   least one non-primary Mac.
 - [ ] Official release proves public Sparkle update on the protected runner.
@@ -286,3 +301,20 @@ plugin tree. The factory must keep package-smoke checks that fail on
   harness fetched the private appcast with unauthenticated `curl`; fixed the
   private runner path so it passes `ONECONTEXT_REMOTE_APPCAST_GITHUB_REPO` and
   `prove-remote-sparkle-update.sh` downloads private appcasts through `gh`.
+- 2026-05-13: The next private proof run `25834251490` proved the remaining
+  design flaw: the harness can download the private appcast through `gh`, but
+  the installed app cannot use a GitHub-private appcast or enclosure URL. The
+  downloaded `live-appcast.xml` correctly advertised `0.1.68` with critical
+  update metadata, but the installed `0.1.67` app stayed at `plist=0.1.67
+  cli=0.1.67` until the 420 second proof timeout. This is now a release-factory
+  requirement, not a runner problem: the private channel must publish the
+  Sparkle appcast and DMG to an unauthenticated HTTPS origin while still avoiding
+  mutation of the official public latest feed.
+- 2026-05-13: Repointed the private-channel policy toward an app-reachable
+  preview artifact repo. `release/release.toml` now owns the artifact repo,
+  requires public visibility plus `appcast_authentication = "none"`, and removes
+  the `ONECONTEXT_PRIVATE_GITHUB_REPO` side channel from `release-train.sh`.
+  Created `hapticasensorics/1context-preview-release` as a public release-asset
+  repo for the private channel, and proved the manifest/test wiring with
+  `./scripts/release-manifest.py validate`, private-channel `export-env`,
+  `bash -n`, `actionlint`, and `./scripts/test-release-train.sh`.

@@ -93,6 +93,7 @@ test "$("$ROOT/scripts/release-manifest.py" matrix-cases | wc -l | tr -d '[:spac
 "$ROOT/scripts/release-manifest.py" matrix-cases | grep -q "^login_restart_recovery$"
 "$ROOT/scripts/release-manifest.py" export-env --channel dev | grep -q "ONECONTEXT_RELEASE_CHANNEL=dev"
 "$ROOT/scripts/release-manifest.py" export-env --channel private | grep -q "ONECONTEXT_RELEASE_CHANNEL_APPCAST=private"
+"$ROOT/scripts/release-manifest.py" export-env --channel private | grep -q "ONECONTEXT_RELEASE_CHANNEL_ARTIFACT_REPO=hapticasensorics/1context-preview-release"
 test -f "$ROOT/release/tools/caddy/darwin-arm64/caddy-v2.11.2-darwin-arm64.tar.gz"
 test -f "$ROOT/release/tools/caddy/darwin-arm64/caddy-v2.11.2-darwin-arm64.tar.gz.sha256"
 (
@@ -258,7 +259,7 @@ ONECONTEXT_RELEASE_EVIDENCE_DIR="$TMP_DIR/private-proof-evidence" \
 grep -q "workflow run self-hosted-mac-private-update-proof.yml" "$TMP_DIR/private-prove-dry-run.out"
 grep -q "ref: main" "$TMP_DIR/private-prove-dry-run.out"
 grep -q "channel: private" "$TMP_DIR/private-prove-dry-run.out"
-grep -q "1context-private-release/releases/latest/download/appcast.xml" "$TMP_DIR/private-prove-dry-run.out"
+grep -q "1context-preview-release/releases/latest/download/appcast.xml" "$TMP_DIR/private-prove-dry-run.out"
 if grep -Eq -- '-f (old_version|new_version|staging_appcast_url|update_class|old_tag|old_dmg_url|update_timeout_seconds|steady_state_seconds|artifact_retention_days|channel)=' "$TMP_DIR/private-prove-dry-run.out"; then
   cat "$TMP_DIR/private-prove-dry-run.out" >&2
   echo "private release-train prove dispatch must pass only proof_reason to the workflow." >&2

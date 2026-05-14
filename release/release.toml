@@ -71,15 +71,18 @@ budget_audit_seconds = 0
 budget_bless_seconds = 0
 
 [release_factory.channels.private]
-description = "Private signed/notarized release for controlled tester update proof."
+description = "Controlled tester release for private-channel update proof. The appcast is not the official public feed, but Sparkle must reach it over unauthenticated HTTPS."
 requires_clean_tree = true
 requires_tag = false
 signing_mode = "developer-id"
 notarize = true
 appcast = "private"
-private_appcast_url = "https://github.com/hapticasensorics/1context-private-release/releases/latest/download/appcast.xml"
-private_download_url_prefix = "https://github.com/hapticasensorics/1context-private-release/releases/download/v0.1.68/"
-private_link_url = "https://github.com/hapticasensorics/1context-private-release/releases/tag/v0.1.68"
+artifact_repo = "hapticasensorics/1context-preview-release"
+artifact_repo_visibility = "public"
+appcast_authentication = "none"
+private_appcast_url = "https://github.com/hapticasensorics/1context-preview-release/releases/latest/download/appcast.xml"
+private_download_url_prefix = "https://github.com/hapticasensorics/1context-preview-release/releases/download/v0.1.68/"
+private_link_url = "https://github.com/hapticasensorics/1context-preview-release/releases/tag/v0.1.68"
 public_asset_mutation = false
 proof = "self_hosted_private_update"
 budget_is_advisory = true

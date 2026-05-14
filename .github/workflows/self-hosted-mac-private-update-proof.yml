@@ -50,15 +50,10 @@ jobs:
       - name: Prove private update
         shell: bash
         env:
-          ONECONTEXT_PRIVATE_RELEASE_TOKEN: ${{ secrets.ONECONTEXT_PRIVATE_RELEASE_TOKEN }}
-          GH_TOKEN: ${{ secrets.ONECONTEXT_PRIVATE_RELEASE_TOKEN || github.token }}
+          GH_TOKEN: ${{ github.token }}
           ONECONTEXT_UPDATE_RUNNER_I_UNDERSTAND_DESTRUCTIVE: "1"
           ONECONTEXT_UPDATE_PROOF_REASON: ${{ inputs.proof_reason }}
         run: |
-          if [[ -n "${ONECONTEXT_PRIVATE_RELEASE_TOKEN:-}" ]]; then
-            export GH_TOKEN="$ONECONTEXT_PRIVATE_RELEASE_TOKEN"
-          fi
-          : "${GH_TOKEN:?GH_TOKEN is required for private release asset downloads. Configure ONECONTEXT_PRIVATE_RELEASE_TOKEN if github.token cannot read the private artifact repo.}"
           ./scripts/release-train.sh prove --channel private --runner-execute
 
       - name: Upload private update proof artifacts
