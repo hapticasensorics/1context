@@ -1,9 +1,9 @@
-# 1Context v0.1.68 Public Preview
+# 1Context v0.1.69 Public Preview
 
 This release includes:
 
-- `0.1.68` proves the private release-factory update hop after `0.1.67`
-  established the private artifact lane.
+- `0.1.69` repairs post-update menu startup by letting the runtime restore the
+  menu LaunchAgent after a mandatory Sparkle update.
 - Release policy now defines build channels, timing budgets, and private
   appcast facts in `release/release.toml`.
 - The old `release-train.sh package` path is deleted; official release builds

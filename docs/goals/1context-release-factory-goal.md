@@ -179,7 +179,7 @@ plugin tree. The factory must keep package-smoke checks that fail on
 - [x] Prototype build creates a pass-around DMG without appcast mutation.
 - [x] Private build and publish create private update assets without public
   appcast mutation.
-- [ ] Private-channel appcast and enclosure URLs are app-reachable over
+- [x] Private-channel appcast and enclosure URLs are app-reachable over
   unauthenticated HTTPS; a private GitHub repository is not accepted as the
   Sparkle feed origin.
 - [x] Private-channel release facts come from the manifest-owned
@@ -318,3 +318,21 @@ plugin tree. The factory must keep package-smoke checks that fail on
   repo for the private channel, and proved the manifest/test wiring with
   `./scripts/release-manifest.py validate`, private-channel `export-env`,
   `bash -n`, `actionlint`, and `./scripts/test-release-train.sh`.
+- 2026-05-13: Built and published app-reachable preview assets. The clean
+  worktree private `0.1.68` build wrote
+  `/tmp/1ctx-release-factory-preview-build-evidence/timings/build-private.json`
+  with elapsed 81 seconds, bundled Caddy `v2.11.2`, no Homebrew path scan hits,
+  and `SUFeedURL=https://github.com/hapticasensorics/1context-preview-release/releases/latest/download/appcast.xml`.
+  Published `v0.1.68` to `hapticasensorics/1context-preview-release` in 7
+  seconds, then created a temporary clean `0.1.67` baseline with the same
+  preview feed and published it in 8 seconds. Unauthenticated `curl` proved
+  `latest/download/appcast.xml` resolves to `0.1.68`, and both `0.1.67` and
+  `0.1.68` DMG URLs return public release assets.
+- 2026-05-13: Private proof run `25835070446` proved the actual Sparkle hop:
+  the runner installed preview `0.1.67`, launched the app, fetched the live
+  preview appcast, and observed `plist=0.1.68 cli=0.1.68` on the second watch
+  iteration. The run still failed the post-update steady-state gate because the
+  runtime LaunchAgent recovered but the menu LaunchAgent was loaded with no PID.
+  The fix is product-owned: the daemon now repairs/kickstarts the menu
+  LaunchAgent on runtime startup, so the KeepAlive runtime can restore the menu
+  after mandatory updates, login, or restart.

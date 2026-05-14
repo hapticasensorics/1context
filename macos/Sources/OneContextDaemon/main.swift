@@ -5,6 +5,7 @@ import OneContextLocalWeb
 import OneContextPlatform
 import OneContextProtocol
 import OneContextSetup
+import OneContextSupervisor
 
 nonisolated(unsafe) private var signalSocketPath: UnsafeMutablePointer<CChar>?
 nonisolated(unsafe) private var signalPIDPath: UnsafeMutablePointer<CChar>?
@@ -90,10 +91,39 @@ final class OneContextDaemon: @unchecked Sendable {
     try writePIDFile()
     installSignalHandlers()
     logger.write("1Context runtime started pid=\(getpid()) socket=\(paths.socketPath)")
+    repairMenuLaunchAgentInBackground()
     startWikiAPI()
     publishWikiInBackground(refresh: false)
     acceptLoop()
     cleanup()
+  }
+
+  private func repairMenuLaunchAgentInBackground() {
+    guard let menuAppPath = menuExecutablePath() else {
+      logger.write("menu launch agent repair skipped: bundled menu executable not found")
+      return
+    }
+
+    Task.detached(priority: .utility) { [logger] in
+      do {
+        try await LaunchAgentManager().startMenu(appPath: menuAppPath)
+        logger.write("menu launch agent ready path=\(menuAppPath)")
+      } catch {
+        logger.write("menu launch agent repair failed: \(error.localizedDescription)")
+      }
+    }
+  }
+
+  private func menuExecutablePath() -> String? {
+    let fileManager = FileManager.default
+    let executableDirectory = URL(fileURLWithPath: CommandLine.arguments[0])
+      .resolvingSymlinksInPath()
+      .deletingLastPathComponent()
+    let candidates = [
+      executableDirectory.appendingPathComponent("1Context").path,
+      "/Applications/1Context.app/Contents/MacOS/1Context"
+    ]
+    return candidates.first { fileManager.isExecutableFile(atPath: $0) }
   }
 
   private func prepareDirectories() throws {

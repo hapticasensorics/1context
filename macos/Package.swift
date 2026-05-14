@@ -59,7 +59,7 @@ let package = Package(
     ),
     .executableTarget(
       name: "OneContextDaemon",
-      dependencies: ["OneContextCore", "OneContextPlatform", "OneContextProtocol", "OneContextLocalWeb", "OneContextSetup"]
+      dependencies: ["OneContextCore", "OneContextPlatform", "OneContextProtocol", "OneContextLocalWeb", "OneContextSetup", "OneContextSupervisor"]
     ),
     .executableTarget(
       name: "OneContextLocalWebProxy"
