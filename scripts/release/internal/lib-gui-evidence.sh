@@ -221,40 +221,59 @@ if runnerPassword is "" then return "no runner admin password configured"
 tell application "System Events"
   set candidateProcesses to {"SecurityAgent", "CoreServicesUIAgent", "System Settings"}
   repeat with procName in candidateProcesses
-    if exists process procName then
-      tell process procName
+    if exists process (procName as text) then
+      tell process (procName as text)
+        set frontmost to true
+        delay 0.2
         repeat with win in windows
-          set passwordFieldFound to false
-          try
-            if (count of secure text fields of win) > 0 then
-              set passwordFieldFound to true
-              click secure text field 1 of win
-            end if
-          end try
-          if passwordFieldFound then
-            keystroke runnerPassword
-            delay 0.2
-            key code 36
-            return "submitted admin authorization prompt"
-          end if
-
           repeat with elementRef in entire contents of win
             try
-              if (role of elementRef as text) is "AXTextField" then
-                set elementDescription to ""
+              set elementRole to role of elementRef as text
+              set elementDescription to ""
+              set elementName to ""
+              try
+                set elementDescription to description of elementRef as text
+              end try
+              try
+                set elementName to name of elementRef as text
+              end try
+              if elementRole is "AXTextField" or elementRole is "AXSecureTextField" or elementDescription contains "password" or elementName contains "Password" then
+                click elementRef
+                keystroke runnerPassword
+                delay 0.2
+                key code 36
+                return "submitted admin authorization prompt"
+              end if
+            end try
+          end repeat
+        end repeat
+      end tell
+    end if
+  end repeat
+end tell
+
+return "no admin authorization prompt found"
+APPLESCRIPT
+}
+
+dismiss_admin_authorization_prompt() {
+  osascript <<'APPLESCRIPT'
+tell application "System Events"
+  set candidateProcesses to {"SecurityAgent", "CoreServicesUIAgent", "System Settings"}
+  repeat with procName in candidateProcesses
+    if exists process (procName as text) then
+      tell process (procName as text)
+        repeat with win in windows
+          repeat with elementRef in entire contents of win
+            try
+              if (role of elementRef as text) is "AXButton" then
                 set elementName to ""
-                try
-                  set elementDescription to description of elementRef as text
-                end try
                 try
                   set elementName to name of elementRef as text
                 end try
-                if elementDescription contains "password" or elementName contains "Password" then
+                if elementName is "Cancel" then
                   click elementRef
-                  keystroke runnerPassword
-                  delay 0.2
-                  key code 36
-                  return "submitted admin authorization prompt"
+                  return "dismissed admin authorization prompt"
                 end if
               end if
             end try

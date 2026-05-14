@@ -130,6 +130,7 @@ capture_process_state() {
 
 stop_1context() {
   log "stopping existing 1Context processes"
+  dismiss_admin_authorization_prompt > "$EVIDENCE_DIR/dismiss-stale-admin-authorization.txt" 2>&1 || true
   osascript -e 'tell application id "com.haptica.1context" to quit' >/dev/null 2>&1 || true
   osascript -e 'tell application id "com.haptica.1context.menu" to quit' >/dev/null 2>&1 || true
   launchctl bootout "gui/$(id -u)/com.haptica.1context" >/dev/null 2>&1 || true
