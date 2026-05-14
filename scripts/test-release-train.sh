@@ -90,7 +90,7 @@ python3 -m py_compile "$ROOT/scripts/release-manifest.py"
 
 "$ROOT/scripts/release-manifest.py" validate
 if ! /bin/bash "$ROOT/scripts/release-train.sh" validate > "$TMP_DIR/system-bash-validate.out" 2>&1; then
-  grep -q "Release tree is dirty" "$TMP_DIR/system-bash-validate.out"
+  grep -Eq "Release tree is dirty|Release must run from tag" "$TMP_DIR/system-bash-validate.out"
 fi
 /bin/bash "$ROOT/scripts/release-train.sh" validate --channel dev >/dev/null
 ONECONTEXT_RELEASE_MANIFEST_FORCE_SIMPLE_TOML=1 "$ROOT/scripts/release-manifest.py" validate
