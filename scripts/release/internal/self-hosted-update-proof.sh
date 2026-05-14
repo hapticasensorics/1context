@@ -557,6 +557,27 @@ restore_setup_via_gui() {
   done
 }
 
+repin_old_baseline_after_setup_restore() {
+  local output_dir="$1"
+  local old_dmg="$2"
+  mkdir -p "$output_dir"
+
+  write_versions "$output_dir/version-after-setup-restore.txt"
+  run_installed_cli diagnose > "$output_dir/diagnose-after-setup-restore.txt" 2>&1 || true
+
+  log "reinstalling old baseline after setup restoration"
+  stop_1context
+  clear_disposable_update_state
+  install_old_app "$old_dmg"
+  write_versions "$output_dir/version-after-old-repin.txt"
+
+  if ! run_installed_cli diagnose > "$output_dir/diagnose-after-old-repin.txt" 2>&1; then
+    fail "Old baseline reinstall after setup restoration failed diagnose. Evidence: $output_dir"
+  fi
+  grep -q "  Setup Ready: yes" "$output_dir/diagnose-after-old-repin.txt" ||
+    fail "Old baseline reinstall did not preserve setup readiness. Evidence: $output_dir"
+}
+
 prove_login_restart_recovery() {
   log "proving login/restart-style recovery"
   local recovery_dir="$EVIDENCE_DIR/login-restart-recovery"
@@ -683,6 +704,7 @@ results = [
     ],
     "artifact_paths": [
       "setup-before-update",
+      "baseline-repin-after-setup",
       "update-proof",
       "steady-state",
       "version-final.txt",
@@ -811,10 +833,11 @@ old_dmg="$DOWNLOADED_OLD_DMG"
 stop_1context
 clear_disposable_update_state
 install_old_app "$old_dmg"
-rm -f "$old_dmg"
 
 log "restoring baseline setup before update proof"
 restore_setup_via_gui "$EVIDENCE_DIR/setup-before-update"
+repin_old_baseline_after_setup_restore "$EVIDENCE_DIR/baseline-repin-after-setup" "$old_dmg"
+rm -f "$old_dmg"
 
 log "running staged Sparkle update proof"
 ONECONTEXT_INSTALLED_APP="$APP" \

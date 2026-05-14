@@ -2,7 +2,7 @@
 
 Status: active
 Owner: Codex
-Target train: 0.1.67 through 0.1.85 unless the manifest says otherwise
+Target train: 0.1.67 through 0.1.86 unless the manifest says otherwise
 
 ## Purpose
 
@@ -586,3 +586,10 @@ plugin tree. The factory must keep package-smoke checks that fail on
   waited for certificate-trust authorization. `v0.1.85` wraps CLI uninstall
   commands in a scoped admin-approval monitor and removes the helper's
   always-on focused-password fallback.
+- 2026-05-14: Official `v0.1.85` then exposed a proof ordering bug, not a
+  product update bug: setup restoration correctly triggered the aggressive
+  mandatory update to `0.1.85` before the harness began its measured update
+  proof. `v0.1.86` now records setup restoration evidence, stops the app,
+  clears disposable Sparkle state, reinstalls the previous public DMG without
+  touching setup data, verifies setup readiness by CLI, and only then starts
+  the measured Sparkle update.

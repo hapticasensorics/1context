@@ -1,11 +1,14 @@
-# 1Context v0.1.85 Public Preview
+# 1Context v0.1.86 Public Preview
 
 This release includes:
 
-- `0.1.85` finishes the release-factory uninstall/reinstall proof repair. The
-  protected runner now watches `1context-cli uninstall` for macOS certificate
-  trust authorization prompts and approves them while the CLI subprocess is
-  blocked.
+- `0.1.86` makes the official release proof deterministic after setup
+  restoration. The protected runner now re-pins the previous public build after
+  Local Wiki Access is ready, so an aggressive mandatory auto-update cannot
+  preempt the measured Sparkle update step.
+- `0.1.85` finished the release-factory uninstall/reinstall proof repair. The
+  protected runner watches `1context-cli uninstall` for macOS certificate trust
+  authorization prompts and approves them while the CLI subprocess is blocked.
 - The password helper no longer uses the broad focused-password fallback unless
   it is explicitly enabled, so proof loops capture the prompt and retry through
   scoped Accessibility actions instead of typing into an arbitrary focused
