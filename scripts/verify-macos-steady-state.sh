@@ -35,7 +35,19 @@ capture_once() {
   printf '%s\n' "$diagnose_exit" > "$EVIDENCE_DIR/diagnose-$name.exitcode"
   launchctl print "gui/$(id -u)/$LABEL_RUNTIME" > "$EVIDENCE_DIR/launchctl-runtime-$name.txt" 2>&1 || true
   launchctl print "gui/$(id -u)/$LABEL_MENU" > "$EVIDENCE_DIR/launchctl-menu-$name.txt" 2>&1 || true
+  ps -axo pid=,command= |
+    awk -v app="$APP/Contents/MacOS/1Context" 'index($0, app) > 0 { print }' \
+      > "$EVIDENCE_DIR/processes-menu-$name.txt" || true
   return "$diagnose_exit"
+}
+
+assert_menu_alive() {
+  local name="$1"
+  local menu_launchctl="$EVIDENCE_DIR/launchctl-menu-$name.txt"
+  local menu_processes="$EVIDENCE_DIR/processes-menu-$name.txt"
+  grep -Eq "state = running|pid = [0-9]+" "$menu_launchctl" && return 0
+  [[ -s "$menu_processes" ]] && return 0
+  fail "menu app was not running in launchd or process list during $name"
 }
 
 assert_diagnose_healthy() {
@@ -49,7 +61,8 @@ assert_diagnose_healthy() {
   grep -q "  Health: OK" "$diagnose_file" || fail "local web health was not OK in $(basename "$diagnose_file")"
   grep -q "  Setup Ready: yes" "$diagnose_file" || fail "setup was not ready in $(basename "$diagnose_file")"
   grep -Eq "state = running|pid = [0-9]+" "$runtime_launchctl" || fail "runtime launch agent was not running in $(basename "$runtime_launchctl")"
-  grep -Eq "state = running|pid = [0-9]+" "$menu_launchctl" || fail "menu launch agent was not running in $(basename "$menu_launchctl")"
+  grep -q "path =" "$menu_launchctl" || fail "menu launch agent was not loaded in $(basename "$menu_launchctl")"
+  assert_menu_alive "$name"
 }
 
 [[ -x "$CLI" ]] || fail "missing CLI at $CLI"

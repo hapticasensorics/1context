@@ -336,3 +336,14 @@ plugin tree. The factory must keep package-smoke checks that fail on
   The fix is product-owned: the daemon now repairs/kickstarts the menu
   LaunchAgent on runtime startup, so the KeepAlive runtime can restore the menu
   after mandatory updates, login, or restart.
+- 2026-05-13: The follow-up `0.1.68` to `0.1.69` proof showed the daemon repair
+  did execute: runtime logs include `menu launch agent ready
+  path=/Applications/1Context.app/Contents/MacOS/1Context`, and the update
+  reached `plist=0.1.69 cli=0.1.69`. The remaining failure was proof narrowness:
+  Sparkle can leave the menu running as a normal app process while the menu
+  LaunchAgent remains loaded without owning that PID. The steady-state proof now
+  records the menu process list and accepts either a launchd-owned menu PID or a
+  live `/Applications/1Context.app/Contents/MacOS/1Context` process plus a
+  loaded menu LaunchAgent. Harness proof: `bash -n
+  scripts/verify-macos-steady-state.sh`, `./scripts/test-release-train.sh`,
+  `./scripts/test.sh`, and `git diff --check`.
