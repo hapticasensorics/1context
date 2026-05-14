@@ -1,10 +1,10 @@
-# 1Context v0.1.71 Public Preview
+# 1Context v0.1.72 Public Preview
 
 This release includes:
 
-- `0.1.71` proves the release factory after the public `0.1.70` train: the
-  packaged app is still self-contained, and release proof now includes
-  login/restart-style recovery evidence.
+- `0.1.72` proves the release factory after the public `0.1.71` train: the
+  packaged app remains self-contained, and release proof now exercises
+  login/restart-style recovery through the real-Mac runner.
 - Distributable `.app` and DMG builds reject Homebrew, host Caddy, local library
   links, and executable script interpreters that depend on developer-machine
   package managers or language runtimes.
