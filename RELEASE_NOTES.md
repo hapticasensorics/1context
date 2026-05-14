@@ -1,11 +1,13 @@
-# 1Context v0.1.78 Public Preview
+# 1Context v0.1.79 Public Preview
 
 This release includes:
 
-- `0.1.78` keeps the release factory moving after the public `0.1.77` train:
-  the protected runner proof now records pre-run setup readiness as evidence
-  instead of treating it as a manual prerequisite, so the proof can repair a
-  dirty runner through the same setup restoration lane it is meant to validate.
+- `0.1.79` tightens the release factory after the public `0.1.78` proof showed
+  that the Sparkle update could finish while the runner still needed Local Wiki
+  setup. The proof now restores setup through the real app UI before steady-state.
+- The protected runner can use an explicit admin-authorization secret for setup
+  prompts, so the release lane can automate the same macOS prompt a tester sees
+  without hardcoding credentials or hiding the requirement.
 - Signed app setup ignores stale runner `SUDO_USER` environment variables
   when the app is actually running as the logged-in macOS user, so Local Wiki
   Access can finish from the real setup window.

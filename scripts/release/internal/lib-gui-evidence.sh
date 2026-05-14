@@ -212,3 +212,59 @@ tell application "System Events"
 end tell
 APPLESCRIPT
 }
+
+approve_admin_authorization_prompt() {
+  osascript <<'APPLESCRIPT'
+set runnerPassword to system attribute "ONECONTEXT_UPDATE_RUNNER_ADMIN_PASSWORD"
+if runnerPassword is "" then return "no runner admin password configured"
+
+tell application "System Events"
+  set candidateProcesses to {"SecurityAgent", "CoreServicesUIAgent", "System Settings"}
+  repeat with procName in candidateProcesses
+    if exists process procName then
+      tell process procName
+        repeat with win in windows
+          set passwordFieldFound to false
+          try
+            if (count of secure text fields of win) > 0 then
+              set passwordFieldFound to true
+              click secure text field 1 of win
+            end if
+          end try
+          if passwordFieldFound then
+            keystroke runnerPassword
+            delay 0.2
+            key code 36
+            return "submitted admin authorization prompt"
+          end if
+
+          repeat with elementRef in entire contents of win
+            try
+              if (role of elementRef as text) is "AXTextField" then
+                set elementDescription to ""
+                set elementName to ""
+                try
+                  set elementDescription to description of elementRef as text
+                end try
+                try
+                  set elementName to name of elementRef as text
+                end try
+                if elementDescription contains "password" or elementName contains "Password" then
+                  click elementRef
+                  keystroke runnerPassword
+                  delay 0.2
+                  key code 36
+                  return "submitted admin authorization prompt"
+                end if
+              end if
+            end try
+          end repeat
+        end repeat
+      end tell
+    end if
+  end repeat
+end tell
+
+return "no admin authorization prompt found"
+APPLESCRIPT
+}

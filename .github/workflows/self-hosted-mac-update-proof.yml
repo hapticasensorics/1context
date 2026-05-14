@@ -53,6 +53,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           ONECONTEXT_UPDATE_RUNNER_I_UNDERSTAND_DESTRUCTIVE: "1"
           ONECONTEXT_UPDATE_PROOF_REASON: ${{ inputs.proof_reason }}
+          ONECONTEXT_UPDATE_RUNNER_ADMIN_PASSWORD: ${{ secrets.ONECONTEXT_UPDATE_RUNNER_ADMIN_PASSWORD }}
         run: ./scripts/release-train.sh prove --runner-execute
 
       - name: Upload update proof artifacts

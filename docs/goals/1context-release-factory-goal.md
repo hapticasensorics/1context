@@ -2,7 +2,7 @@
 
 Status: active
 Owner: Codex
-Target train: 0.1.67 through 0.1.78 unless the manifest says otherwise
+Target train: 0.1.67 through 0.1.79 unless the manifest says otherwise
 
 ## Purpose
 
@@ -68,7 +68,7 @@ gets slower, the timing artifact must explain the cost.
 - Official signed/notarized assets plus public audit: under 4 minutes.
 - Official standard proof and bless: under 6 minutes.
 - Official destructive uninstall/reinstall/delete-data proof and bless: under 10
-  minutes until the first full 0.1.78 measurement replaces this provisional cap.
+  minutes until the first full 0.1.79 measurement replaces this provisional cap.
 
 If a target is unrealistic, the release evidence should say why with stage timings
 instead of hiding the cost in a giant shell log.
@@ -542,3 +542,10 @@ plugin tree. The factory must keep package-smoke checks that fail on
   release-factory goal. `v0.1.78` records pre-run setup readiness as evidence
   only; the proof owns installing the baseline app and restoring setup through
   the same GUI lane it is validating.
+- 2026-05-13: Official `v0.1.78` proved the public Sparkle hop itself worked
+  quickly, but the self-hosted proof then failed steady-state because it asked
+  runtime/local-web to be healthy before running the existing setup restoration
+  lane. `v0.1.79` moves setup restoration immediately after update success and
+  before steady-state, records `setup-after-update` evidence, and gives the
+  protected runner an explicit optional admin-authorization secret hook for the
+  real macOS setup prompt instead of relying on a hidden manual password step.

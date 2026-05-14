@@ -489,6 +489,8 @@ restore_setup_via_gui() {
     if accessibility_has_button "Grant" "$output_dir/accessibility-setup-$attempt.txt"; then
       click_window_button "Grant" >"$output_dir/click-grant-$attempt.txt" 2>&1 || true
       sleep 3
+      approve_admin_authorization_prompt >"$output_dir/admin-authorization-after-grant-$attempt.txt" 2>&1 || true
+      sleep 2
       capture_windows "$output_dir/windows-after-grant-$attempt.txt"
       capture_accessibility "$output_dir/accessibility-after-grant-$attempt.txt"
       capture_screenshot "$output_dir/desktop-after-grant-$attempt.png"
@@ -628,10 +630,12 @@ results = [
     "runtime_assertions": [
       "no_runtime_pause",
       "final_installed_version_matches_expected",
+      "setup_restored_after_update",
       "public_feed_restored",
     ],
     "artifact_paths": [
       "update-proof",
+      "setup-after-update",
       "steady-state",
       "version-final.txt",
       "self-hosted-update-proof.log",
@@ -773,6 +777,9 @@ ONECONTEXT_UPDATE_PROOF_TIMEOUT_SECONDS="$TIMEOUT_SECONDS" \
 ONECONTEXT_UPDATE_PROOF_POLL_SECONDS="$POLL_SECONDS" \
 ONECONTEXT_REMOTE_UPDATE_EVIDENCE_DIR="$EVIDENCE_DIR/update-proof" \
   "$ROOT/scripts/release/internal/prove-remote-sparkle-update.sh"
+
+log "restoring setup after update before steady-state proof"
+restore_setup_via_gui "$EVIDENCE_DIR/setup-after-update"
 
 log "running post-update steady-state proof"
 ONECONTEXT_APP="$APP" \
