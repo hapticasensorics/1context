@@ -1,24 +1,15 @@
-# 1Context v0.1.70 Public Preview
+# 1Context v0.1.71 Public Preview
 
 This release includes:
 
-- `0.1.70` promotes the release factory work to the official public channel
-  after the preview train proved mandatory Sparkle updates through `0.1.69`.
-- The app no longer relies on Homebrew or host Caddy for distributable `.app`
-  or DMG builds; release-owned bundled inputs are required for shipped
-  artifacts.
-- Mandatory update proof now accepts the healthy Sparkle-relaunched app state
-  while still requiring menu/runtime recovery evidence.
-- Release policy now defines build channels, timing budgets, and private
-  appcast facts in `release/release.toml`.
-- The old `release-train.sh package` path is deleted; official release builds
-  use `release-train.sh build --channel official`.
-- The public CLI is now support-only: version, redacted diagnostics, uninstall,
-  and local wiki URL.
-- Setup, app lifecycle, and updates are owned by the app UI and menu bar instead
-  of old command-line control paths.
-- The shipped app bundle remains small after deleting obsolete compatibility
-  code, test hooks, generated state, and source-checkout packaging assumptions.
+- `0.1.71` proves the release factory after the public `0.1.70` train: the
+  packaged app is still self-contained, and release proof now includes
+  login/restart-style recovery evidence.
+- Distributable `.app` and DMG builds reject Homebrew, host Caddy, local library
+  links, and executable script interpreters that depend on developer-machine
+  package managers or language runtimes.
+- Private and official appcasts are validated against `release/release.toml`
+  instead of using compatibility skips.
 - Mandatory Sparkle updates remain quiet and automatic; manual `Check for
   Updates` remains a normal user action.
 

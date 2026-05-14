@@ -2,7 +2,7 @@
 
 Status: active
 Owner: Codex
-Target train: 0.1.67 through 0.1.70 unless the manifest says otherwise
+Target train: 0.1.67 through 0.1.71 unless the manifest says otherwise
 
 ## Purpose
 
