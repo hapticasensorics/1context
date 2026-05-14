@@ -419,6 +419,7 @@ required = {
     "1Context.dmg",
     "1Context.dmg.sha256",
     "appcast.xml",
+    "asset-manifest.json",
 }
 missing = sorted(required - assets)
 if missing:
@@ -429,6 +430,9 @@ PY
   release_audit_log "downloading appcast.xml"
   gh release download "$tag" --repo "$repo" --pattern appcast.xml --dir "$work_dir" --clobber >/dev/null
   "$ROOT/scripts/release-manifest.py" validate --appcast "$work_dir/appcast.xml"
+  gh release download "$tag" --repo "$repo" --pattern asset-manifest.json --dir "$work_dir" --clobber >/dev/null
+  mkdir -p "$(dirname "$ASSET_MANIFEST")"
+  cp "$work_dir/asset-manifest.json" "$ASSET_MANIFEST"
 
   if ! [[ "$probes" =~ ^[0-9]+$ ]] || (( probes < 1 )); then
     fail "ONECONTEXT_RELEASE_AUDIT_PROBES must be a positive integer."

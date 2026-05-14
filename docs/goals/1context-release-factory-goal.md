@@ -72,7 +72,8 @@ gets slower, the timing artifact must explain the cost.
 - Official signed/notarized assets plus public audit: under 4 minutes.
 - Official standard proof and bless: under 6 minutes.
 - Official destructive uninstall/reinstall/delete-data proof and bless: under 10
-  minutes until the first full 0.1.83 measurement replaces this provisional cap.
+  minutes. The first full public measurement was `v0.1.86` at 6 minutes 35
+  seconds for the protected runner proof, plus a separate local bless gate.
 
 If a target is unrealistic, the release evidence should say why with stage timings
 instead of hiding the cost in a giant shell log.
@@ -208,7 +209,7 @@ plugin tree. The factory must keep package-smoke checks that fail on
 - [x] Private release creates private update assets and proves update on at
   least one non-primary Mac.
 - [x] Official release proves public Sparkle update on the protected runner.
-- [ ] Official release proves install, update, uninstall without data deletion,
+- [x] Official release proves install, update, uninstall without data deletion,
   reinstall, and controlled delete-data in a throwaway account.
 
 ### Memory Runtime Reintroduction
@@ -593,3 +594,15 @@ plugin tree. The factory must keep package-smoke checks that fail on
   clears disposable Sparkle state, reinstalls the previous public DMG without
   touching setup data, verifies setup readiness by CLI, and only then starts
   the measured Sparkle update.
+- 2026-05-14: Official `v0.1.86` closed the release-factory loop. Protected
+  release workflow `25849726961` built, signed, notarized, published, and
+  audited public assets in 2 minutes 38 seconds. Protected self-hosted proof
+  workflow `25849913887` passed in 6 minutes 35 seconds, proving public
+  `0.1.85 -> 0.1.86` Sparkle update, post-update steady state, already-current
+  manual update check, login/restart recovery, real uninstall without
+  delete-data, reinstall from DMG, controlled delete-data with keep-app, setup
+  restoration, runner attestation, normalized proof JSON for every updater
+  matrix case, and redaction audit. Local
+  `release-train.sh bless --channel official` passed after staging the public
+  `asset-manifest.json`; `release-train.sh audit` now downloads that manifest
+  automatically for future bless runs.
