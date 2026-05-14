@@ -355,7 +355,8 @@ prove_already_current_manual_check() {
   mkdir -p "$manual_dir"
   write_versions "$manual_dir/version-before.txt"
   click_menu_item "Check for Updates"
-  local deadline=$(( "$(date +%s)" + 60 ))
+  local deadline
+  deadline=$(($(date +%s) + 60))
   local attempt=0
   while true; do
     attempt=$((attempt + 1))
@@ -380,6 +381,35 @@ prove_already_current_manual_check() {
   done
 }
 
+bootstrap_user_launch_agent() {
+  local label="$1"
+  local plist="$HOME/Library/LaunchAgents/$label.plist"
+  [[ -f "$plist" ]] || fail "Expected LaunchAgent plist missing after app launch: $plist"
+  launchctl bootstrap "gui/$(id -u)" "$plist" >/dev/null 2>&1 || true
+  launchctl kickstart -k "gui/$(id -u)/$label" >/dev/null 2>&1 || true
+}
+
+wait_for_recovery_health() {
+  local output_dir="$1"
+  local deadline
+  deadline=$(($(date +%s) + 45))
+  local attempt=0
+  while true; do
+    attempt=$((attempt + 1))
+    local diagnose="$output_dir/diagnose-wait-$attempt.txt"
+    if "$APP/Contents/MacOS/1context-cli" diagnose > "$diagnose" 2>&1; then
+      if grep -q "  Health: OK" "$diagnose" && grep -q "  Setup Ready: yes" "$diagnose"; then
+        cp "$diagnose" "$output_dir/diagnose-ready.txt"
+        return
+      fi
+    fi
+    if (( "$(date +%s)" >= deadline )); then
+      fail "Timed out waiting for login/restart recovery health. Evidence: $output_dir"
+    fi
+    sleep 2
+  done
+}
+
 prove_login_restart_recovery() {
   log "proving login/restart-style recovery"
   local recovery_dir="$EVIDENCE_DIR/login-restart-recovery"
@@ -388,8 +418,10 @@ prove_login_restart_recovery() {
   capture_process_state "login-restart-before"
   stop_1context
   capture_process_state "login-restart-stopped"
-  open "$APP"
-  sleep 8
+  bootstrap_user_launch_agent "com.haptica.1context"
+  bootstrap_user_launch_agent "com.haptica.1context.menu"
+  open "$APP" >/dev/null 2>&1 || true
+  wait_for_recovery_health "$recovery_dir"
   write_versions "$recovery_dir/version-after-open.txt"
   ONECONTEXT_APP="$APP" \
   ONECONTEXT_STEADY_STATE_SECONDS="$LOGIN_RESTART_STEADY_STATE_SECONDS" \
