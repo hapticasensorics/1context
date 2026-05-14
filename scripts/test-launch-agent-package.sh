@@ -30,7 +30,8 @@ for executable in \
   "$APP/Contents/MacOS/1Context" \
   "$APP/Contents/MacOS/1context-cli" \
   "$APP/Contents/MacOS/1contextd" \
-  "$APP/Contents/Resources/1context-local-web-proxy"; do
+  "$APP/Contents/Resources/1context-local-web-proxy" \
+  "$APP/Contents/Resources/local-web/caddy/caddy"; do
   if [[ ! -x "$executable" ]]; then
     echo "Packaged executable is missing or not executable: $executable" >&2
     exit 1
@@ -55,6 +56,11 @@ if find "$APP/Contents/Resources" -type f -print0 \
   | xargs -0 grep -I -n -E '/Users/paulhan|paulhan|/dev/1context|(^|[^[:alnum:]_])/goal([^[:alnum:]_]|$)|goal\\.html|goal\\.md' >/tmp/1context-package-local-paths.txt; then
   echo "Packaged resources must not include local developer paths or development goal routes. Matches:" >&2
   cat /tmp/1context-package-local-paths.txt >&2
+  exit 1
+fi
+if grep -R -a -n -E '/opt/homebrew|/usr/local/Cellar|/Cellar/caddy' "$APP" >/tmp/1context-package-homebrew-paths.txt; then
+  echo "Packaged app must not include Homebrew or host Caddy paths. Matches:" >&2
+  cat /tmp/1context-package-homebrew-paths.txt >&2
   exit 1
 fi
 

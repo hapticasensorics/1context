@@ -10,11 +10,15 @@ import re
 import shlex
 import subprocess
 import sys
-import tomllib
 import xml.etree.ElementTree as ET
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
+
+try:
+  import tomllib
+except ModuleNotFoundError:  # macOS runner system Python can be older than 3.11.
+  tomllib = None  # type: ignore[assignment]
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -88,6 +92,134 @@ class ManifestError(Exception):
   pass
 
 
+class SimpleTOMLDecodeError(ValueError):
+  pass
+
+
+def strip_toml_comment(line: str) -> str:
+  in_string = False
+  escaped = False
+  for index, char in enumerate(line):
+    if in_string:
+      if escaped:
+        escaped = False
+      elif char == "\\":
+        escaped = True
+      elif char == '"':
+        in_string = False
+    elif char == '"':
+      in_string = True
+    elif char == "#":
+      return line[:index]
+  return line
+
+
+def parse_simple_toml_string(raw: str, line_number: int) -> str:
+  try:
+    value = json.loads(raw)
+  except json.JSONDecodeError as exc:
+    raise SimpleTOMLDecodeError(f"line {line_number}: invalid string: {exc}") from exc
+  if not isinstance(value, str):
+    raise SimpleTOMLDecodeError(f"line {line_number}: expected string.")
+  return value
+
+
+def parse_simple_toml_value(raw: str, line_number: int) -> Any:
+  raw = raw.strip()
+  if not raw:
+    raise SimpleTOMLDecodeError(f"line {line_number}: missing value.")
+  if raw.startswith('"') and raw.endswith('"'):
+    return parse_simple_toml_string(raw, line_number)
+  if raw == "true":
+    return True
+  if raw == "false":
+    return False
+  if raw.startswith("[") and raw.endswith("]"):
+    content = raw[1:-1]
+    if not content.strip():
+      return []
+    strings = re.findall(r'"(?:\\.|[^"\\])*"', content)
+    if strings:
+      leftovers = re.sub(r'"(?:\\.|[^"\\])*"', "", content)
+      if leftovers.replace(",", "").strip():
+        raise SimpleTOMLDecodeError(f"line {line_number}: string arrays may contain only quoted strings.")
+      return [parse_simple_toml_string(item, line_number) for item in strings]
+    raise SimpleTOMLDecodeError(f"line {line_number}: only string arrays are supported by the built-in parser.")
+  if re.match(r"^-?\d+$", raw):
+    return int(raw)
+  raise SimpleTOMLDecodeError(f"line {line_number}: unsupported TOML value {raw!r}.")
+
+
+def simple_toml_table(root: dict[str, Any], path: str, line_number: int) -> dict[str, Any]:
+  if not path:
+    raise SimpleTOMLDecodeError(f"line {line_number}: empty table path.")
+  current = root
+  for part in path.split("."):
+    if not part:
+      raise SimpleTOMLDecodeError(f"line {line_number}: empty table path component.")
+    existing = current.get(part)
+    if existing is None:
+      existing = {}
+      current[part] = existing
+    if not isinstance(existing, dict):
+      raise SimpleTOMLDecodeError(f"line {line_number}: {part} is not a table.")
+    current = existing
+  return current
+
+
+def simple_toml_array_table(root: dict[str, Any], path: str, line_number: int) -> dict[str, Any]:
+  parent_path, _, table_name = path.rpartition(".")
+  parent = simple_toml_table(root, parent_path, line_number) if parent_path else root
+  existing = parent.get(table_name)
+  if existing is None:
+    existing = []
+    parent[table_name] = existing
+  if not isinstance(existing, list):
+    raise SimpleTOMLDecodeError(f"line {line_number}: {path} is not an array of tables.")
+  item: dict[str, Any] = {}
+  existing.append(item)
+  return item
+
+
+def parse_simple_toml(text: str) -> dict[str, Any]:
+  root: dict[str, Any] = {}
+  current = root
+  lines = text.splitlines()
+  index = 0
+  while index < len(lines):
+    line_number = index + 1
+    line = strip_toml_comment(lines[index]).strip()
+    index += 1
+    if not line:
+      continue
+    if line.startswith("[[") and line.endswith("]]"):
+      current = simple_toml_array_table(root, line[2:-2].strip(), line_number)
+      continue
+    if line.startswith("[") and line.endswith("]"):
+      current = simple_toml_table(root, line[1:-1].strip(), line_number)
+      continue
+    key, separator, raw_value = line.partition("=")
+    if not separator:
+      raise SimpleTOMLDecodeError(f"line {line_number}: expected key = value.")
+    key = key.strip()
+    if not key:
+      raise SimpleTOMLDecodeError(f"line {line_number}: empty key.")
+    raw_value = raw_value.strip()
+    if raw_value.startswith("[") and not raw_value.endswith("]"):
+      array_lines = [raw_value]
+      while index < len(lines):
+        next_line = strip_toml_comment(lines[index]).strip()
+        array_lines.append(next_line)
+        index += 1
+        if next_line.endswith("]"):
+          break
+      raw_value = "\n".join(array_lines)
+      if not raw_value.strip().endswith("]"):
+        raise SimpleTOMLDecodeError(f"line {line_number}: unterminated array.")
+    current[key] = parse_simple_toml_value(raw_value, line_number)
+  return root
+
+
 def run_git(root: Path, args: list[str], *, check: bool = True) -> subprocess.CompletedProcess[str]:
   return subprocess.run(
     ["git", "-C", str(root), *args],
@@ -100,11 +232,13 @@ def run_git(root: Path, args: list[str], *, check: bool = True) -> subprocess.Co
 
 def load_toml(path: Path, label: str) -> dict[str, Any]:
   try:
-    with path.open("rb") as handle:
-      return tomllib.load(handle)
+    if tomllib is not None and os.environ.get("ONECONTEXT_RELEASE_MANIFEST_FORCE_SIMPLE_TOML") != "1":
+      with path.open("rb") as handle:
+        return tomllib.load(handle)
+    return parse_simple_toml(path.read_text(encoding="utf-8"))
   except FileNotFoundError as exc:
     raise ManifestError(f"{label} not found: {path}") from exc
-  except tomllib.TOMLDecodeError as exc:
+  except (SimpleTOMLDecodeError, getattr(tomllib, "TOMLDecodeError", SimpleTOMLDecodeError)) as exc:
     raise ManifestError(f"{label} is not valid TOML: {exc}") from exc
 
 

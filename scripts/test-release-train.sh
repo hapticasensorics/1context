@@ -87,10 +87,17 @@ bash -n \
 python3 -m py_compile "$ROOT/scripts/release-manifest.py"
 
 "$ROOT/scripts/release-manifest.py" validate
+ONECONTEXT_RELEASE_MANIFEST_FORCE_SIMPLE_TOML=1 "$ROOT/scripts/release-manifest.py" validate
 test "$("$ROOT/scripts/release-manifest.py" matrix-cases | wc -l | tr -d '[:space:]')" = "13"
 "$ROOT/scripts/release-manifest.py" matrix-cases | grep -q "^login_restart_recovery$"
 "$ROOT/scripts/release-manifest.py" export-env --channel dev | grep -q "ONECONTEXT_RELEASE_CHANNEL=dev"
 "$ROOT/scripts/release-manifest.py" export-env --channel private | grep -q "ONECONTEXT_RELEASE_CHANNEL_APPCAST=private"
+test -f "$ROOT/release/tools/caddy/darwin-arm64/caddy-v2.11.2-darwin-arm64.tar.gz"
+test -f "$ROOT/release/tools/caddy/darwin-arm64/caddy-v2.11.2-darwin-arm64.tar.gz.sha256"
+(
+  cd "$ROOT/release/tools/caddy/darwin-arm64"
+  shasum -a 256 -c caddy-v2.11.2-darwin-arm64.tar.gz.sha256
+) >/dev/null
 
 MANDATORY_OK="$TMP_DIR/mandatory-ok.xml"
 MANDATORY_WITH_NOTES="$TMP_DIR/mandatory-with-notes.xml"
@@ -187,6 +194,17 @@ if rg -n --glob '!test-release-train.sh' 'release-train\.sh package|ONECONTEXT_R
 then
   cat "$TMP_DIR/no-shim-scan.out" >&2
   echo "active release surfaces must not mention deleted shims, old package commands, or old update-policy files." >&2
+  exit 1
+fi
+if rg -n '\bbrew (install|--prefix)\b|command -v caddy' \
+  "$ROOT/.github/workflows/ci.yml" \
+  "$ROOT/.github/workflows/release.yml" \
+  "$ROOT/.github/workflows/self-hosted-mac-update-proof.yml" \
+  "$ROOT/.github/workflows/self-hosted-mac-private-update-proof.yml" \
+  "$ROOT/scripts/build-macos-app.sh" > "$TMP_DIR/no-brew-release-build.out"
+then
+  cat "$TMP_DIR/no-brew-release-build.out" >&2
+  echo "release app/DMG builds must not depend on Homebrew installs, Homebrew prefixes, or host caddy discovery." >&2
   exit 1
 fi
 if rg -n 'ONECONTEXT_(SPARKLE_FEED_URL|UPDATE_OPTIONAL_PROMPT_TITLE|UPDATE_OPTIONAL_PROMPT_BODY|UPDATE_FAILURE_TITLE|UPDATE_FAILURE_BODY|UPDATE_POST_INSTALL_MESSAGE_ENABLED|UPDATE_POST_INSTALL_TITLE|UPDATE_POST_INSTALL_BODY|SPARKLE_SHOW_RELEASE_NOTES_IN_UPDATE_WINDOW):-' \

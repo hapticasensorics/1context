@@ -10,7 +10,9 @@ This is the current operating doc for shipping the 1Context macOS app.
   appcast facts into docs or workflow inputs by hand.
 - Normal install channel: signed, notarized, stapled `1Context.dmg` from GitHub
   Releases.
-- Secondary install channel: Homebrew cask in `hapticasensorics/homebrew-tap`.
+- Homebrew is not a release dependency or supported install surface for this
+  train. Prototype, private, and official `.app`/DMG builds must bundle their
+  runtime inputs instead of resolving tools from Homebrew or host `PATH`.
 - Update engine: Sparkle from the installed `/Applications/1Context.app`.
 - Canonical wiki URL: `https://wiki.1context.localhost/your-context`.
 - Required first setup: Local Wiki Access through native app setup.

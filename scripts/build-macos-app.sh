@@ -21,7 +21,12 @@ VERSION="$ONECONTEXT_RELEASE_VERSION"
 ARCH="${ONECONTEXT_ARCH:-arm64}"
 BUNDLE_IDENTIFIER="${ONECONTEXT_BUNDLE_IDENTIFIER:-com.haptica.1context}"
 MENU_ICON_SOURCE="$MACOS_DIR/Sources/OneContextMenuBar/Resources/MenuBarIcon.png"
-CADDY_SOURCE="${ONECONTEXT_CADDY_PATH:-$(command -v caddy 2>/dev/null || true)}"
+CADDY_VERSION="2.11.2"
+CADDY_TOOL_ARCHIVE="$ROOT/release/tools/caddy/darwin-$ARCH/caddy-v$CADDY_VERSION-darwin-$ARCH.tar.gz"
+CADDY_TOOL_SHA256="$CADDY_TOOL_ARCHIVE.sha256"
+CADDY_TOOL_WORK_DIR="$ROOT/dist/release-tools/caddy/darwin-$ARCH"
+CADDY_SOURCE=""
+CADDY_NOTICE_SOURCE_DIR=""
 SPARKLE_FEED_URL="$ONECONTEXT_SPARKLE_FEED_URL"
 SPARKLE_PUBLIC_ED_KEY="${ONECONTEXT_SPARKLE_PUBLIC_ED_KEY:-}"
 UPDATE_OPTIONAL_PROMPT_TITLE="$ONECONTEXT_UPDATE_OPTIONAL_PROMPT_TITLE"
@@ -59,6 +64,60 @@ codesign_release() {
   codesign "${args[@]}" "$@"
 }
 
+release_caddy_source() {
+  if [[ ! -f "$CADDY_TOOL_ARCHIVE" || ! -f "$CADDY_TOOL_SHA256" ]]; then
+    echo "Release-owned Caddy artifact is missing: $CADDY_TOOL_ARCHIVE" >&2
+    exit 1
+  fi
+
+  local expected_sha
+  local actual_sha
+  expected_sha="$(awk '{print $1}' "$CADDY_TOOL_SHA256")"
+  actual_sha="$(shasum -a 256 "$CADDY_TOOL_ARCHIVE" | awk '{print $1}')"
+  if [[ -z "$expected_sha" || "$actual_sha" != "$expected_sha" ]]; then
+    echo "Release-owned Caddy artifact checksum mismatch." >&2
+    echo "Expected: $expected_sha" >&2
+    echo "Actual:   $actual_sha" >&2
+    exit 1
+  fi
+
+  rm -rf "$CADDY_TOOL_WORK_DIR"
+  mkdir -p "$CADDY_TOOL_WORK_DIR"
+  tar -xzf "$CADDY_TOOL_ARCHIVE" -C "$CADDY_TOOL_WORK_DIR"
+  chmod 755 "$CADDY_TOOL_WORK_DIR/caddy"
+  CADDY_SOURCE="$CADDY_TOOL_WORK_DIR/caddy"
+  CADDY_NOTICE_SOURCE_DIR="$CADDY_TOOL_WORK_DIR"
+}
+
+resolve_caddy_source() {
+  if [[ "$ONECONTEXT_RELEASE_CHANNEL" == "dev" ]]; then
+    if [[ -n "${ONECONTEXT_CADDY_PATH:-}" ]]; then
+      CADDY_SOURCE="$ONECONTEXT_CADDY_PATH"
+      CADDY_NOTICE_SOURCE_DIR="$(dirname "$ONECONTEXT_CADDY_PATH")"
+      return
+    fi
+    if [[ -f "$CADDY_TOOL_ARCHIVE" && -f "$CADDY_TOOL_SHA256" ]]; then
+      release_caddy_source
+      return
+    fi
+    local host_caddy
+    host_caddy="$(type -P caddy 2>/dev/null || true)"
+    if [[ -n "$host_caddy" ]]; then
+      CADDY_SOURCE="$host_caddy"
+      CADDY_NOTICE_SOURCE_DIR="$(dirname "$host_caddy")"
+      return
+    fi
+    echo "Dev app build requires Caddy. Set ONECONTEXT_CADDY_PATH or add the release-owned Caddy artifact." >&2
+    exit 1
+  fi
+
+  if [[ -n "${ONECONTEXT_CADDY_PATH:-}" ]]; then
+    echo "Non-dev release channels must use the release-owned Caddy artifact, not ONECONTEXT_CADDY_PATH." >&2
+    exit 1
+  fi
+  release_caddy_source
+}
+
 swift build --package-path "$MACOS_DIR" -c release --arch "$ARCH"
 BIN_DIR="$(swift build --package-path "$MACOS_DIR" -c release --arch "$ARCH" --show-bin-path)"
 
@@ -76,8 +135,9 @@ if [[ ! -d "$BIN_DIR/Sparkle.framework" ]]; then
 fi
 ditto "$BIN_DIR/Sparkle.framework" "$FRAMEWORKS_DIR/Sparkle.framework"
 CADDY_BUNDLE_DIR="$RESOURCES_DIR/local-web/caddy"
+resolve_caddy_source
 if [[ -z "$CADDY_SOURCE" || ! -x "$CADDY_SOURCE" ]]; then
-  echo "Release app build requires a Caddy binary. Install caddy or set ONECONTEXT_CADDY_PATH." >&2
+  echo "App build requires an executable Caddy source: $CADDY_SOURCE" >&2
   exit 1
 fi
 mkdir -p "$CADDY_BUNDLE_DIR"
@@ -92,15 +152,12 @@ License: Apache-2.0
 Bundled by 1Context as the local web edge server so users do not need to
 install or manage a separate Caddy dependency.
 EOF
-if command -v brew >/dev/null 2>&1; then
-  CADDY_PREFIX="$(brew --prefix caddy 2>/dev/null || true)"
-  if [[ -n "$CADDY_PREFIX" ]]; then
-    for notice in LICENSE AUTHORS README.md sbom.spdx.json; do
-      if [[ -f "$CADDY_PREFIX/$notice" ]]; then
-        cp "$CADDY_PREFIX/$notice" "$CADDY_BUNDLE_DIR/$notice"
-      fi
-    done
-  fi
+if [[ -n "$CADDY_NOTICE_SOURCE_DIR" ]]; then
+  for notice in LICENSE AUTHORS README.md sbom.spdx.json; do
+    if [[ -f "$CADDY_NOTICE_SOURCE_DIR/$notice" ]]; then
+      cp "$CADDY_NOTICE_SOURCE_DIR/$notice" "$CADDY_BUNDLE_DIR/$notice"
+    fi
+  done
 fi
 ICONSET="$ROOT/dist/AppIcon.iconset"
 rm -rf "$ICONSET"
@@ -289,6 +346,17 @@ elif command -v codesign >/dev/null 2>&1; then
   codesign --force --sign - "$RESOURCES_DIR/1context-local-web-proxy" >/dev/null
   codesign --force --sign - "$MACOS_APP_DIR/1Context" >/dev/null
   codesign --force --sign - "$APP_DIR" >/dev/null
+fi
+
+if [[ "$ONECONTEXT_RELEASE_CHANNEL" != "dev" ]]; then
+  homebrew_path_report="$(mktemp /tmp/onecontext-homebrew-paths.XXXXXX)"
+  if grep -R -a -n -E '/opt/homebrew|/usr/local/Cellar|/Cellar/caddy' "$APP_DIR" >"$homebrew_path_report"; then
+    cat "$homebrew_path_report" >&2
+    rm -f "$homebrew_path_report"
+    echo "Non-dev app bundle contains Homebrew or host Caddy paths." >&2
+    exit 1
+  fi
+  rm -f "$homebrew_path_report"
 fi
 
 echo "$APP_DIR"

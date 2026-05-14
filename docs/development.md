@@ -98,9 +98,9 @@ keychain and `scripts/check-macos-release-credentials.sh` preflights Developer I
 signing, Sparkle signing, and the notary profile before any artifact is built.
 
 Release packaging validates that archives do not contain local owner/group
-metadata, AppleDouble files, local build paths, SwiftPM resource-bundle fallback
-paths, generated wiki render manifests, or generated markdown source files in
-the bundled user-wiki surface.
+metadata, AppleDouble files, Homebrew paths, local build paths, SwiftPM
+resource-bundle fallback paths, generated wiki render manifests, or generated
+markdown source files in the bundled user-wiki surface.
 
 Production packaging signs and notarizes both layers:
 
@@ -110,13 +110,9 @@ Production packaging signs and notarizes both layers:
    assessed with Gatekeeper.
 
 `scripts/package-macos-smoke.sh` is the only local unsigned package path. It is
-not a release command.
-
-The public Homebrew cask in `hapticasensorics/homebrew-tap` should point to the
-same versioned DMG and SHA as the GitHub release. Keep the cask marked
-`auto_updates true`: Sparkle owns app updates after installation, so Homebrew may
-retain an older Caskroom receipt after an in-app update even while
-`/Applications/1Context.app` and the linked `1context` command are current.
+not a release command. Prototype, private, and official channels must bundle
+their release-owned runtime inputs and must not install or resolve Homebrew
+packages while creating the shipped `.app` or DMG.
 
 The self-hosted Mac update proof is required for official releases that list it
 in `release/release.toml`. Private and official updater hops should be proved by

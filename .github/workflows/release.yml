@@ -17,25 +17,8 @@ jobs:
     environment: onecontext-update-runner
     steps:
       - uses: actions/checkout@v6
-      - name: Use Python with tomllib
-        shell: bash
-        run: |
-          if python3 -c 'import tomllib' >/dev/null 2>&1; then
-            python3 --version
-            exit 0
-          fi
-          brew install python
-          echo "$(brew --prefix)/bin" >> "$GITHUB_PATH"
-          "$(brew --prefix)/bin/python3" --version
-          "$(brew --prefix)/bin/python3" -c 'import tomllib'
       - name: Validate release manifest before credentials
         run: ./scripts/release-train.sh validate
-      - name: Install bundled web edge dependency
-        run: |
-          if ! command -v caddy >/dev/null 2>&1; then
-            brew install caddy
-          fi
-          caddy version
       - name: Prepare release keychain
         env:
           ONECONTEXT_RELEASE_KEYCHAIN: ${{ vars.ONECONTEXT_RELEASE_KEYCHAIN }}
@@ -47,8 +30,7 @@ jobs:
         run: |
           swift --version
           xcodebuild -version
-          brew --version
-          caddy version
+          python3 --version
           security find-identity -v -p codesigning
       - name: Check local release credentials
         env:
