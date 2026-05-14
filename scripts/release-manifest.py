@@ -73,6 +73,7 @@ REQUIRED_MATRIX_CASES = {
   "old_app_with_new_appcast",
   "app_relaunch_recovery",
   "login_restart_recovery",
+  "real_uninstall_reinstall",
 }
 REQUIRED_RELEASE_CHANNELS = {"dev", "prototype", "private", "official"}
 CHANNEL_APPCAST_MODES = {"none", "private", "public"}

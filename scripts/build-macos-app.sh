@@ -25,6 +25,7 @@ CADDY_VERSION="2.11.2"
 CADDY_TOOL_ARCHIVE="$ROOT/release/tools/caddy/darwin-$ARCH/caddy-v$CADDY_VERSION-darwin-$ARCH.tar.gz"
 CADDY_TOOL_SHA256="$CADDY_TOOL_ARCHIVE.sha256"
 CADDY_TOOL_WORK_DIR="$ROOT/dist/release-tools/caddy/darwin-$ARCH"
+MEMORY_RUNTIME_BUILD_DIR="$ROOT/dist/release-tools/memory-runtime"
 CADDY_SOURCE=""
 CADDY_NOTICE_SOURCE_DIR=""
 SPARKLE_FEED_URL="$ONECONTEXT_SPARKLE_FEED_URL"
@@ -159,6 +160,8 @@ if [[ -n "$CADDY_NOTICE_SOURCE_DIR" ]]; then
     fi
   done
 fi
+"$ROOT/scripts/build-memory-runtime-artifact.sh" >/dev/null
+ditto "$MEMORY_RUNTIME_BUILD_DIR" "$RESOURCES_DIR/memory-runtime"
 ICONSET="$ROOT/dist/AppIcon.iconset"
 rm -rf "$ICONSET"
 mkdir -p "$ICONSET"

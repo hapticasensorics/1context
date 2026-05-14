@@ -14,6 +14,7 @@ fi
 INFO="$APP/Contents/Info.plist"
 DAEMON_PLIST="$APP/Contents/Library/LaunchDaemons/com.haptica.1context.local-web-proxy.plist"
 MEMORY_CORE="$APP/Contents/Resources/memory-core"
+MEMORY_RUNTIME="$APP/Contents/Resources/memory-runtime"
 
 plutil -lint "$INFO" >/dev/null
 plutil -lint "$DAEMON_PLIST" >/dev/null
@@ -42,6 +43,39 @@ if [[ -e "$MEMORY_CORE" ]]; then
   echo "Packaged app must not include the memory-core source checkout." >&2
   exit 1
 fi
+if [[ ! -f "$MEMORY_RUNTIME/manifest.json" || ! -f "$MEMORY_RUNTIME/wiki-site/index.html" ]]; then
+  echo "Packaged app must include the allowlisted memory-runtime artifact." >&2
+  exit 1
+fi
+python3 - "$MEMORY_RUNTIME" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+root = Path(sys.argv[1])
+manifest = json.loads((root / "manifest.json").read_text(encoding="utf-8"))
+if manifest.get("schema_version") != "1context.memory-runtime.v1":
+    raise SystemExit("memory-runtime manifest schema mismatch")
+total_bytes = int(manifest.get("total_bytes") or 0)
+if total_bytes <= 0 or total_bytes > 262_144:
+    raise SystemExit(f"memory-runtime size outside contract: {total_bytes}")
+paths = {entry.get("path") for entry in manifest.get("files", [])}
+required = {
+    "wiki-site/index.html",
+    "wiki-site/your-context/index.html",
+    "wiki-site/for-you/index.html",
+    "wiki-site/__1context/health",
+    "wiki-site/api/wiki/search.json",
+    "wiki-site/api/wiki/bookmarks.json",
+    "wiki-site/api/wiki/state.json",
+}
+missing = sorted(required - paths)
+if missing:
+    raise SystemExit("memory-runtime missing files: " + ", ".join(missing))
+for path in root.rglob("*"):
+    if path.is_file() and path.suffix in {".py", ".pyc", ".sh", ".swift", ".ts", ".tsx", ".js", ".mjs", ".md"}:
+        raise SystemExit(f"memory-runtime contains source/script file: {path.relative_to(root)}")
+PY
 if find "$APP/Contents/Resources" -path '*/generated/*' -print -quit | grep -q .; then
   echo "Packaged app must not include generated wiki source output." >&2
   exit 1

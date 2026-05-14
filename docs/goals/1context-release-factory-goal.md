@@ -204,10 +204,10 @@ plugin tree. The factory must keep package-smoke checks that fail on
 
 ### Memory Runtime Reintroduction
 
-- [ ] Define the smallest memory runtime artifact contract.
-- [ ] Build that artifact from source at package time or CI time.
-- [ ] Package only allowlisted runtime files.
-- [ ] Add package smoke for runtime artifact contents, size, and absence of
+- [x] Define the smallest memory runtime artifact contract.
+- [x] Build that artifact from source at package time or CI time.
+- [x] Package only allowlisted runtime files.
+- [x] Add package smoke for runtime artifact contents, size, and absence of
   source checkout paths.
 
 ### Exit Criteria
@@ -476,3 +476,33 @@ plugin tree. The factory must keep package-smoke checks that fail on
   the original exit code. Regression proof: `scripts/test-release-train.sh`
   creates a tracked-file dirty fixture and asserts official dry-run build stops
   at `build-official-validate-preflight` with status `failed`.
+- 2026-05-13: Reintroduced memory runtime as a small release artifact instead
+  of a source checkout. `release/memory-runtime/CONTRACT.md` defines the
+  allowlist; `scripts/build-memory-runtime-artifact.sh` builds
+  `dist/release-tools/memory-runtime` from static HTML/JSON source, rejects
+  Python, Node, shell, markdown, package-manager files, generated directories,
+  local paths, dev goal routes, `memory-core`, `uv run`, and `npm ci`, and
+  writes `manifest.json` with file hashes and total size. `build-macos-app.sh`
+  copies that artifact into `Contents/Resources/memory-runtime`; the local web
+  publisher consumes `memory-runtime/wiki-site` when seeding the app-owned wiki
+  shell. Package smoke now requires the artifact, validates schema, required
+  files, and size, and still rejects `Contents/Resources/memory-core`. Proof:
+  `./scripts/build-memory-runtime-artifact.sh`, `swift test --package-path
+  macos`, `./scripts/test-release-train.sh`, `./scripts/package-macos-smoke.sh`,
+  `./scripts/test-launch-agent-package.sh`, `./scripts/test.sh`, and
+  `git diff --check`. The packaged artifact is 40 KB on disk and contains only
+  the allowlisted static wiki seed plus manifest.
+- 2026-05-13: Wired the official real-Mac proof to cover the remaining
+  uninstall/reinstall lane for the next tagged release. Official
+  `release-train.sh prove --runner-execute` now enables
+  `ONECONTEXT_RUN_UNINSTALL_REINSTALL_PROOF=1` and
+  `ONECONTEXT_UPDATE_RUNNER_ALLOW_DELETE_DATA=1`, while private proof skips the
+  destructive lane. The self-hosted runner proof now runs normal uninstall,
+  verifies a `~/1Context` sentinel survives, reinstalls the current release DMG,
+  restores Local Wiki Access through the real menu setup UI, verifies steady
+  state, then runs controlled `uninstall --delete-data --keep-app`, proves an
+  approved 1Context sentinel is removed while an adjacent non-1Context sentinel
+  survives, restores setup again, and emits
+  `proof-results/real_uninstall_reinstall.json`. This is implemented and
+  locally syntax/test verified, but the Channel Proof checkbox remains open
+  until a protected official tagged proof run downloads and blesses that JSON.

@@ -164,6 +164,19 @@ end tell
 APPLESCRIPT
 }
 
+click_settings_menu_item() {
+  local settings_item="$1"
+  osascript <<APPLESCRIPT
+tell application "System Events"
+  tell process "1Context"
+    click menu bar item 1 of menu bar 1
+    delay 0.5
+    click menu item "$settings_item" of menu 1 of menu item "Settings" of menu 1 of menu bar item 1 of menu bar 1
+  end tell
+end tell
+APPLESCRIPT
+}
+
 click_window_button() {
   local button_title="$1"
   osascript <<APPLESCRIPT

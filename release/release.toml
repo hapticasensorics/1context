@@ -223,3 +223,9 @@ case = "login_restart_recovery"
 expected_version = "0.1.72"
 proof = "real_uninstall_reinstall"
 description = "Login/restart recovery preserves setup state and avoids runtime pause."
+
+[[updater_matrix]]
+case = "real_uninstall_reinstall"
+expected_version = "0.1.72"
+proof = "real_uninstall_reinstall"
+description = "Official proof runs real uninstall without delete-data, reinstall from DMG, controlled delete-data with keep-app, and setup restoration."

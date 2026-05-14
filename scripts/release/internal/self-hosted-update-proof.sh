@@ -22,9 +22,13 @@ POLL_SECONDS="${ONECONTEXT_UPDATE_PROOF_POLL_SECONDS:-5}"
 STEADY_STATE_SECONDS="${ONECONTEXT_STEADY_STATE_SECONDS:-120}"
 STEADY_STATE_INTERVAL_SECONDS="${ONECONTEXT_STEADY_STATE_INTERVAL_SECONDS:-5}"
 LOGIN_RESTART_STEADY_STATE_SECONDS="${ONECONTEXT_LOGIN_RESTART_STEADY_STATE_SECONDS:-30}"
+UNINSTALL_REINSTALL_STEADY_STATE_SECONDS="${ONECONTEXT_UNINSTALL_REINSTALL_STEADY_STATE_SECONDS:-30}"
+RECOVERY_HEALTH_TIMEOUT_SECONDS="${ONECONTEXT_RECOVERY_HEALTH_TIMEOUT_SECONDS:-120}"
 RUNNER_SETUP_PREFLIGHT="${ONECONTEXT_RUNNER_SETUP_PREFLIGHT:-1}"
 ALLOW_NON_PUBLIC_FINAL_FEED="${ONECONTEXT_UPDATE_RUNNER_ALLOW_NON_PUBLIC_FINAL_FEED:-0}"
 RESTORE_PUBLIC_FINAL_FEED="${ONECONTEXT_UPDATE_RUNNER_RESTORE_PUBLIC_FINAL_FEED:-1}"
+RUN_UNINSTALL_REINSTALL_PROOF="${ONECONTEXT_RUN_UNINSTALL_REINSTALL_PROOF:-0}"
+ALLOW_DELETE_DATA_PROOF="${ONECONTEXT_UPDATE_RUNNER_ALLOW_DELETE_DATA:-0}"
 STAMP="$(date -u +%Y%m%dT%H%M%SZ)"
 EVIDENCE_DIR="${ONECONTEXT_SELF_HOSTED_UPDATE_EVIDENCE_DIR:-$ROOT/dist/self-hosted-update-proof/$STAMP}"
 DOWNLOAD_DIR="$EVIDENCE_DIR/downloads"
@@ -185,6 +189,15 @@ download_release_dmg() {
   DOWNLOADED_RELEASE_DMG="$output"
 }
 
+download_new_dmg() {
+  local output="$DOWNLOAD_DIR/1Context-$NEW_VERSION-macos-$ARCH.dmg"
+  if [[ -f "$output" ]]; then
+    DOWNLOADED_RELEASE_DMG="$output"
+    return
+  fi
+  download_release_dmg "$NEW_VERSION" "v$NEW_VERSION" "1Context-$NEW_VERSION-macos-$ARCH.dmg" "$output"
+}
+
 mount_dmg() {
   local dmg="$1"
   local plist="$EVIDENCE_DIR/hdiutil-attach.plist"
@@ -301,9 +314,13 @@ collect_host_snapshot() {
     echo "steady_state_seconds=$STEADY_STATE_SECONDS"
     echo "steady_state_interval_seconds=$STEADY_STATE_INTERVAL_SECONDS"
     echo "login_restart_steady_state_seconds=$LOGIN_RESTART_STEADY_STATE_SECONDS"
+    echo "uninstall_reinstall_steady_state_seconds=$UNINSTALL_REINSTALL_STEADY_STATE_SECONDS"
+    echo "recovery_health_timeout_seconds=$RECOVERY_HEALTH_TIMEOUT_SECONDS"
     echo "runner_setup_preflight=$RUNNER_SETUP_PREFLIGHT"
     echo "allow_non_public_final_feed=$ALLOW_NON_PUBLIC_FINAL_FEED"
     echo "restore_public_final_feed=$RESTORE_PUBLIC_FINAL_FEED"
+    echo "run_uninstall_reinstall_proof=$RUN_UNINSTALL_REINSTALL_PROOF"
+    echo "allow_delete_data_proof=$ALLOW_DELETE_DATA_PROOF"
     echo "evidence_dir=$EVIDENCE_DIR"
     echo
     sw_vers || true
@@ -392,7 +409,7 @@ bootstrap_user_launch_agent() {
 wait_for_recovery_health() {
   local output_dir="$1"
   local deadline
-  deadline=$(($(date +%s) + 45))
+  deadline=$(($(date +%s) + RECOVERY_HEALTH_TIMEOUT_SECONDS))
   local attempt=0
   while true; do
     attempt=$((attempt + 1))
@@ -408,6 +425,33 @@ wait_for_recovery_health() {
     fi
     sleep 2
   done
+}
+
+restore_setup_via_gui() {
+  local output_dir="$1"
+  mkdir -p "$output_dir"
+  open "$APP" >/dev/null 2>&1 || true
+  sleep 3
+  if "$APP/Contents/MacOS/1context-cli" diagnose > "$output_dir/diagnose-before-setup.txt" 2>&1 &&
+    grep -q "  Setup Ready: yes" "$output_dir/diagnose-before-setup.txt"; then
+    cp "$output_dir/diagnose-before-setup.txt" "$output_dir/diagnose-ready.txt"
+    return
+  fi
+
+  if ! click_settings_menu_item "Finish Setup..." >/dev/null 2>&1; then
+    click_settings_menu_item "Setup..." >/dev/null 2>&1 || true
+  fi
+  sleep 1
+  capture_windows "$output_dir/windows-setup.txt"
+  capture_accessibility "$output_dir/accessibility-setup.txt"
+  capture_screenshot "$output_dir/desktop-setup.png"
+  if grep -Fq "Grant" "$output_dir/accessibility-setup.txt"; then
+    click_window_button "Grant" >/dev/null 2>&1 || true
+  elif grep -Fq "Local Wiki Access is ready." "$output_dir/accessibility-setup.txt"; then
+    wait_for_recovery_health "$output_dir"
+    return
+  fi
+  wait_for_recovery_health "$output_dir"
 }
 
 prove_login_restart_recovery() {
@@ -431,9 +475,71 @@ prove_login_restart_recovery() {
   capture_process_state "login-restart-after"
 }
 
+prove_uninstall_reinstall() {
+  if [[ "$RUN_UNINSTALL_REINSTALL_PROOF" != "1" ]]; then
+    log "skipping uninstall/reinstall proof"
+    return
+  fi
+  if [[ "$ALLOW_DELETE_DATA_PROOF" != "1" ]]; then
+    fail "Refusing delete-data proof without ONECONTEXT_UPDATE_RUNNER_ALLOW_DELETE_DATA=1."
+  fi
+
+  log "proving real uninstall, reinstall, and controlled delete-data"
+  local proof_dir="$EVIDENCE_DIR/uninstall-reinstall"
+  mkdir -p "$proof_dir"
+  download_new_dmg
+  local new_dmg="$DOWNLOADED_RELEASE_DMG"
+
+  local preserved_dir="$HOME/1Context/release-factory-proof"
+  local preserved_sentinel="$preserved_dir/preserved-after-normal-uninstall.txt"
+  mkdir -p "$preserved_dir"
+  printf 'preserve sentinel %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$preserved_sentinel"
+  "$APP/Contents/MacOS/1context-cli" diagnose > "$proof_dir/diagnose-before-uninstall.txt" 2>&1 || true
+
+  "$APP/Contents/MacOS/1context-cli" uninstall > "$proof_dir/uninstall-keep-data.txt" 2>&1 || {
+    cat "$proof_dir/uninstall-keep-data.txt" >&2
+    fail "Normal uninstall failed. Evidence: $proof_dir/uninstall-keep-data.txt"
+  }
+  [[ ! -d "$APP" ]] || fail "Normal uninstall did not remove app bundle at $APP."
+  [[ -f "$preserved_sentinel" ]] || fail "Normal uninstall removed preserved user content sentinel."
+  capture_process_state "after-normal-uninstall"
+
+  install_app_from_dmg "$new_dmg" "$NEW_VERSION" "reinstall" "$APPCAST_URL"
+  restore_setup_via_gui "$proof_dir/setup-after-reinstall"
+  ONECONTEXT_APP="$APP" \
+  ONECONTEXT_STEADY_STATE_SECONDS="$UNINSTALL_REINSTALL_STEADY_STATE_SECONDS" \
+  ONECONTEXT_STEADY_STATE_INTERVAL_SECONDS="$STEADY_STATE_INTERVAL_SECONDS" \
+  ONECONTEXT_STEADY_STATE_EVIDENCE_DIR="$proof_dir/steady-state-after-reinstall" \
+    "$ROOT/scripts/release/internal/verify-macos-steady-state.sh"
+  [[ -f "$preserved_sentinel" ]] || fail "Reinstall did not preserve user content sentinel."
+
+  local delete_sentinel="$HOME/1Context/release-factory-delete-data-sentinel.txt"
+  local adjacent_sentinel="$HOME/Not1Context/release-factory-keep-sentinel.txt"
+  mkdir -p "$(dirname "$delete_sentinel")" "$(dirname "$adjacent_sentinel")"
+  printf 'delete sentinel %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$delete_sentinel"
+  printf 'keep sentinel %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$adjacent_sentinel"
+
+  "$APP/Contents/MacOS/1context-cli" uninstall --delete-data --keep-app > "$proof_dir/uninstall-delete-data-keep-app.txt" 2>&1 || {
+    cat "$proof_dir/uninstall-delete-data-keep-app.txt" >&2
+    fail "Delete-data uninstall failed. Evidence: $proof_dir/uninstall-delete-data-keep-app.txt"
+  }
+  [[ -d "$APP" ]] || fail "Delete-data keep-app uninstall removed the app bundle."
+  [[ ! -e "$delete_sentinel" ]] || fail "Delete-data uninstall preserved the approved user data sentinel."
+  [[ -f "$adjacent_sentinel" ]] || fail "Delete-data uninstall removed adjacent non-1Context sentinel."
+  capture_process_state "after-delete-data-uninstall"
+
+  restore_setup_via_gui "$proof_dir/setup-after-delete-data"
+  ONECONTEXT_APP="$APP" \
+  ONECONTEXT_STEADY_STATE_SECONDS="$UNINSTALL_REINSTALL_STEADY_STATE_SECONDS" \
+  ONECONTEXT_STEADY_STATE_INTERVAL_SECONDS="$STEADY_STATE_INTERVAL_SECONDS" \
+  ONECONTEXT_STEADY_STATE_EVIDENCE_DIR="$proof_dir/steady-state-after-delete-data-restore" \
+    "$ROOT/scripts/release/internal/verify-macos-steady-state.sh"
+  "$APP/Contents/MacOS/1context-cli" diagnose > "$proof_dir/diagnose-after-delete-data-restore.txt" 2>&1
+}
+
 write_proof_result() {
   mkdir -p "$EVIDENCE_DIR/proof-results"
-  python3 - "$EVIDENCE_DIR/proof-results" "$OLD_VERSION" "$NEW_VERSION" "$UPDATE_CLASS" <<'PY'
+  python3 - "$EVIDENCE_DIR/proof-results" "$OLD_VERSION" "$NEW_VERSION" "$UPDATE_CLASS" "$RUN_UNINSTALL_REINSTALL_PROOF" <<'PY'
 import datetime as dt
 import json
 import sys
@@ -443,6 +549,7 @@ proof_dir = Path(sys.argv[1])
 old_version = sys.argv[2]
 new_version = sys.argv[3]
 update_class = sys.argv[4]
+run_uninstall_reinstall = sys.argv[5] == "1"
 now = dt.datetime.now(dt.timezone.utc).isoformat()
 
 base = {
@@ -559,6 +666,29 @@ results = [
   },
 ]
 
+if run_uninstall_reinstall:
+  results.append({
+    **base,
+    "case": "real_uninstall_reinstall",
+    "ui_assertions": [
+      "setup_restored_after_reinstall",
+      "setup_restored_after_delete_data",
+    ],
+    "runtime_assertions": [
+      "normal_uninstall_removed_app_bundle",
+      "normal_uninstall_preserved_user_content",
+      "reinstall_from_dmg_restored_current_version",
+      "delete_data_removed_approved_1context_paths",
+      "delete_data_preserved_adjacent_non_1context_paths",
+      "runner_returned_to_setup_ready_steady_state",
+    ],
+    "artifact_paths": [
+      "uninstall-reinstall",
+      "processes-after-normal-uninstall.txt",
+      "processes-after-delete-data-uninstall.txt",
+    ],
+  })
+
 for result in results:
   output = proof_dir / f"{result['case']}.json"
   output.write_text(json.dumps(result, indent=2, sort_keys=True) + "\n", encoding="utf-8")
@@ -600,6 +730,7 @@ ONECONTEXT_STEADY_STATE_EVIDENCE_DIR="$EVIDENCE_DIR/steady-state" \
 ensure_final_app_uses_public_feed
 prove_already_current_manual_check
 prove_login_restart_recovery
+prove_uninstall_reinstall
 collect_final_logs
 write_proof_result
 

@@ -84,6 +84,7 @@ bash -n \
   "$ROOT/scripts/release/internal/lib-gui-evidence.sh" \
   "$ROOT/scripts/release/internal/prove-remote-sparkle-update.sh" \
   "$ROOT/scripts/release/internal/self-hosted-update-proof.sh" \
+  "$ROOT/scripts/build-memory-runtime-artifact.sh" \
   "$ROOT/scripts/write-runner-attestation.sh" \
   "$ROOT/scripts/package-macos-smoke.sh"
 python3 -m py_compile "$ROOT/scripts/release-manifest.py"
@@ -94,9 +95,11 @@ if ! /bin/bash "$ROOT/scripts/release-train.sh" validate > "$TMP_DIR/system-bash
 fi
 /bin/bash "$ROOT/scripts/release-train.sh" validate --channel dev >/dev/null
 ONECONTEXT_RELEASE_MANIFEST_FORCE_SIMPLE_TOML=1 "$ROOT/scripts/release-manifest.py" validate
-test "$("$ROOT/scripts/release-manifest.py" matrix-cases | wc -l | tr -d '[:space:]')" = "13"
+test "$("$ROOT/scripts/release-manifest.py" matrix-cases | wc -l | tr -d '[:space:]')" = "14"
 "$ROOT/scripts/release-manifest.py" matrix-cases | grep -q "^login_restart_recovery$"
+"$ROOT/scripts/release-manifest.py" matrix-cases | grep -q "^real_uninstall_reinstall$"
 grep -q '"case": "login_restart_recovery"' "$ROOT/scripts/release/internal/self-hosted-update-proof.sh"
+grep -q '"case": "real_uninstall_reinstall"' "$ROOT/scripts/release/internal/self-hosted-update-proof.sh"
 "$ROOT/scripts/release-manifest.py" write-fixture-proof-results --output-dir "$TMP_DIR/fixture-proof-results" > "$TMP_DIR/fixture-proof-results.out"
 test "$(find "$TMP_DIR/fixture-proof-results" -name '*.json' | wc -l | tr -d '[:space:]')" = "7"
 grep -q "^optional_prompt$" "$TMP_DIR/fixture-proof-results.out"
@@ -125,6 +128,10 @@ test -f "$ROOT/release/tools/caddy/darwin-arm64/caddy-v2.11.2-darwin-arm64.tar.g
   cd "$ROOT/release/tools/caddy/darwin-arm64"
   shasum -a 256 -c caddy-v2.11.2-darwin-arm64.tar.gz.sha256
 ) >/dev/null
+"$ROOT/scripts/build-memory-runtime-artifact.sh" >/dev/null
+test -f "$ROOT/dist/release-tools/memory-runtime/manifest.json"
+test -f "$ROOT/dist/release-tools/memory-runtime/wiki-site/index.html"
+grep -q '"schema_version": "1context.memory-runtime.v1"' "$ROOT/dist/release-tools/memory-runtime/manifest.json"
 
 MANDATORY_OK="$TMP_DIR/mandatory-ok.xml"
 MANDATORY_WITH_NOTES="$TMP_DIR/mandatory-with-notes.xml"
