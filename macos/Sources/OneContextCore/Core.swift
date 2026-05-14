@@ -1,10 +1,21 @@
+import Darwin
 import Foundation
 
 public let oneContextVersion = OneContextVersion.current()
 public let oneContextGitHubURL = URL(string: "https://github.com/hapticasensorics/1context")!
 
+public enum ProcessPrivilegePolicy {
+  public static func rejectsAppOwnedUserLifecycle(
+    effectiveUserID: uid_t = geteuid(),
+    inheritedSudoUser: String? = ProcessInfo.processInfo.environment["SUDO_USER"]
+  ) -> Bool {
+    _ = inheritedSudoUser
+    return effectiveUserID == 0
+  }
+}
+
 public enum OneContextVersion {
-  public static let fallback = "0.1.76"
+  public static let fallback = "0.1.77"
 
   public static func current(
     bundle: Bundle = .main,

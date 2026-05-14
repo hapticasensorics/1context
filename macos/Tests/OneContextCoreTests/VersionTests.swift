@@ -2,6 +2,21 @@ import XCTest
 @testable import OneContextCore
 
 final class VersionTests: XCTestCase {
+  func testPrivilegePolicyIgnoresStaleSudoEnvironmentForUserProcesses() {
+    XCTAssertFalse(
+      ProcessPrivilegePolicy.rejectsAppOwnedUserLifecycle(
+        effectiveUserID: 501,
+        inheritedSudoUser: "root"
+      )
+    )
+    XCTAssertTrue(
+      ProcessPrivilegePolicy.rejectsAppOwnedUserLifecycle(
+        effectiveUserID: 0,
+        inheritedSudoUser: nil
+      )
+    )
+  }
+
   func testVersionResolutionUsesMainBundleVersionBeforeFallback() {
     let version = OneContextVersion.resolve(
       bundleVersion: "1.2.3",

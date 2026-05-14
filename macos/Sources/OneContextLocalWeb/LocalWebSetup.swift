@@ -1,6 +1,7 @@
 import CryptoKit
 import Darwin
 import Foundation
+import OneContextCore
 import OneContextPlatform
 import ServiceManagement
 
@@ -652,7 +653,7 @@ public struct LocalWebSetupInstaller {
   }
 
   private func rejectRootInvocation() throws {
-    if geteuid() == 0 || ProcessInfo.processInfo.environment["SUDO_USER"] != nil {
+    if ProcessPrivilegePolicy.rejectsAppOwnedUserLifecycle() {
       throw LocalWebSetupInstallerError.rootUserUnsupported
     }
   }

@@ -210,7 +210,7 @@ public final class RuntimeController {
   }
 
   private func ensureNormalUserLifecycle() throws {
-    if geteuid() == 0 || ProcessInfo.processInfo.environment["SUDO_USER"] != nil {
+    if ProcessPrivilegePolicy.rejectsAppOwnedUserLifecycle() {
       throw RuntimeControlError.rootUserUnsupported
     }
   }

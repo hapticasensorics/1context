@@ -190,7 +190,7 @@ public final class LaunchAgentManager {
   }
 
   private func ensureNormalUserLifecycle() throws {
-    if geteuid() == 0 || ProcessInfo.processInfo.environment["SUDO_USER"] != nil {
+    if ProcessPrivilegePolicy.rejectsAppOwnedUserLifecycle() {
       throw RuntimeControlError.rootUserUnsupported
     }
   }

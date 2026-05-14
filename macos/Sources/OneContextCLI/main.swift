@@ -368,7 +368,7 @@ struct OneContextCLI {
   }
 
   static func rejectRootInvocationForAppCleanup() throws {
-    if geteuid() == 0 || ProcessInfo.processInfo.environment["SUDO_USER"] != nil {
+    if ProcessPrivilegePolicy.rejectsAppOwnedUserLifecycle() {
       throw CLIError.commandFailed("Run 1Context uninstall as your normal macOS user, not with sudo or as root.")
     }
   }

@@ -1,9 +1,12 @@
-# 1Context v0.1.76 Public Preview
+# 1Context v0.1.77 Public Preview
 
 This release includes:
 
-- `0.1.76` keeps the release factory moving after the public `0.1.75` train:
-  the official proof runner now treats setup restoration as a closed-loop GUI
+- `0.1.77` keeps the release factory moving after the public `0.1.76` train:
+  signed app setup now ignores stale runner `SUDO_USER` environment variables
+  when the app is actually running as the logged-in macOS user, so Local Wiki
+  Access can finish from the real setup window.
+- The official proof runner treats setup restoration as a closed-loop GUI
   workflow, captures each `Grant` / `Check Again` action, and keeps checking
   diagnose until Local Wiki Access and runtime health are actually restored.
 - Distributable `.app` and DMG builds reject Homebrew, host Caddy, local library
