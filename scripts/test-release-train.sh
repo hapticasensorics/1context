@@ -217,7 +217,7 @@ fi
 grep -q "./scripts/release-train.sh build --channel official" "$ROOT/.github/workflows/release.yml"
 grep -q "ONECONTEXT_REMOTE_APPCAST_GITHUB_REPO" "$ROOT/scripts/release-train.sh"
 grep -q "ONECONTEXT_REMOTE_APPCAST_GITHUB_REPO" "$ROOT/scripts/release/internal/prove-remote-sparkle-update.sh"
-if rg -n --glob '!test-release-train.sh' 'release-train\.sh package|ONECONTEXT_RUNTIME_ROOT|dev-runtime-env|with-dev-runtime|release/update-policy' \
+if rg -n --glob '!test-release-train.sh' 'release-train\.sh package|ONECONTEXT_RUNTIME_ROOT|ONECONTEXT_REMOTE_UPDATE_VALIDATE_REPO_POLICY|dev-runtime-env|with-dev-runtime|release/update-policy' \
   "$ROOT/.github" "$ROOT/scripts" "$ROOT/docs/README.md" "$ROOT/docs/development.md" "$ROOT/docs/macos-release-runbook.md" "$ROOT/docs/ci/self-hosted-mac-runner.md" "$ROOT/release" \
   > "$TMP_DIR/no-shim-scan.out"
 then

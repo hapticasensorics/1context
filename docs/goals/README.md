@@ -10,8 +10,8 @@ it into the installed app's `wiki-site/current` release site.
 Current goals:
 
 - [1Context Release Factory Goal](1context-release-factory-goal.md)
-- [1Context Delete Bloat Goal](1context-delete-bloat-goal.md)
 
 Archived goals:
 
+- [1Context Delete Bloat Goal](archive/1context-delete-bloat-goal.md)
 - [1Context Release Lockdown Goal](archive/1context-release-lockdown-goal.md)

@@ -10,6 +10,7 @@ APPCAST_GITHUB_REPO="${ONECONTEXT_REMOTE_APPCAST_GITHUB_REPO:-}"
 EXPECTED_NEW_VERSION="${ONECONTEXT_EXPECTED_NEW_VERSION:-$(tr -d '[:space:]' < "$ROOT/VERSION")}"
 EXPECTED_OLD_VERSION="${ONECONTEXT_EXPECTED_OLD_VERSION:-}"
 EXPECTED_UPDATE_CLASS="${ONECONTEXT_EXPECTED_UPDATE_CLASS:-mandatory}"
+MANIFEST_CHANNEL="${ONECONTEXT_REMOTE_UPDATE_MANIFEST_CHANNEL:-official}"
 KICK_MODE="${ONECONTEXT_UPDATE_PROOF_KICK_MODE:-relaunch}"
 TIMEOUT_SECONDS="${ONECONTEXT_UPDATE_PROOF_TIMEOUT_SECONDS:-360}"
 POLL_SECONDS="${ONECONTEXT_UPDATE_PROOF_POLL_SECONDS:-5}"
@@ -190,6 +191,7 @@ kick_update_check() {
   echo "expected_old_version=$EXPECTED_OLD_VERSION"
   echo "expected_new_version=$EXPECTED_NEW_VERSION"
   echo "expected_update_class=$EXPECTED_UPDATE_CLASS"
+  echo "manifest_channel=$MANIFEST_CHANNEL"
   echo "kick_mode=$KICK_MODE"
   echo "timeout_seconds=$TIMEOUT_SECONDS"
   echo "poll_seconds=$POLL_SECONDS"
@@ -200,11 +202,7 @@ kick_update_check() {
 log "fetching live appcast"
 fetch_live_appcast "$EVIDENCE_DIR/live-appcast.xml"
 validate_appcast "$EVIDENCE_DIR/live-appcast.xml"
-if [[ "${ONECONTEXT_REMOTE_UPDATE_VALIDATE_REPO_POLICY:-1}" == "1" ]]; then
-  "$ROOT/scripts/release-manifest.py" validate --appcast "$EVIDENCE_DIR/live-appcast.xml"
-else
-  log "skipping repo update-policy validation for staged appcast"
-fi
+"$ROOT/scripts/release-manifest.py" validate --channel "$MANIFEST_CHANNEL" --appcast "$EVIDENCE_DIR/live-appcast.xml"
 
 write_versions "$EVIDENCE_DIR/version-before.txt"
 capture_windows "$EVIDENCE_DIR/windows-before.txt"

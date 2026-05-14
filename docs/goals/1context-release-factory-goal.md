@@ -217,7 +217,7 @@ plugin tree. The factory must keep package-smoke checks that fail on
 - [ ] Official proof, audit, and bless pass from a clean tag.
 - [x] Prototype, private, and official build evidence proves no Homebrew or host
   dependency was used to produce the shipped `.app` or DMG.
-- [ ] The active docs, workflows, tests, and scripts have no old release command
+- [x] The active docs, workflows, tests, and scripts have no old release command
   or compatibility-shim references.
 
 ## Evidence Log
@@ -448,3 +448,7 @@ plugin tree. The factory must keep package-smoke checks that fail on
   steady-state verifier against menu, runtime, setup, and local web before it
   emits `proof-results/login_restart_recovery.json`. This is wired but still
   needs the next official tagged proof run before the exit box can be checked.
+- 2026-05-13: Archived the completed delete-bloat goal so active docs point to
+  the release-factory goal and manifest-driven runbook only. The old cleanup
+  file remains under `docs/goals/archive/` as historical evidence, not an
+  active release surface.

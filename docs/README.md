@@ -6,12 +6,10 @@ that operators and contributors should use.
 
 ## Start Here
 
-- [Delete Bloat Goal](goals/1context-delete-bloat-goal.md): active priority for
-  deleting old release paths, compatibility shims, stale docs, generated state,
-  and product test hooks before adding more release machinery.
 - [Release Factory Goal](goals/1context-release-factory-goal.md): active
   priority for channel-aware dev, prototype, private, and official release
-  builds with no backwards-compatible shims.
+  builds with no backwards-compatible shims, no Homebrew dependency for
+  distributable artifacts, and no revival of deleted release paths.
 - [macOS Release Runbook](macos-release-runbook.md): current release packaging,
   local proof, update policy, and self-hosted Mac proof guidance.
 - [Development And Release Notes](development.md): maintainer details for local
@@ -35,8 +33,10 @@ that operators and contributors should use.
 - [Self-hosted Mac Runner](ci/self-hosted-mac-runner.md): protected real-Mac
   updater proof for release hops that need installed-app evidence.
 - [Archived Release Lockdown Goal](goals/archive/1context-release-lockdown-goal.md):
-  historical Sparkle-transition evidence. Current release work belongs in the
-  delete-bloat goal and the manifest-driven runbook.
+  historical Sparkle-transition evidence.
+- [Archived Delete Bloat Goal](goals/archive/1context-delete-bloat-goal.md):
+  historical cleanup evidence. Current release work belongs in the release
+  factory goal and the manifest-driven runbook.
 - [Goals Folder](goals/README.md): policy for keeping operator goals out of the
   installed user wiki.
 
