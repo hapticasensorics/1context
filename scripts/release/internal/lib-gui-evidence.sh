@@ -255,9 +255,16 @@ tell application "System Events"
             set directFields to text fields of win
             if (count of directFields) > 0 then
               set passwordField to item -1 of directFields
+              try
+                set focused of passwordField to true
+              end try
               click passwordField
               delay 0.2
-              keystroke runnerPassword
+              try
+                set value of passwordField to runnerPassword
+              on error
+                keystroke runnerPassword
+              end try
               delay 0.2
               try
                 click button "Update Settings" of win
@@ -286,9 +293,16 @@ tell application "System Events"
           end repeat
           if (count of candidateFields) > 0 then
             set passwordField to item -1 of candidateFields
+            try
+              set focused of passwordField to true
+            end try
             click passwordField
             delay 0.2
-            keystroke runnerPassword
+            try
+              set value of passwordField to runnerPassword
+            on error
+              keystroke runnerPassword
+            end try
             delay 0.2
             try
               click button "Update Settings" of win
