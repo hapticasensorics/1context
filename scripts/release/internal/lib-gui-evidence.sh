@@ -7,7 +7,7 @@ tell application "System Events"
   set reportLines to {}
   repeat with proc in application processes
     set procName to name of proc
-    if procName contains "1Context" or procName contains "Sparkle" or procName contains "Updater" or procName contains "System Settings" then
+    if procName contains "1Context" or procName contains "Sparkle" or procName contains "Updater" or procName contains "System Settings" or procName contains "SecurityAgent" or procName contains "CoreServicesUIAgent" then
       repeat with win in windows of proc
         set end of reportLines to procName & tab & (name of win) & tab & (description of win)
       end repeat
@@ -26,7 +26,7 @@ tell application "System Events"
   set reportLines to {}
   repeat with proc in application processes
     set procName to name of proc
-    if procName contains "1Context" or procName contains "Sparkle" or procName contains "Updater" or procName contains "System Settings" then
+    if procName contains "1Context" or procName contains "Sparkle" or procName contains "Updater" or procName contains "System Settings" or procName contains "SecurityAgent" or procName contains "CoreServicesUIAgent" then
       set end of reportLines to "process=" & procName
       repeat with win in windows of proc
         set end of reportLines to "window=" & (name of win) & tab & (description of win)
@@ -219,7 +219,7 @@ set runnerPassword to system attribute "ONECONTEXT_UPDATE_RUNNER_ADMIN_PASSWORD"
 if runnerPassword is "" then return "no runner admin password configured"
 
 tell application "System Events"
-  set candidateProcesses to {"SecurityAgent", "CoreServicesUIAgent", "System Settings"}
+  set candidateProcesses to {"SecurityAgent", "CoreServicesUIAgent", "System Settings", "1Context"}
   repeat with procName in candidateProcesses
     if exists process (procName as text) then
       tell process (procName as text)
@@ -250,6 +250,14 @@ tell application "System Events"
       end tell
     end if
   end repeat
+  -- macOS authorization sheets can be frontmost but not enumerable through
+  -- the normal AX process tree on the runner. This helper is only called right
+  -- after clicking the app's setup Grant button, so a focused keystroke fallback
+  -- is scoped to setup restoration rather than normal Sparkle updates.
+  keystroke runnerPassword
+  delay 0.2
+  key code 36
+  return "submitted admin authorization prompt through focused fallback"
 end tell
 
 return "no admin authorization prompt found"
@@ -259,7 +267,7 @@ APPLESCRIPT
 dismiss_admin_authorization_prompt() {
   osascript <<'APPLESCRIPT'
 tell application "System Events"
-  set candidateProcesses to {"SecurityAgent", "CoreServicesUIAgent", "System Settings"}
+  set candidateProcesses to {"SecurityAgent", "CoreServicesUIAgent", "System Settings", "1Context"}
   repeat with procName in candidateProcesses
     if exists process (procName as text) then
       tell process (procName as text)
@@ -282,6 +290,8 @@ tell application "System Events"
       end tell
     end if
   end repeat
+  key code 53
+  return "dismissed admin authorization prompt through escape fallback"
 end tell
 
 return "no admin authorization prompt found"

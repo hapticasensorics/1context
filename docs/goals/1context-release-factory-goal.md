@@ -2,7 +2,7 @@
 
 Status: active
 Owner: Codex
-Target train: 0.1.67 through 0.1.82 unless the manifest says otherwise
+Target train: 0.1.67 through 0.1.83 unless the manifest says otherwise
 
 ## Purpose
 
@@ -72,7 +72,7 @@ gets slower, the timing artifact must explain the cost.
 - Official signed/notarized assets plus public audit: under 4 minutes.
 - Official standard proof and bless: under 6 minutes.
 - Official destructive uninstall/reinstall/delete-data proof and bless: under 10
-  minutes until the first full 0.1.82 measurement replaces this provisional cap.
+  minutes until the first full 0.1.83 measurement replaces this provisional cap.
 
 If a target is unrealistic, the release evidence should say why with stage timings
 instead of hiding the cost in a giant shell log.
@@ -566,3 +566,8 @@ plugin tree. The factory must keep package-smoke checks that fail on
   and could not type the setup password. `v0.1.82` walks AX elements instead,
   dismisses stale authorization sheets before a fresh run, and keeps the
   password scoped to setup restoration rather than the Sparkle update.
+- 2026-05-13: Official `v0.1.82` then proved the password sheet can still be
+  frontmost while hidden from the normal AX process tree. `v0.1.83` keeps the
+  process search but adds a focused keystroke fallback that runs only after the
+  setup `Grant` click, so the runner can finish first-setup authorization
+  without making the Sparkle update itself depend on sudo.

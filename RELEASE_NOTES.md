@@ -1,11 +1,12 @@
-# 1Context v0.1.82 Public Preview
+# 1Context v0.1.83 Public Preview
 
 This release includes:
 
-- `0.1.82` repairs the release-factory GUI proof for setup-only macOS
-  authorization prompts. The protected runner can now enter the setup password
-  when certificate trust settings require it, then continue to prove the actual
-  Sparkle update path.
+- `0.1.83` repairs the release-factory GUI proof for setup-only macOS
+  authorization prompts that are frontmost but not exposed through the normal
+  accessibility process tree. The protected runner can enter the setup password
+  after the setup `Grant` action, then continue to prove the actual Sparkle
+  update path.
 - The proof contract now explicitly preserves the product boundary: an already
   setup user should not need sudo or a fresh Local Wiki Access grant during an
   app update.
