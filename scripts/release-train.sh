@@ -342,11 +342,17 @@ time_release_step() {
   shift 2
   local started_epoch exit_code
   started_epoch="$(date +%s)"
-  if "$@"; then
+  set +e
+  (
+    set -euo pipefail
+    "$@"
+  )
+  exit_code=$?
+  set -e
+  if [[ "$exit_code" -eq 0 ]]; then
     write_step_timing "$stage" "$step" "passed" "$started_epoch"
     return 0
   else
-    exit_code=$?
     write_step_timing "$stage" "$step" "failed" "$started_epoch"
     return "$exit_code"
   fi

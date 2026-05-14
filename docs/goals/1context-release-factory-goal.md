@@ -40,6 +40,10 @@ manifest and evidence bundle.
   that creates a distributable `.app` or `.dmg`. Dev builds can use a developer
   machine; prototype, private, and official builds must use bundled, pinned, or
   release-owned inputs.
+- The distributable boundary is the artifact, not the script name. A dev-only
+  local app may be convenient, but any `.app` or DMG intended for testers,
+  private release, or official release must be self-contained and pass the
+  dependency audit.
 - No hidden dynamic-library or script-interpreter dependency on host package
   managers or language runtimes in distributable app bundles. The package audit
   must inspect Mach-O linkages and executable shebangs, not just grep readable
@@ -214,7 +218,7 @@ plugin tree. The factory must keep package-smoke checks that fail on
 - [x] `scripts/release-train.sh build --channel private` passes within target time.
 - [x] `scripts/release-train.sh build --channel official` passes within target time.
 - [x] Private proof passes on the self-hosted Mac runner.
-- [ ] Official proof, audit, and bless pass from a clean tag.
+- [x] Official proof, audit, and bless pass from a clean tag.
 - [x] Prototype, private, and official build evidence proves no Homebrew or host
   dependency was used to produce the shipped `.app` or DMG.
 - [x] The active docs, workflows, tests, and scripts have no old release command
@@ -452,3 +456,23 @@ plugin tree. The factory must keep package-smoke checks that fail on
   the release-factory goal and manifest-driven runbook only. The old cleanup
   file remains under `docs/goals/archive/` as historical evidence, not an
   active release surface.
+- 2026-05-13: Official `v0.1.72` passed the full public release-factory close.
+  The protected release workflow `25838276795` built, signed, notarized,
+  published, and audited official assets in 2 minutes 46 seconds. The protected
+  real-Mac proof workflow `25838404159` passed in 3 minutes 36 seconds, proving
+  the public `0.1.71 -> 0.1.72` Sparkle hop plus already-current manual check,
+  app relaunch recovery, old-app/new-appcast behavior, stale Sparkle defaults,
+  and login/restart recovery. `release-train.sh prove --channel official`
+  downloaded the runner artifacts, emitted the remaining fixture-owned matrix
+  proof JSON, and passed redaction audit. Reconstructed the official
+  `asset-manifest.json` from public GitHub release assets, redacted/audited the
+  evidence bundle, and `release-train.sh bless --channel official` passed for
+  `v0.1.72`.
+- 2026-05-13: Closed a release-factory failure-propagation bug found while
+  updating this goal. A dirty-tree official `bless` printed the clean-tree
+  preflight error but continued because Bash suppresses `set -e` inside
+  functions invoked through `if "$@"`. `time_release_step` now executes each
+  step in a strict subshell and records failed timing evidence before returning
+  the original exit code. Regression proof: `scripts/test-release-train.sh`
+  creates a tracked-file dirty fixture and asserts official dry-run build stops
+  at `build-official-validate-preflight` with status `failed`.

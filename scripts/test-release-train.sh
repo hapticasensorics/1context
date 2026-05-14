@@ -274,6 +274,19 @@ assert summary["step_count"] >= 2
 assert summary["budget_exceeded_count"] == 0
 assert any(step["step"] == "validate_preflight" for step in summary["slowest_steps"])
 PY
+dirty_fixture="$ROOT/.release-train-dirty-fixture"
+printf 'dirty release preflight fixture\n' > "$dirty_fixture"
+if ONECONTEXT_RELEASE_EVIDENCE_DIR="$TMP_DIR/dirty-official-build-evidence" \
+  "$ROOT/scripts/release-train.sh" build --channel official --dry-run \
+  > "$TMP_DIR/dirty-official-build.out" 2>&1
+then
+  rm -f "$dirty_fixture"
+  echo "official release build must fail before continuing when clean-tree preflight fails." >&2
+  exit 1
+fi
+rm -f "$dirty_fixture"
+grep -q "Release tree is dirty" "$TMP_DIR/dirty-official-build.out"
+grep -q '"status": "failed"' "$TMP_DIR/dirty-official-build-evidence/timings/steps/build-official-validate-preflight.json"
 if "$ROOT/scripts/release-train.sh" package > "$TMP_DIR/package-command.out" 2>&1; then
   echo "release-train package must not remain as a compatibility shim." >&2
   exit 1
