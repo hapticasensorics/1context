@@ -1,9 +1,14 @@
-# 1Context v0.1.69 Public Preview
+# 1Context v0.1.70 Public Preview
 
 This release includes:
 
-- `0.1.69` repairs post-update menu startup by letting the runtime restore the
-  menu LaunchAgent after a mandatory Sparkle update.
+- `0.1.70` promotes the release factory work to the official public channel
+  after the preview train proved mandatory Sparkle updates through `0.1.69`.
+- The app no longer relies on Homebrew or host Caddy for distributable `.app`
+  or DMG builds; release-owned bundled inputs are required for shipped
+  artifacts.
+- Mandatory update proof now accepts the healthy Sparkle-relaunched app state
+  while still requiring menu/runtime recovery evidence.
 - Release policy now defines build channels, timing budgets, and private
   appcast facts in `release/release.toml`.
 - The old `release-train.sh package` path is deleted; official release builds
