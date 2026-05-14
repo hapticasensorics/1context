@@ -2,11 +2,11 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-manifest_args=()
 if [[ -n "${ONECONTEXT_RELEASE_CHANNEL:-}" ]]; then
-  manifest_args=(--channel "$ONECONTEXT_RELEASE_CHANNEL")
+  eval "$("$ROOT/scripts/release-manifest.py" export-env --channel "$ONECONTEXT_RELEASE_CHANNEL")"
+else
+  eval "$("$ROOT/scripts/release-manifest.py" export-env)"
 fi
-eval "$("$ROOT/scripts/release-manifest.py" export-env "${manifest_args[@]}")"
 MACOS_DIR="$ROOT/macos"
 APP_DIR="$ROOT/dist/1Context.app"
 CONTENTS_DIR="$APP_DIR/Contents"
