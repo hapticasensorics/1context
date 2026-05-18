@@ -111,6 +111,10 @@ let package = Package(
     .testTarget(
       name: "OneContextWikiRuntimeTests",
       dependencies: ["OneContextWikiRuntime"]
+    ),
+    .testTarget(
+      name: "OneContextSupervisorTests",
+      dependencies: ["OneContextSupervisor"]
     )
   ]
 )

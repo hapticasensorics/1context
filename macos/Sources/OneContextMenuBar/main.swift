@@ -469,6 +469,7 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
         self.cachedRequiredSetupReady = readiness.requiredSetupReady
         guard readiness.requiredSetupReady else {
           self.setRuntimeState(.needsSetup)
+          self.ensureRuntimeRunning(userInitiated: userInitiated, force: force, requiredSetupReady: false)
           return
         }
         self.startLocalWebEdge(requiredSetupReady: true)
@@ -853,9 +854,8 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
   ) {
     guard !isRepairingRuntime else { return }
     let setupReady = requiredSetupReady ?? refreshRequiredSetupCache()
-    guard setupReady else {
+    if !setupReady {
       setRuntimeState(.needsSetup)
-      return
     }
     if !userInitiated && !force && !shouldRefreshRuntimeState() {
       return
@@ -876,25 +876,23 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
           try UnixJSONRPCClient().health()
         }
         guard health.version == oneContextVersion else {
-          _ = try await controller.restart(startMenu: false)
+          let restarted = try await controller.restart(startMenu: false)
           await MainActor.run {
-            self.setRuntimeState(.running)
+            self.applyRuntimeHealth(restarted, fallbackSetupReady: setupReady)
           }
           return
         }
         await MainActor.run {
-          self.setRuntimeState(.running)
-          self.startLocalWebEdge(requiredSetupReady: true)
+          self.applyRuntimeHealth(health, fallbackSetupReady: setupReady)
         }
         return
       } catch let error as UnixSocketError {
         switch error {
         case .connectFailed, .emptyResponse:
           do {
-            _ = try await controller.start(startMenu: false)
+            let started = try await controller.start(startMenu: false)
             await MainActor.run {
-              self.setRuntimeState(.running)
-              self.startLocalWebEdge(requiredSetupReady: true)
+              self.applyRuntimeHealth(started.health, fallbackSetupReady: setupReady)
             }
           } catch {
             await MainActor.run {
@@ -907,6 +905,16 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
       } catch {
         await self.markRuntimeNeedsAttention()
       }
+    }
+  }
+
+  private func applyRuntimeHealth(_ health: RuntimeHealth, fallbackSetupReady: Bool) {
+    let runtimeSetupReady = health.requiredSetupReady ?? fallbackSetupReady
+    if runtimeSetupReady {
+      setRuntimeState(.running)
+      startLocalWebEdge(requiredSetupReady: true)
+    } else {
+      setRuntimeState(.needsSetup)
     }
   }
 

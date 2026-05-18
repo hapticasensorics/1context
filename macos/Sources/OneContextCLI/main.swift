@@ -260,15 +260,18 @@ struct OneContextCLI {
     let plist = home.appendingPathComponent("Library/LaunchAgents/\(label).plist")
     let loaded = launchctlPrint(label: label)
     let loadedFields = loaded.map(launchctlFields) ?? [:]
+    let program = plistProgram(path: plist.path) ?? loadedFields["program"]
+    let matchingPIDs = program.map(processIDs(matchingExecutable:)) ?? []
 
     print("  \(label):")
     print("    Plist: \(displayPath(plist.path, redact: redact))")
     print("    Plist Exists: \(FileManager.default.fileExists(atPath: plist.path) ? "yes" : "no")")
-    print("    Plist Program: \(displayPath(plistProgram(path: plist.path) ?? "missing", redact: redact))")
+    print("    Plist Program: \(displayPath(program ?? "missing", redact: redact))")
     print("    Loaded: \(loaded == nil ? "no" : "yes")")
     print("    State: \(loadedFields["state"] ?? "missing")")
     print("    Loaded Program: \(displayPath(loadedFields["program"] ?? "missing", redact: redact))")
     print("    PID: \(loadedFields["pid"] ?? "missing")")
+    print("    Matching Processes: \(matchingPIDs.isEmpty ? "none" : matchingPIDs.joined(separator: ", "))")
     print("    Minimum Runtime: \(loadedFields["minimum runtime"] ?? "missing")")
     print("    Last Exit Code: \(loadedFields["last exit code"] ?? "missing")")
     print("    Last Signal: \(loadedFields["last terminating signal"] ?? "missing")")
@@ -309,6 +312,17 @@ struct OneContextCLI {
       return nil
     }
     return first
+  }
+
+  static func processIDs(matchingExecutable executable: String) -> [String] {
+    let pattern = NSRegularExpression.escapedPattern(for: executable)
+    let result = runCapture("/usr/bin/pgrep", ["-f", pattern])
+    guard result.status == 0 else { return [] }
+    return result.stdout.split(separator: "\n").map { pid in
+      String(pid).trimmingCharacters(in: .whitespaces)
+    }.filter {
+      !$0.isEmpty
+    }
   }
 
   static func printLogTail(title: String, path: String, lineCount: Int = 5, redact: Bool = false) {

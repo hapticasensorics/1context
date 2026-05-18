@@ -8,13 +8,43 @@ public struct LaunchAgentState {
   public let loaded: Bool
 }
 
-private typealias ProcessResult = (status: Int32, stdout: String, stderr: String)
+typealias ProcessResult = (status: Int32, stdout: String, stderr: String)
 
 public final class LaunchAgentManager {
   public static let runtimeLabel = "com.haptica.1context"
   public static let menuLabel = "com.haptica.1context.menu"
 
-  public init() {}
+  private let homeDirectory: URL
+  private let runtimePaths: RuntimePaths
+  private let uid: uid_t
+  private let isRootLifecycleRejected: @Sendable () -> Bool
+  private let processRunner: @Sendable (String, [String], TimeInterval) async -> ProcessResult
+
+  public convenience init() {
+    self.init(
+      homeDirectory: FileManager.default.homeDirectoryForCurrentUser,
+      runtimePaths: RuntimePaths.current(),
+      uid: getuid(),
+      isRootLifecycleRejected: { ProcessPrivilegePolicy.rejectsAppOwnedUserLifecycle() },
+      processRunner: { executable, arguments, timeout in
+        await LaunchAgentManager.runProcess(executable: executable, arguments: arguments, timeout: timeout)
+      }
+    )
+  }
+
+  init(
+    homeDirectory: URL,
+    runtimePaths: RuntimePaths,
+    uid: uid_t,
+    isRootLifecycleRejected: @escaping @Sendable () -> Bool,
+    processRunner: @escaping @Sendable (String, [String], TimeInterval) async -> ProcessResult
+  ) {
+    self.homeDirectory = homeDirectory
+    self.runtimePaths = runtimePaths
+    self.uid = uid
+    self.isRootLifecycleRejected = isRootLifecycleRejected
+    self.processRunner = processRunner
+  }
 
   public func status() async -> LaunchAgentState {
     let result = await launchctl(["print", agentTarget()])
@@ -107,12 +137,12 @@ public final class LaunchAgentManager {
   }
 
   private func launchAgentPath(label: String) -> URL {
-    FileManager.default.homeDirectoryForCurrentUser
+    homeDirectory
       .appendingPathComponent("Library/LaunchAgents/\(label).plist")
   }
 
   private func install(daemonPath: String) throws {
-    let paths = RuntimePaths.current()
+    let paths = runtimePaths
     try RuntimePermissions.ensurePrivateDirectory(paths.appSupportDirectory)
     try RuntimePermissions.ensurePrivateDirectory(paths.runDirectory)
     try RuntimePermissions.ensurePrivateDirectory(paths.logDirectory)
@@ -122,7 +152,7 @@ public final class LaunchAgentManager {
   }
 
   private func installMenu(appPath: String) throws {
-    let paths = RuntimePaths.current()
+    let paths = runtimePaths
     let menuLogPath = paths.logDirectory.appendingPathComponent("menu.log").path
     try RuntimePermissions.ensurePrivateDirectory(paths.logDirectory)
     _ = FileManager.default.createFile(atPath: menuLogPath, contents: nil)
@@ -177,7 +207,12 @@ public final class LaunchAgentManager {
       <key>RunAtLoad</key>
       <true/>
       <key>KeepAlive</key>
-      <false/>
+      <dict>
+        <key>SuccessfulExit</key>
+        <false/>
+        <key>Crashed</key>
+        <true/>
+      </dict>
       <key>ThrottleInterval</key>
       <integer>1</integer>
       <key>StandardOutPath</key>
@@ -190,13 +225,13 @@ public final class LaunchAgentManager {
   }
 
   private func ensureNormalUserLifecycle() throws {
-    if ProcessPrivilegePolicy.rejectsAppOwnedUserLifecycle() {
+    if isRootLifecycleRejected() {
       throw RuntimeControlError.rootUserUnsupported
     }
   }
 
   private func guiDomain() -> String {
-    "gui/\(getuid())"
+    "gui/\(uid)"
   }
 
   private func agentTarget() -> String {
@@ -204,7 +239,7 @@ public final class LaunchAgentManager {
   }
 
   private func launchctl(_ args: [String]) async -> ProcessResult {
-    await runProcess(executable: "/bin/launchctl", arguments: args, timeout: 2)
+    await processRunner("/bin/launchctl", args, 2)
   }
 
   private func launchAgentHasPID(_ output: String) -> Bool {
@@ -217,7 +252,7 @@ public final class LaunchAgentManager {
     _ = await launchctl(["kill", "TERM", "\(guiDomain())/\(Self.menuLabel)"])
   }
 
-  private func runProcess(executable: String, arguments: [String], timeout: TimeInterval) async -> ProcessResult {
+  private static func runProcess(executable: String, arguments: [String], timeout: TimeInterval) async -> ProcessResult {
     await withCheckedContinuation { continuation in
       let process = Process()
       let processBox = ProcessBox(process)
