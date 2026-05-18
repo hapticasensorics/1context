@@ -17,5 +17,5 @@ storage/lakestore/
 Create or refresh the tables with:
 
 ```bash
-uv run 1context storage init
+uv run --project memory-core 1context-memory-core storage init --json
 ```

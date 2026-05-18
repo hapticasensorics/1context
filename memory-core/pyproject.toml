@@ -13,8 +13,6 @@ dependencies = [
 ]
 
 [project.scripts]
-1context = "onectx.cli:main"
-onectx = "onectx.cli:main"
 1context-memory-core = "onectx.memory_core_cli:main"
 
 [build-system]

@@ -46,13 +46,10 @@ This is not "memory" in the agent-experience sense. It is storage: the stable
 local lake that memory systems, state machines, viewers, importers, and
 publishers can all use.
 
-Use:
+The app-facing storage command is deliberately narrow:
 
 ```bash
-uv run 1context storage init
-uv run 1context storage smoke
-uv run 1context storage search "daemon" --table events
-uv run 1context storage export --output apps/swim-lane-context-viewer/public/context.json
+uv run --project memory-core 1context-memory-core storage init --json
 ```
 
 The daemon also keeps small local cursor files under `storage/cursors/`. Those

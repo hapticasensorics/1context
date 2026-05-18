@@ -4,9 +4,9 @@ This directory contains the Python memory engine being integrated behind the
 public macOS shell.
 
 The public Swift app owns installation, lifecycle, diagnostics, permissions,
-hooks, and update behavior. The memory core owns storage semantics, wiki
-rendering, memory ticks, replay dry-runs, route planning, and future agentic
-memory logic.
+hooks, update behavior, wiki rendering, and wiki publication. The memory core
+owns storage semantics, memory ticks, replay dry-runs, route planning, and
+future agentic memory logic.
 
 The boundary is a subprocess contract. For local development:
 
@@ -20,8 +20,20 @@ The executable wrapper used by the Swift adapter is:
 memory-core/bin/1context-memory-core
 ```
 
-It accepts the narrow public command shapes documented in
-`docs/memory-core-contract.md` and wraps successful output as:
+It intentionally exposes only the narrow public command shapes needed by the
+app-facing subprocess contract:
+
+```text
+status --json
+storage init --json
+memory tick --wiki-only --json
+memory cycles list --json
+memory cycles show <cycle-id> --json
+memory cycles validate <cycle-id> --json
+memory replay-dry-run --start <ts> --end <ts> [--sources a,b] [--replay-run-id id] --json
+```
+
+Successful output is wrapped as:
 
 ```json
 {

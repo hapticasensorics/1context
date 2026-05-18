@@ -1,15 +1,20 @@
 from __future__ import annotations
 
-import contextlib
-import io
 import json
 import os
 import sys
 from pathlib import Path
 from typing import Any
 
-from onectx.cli import main as onectx_main
 from onectx.config import ConfigError, compile_system_map, load_system
+from onectx.memory.replay import ReplayError, run_replay_dry_run
+from onectx.memory.tick import (
+    MemoryTickError,
+    list_memory_cycles,
+    load_memory_cycle,
+    run_memory_tick,
+    validate_memory_cycle,
+)
 from onectx.storage import LakeStore, TABLE_ORDER, StorageError
 
 
@@ -56,14 +61,13 @@ def dispatch(args: list[str], *, root: Path) -> int:
         }))
         return 0
 
-    delegated_args = add_root_to_args(args, root)
-    rc, stdout, stderr = run_private_cli(delegated_args)
-    if rc != 0:
-        print_json(error_payload("command_failed", stderr.strip() or stdout.strip() or f"exit {rc}"))
-        return rc
-    parsed = parse_json(stdout)
-    print_json(ok_payload(".".join(args[:2]).replace(".--json", ""), parsed))
-    return 0
+    try:
+        command, result, exit_code = execute_allowed_shape(args, root=root)
+    except (MemoryTickError, ReplayError) as exc:
+        print_json(error_payload("command_failed", str(exc)))
+        return 1
+    print_json(ok_payload(command, result))
+    return exit_code
 
 
 def status_payload(root: Path) -> dict[str, Any]:
@@ -81,8 +85,63 @@ def status_payload(root: Path) -> dict[str, Any]:
     })
 
 
-def add_root_to_args(args: list[str], root: Path) -> list[str]:
-    return ["--root", str(root), *args]
+def execute_allowed_shape(args: list[str], *, root: Path) -> tuple[str, Any, int]:
+    system = load_system(root)
+
+    if args == ["memory", "tick", "--wiki-only", "--json"]:
+        result = run_memory_tick(system, wiki_only=True)
+        return "memory.tick", result.to_payload(), memory_tick_exit_code(result.status)
+
+    if args == ["memory", "cycles", "list", "--json"]:
+        cycles = list_memory_cycles(system, limit=20)
+        return "memory.cycles", {"cycles": [cycle.to_payload() for cycle in cycles]}, 0
+
+    if is_cycle_shape(args, "show"):
+        return "memory.cycles", load_memory_cycle(system, args[3]), 0
+
+    if is_cycle_shape(args, "validate"):
+        result = validate_memory_cycle(system, args[3])
+        return "memory.cycles", result.to_payload(), 0 if result.passed else 2
+
+    if len(args) >= 6 and args[:2] == ["memory", "replay-dry-run"] and args[-1] == "--json":
+        replay_args = parse_replay_args(args[2:-1])
+        result = run_replay_dry_run(system, **replay_args)
+        return "memory.replay-dry-run", result.to_payload(), 0
+
+    raise MemoryCoreContractError(f"unsupported memory-core command: {' '.join(args) or '(empty)'}")
+
+
+def memory_tick_exit_code(status: str) -> int:
+    if status in {"blocked", "retryable"}:
+        return 2
+    if status == "failed":
+        return 1
+    return 0
+
+
+def parse_replay_args(args: list[str]) -> dict[str, Any]:
+    parsed: dict[str, Any] = {
+        "start": "",
+        "end": "",
+        "sources": ("codex", "claude-code"),
+        "replay_run_id": "",
+    }
+    index = 0
+    while index < len(args):
+        option = args[index]
+        value = args[index + 1]
+        if option == "--start":
+            parsed["start"] = value
+        elif option == "--end":
+            parsed["end"] = value
+        elif option == "--sources":
+            parsed["sources"] = tuple(item.strip() for item in value.split(",") if item.strip())
+        elif option == "--replay-run-id":
+            parsed["replay_run_id"] = value
+        else:
+            raise MemoryCoreContractError(f"unsupported replay option: {option}")
+        index += 2
+    return parsed
 
 
 def is_allowed_parameterized_shape(args: list[str]) -> bool:
@@ -134,24 +193,6 @@ def safe_scalar(value: str) -> bool:
 def safe_identifier(value: str) -> bool:
     allowed = set("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._:-,")
     return safe_scalar(value) and value not in {".", ".."} and all(character in allowed for character in value)
-
-
-def run_private_cli(args: list[str]) -> tuple[int, str, str]:
-    stdout = io.StringIO()
-    stderr = io.StringIO()
-    with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
-        rc = onectx_main(args)
-    return int(rc or 0), stdout.getvalue(), stderr.getvalue()
-
-
-def parse_json(stdout: str) -> Any:
-    text = stdout.strip()
-    if not text:
-        return {}
-    try:
-        return json.loads(text)
-    except json.JSONDecodeError as exc:
-        raise MemoryCoreContractError(f"private CLI returned non-JSON output: {exc}") from exc
 
 
 def ok_payload(command: str, result: Any) -> dict[str, Any]:

@@ -84,12 +84,8 @@ store.append_artifact("talk_entry_file", path="memory/runtime/...")
 store.append_evidence("talk_entry.valid", artifact_id="artifact_...")
 ```
 
-The CLI is only an inspection/smoke door:
+The app-facing storage command only initializes the local tables:
 
 ```bash
-uv run 1context storage
-uv run 1context storage init
-uv run 1context storage smoke
-uv run 1context storage events
-uv run 1context storage search braided_lived_messages --table artifacts
+uv run --project memory-core 1context-memory-core storage init --json
 ```

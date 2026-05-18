@@ -87,18 +87,12 @@ same parser state. This matters for Codex rollouts, where `session_meta` can
 appear before the slice being resumed. This makes first backfill ordinary
 software: interruptible, repeatable, and proportional to the new work.
 
-Keep adapters idempotent. Running `uv run 1context daemon once` ten times
-should not duplicate imported rows. Session adapters also own cleanup: native
-Codex and Claude rows are reshaped into the same human-readable contract proven
-in the earlier prototype (`user`, `assistant`, `tool_use`, `tool_result`; Codex command
-envelopes stripped; large tool output collapsed; transient Claude plumbing
-tools ignored).
-
-In the live system this is clocked by the daemon:
-
-```bash
-uv run 1context daemon watch
-```
+Keep adapters idempotent. Repeated daemon ticks should not duplicate imported
+rows. Session adapters also own cleanup: native Codex and Claude rows are
+reshaped into the same human-readable contract proven in the earlier prototype
+(`user`, `assistant`, `tool_use`, `tool_result`; Codex command envelopes
+stripped; large tool output collapsed; transient Claude plumbing tools
+ignored).
 
 The default watch interval is five minutes. Each tick appends eligible new
 normalized events from the native transcript sources, observes raw session-log
@@ -113,12 +107,6 @@ The code mirrors the earlier prototype split:
 ```text
 src/onectx/ports/session_extract.py   pure native-log cleanup and shaping
 src/onectx/ports/sessions.py          file cursors, lake writes, summaries
-```
-
-For a source-controlled smoke run, use the plugin's mock lived-experience:
-
-```bash
-uv run 1context daemon --experience-source daemon-smoke
 ```
 
 For real local use, enable the relevant port and let the daemon read the native
