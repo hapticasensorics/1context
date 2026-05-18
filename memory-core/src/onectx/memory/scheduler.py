@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from onectx.config import MemorySystem
-from onectx.memory.wiki import evaluate_wiki_route_source_freshness
+from onectx.memory.source_freshness import evaluate_source_freshness
 from onectx.storage import LakeStore, stable_id, utc_now
 from onectx.storage.hour_events import format_ts, normalize_source, parse_ts
 
@@ -127,7 +127,7 @@ def plan_scheduler_tick(
 ) -> SchedulerPlan:
     normalized_sources = tuple(normalize_source(source) for source in sources if str(source).strip())
     now_dt = parse_scheduler_ts(now) if now is not None else None
-    freshness = evaluate_wiki_route_source_freshness(
+    freshness = evaluate_source_freshness(
         store,
         required_sources=normalized_sources,
         max_age_hours=max_source_age_hours,

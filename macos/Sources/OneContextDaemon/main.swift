@@ -6,6 +6,7 @@ import OneContextPlatform
 import OneContextProtocol
 import OneContextSetup
 import OneContextSupervisor
+import OneContextWikiRuntime
 
 nonisolated(unsafe) private var signalSocketPath: UnsafeMutablePointer<CChar>?
 nonisolated(unsafe) private var signalPIDPath: UnsafeMutablePointer<CChar>?
@@ -72,16 +73,31 @@ final class OneContextDaemon: @unchecked Sendable {
   private var listenFD: Int32 = -1
   private lazy var logger = Logger(path: paths.logPath)
   private lazy var localWeb = CaddyManager(runtimePaths: paths)
+  private lazy var wikiRenderCoordinator = WikiRenderCoordinator(
+    runtimePaths: paths,
+    rendererConfig: WikiEngineRendererConfig.discover(),
+    log: { [weak self] message in
+      self?.logger.write(message)
+    }
+  )
   private lazy var wikiAPI = WikiLocalAPIServer(
     config: WikiLocalAPIConfig(),
     handler: WikiLocalAPIHandler(paths: LocalWebPaths(runtimePaths: paths), renderState: { [weak self] in
       self?.wikiRenderState ?? "idle"
     })
   )
-  private let wikiQueue = DispatchQueue(label: "com.haptica.1context.wiki.publish")
-  private let wikiStateLock = NSLock()
-  private var wikiPreparing = false
-  private var wikiRefreshing = false
+  private lazy var wikiRenderQueue = WikiRenderQueue(
+    debounceInterval: 0.5,
+    failureBackoffInterval: 5,
+    render: { [weak self] request in
+      self?.performWikiRender(request) ?? WikiRenderQueueOutcome(
+        status: .failed,
+        dirtyPages: 0,
+        rendererDurationMilliseconds: 0,
+        error: "daemon unavailable"
+      )
+    }
+  )
 
   func run() throws {
     umask(0o077)
@@ -128,12 +144,21 @@ final class OneContextDaemon: @unchecked Sendable {
 
   private func prepareDirectories() throws {
     try RuntimePermissions.ensurePrivateDirectory(paths.userContentDirectory)
+    try RuntimePermissions.ensurePrivateDirectory(paths.userWikiDirectory)
+    try RuntimePermissions.ensurePrivateDirectory(paths.userWikiSourceDirectory)
+    try RuntimePermissions.ensurePrivateDirectory(paths.userWikiSiteDirectory)
+    try RuntimePermissions.ensurePrivateDirectory(paths.contextEngineDirectory)
+    try RuntimePermissions.ensurePrivateDirectory(paths.contextEngineIndexesDirectory)
     try RuntimePermissions.ensurePrivateDirectory(paths.appSupportDirectory)
+    try RuntimePermissions.ensurePrivateDirectory(paths.appSupportIndexesDirectory)
+    try RuntimePermissions.ensurePrivateDirectory(paths.lanceDBIndexDirectory)
+    try RuntimePermissions.ensurePrivateDirectory(paths.appSupportSetupDirectory)
     try RuntimePermissions.ensurePrivateDirectory(paths.runDirectory)
     try RuntimePermissions.ensurePrivateDirectory(paths.logDirectory)
     try RuntimePermissions.ensurePrivateDirectory(paths.cacheDirectory)
     try RuntimePermissions.ensurePrivateDirectory(paths.renderCacheDirectory)
     try RuntimePermissions.ensurePrivateDirectory(paths.downloadCacheDirectory)
+    _ = try WikiRuntimeDefaultsInstaller(runtimePaths: paths).installMissingDefaults()
     RuntimePermissions.repairRuntimePaths(paths)
     pruneCaches()
   }
@@ -331,18 +356,22 @@ final class OneContextDaemon: @unchecked Sendable {
   }
 
   private func wikiPayload(_ snapshot: LocalWebSnapshot) -> [String: Any] {
+    let renderSnapshot = wikiRenderQueue.snapshot()
     var payload: [String: Any] = [
       "running": snapshot.running,
       "url": snapshot.url,
       "route": snapshot.route,
       "health": snapshot.health,
-      "api": wikiAPIPayload()
+      "api": wikiAPIPayload(),
+      "render": wikiRenderPayload(renderSnapshot)
     ]
     if let pid = snapshot.pid {
       payload["pid"] = Int(pid)
     }
     if let lastError = snapshot.lastError {
       payload["lastError"] = lastError
+    } else if let renderError = renderSnapshot.history.last(where: { $0.status == .failed })?.error {
+      payload["lastError"] = renderError
     }
     return payload
   }
@@ -370,11 +399,9 @@ final class OneContextDaemon: @unchecked Sendable {
   }
 
   private func wikiStatus() -> LocalWebSnapshot {
-    if isWikiRefreshing {
-      return pendingWikiSnapshot(health: "refreshing")
-    }
-    if isWikiPreparing {
-      return pendingWikiSnapshot(health: "starting")
+    let renderSnapshot = wikiRenderQueue.snapshot()
+    if renderSnapshot.running || renderSnapshot.scheduled || renderSnapshot.pending {
+      return pendingWikiSnapshot(health: wikiHealth(for: renderSnapshot))
     }
     return localWeb.status()
   }
@@ -385,51 +412,61 @@ final class OneContextDaemon: @unchecked Sendable {
   }
 
   private func publishWikiInBackground(refresh: Bool) {
-    wikiStateLock.lock()
-    if wikiPreparing || wikiRefreshing {
-      wikiStateLock.unlock()
-      return
-    }
-    if refresh {
-      wikiRefreshing = true
-    } else {
-      wikiPreparing = true
-    }
-    wikiStateLock.unlock()
-
-    wikiQueue.async { [self] in
-      defer {
-        wikiStateLock.lock()
-        wikiPreparing = false
-        wikiRefreshing = false
-        wikiStateLock.unlock()
-      }
-      do {
-        try localWeb.ensurePlaceholderSite()
-        let snapshot = localWeb.status()
-        logger.write("wiki site ready refresh=\(refresh) url=\(snapshot.url)")
-      } catch {
-        logger.write("wiki site prepare failed refresh=\(refresh): \(error.localizedDescription)")
-      }
-    }
-  }
-
-  private var isWikiPreparing: Bool {
-    wikiStateLock.lock()
-    defer { wikiStateLock.unlock() }
-    return wikiPreparing
-  }
-
-  private var isWikiRefreshing: Bool {
-    wikiStateLock.lock()
-    defer { wikiStateLock.unlock() }
-    return wikiRefreshing
+    wikiRenderQueue.request(
+      trigger: refresh ? "wiki.refresh" : "wiki.prepare",
+      priority: refresh ? .manual : .automatic
+    )
   }
 
   private var wikiRenderState: String {
-    if isWikiRefreshing { return "refreshing" }
-    if isWikiPreparing { return "starting" }
-    return "idle"
+    let snapshot = wikiRenderQueue.snapshot()
+    guard snapshot.running || snapshot.scheduled || snapshot.pending else {
+      return "idle"
+    }
+    return wikiHealth(for: snapshot)
+  }
+
+  private func wikiHealth(for snapshot: WikiRenderQueueSnapshot) -> String {
+    if snapshot.backingOff { return "backoff" }
+    return snapshot.activeTrigger == "wiki.refresh" ? "refreshing" : "starting"
+  }
+
+  private func performWikiRender(_ request: WikiRenderQueueRequest) -> WikiRenderQueueOutcome {
+    let startedAt = Date()
+    do {
+      if request.trigger == "wiki.prepare" {
+        try localWeb.ensureStaticSupportFiles()
+      }
+
+      let result = wikiRenderCoordinator.renderAndPublish(trigger: request.trigger)
+      let duration = max(0, Int((Date().timeIntervalSince(startedAt) * 1_000).rounded()))
+      let snapshot = localWeb.status()
+      let skipped = result.message.contains("Skipped renderer; accepted inputs unchanged")
+      logger.write("wiki site ready trigger=\(request.trigger) status=\(result.status.rawValue) skipped=\(skipped) url=\(snapshot.url)")
+      if result.status == .failed {
+        return WikiRenderQueueOutcome(
+          status: .failed,
+          dirtyPages: 0,
+          rendererDurationMilliseconds: duration,
+          error: result.message
+        )
+      }
+      return WikiRenderQueueOutcome(
+        status: skipped ? .skipped : .published,
+        dirtyPages: skipped ? 0 : 1,
+        rendererDurationMilliseconds: duration,
+        skipReason: skipped ? "accepted_inputs_unchanged" : nil
+      )
+    } catch {
+      let duration = max(0, Int((Date().timeIntervalSince(startedAt) * 1_000).rounded()))
+      logger.write("wiki site prepare failed trigger=\(request.trigger): \(error.localizedDescription)")
+      return WikiRenderQueueOutcome(
+        status: .failed,
+        dirtyPages: 0,
+        rendererDurationMilliseconds: duration,
+        error: error.localizedDescription
+      )
+    }
   }
 
   private func wikiAPIPayload() -> [String: Any] {
@@ -442,6 +479,40 @@ final class OneContextDaemon: @unchecked Sendable {
     ]
     if let lastError = snapshot.lastError {
       payload["lastError"] = lastError
+    }
+    return payload
+  }
+
+  private func wikiRenderPayload(_ snapshot: WikiRenderQueueSnapshot) -> [String: Any] {
+    var payload: [String: Any] = [
+      "state": wikiRenderState,
+      "running": snapshot.running,
+      "scheduled": snapshot.scheduled,
+      "pending": snapshot.pending,
+      "accepted_count": snapshot.acceptedCount,
+      "coalesced_count": snapshot.coalescedCount,
+      "completed_count": snapshot.completedCount,
+      "failed_count": snapshot.failedCount,
+      "skipped_count": snapshot.skippedCount,
+      "max_concurrent_renders": snapshot.maxConcurrentRenders,
+      "backing_off": snapshot.backingOff,
+      "backoff_remaining_ms": snapshot.backoffRemainingMilliseconds
+    ]
+    if let activeTrigger = snapshot.activeTrigger {
+      payload["active_trigger"] = activeTrigger
+    }
+    if let last = snapshot.history.last {
+      payload["last"] = [
+        "trigger": last.trigger,
+        "priority": last.priority.rawValue,
+        "status": last.status.rawValue,
+        "queue_delay_ms": last.queueDelayMilliseconds,
+        "render_duration_ms": last.renderDurationMilliseconds,
+        "renderer_duration_ms": last.rendererDurationMilliseconds,
+        "dirty_pages": last.dirtyPages,
+        "skip_reason": (last.skipReason ?? NSNull()) as Any,
+        "error": (last.error ?? NSNull()) as Any
+      ]
     }
     return payload
   }

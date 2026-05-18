@@ -1,7 +1,10 @@
 .DS_Store
 *.log
 tmp/
+runtime-test/
 dist/
+.playwright-mcp/
+.tmp-wiki-browser-*/
 scripts/__pycache__/
 .vscode/
 macos/.build/
@@ -12,4 +15,4 @@ memory-core/memory/runtime/
 memory-core/wiki/generated/
 memory-core/wiki/menu/**/generated/
 memory-core/storage/lakestore/*.lance/
-memory-core/wiki-engine/node_modules/
+wiki-engine/node_modules/

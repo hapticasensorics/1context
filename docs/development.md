@@ -13,10 +13,11 @@ truth; this file keeps the supporting engineering details.
 
 ```text
 ~/1Context/
-  user-created wiki files and user-owned content
+  user-wiki/        readable wiki source, talk, templates, assets, and export
+  context-engine/   user-owned agent work, prompts, runs, ledgers, and manifests
 
 ~/Library/Application Support/1Context/
-  app/runtime state, config, indexes, sockets, queues, shipped wiki shell, and local web state
+  app/runtime state, config, sockets, queues, local web mirrors, and derived indexes
 
 ~/Library/Logs/1Context/
   logs and debug/support information
@@ -24,6 +25,10 @@ truth; this file keeps the supporting engineering details.
 ~/Library/Caches/1Context/
   disposable cache, safe to delete
 ```
+
+The production user-data contract lives in [user-data-spec.md](user-data-spec.md).
+The repo-local development mirror is described in
+[../runtime/README.md](../runtime/README.md).
 
 See [../PERMISSIONS.md](../PERMISSIONS.md) for the ownership, consent, and
 privacy contract used by the runtime and installer.
@@ -52,9 +57,9 @@ The CLI is intentionally not a setup or lifecycle control plane; setup stays in
 the app UI and redacted setup state is visible through `1context diagnose`.
 
 The menu bar owns Caddy lifetime. The daemon owns the local `/api/wiki/*`
-adapter and prepares the small placeholder wiki shell. Browser code should call
-relative `/api/wiki/*` routes so the same static site can run behind local Caddy
-today and cloud hosting later.
+adapter and the wiki refresh entrypoint. Browser code should call relative
+`/api/wiki/*` routes so the same static site can run behind local Caddy today
+and cloud hosting later.
 
 See [local-web-contract.md](local-web-contract.md) for the local-first web
 contract.
@@ -99,8 +104,8 @@ signing, Sparkle signing, and the notary profile before any artifact is built.
 
 Release packaging validates that archives do not contain local owner/group
 metadata, AppleDouble files, Homebrew paths, local build paths, SwiftPM
-resource-bundle fallback paths, generated wiki render manifests, or generated
-markdown source files in the bundled user-wiki surface.
+resource-bundle fallback paths, stale wiki manifests, or generated markdown
+source files in the bundled user-wiki surface.
 
 Production packaging signs and notarizes both layers:
 

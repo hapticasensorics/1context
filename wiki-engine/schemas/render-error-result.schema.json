@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://1context.local/schemas/wiki-engine/render-error-result.schema.json",
+  "title": "1Context Wiki Render Error Result",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "status",
+    "rendered_at",
+    "source_root",
+    "output",
+    "error"
+  ],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "status": { "const": "failed" },
+    "rendered_at": { "type": "string", "format": "date-time" },
+    "source_root": { "type": "string", "minLength": 1 },
+    "output": { "type": "string", "minLength": 1 },
+    "source_inputs": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "talk_inputs": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "source_input_count": { "type": "integer", "minimum": 0 },
+    "talk_input_count": { "type": "integer", "minimum": 0 },
+    "error": { "type": "string", "minLength": 1 }
+  },
+  "additionalProperties": false
+}

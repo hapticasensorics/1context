@@ -1,0 +1,189 @@
+import Foundation
+import OneContextPlatform
+
+public struct WikiEngineRendererConfig: Equatable, Sendable {
+  public var nodeExecutable: URL
+  public var engineDirectory: URL
+  public var renderTool: URL
+
+  public init(nodeExecutable: URL, engineDirectory: URL, renderTool: URL) {
+    self.nodeExecutable = nodeExecutable
+    self.engineDirectory = engineDirectory
+    self.renderTool = renderTool
+  }
+
+  public static func discover(environment: [String: String] = ProcessInfo.processInfo.environment) -> WikiEngineRendererConfig? {
+    guard let enginePath = environment["ONECONTEXT_WIKI_ENGINE_DIR"], !enginePath.isEmpty else {
+      return nil
+    }
+    let engine = URL(fileURLWithPath: enginePath, isDirectory: true)
+    let nodePath = environment["ONECONTEXT_NODE"] ?? "/usr/bin/env"
+    let nodeExecutable = URL(fileURLWithPath: nodePath)
+    return WikiEngineRendererConfig(
+      nodeExecutable: nodeExecutable,
+      engineDirectory: engine,
+      renderTool: engine.appendingPathComponent("tools/render-site.mjs")
+    )
+  }
+}
+
+public struct WikiEngineRenderSummary: Equatable, Sendable {
+  public var sourceInputs: Int
+  public var talkInputs: Int
+  public var routeCount: Int
+  public var markdownTwinCount: Int
+  public var outputDirectory: URL
+
+  public init(
+    sourceInputs: Int,
+    talkInputs: Int,
+    routeCount: Int,
+    markdownTwinCount: Int,
+    outputDirectory: URL
+  ) {
+    self.sourceInputs = sourceInputs
+    self.talkInputs = talkInputs
+    self.routeCount = routeCount
+    self.markdownTwinCount = markdownTwinCount
+    self.outputDirectory = outputDirectory
+  }
+}
+
+public enum WikiEngineRendererError: LocalizedError, Equatable {
+  case missingRenderTool(String)
+  case missingSourceRoot(String)
+  case renderFailed(input: String, detail: String)
+  case invalidResult(String)
+
+  public var errorDescription: String? {
+    switch self {
+    case .missingRenderTool(let path):
+      return "Missing wiki renderer tool: \(path)"
+    case .missingSourceRoot(let path):
+      return "Missing wiki source root: \(path)"
+    case .renderFailed(let input, let detail):
+      return "Wiki render failed for \(input): \(detail)"
+    case .invalidResult(let detail):
+      return "Wiki renderer returned an invalid result: \(detail)"
+    }
+  }
+}
+
+public final class WikiEngineRenderer: @unchecked Sendable {
+  private struct RenderSiteResult: Decodable {
+    var schema_version: Int
+    var status: String
+    var source_input_count: Int?
+    var talk_input_count: Int?
+    var route_count: Int?
+    var markdown_twin_count: Int?
+    var error: String?
+  }
+
+  private let config: WikiEngineRendererConfig
+  private let fileManager: FileManager
+
+  public init(config: WikiEngineRendererConfig, fileManager: FileManager = .default) {
+    self.config = config
+    self.fileManager = fileManager
+  }
+
+  public func render(runtimePaths: RuntimePaths, outputDirectory: URL) throws -> WikiEngineRenderSummary {
+    guard fileManager.fileExists(atPath: config.renderTool.path) else {
+      throw WikiEngineRendererError.missingRenderTool(config.renderTool.path)
+    }
+    guard fileManager.fileExists(atPath: runtimePaths.userWikiSourceDirectory.path) else {
+      throw WikiEngineRendererError.missingSourceRoot(runtimePaths.userWikiSourceDirectory.path)
+    }
+
+    if fileManager.fileExists(atPath: outputDirectory.path) {
+      try fileManager.removeItem(at: outputDirectory)
+    }
+    try RuntimePermissions.ensurePrivateDirectory(outputDirectory.deletingLastPathComponent())
+
+    let resultURL = outputDirectory
+      .appendingPathComponent(".1context", isDirectory: true)
+      .appendingPathComponent("render-site-result.json")
+    try runRenderSite(
+      sourceRoot: runtimePaths.userWikiSourceDirectory,
+      outputDirectory: outputDirectory,
+      resultURL: resultURL
+    )
+
+    let data = try Data(contentsOf: resultURL)
+    let result = try JSONDecoder().decode(RenderSiteResult.self, from: data)
+    guard result.schema_version == 1 else {
+      throw WikiEngineRendererError.invalidResult("unexpected schema_version \(result.schema_version)")
+    }
+    guard result.status == "published" else {
+      throw WikiEngineRendererError.renderFailed(
+        input: runtimePaths.userWikiSourceDirectory.path,
+        detail: result.error ?? "renderer status=\(result.status)"
+      )
+    }
+    guard
+      let sourceInputs = result.source_input_count,
+      let talkInputs = result.talk_input_count,
+      let routeCount = result.route_count,
+      let markdownTwinCount = result.markdown_twin_count
+    else {
+      throw WikiEngineRendererError.invalidResult("missing input, route, or markdown twin counts")
+    }
+
+    return WikiEngineRenderSummary(
+      sourceInputs: sourceInputs,
+      talkInputs: talkInputs,
+      routeCount: routeCount,
+      markdownTwinCount: markdownTwinCount,
+      outputDirectory: outputDirectory
+    )
+  }
+
+  private func runRenderSite(sourceRoot: URL, outputDirectory: URL, resultURL: URL) throws {
+    let process = Process()
+    if config.nodeExecutable.lastPathComponent == "env" {
+      process.executableURL = config.nodeExecutable
+      process.arguments = [
+        "node",
+        config.renderTool.path,
+        "--source-root",
+        sourceRoot.path,
+        "--output",
+        outputDirectory.path,
+        "--result-json",
+        resultURL.path
+      ]
+    } else {
+      process.executableURL = config.nodeExecutable
+      process.arguments = [
+        config.renderTool.path,
+        "--source-root",
+        sourceRoot.path,
+        "--output",
+        outputDirectory.path,
+        "--result-json",
+        resultURL.path
+      ]
+    }
+    process.currentDirectoryURL = config.engineDirectory
+    process.standardInput = FileHandle.nullDevice
+
+    let stdout = Pipe()
+    let stderr = Pipe()
+    process.standardOutput = stdout
+    process.standardError = stderr
+    try process.run()
+    process.waitUntilExit()
+
+    guard process.terminationStatus == 0 else {
+      let detail = [
+        String(data: stderr.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? "",
+        String(data: stdout.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
+      ]
+      .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+      .filter { !$0.isEmpty }
+      .joined(separator: "\n")
+      throw WikiEngineRendererError.renderFailed(input: sourceRoot.path, detail: detail)
+    }
+  }
+}

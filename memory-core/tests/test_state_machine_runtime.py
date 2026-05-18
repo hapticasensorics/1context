@@ -27,9 +27,9 @@ def test_runtime_selects_reader_surface_transition_from_compiled_ir() -> None:
     assert plan.transition_id == "memory_system_fabric.cycle.routing_wiki--wiki.agent_layer.closed--building_reader_surface"
     assert plan.source == {"scope": "cycle", "state": "routing_wiki"}
     assert plan.target == {"scope": "cycle", "state": "building_reader_surface"}
-    assert plan.summary["steps"] == ("run_wiki_reader_loop", "render_wiki_engine_families")
-    assert plan.summary["expects"] == ("reader_surface.ready",)
-    assert plan.summary["emits"] == ("memory.reader_surface.ready",)
+    assert plan.summary["steps"] == ("write_wiki_refresh_request", "notify_wiki_render_queue")
+    assert plan.summary["expects"] == ("wiki.refresh.requested",)
+    assert plan.summary["emits"] == ("wiki.refresh.requested",)
 
 
 def test_runtime_execution_reports_missing_expected_evidence() -> None:
@@ -43,14 +43,14 @@ def test_runtime_execution_reports_missing_expected_evidence() -> None:
         event_name="wiki.agent_layer.closed",
         target_state="building_reader_surface",
         status="failed",
-        completed_steps=("run_wiki_reader_loop", "render_wiki_engine_families"),
+        completed_steps=("write_wiki_refresh_request", "notify_wiki_render_queue"),
     )
 
-    assert execution.missing_expected_evidence == ("reader_surface.ready",)
+    assert execution.missing_expected_evidence == ("wiki.refresh.requested",)
     payload = execution.to_payload()
     assert payload["status"] == "failed"
     assert payload["target_state"] == "building_reader_surface"
-    assert payload["missing_expected_evidence"] == ["reader_surface.ready"]
+    assert payload["missing_expected_evidence"] == ["wiki.refresh.requested"]
 
 
 def test_runtime_persists_scope_state_for_restartable_cycles(tmp_path: Path) -> None:
@@ -60,7 +60,7 @@ def test_runtime_persists_scope_state_for_restartable_cycles(tmp_path: Path) -> 
         machine_id="memory_system_fabric",
         scope="cycle",
         source_state="building_reader_surface",
-        event_name="memory.reader_surface.ready",
+        event_name="wiki.refresh.requested",
         target_state="complete",
         status="passed",
         completed_steps=("append_cycle_summary_event",),
@@ -86,7 +86,7 @@ def test_runtime_persists_scope_state_for_restartable_cycles(tmp_path: Path) -> 
         key="cycle-001",
     )
     assert loaded["state"] == "complete"
-    assert loaded["transitions"][0]["event"] == "memory.reader_surface.ready"
+    assert loaded["transitions"][0]["event"] == "wiki.refresh.requested"
     assert loaded["history"][-1]["transitions"] == [
-        "memory_system_fabric.cycle.building_reader_surface--memory.reader_surface.ready--complete"
+        "memory_system_fabric.cycle.building_reader_surface--wiki.refresh.requested--complete"
     ]

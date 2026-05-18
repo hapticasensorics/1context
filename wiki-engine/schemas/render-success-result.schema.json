@@ -1,0 +1,61 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://1context.local/schemas/wiki-engine/render-success-result.schema.json",
+  "title": "1Context Wiki Render Success Result",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "status",
+    "rendered_at",
+    "source_root",
+    "output",
+    "route_manifest",
+    "content_index",
+    "route_count",
+    "markdown_twin_count",
+    "source_inputs",
+    "talk_inputs",
+    "source_input_count",
+    "talk_input_count",
+    "assets",
+    "logs"
+  ],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "status": { "const": "published" },
+    "rendered_at": { "type": "string", "format": "date-time" },
+    "source_root": { "type": "string", "minLength": 1 },
+    "output": { "type": "string", "minLength": 1 },
+    "route_manifest": { "const": ".1context/route-manifest.json" },
+    "content_index": { "const": ".1context/content-index.json" },
+    "route_count": { "type": "integer", "minimum": 1 },
+    "markdown_twin_count": { "type": "integer", "minimum": 1 },
+    "source_inputs": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "talk_inputs": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "source_input_count": { "type": "integer", "minimum": 0 },
+    "talk_input_count": { "type": "integer", "minimum": 0 },
+    "assets": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "logs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["input", "summary"],
+        "properties": {
+          "input": { "type": "string", "minLength": 1 },
+          "summary": { "type": "string" }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}

@@ -154,22 +154,47 @@ final class LocalWebTests: XCTestCase {
     }
   }
 
-  func testPlaceholderSiteUsesPlaceholderPagesInsteadOfGeneratedSourceWiki() throws {
+  func testStaticSupportFilesDoNotPublishPlaceholderPages() throws {
     let root = temporaryRoot()
     let paths = testRuntimePaths(root: root)
     let web = LocalWebPaths(runtimePaths: paths)
     let manager = CaddyManager(runtimePaths: paths)
 
-    try manager.ensurePlaceholderSite()
+    try manager.ensureStaticSupportFiles()
 
-    XCTAssertTrue(FileManager.default.fileExists(atPath: web.wikiCurrent.appendingPathComponent("your-context.html").path))
-    XCTAssertTrue(FileManager.default.fileExists(atPath: web.wikiCurrent.appendingPathComponent("for-you.html").path))
+    XCTAssertTrue(FileManager.default.fileExists(atPath: web.wikiCurrent.appendingPathComponent("__1context/health").path))
+    XCTAssertTrue(FileManager.default.fileExists(atPath: web.wikiCurrent.appendingPathComponent("api/wiki/search.json").path))
+    XCTAssertTrue(FileManager.default.fileExists(atPath: web.wikiCurrent.appendingPathComponent("api/wiki/bookmarks.json").path))
+    XCTAssertFalse(FileManager.default.fileExists(atPath: web.wikiCurrent.appendingPathComponent("index.html").path))
+    XCTAssertFalse(FileManager.default.fileExists(atPath: web.wikiCurrent.appendingPathComponent("your-context.html").path))
+    XCTAssertFalse(FileManager.default.fileExists(atPath: web.wikiCurrent.appendingPathComponent("for-you.html").path))
     XCTAssertFalse(FileManager.default.fileExists(atPath: web.wikiCurrent.appendingPathComponent("projects.html").path))
     XCTAssertFalse(FileManager.default.fileExists(atPath: web.wikiCurrent.appendingPathComponent("topics.html").path))
     XCTAssertFalse(FileManager.default.fileExists(atPath: web.wikiCurrent.appendingPathComponent("goal.html").path))
     XCTAssertFalse(FileManager.default.fileExists(atPath: web.wikiCurrent.appendingPathComponent("goal.md").path))
     XCTAssertFalse(FileManager.default.fileExists(atPath: web.wikiCurrent.appendingPathComponent("your-context.md").path))
     XCTAssertFalse(FileManager.default.fileExists(atPath: web.wikiCurrent.appendingPathComponent("render-manifest.json").path))
+  }
+
+  func testStaticSupportFilesPreserveLastGoodRenderedSite() throws {
+    let root = temporaryRoot()
+    let paths = testRuntimePaths(root: root)
+    let web = LocalWebPaths(runtimePaths: paths)
+    let manager = CaddyManager(runtimePaths: paths)
+    try writeString("last-good", to: web.wikiCurrent.appendingPathComponent("your-context.html"))
+    try writeString("last-good-md", to: web.wikiCurrent.appendingPathComponent("your-context.md"))
+
+    try manager.ensureStaticSupportFiles()
+
+    XCTAssertEqual(
+      try String(contentsOf: web.wikiCurrent.appendingPathComponent("your-context.html"), encoding: .utf8),
+      "last-good"
+    )
+    XCTAssertEqual(
+      try String(contentsOf: web.wikiCurrent.appendingPathComponent("your-context.md"), encoding: .utf8),
+      "last-good-md"
+    )
+    XCTAssertTrue(FileManager.default.fileExists(atPath: web.wikiCurrent.appendingPathComponent("__1context/health").path))
   }
 
   func testLocalHTTPSSetupSnapshotReflectsInstalledProxyAndTrust() {
@@ -296,7 +321,7 @@ final class LocalWebTests: XCTestCase {
         ["title": "Release Bones", "route": "/projects", "description": "Packaging and daemon work"]
       ]
     ]
-    try writeJSON(index, to: web.wikiCurrent.appendingPathComponent("content-index.json"))
+    try writeJSON(index, to: web.wikiCurrent.appendingPathComponent(".1context/content-index.json"))
 
     let handler = WikiLocalAPIHandler(paths: web)
     let response = handler.handle(WikiLocalAPIRequest(method: "GET", path: "/api/wiki/search", query: ["q": "french"]))
@@ -329,14 +354,41 @@ final class LocalWebTests: XCTestCase {
     XCTAssertEqual(rejected.statusCode, 413)
   }
 
-  func testWikiLocalAPIRejectsUnshippedChatRoutes() throws {
-    let web = LocalWebPaths(runtimePaths: testRuntimePaths(root: temporaryRoot()))
+  func testWikiLocalAPIRedactsBrowserVisibleLocalPaths() throws {
+    let root = temporaryRoot()
+    let web = LocalWebPaths(runtimePaths: testRuntimePaths(root: root))
     let handler = WikiLocalAPIHandler(paths: web)
 
-    let config = handler.handle(WikiLocalAPIRequest(method: "GET", path: "/api/wiki/chat/config"))
-    let chat = handler.handle(WikiLocalAPIRequest(method: "POST", path: "/api/wiki/chat", body: Data(#"{"message":"hello"}"#.utf8)))
+    let health = handler.handle(WikiLocalAPIRequest(method: "GET", path: "/api/wiki/health"))
+    let state = handler.handle(WikiLocalAPIRequest(method: "GET", path: "/api/wiki/state"))
+    let healthPayload = try XCTUnwrap(json(health))
+    let statePayload = try XCTUnwrap(json(state))
+    let storage = try XCTUnwrap(statePayload["_storage"] as? [String: Any])
+    let visibleAPIText = [
+      String(data: health.body, encoding: .utf8) ?? "",
+      String(data: state.body, encoding: .utf8) ?? ""
+    ].joined(separator: "\n")
+
+    XCTAssertEqual(healthPayload["current_site"] as? String, "app-support://wiki-site/current")
+    XCTAssertEqual(storage["uri"] as? String, "app-support://local-web/wiki-browser-state.json")
+    XCTAssertNil(storage["path"])
+    XCTAssertFalse(visibleAPIText.contains(root.path))
+    XCTAssertFalse(visibleAPIText.contains(NSHomeDirectory()))
+  }
+
+  func testWikiLocalAPIDoesNotExposeUnshippedChatRoutes() throws {
+    let web = LocalWebPaths(runtimePaths: testRuntimePaths(root: temporaryRoot()))
+    let handler = WikiLocalAPIHandler(paths: web)
+    let removedPrefix = "/api/wiki/" + "chat"
+
+    let config = handler.handle(WikiLocalAPIRequest(method: "GET", path: removedPrefix + "/config"))
+    let provider = handler.handle(WikiLocalAPIRequest(method: "POST", path: removedPrefix + "/provider", body: Data(#"{"provider":"auto"}"#.utf8)))
+    let reset = handler.handle(WikiLocalAPIRequest(method: "POST", path: removedPrefix + "/reset"))
+    let chat = handler.handle(WikiLocalAPIRequest(method: "POST", path: removedPrefix, body: Data(#"{"message":"hello"}"#.utf8)))
 
     XCTAssertEqual(config.statusCode, 404)
+    XCTAssertEqual(provider.statusCode, 404)
+    XCTAssertEqual(reset.statusCode, 404)
     XCTAssertEqual(chat.statusCode, 404)
   }
 
@@ -400,6 +452,11 @@ final class LocalWebTests: XCTestCase {
     try RuntimePermissions.ensurePrivateDirectory(url.deletingLastPathComponent())
     let data = try JSONSerialization.data(withJSONObject: payload, options: [.prettyPrinted, .sortedKeys])
     try RuntimePermissions.writePrivateData(data, to: url)
+  }
+
+  private func writeString(_ value: String, to url: URL) throws {
+    try RuntimePermissions.ensurePrivateDirectory(url.deletingLastPathComponent())
+    try RuntimePermissions.writePrivateData(Data(value.utf8), to: url)
   }
 
   private func json(_ response: WikiLocalAPIResponse) throws -> [String: Any]? {

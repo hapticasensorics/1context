@@ -50,6 +50,10 @@ let package = Package(
       dependencies: ["OneContextCore", "OneContextPlatform"]
     ),
     .target(
+      name: "OneContextWikiRuntime",
+      dependencies: ["OneContextPlatform"]
+    ),
+    .target(
       name: "OneContextSupervisor",
       dependencies: ["OneContextCore", "OneContextPlatform", "OneContextProtocol"]
     ),
@@ -59,7 +63,7 @@ let package = Package(
     ),
     .executableTarget(
       name: "OneContextDaemon",
-      dependencies: ["OneContextCore", "OneContextPlatform", "OneContextProtocol", "OneContextLocalWeb", "OneContextSetup", "OneContextSupervisor"]
+      dependencies: ["OneContextCore", "OneContextPlatform", "OneContextProtocol", "OneContextLocalWeb", "OneContextSetup", "OneContextSupervisor", "OneContextWikiRuntime"]
     ),
     .executableTarget(
       name: "OneContextLocalWebProxy"
@@ -103,6 +107,10 @@ let package = Package(
     .testTarget(
       name: "OneContextLocalWebTests",
       dependencies: ["OneContextLocalWeb"]
+    ),
+    .testTarget(
+      name: "OneContextWikiRuntimeTests",
+      dependencies: ["OneContextWikiRuntime"]
     )
   ]
 )

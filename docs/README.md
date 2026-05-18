@@ -6,6 +6,12 @@ that operators and contributors should use.
 
 ## Start Here
 
+- [Wiki Memory Runtime V0 Goal](goals/1context-wiki-memory-runtime-v0-goal.md):
+  active close-loop checklist for the user-owned wiki runtime, Swift publisher,
+  bundled renderer, local web proof, and future memory-core authoring surfaces.
+- [Delete Bloat Goal](goals/1context-delete-bloat-goal.md): active priority for
+  deleting old release paths, compatibility shims, stale docs, generated state,
+  and product test hooks before adding more release machinery.
 - [Release Factory Goal](goals/1context-release-factory-goal.md): active
   priority for channel-aware dev, prototype, private, and official release
   builds with no backwards-compatible shims, no Homebrew dependency for
@@ -25,6 +31,14 @@ that operators and contributors should use.
 - [Wiki Productionization Plan](wiki-productionization.html): where wiki source,
   default templates, generated files, and served local-web artifacts live in the
   repo and on an installed Mac.
+- [User Data Spec](user-data-spec.md): filesystem and persisted-data contract
+  for `~/1Context`, Application Support, first-run defaults, runtime mirrors,
+  templates, source families, talk files, ledgers, indexes, and static export.
+- [Wiki Memory Publication Contract](wiki-memory-publication-contract.md):
+  behavior contract for Python memory authoring, Swift publication, render
+  scheduling, proposal promotion, local APIs, and the bundled JS renderer.
+- [Repo Runtime Layout](../runtime/README.md): repo-local development mirror for
+  the production user-data and Application Support paths.
 - [Permissions](../PERMISSIONS.md): ownership, consent, storage, privacy, and
   diagnostic invariants.
 

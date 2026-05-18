@@ -28,6 +28,9 @@ CADDY_TOOL_WORK_DIR="$ROOT/dist/release-tools/caddy/darwin-$ARCH"
 MEMORY_RUNTIME_BUILD_DIR="$ROOT/dist/release-tools/memory-runtime"
 CADDY_SOURCE=""
 CADDY_NOTICE_SOURCE_DIR=""
+RUNTIME_DEFAULTS_WORK_DIR="$ROOT/dist/runtime-defaults"
+RUNTIME_DEFAULTS_RESOURCE_DIR="$RESOURCES_DIR/RuntimeDefaults"
+WIKI_ENGINE_RESOURCE_DIR="$RESOURCES_DIR/WikiEngine"
 SPARKLE_FEED_URL="$ONECONTEXT_SPARKLE_FEED_URL"
 SPARKLE_PUBLIC_ED_KEY="${ONECONTEXT_SPARKLE_PUBLIC_ED_KEY:-}"
 UPDATE_OPTIONAL_PROMPT_TITLE="$ONECONTEXT_UPDATE_OPTIONAL_PROMPT_TITLE"
@@ -162,6 +165,27 @@ if [[ -n "$CADDY_NOTICE_SOURCE_DIR" ]]; then
 fi
 "$ROOT/scripts/build-memory-runtime-artifact.sh" >/dev/null
 ditto "$MEMORY_RUNTIME_BUILD_DIR" "$RESOURCES_DIR/memory-runtime"
+
+rm -rf "$RUNTIME_DEFAULTS_WORK_DIR" "$RUNTIME_DEFAULTS_RESOURCE_DIR" "$WIKI_ENGINE_RESOURCE_DIR"
+mkdir -p "$RUNTIME_DEFAULTS_WORK_DIR" "$RUNTIME_DEFAULTS_RESOURCE_DIR" "$WIKI_ENGINE_RESOURCE_DIR"
+rsync -a \
+  --exclude '.gitkeep' \
+  --exclude 'README.md' \
+  "$ROOT/runtime/1Context/" \
+  "$RUNTIME_DEFAULTS_WORK_DIR/1Context/"
+python3 "$ROOT/scripts/materialize-wiki-pages.py" "$RUNTIME_DEFAULTS_WORK_DIR" >/dev/null
+node "$ROOT/wiki-engine/tools/render-site.mjs" \
+  --source-root "$RUNTIME_DEFAULTS_WORK_DIR/1Context/user-wiki/source" \
+  --output "$RUNTIME_DEFAULTS_WORK_DIR/1Context/user-wiki/site" \
+  --result-json "$RUNTIME_DEFAULTS_WORK_DIR/render-site-result.json" >/dev/null
+ditto "$RUNTIME_DEFAULTS_WORK_DIR/1Context" "$RUNTIME_DEFAULTS_RESOURCE_DIR/1Context"
+rsync -a \
+  --exclude 'node_modules' \
+  --exclude 'package-lock.json' \
+  --exclude 'README.md' \
+  "$ROOT/wiki-engine/" \
+  "$WIKI_ENGINE_RESOURCE_DIR/"
+
 ICONSET="$ROOT/dist/AppIcon.iconset"
 rm -rf "$ICONSET"
 mkdir -p "$ICONSET"

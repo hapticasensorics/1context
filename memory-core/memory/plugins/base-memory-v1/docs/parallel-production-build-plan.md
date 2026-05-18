@@ -317,7 +317,7 @@ and internal siblings.**
 
 Owner files:
 
-- `src/onectx/wiki/`
+- `src/onectx/memory/wiki.py` and `src/onectx/memory/wiki_authoring.py`
 - `src/onectx/memory/wiki.py` only for agreed integration hooks
 - `tests/test_wiki_tiers.py`
 
@@ -419,13 +419,13 @@ slice.** Tier reconciliation is encoded and tested, and curator apply can now
 promote a validated route artifact into a real source article with explicit
 operator approval, backups, snapshots, and ledger evidence. The remaining work
 is running a small live copied-workspace tick with Claude route hires, source
-promotion, wiki render, and invariant review in one command.
+promotion, wiki.refresh request, and invariant review in one command.
 
 ## Immediate Next Step
 
 - [ ] Run and harden the copied-workspace end-to-end tick:
   route row -> hired Claude artifact -> sandbox apply -> source promotion ->
-  wiki render -> runtime invariant report.
+  wiki.refresh request -> runtime invariant report.
 
 These are the best next code steps because migration receipts, validators, and
 replay sandboxing are now in place; sandboxed apply is the guard before real

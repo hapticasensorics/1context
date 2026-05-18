@@ -1,0 +1,125 @@
+schema_version = 1
+title = "1Context"
+source_dir = "source"
+site_dir = "site"
+templates_dir = "templates"
+assets_dir = "assets"
+
+[site]
+home_route = "/"
+missing_route_behavior = "diagnose"
+# V0 materializes only source-backed navigation. The fuller target map is
+# captured by primary_navigation, utility_navigation, and site_pages below.
+navigation = ["for-you", "your-context", "projects", "topics"]
+primary_navigation = ["for-you", "your-context", "projects", "topics"]
+utility_navigation = ["this-week", "open-questions"]
+
+[defaults]
+operator_name = "Operator"
+access_tier = "private"
+asset_base = "."
+home_href = "/"
+template_pack = "e08"
+
+[materialization]
+enabled = true
+create_talk = true
+overwrite_user_files = false
+
+[[site_pages]]
+id = "home"
+enabled = true
+title = "Home"
+kind = "generated"
+route = "/"
+template = "site/e08/index.md"
+summary = "Generated wiki home and orientation surface."
+nav_order = 0
+
+[[site_pages]]
+id = "this-week"
+enabled = false
+title = "This Week"
+kind = "generated"
+route = "/this-week"
+template = "site/e08/this-week.md"
+summary = "Generated digest of recent changes, decisions, and open work."
+nav_order = 90
+
+[[site_pages]]
+id = "open-questions"
+enabled = false
+title = "Open Questions"
+kind = "generated"
+route = "/open-questions"
+template = "site/e08/open-questions.md"
+summary = "Generated worklist from talk, proposals, diagnostics, and ledgers."
+nav_order = 100
+
+[[pages]]
+id = "for-you"
+enabled = true
+title = "For You"
+slug = "for-you"
+route = "/for-you"
+family_group = "for-you"
+family_group_title = "For You"
+family_id = "for-you"
+family_title = "For You"
+type = "for-you"
+template = "pages/e08/for-you.md"
+talk_conventions_template = "talk/conventions/for-you.md"
+talk_curator_template = "talk/curators/for-you.md"
+summary = "Current orientation, recent signals, and open loops."
+nav_order = 5
+
+[[pages]]
+id = "your-context"
+enabled = true
+title = "Your Context"
+slug = "your-context"
+route = "/your-context"
+family_group = "context"
+family_group_title = "Context"
+family_id = "your-context"
+family_title = "Your Context"
+type = "context-page"
+template = "pages/e08/your-context.md"
+talk_conventions_template = "talk/conventions/your-context.md"
+talk_curator_template = "talk/curators/your-context.md"
+summary = "Durable collaboration context, standing preferences, and operator guidance."
+nav_order = 10
+
+[[pages]]
+id = "projects"
+enabled = true
+title = "Projects"
+slug = "projects"
+route = "/projects"
+family_group = "work"
+family_group_title = "Work"
+family_id = "projects"
+family_title = "Projects"
+type = "project-index"
+template = "pages/e08/projects.md"
+talk_conventions_template = "talk/conventions/projects.md"
+talk_curator_template = "talk/curators/projects.md"
+summary = "Active, paused, completed, and archived work."
+nav_order = 20
+
+[[pages]]
+id = "topics"
+enabled = true
+title = "Topics"
+slug = "topics"
+route = "/topics"
+family_group = "reference"
+family_group_title = "Reference"
+family_id = "topics"
+family_title = "Topics"
+type = "topic-index"
+template = "pages/e08/topics.md"
+talk_conventions_template = "talk/conventions/topics.md"
+talk_curator_template = "talk/curators/topics.md"
+summary = "Named subjects, concepts, tools, people, and organizations."
+nav_order = 30

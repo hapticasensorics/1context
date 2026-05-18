@@ -12,14 +12,7 @@ from onectx.memory.invariants import (
     write_runtime_invariant_report_artifact,
 )
 from onectx.memory.migrations import MigrationError, run_contract_migrations
-from onectx.memory.wiki import (
-    WikiError as MemoryWikiError,
-    evaluate_wiki_route_source_freshness,
-    plan_wiki_roles,
-    preview_wiki_route_execution,
-    write_wiki_route_execution_artifact,
-)
-from onectx.memory.wiki_executor import execute_wiki_route_hires, promote_wiki_route_outputs
+from onectx.memory.source_freshness import evaluate_source_freshness
 from onectx.state_machines.runtime import (
     StateMachineRuntimeError,
     persist_scope_state,
@@ -28,12 +21,6 @@ from onectx.state_machines.runtime import (
 )
 from onectx.storage import LakeStore, stable_id, utc_now
 from onectx.storage.hour_events import normalize_source
-from onectx.wiki.evidence import record_render_evidence
-from onectx.wiki.families import WikiError as WikiEngineError
-from onectx.wiki.families import discover_families
-from onectx.wiki.render import render_family
-from onectx.wiki.routes import load_route_table
-from onectx.wiki.site import write_site_files
 
 
 FRESHNESS_CHECK_MODES = {"auto", "always", "skip"}
@@ -51,16 +38,18 @@ class MemoryTickError(RuntimeError):
 
 
 @dataclass(frozen=True)
+class RouteTableSummary:
+    manifests: tuple[dict[str, Any], ...] = ()
+    routes: tuple[dict[str, Any], ...] = ()
+
+
+@dataclass(frozen=True)
 class MemoryTickResult:
     cycle_id: str
     path: Path
     mode: str
     status: str
     dry_run: bool
-    planned_hire_count: int
-    non_hire_count: int
-    route_hire_count: int
-    route_hire_error_count: int
     render_count: int
     route_count: int
     manifest_count: int
@@ -76,10 +65,6 @@ class MemoryTickResult:
             "mode": self.mode,
             "status": self.status,
             "dry_run": self.dry_run,
-            "planned_hire_count": self.planned_hire_count,
-            "non_hire_count": self.non_hire_count,
-            "route_hire_count": self.route_hire_count,
-            "route_hire_error_count": self.route_hire_error_count,
             "render_count": self.render_count,
             "route_count": self.route_count,
             "manifest_count": self.manifest_count,
@@ -101,7 +86,6 @@ class MemoryCycleSummary:
     mode: str
     dry_run: bool
     created_at: str
-    planned_hire_count: int
     render_count: int
     manifest_count: int
     route_count: int
@@ -114,7 +98,6 @@ class MemoryCycleSummary:
             "mode": self.mode,
             "dry_run": self.dry_run,
             "created_at": self.created_at,
-            "planned_hire_count": self.planned_hire_count,
             "render_count": self.render_count,
             "manifest_count": self.manifest_count,
             "route_count": self.route_count,
@@ -145,19 +128,11 @@ def run_memory_tick(
     system: MemorySystem,
     *,
     wiki_only: bool,
-    workspace: Path | None = None,
-    concept_dir: Path | None = None,
-    audience: str = "private",
     sources: tuple[str, ...] = ("codex", "claude-code"),
     max_source_age_hours: int | None = None,
     require_fresh: bool = False,
     freshness_check: str = "auto",
     execute_render: bool = False,
-    execute_route_hires: bool = False,
-    route_hire_limit: int = 0,
-    route_hire_run_harness: bool = False,
-    promote_route_outputs: bool = False,
-    route_promotion_operator_approval: str = "",
     render_family_ids: tuple[str, ...] = (),
     include_talk: bool = True,
     record_evidence: bool = True,
@@ -167,8 +142,6 @@ def run_memory_tick(
 ) -> MemoryTickResult:
     if not wiki_only:
         raise MemoryTickError("only --wiki-only memory ticks are implemented")
-    if (workspace is None) != (concept_dir is None):
-        raise MemoryTickError("--workspace and --concept-dir must be supplied together")
 
     store = LakeStore(system.storage_dir)
     store.ensure()
@@ -180,21 +153,11 @@ def run_memory_tick(
     out_dir.mkdir(parents=True, exist_ok=True)
 
     steps: list[dict[str, Any]] = []
-    route_preview_payload: dict[str, Any] = {}
-    route_artifact_payload: dict[str, Any] = {}
-    route_hire_execution_payload: dict[str, Any] = {}
-    route_promotion_payload: dict[str, Any] = {}
     migration_payload: dict[str, Any] = {}
     freshness: dict[str, Any] = {}
-    planned_hire_count = 0
-    non_hire_count = 0
     migration_failures: list[dict[str, Any]] = []
     render_failures: list[dict[str, Any]] = []
-    route_hire_failures: list[dict[str, Any]] = []
-    route_promotion_failures: list[dict[str, Any]] = []
-    route_hire_execution = None
-    source_derived = bool(workspace and concept_dir)
-    should_check_freshness = freshness_check == "always" or (freshness_check == "auto" and source_derived)
+    should_check_freshness = freshness_check == "always"
     max_age_hours = int(
         max_source_age_hours
         if max_source_age_hours is not None
@@ -202,7 +165,7 @@ def run_memory_tick(
     )
 
     if should_check_freshness:
-        freshness = evaluate_wiki_route_source_freshness(
+        freshness = evaluate_source_freshness(
             store,
             required_sources=normalized_sources,
             max_age_hours=max_age_hours,
@@ -262,254 +225,73 @@ def run_memory_tick(
                         "retryable": False,
                     }
                 )
-    if workspace and concept_dir:
-        try:
-            plan = plan_wiki_roles(workspace=workspace, concept_dir=concept_dir, audience=audience)
-            preview = preview_wiki_route_execution(plan, freshness=freshness)
-            route_artifact = write_wiki_route_execution_artifact(system, preview)
-        except MemoryWikiError as exc:
-            raise MemoryTickError(str(exc)) from exc
-
-        route_preview_payload = preview.to_payload()
-        route_artifact_payload = route_artifact.to_payload()
-        planned_hire_count = preview.planned_hire_count
-        non_hire_count = preview.non_hire_count
-        steps.append(
-            {
-                "id": "wiki_route_dry_run",
-                "status": "passed",
-                "planned_hire_count": planned_hire_count,
-                "non_hire_count": non_hire_count,
-                "artifact_id": route_artifact.artifact_id,
-            }
-        )
-    else:
-        steps.append(
-            {
-                "id": "wiki_route_dry_run",
-                "status": "skipped",
-                "reason": "workspace and concept_dir were not supplied",
-            }
-        )
+    steps.append(
+        {
+            "id": "wiki_interface",
+            "status": "ready",
+            "reason": "Python wiki interface is limited to authoring records and Swift wiki.refresh requests",
+        }
+    )
 
     freshness_failed = preflight["source_freshness"]["status"] == "failed"
     freshness_required = bool(require_fresh and should_check_freshness)
     blocked = bool(freshness_required and freshness_failed)
-    if execute_route_hires:
-        if blocked:
-            steps.append(
-                {
-                    "id": "wiki_route_hires",
-                    "status": "blocked",
-                    "reason": "source import freshness failed",
-                }
-            )
-        elif not (workspace and concept_dir):
-            steps.append(
-                {
-                    "id": "wiki_route_hires",
-                    "status": "skipped",
-                    "reason": "workspace and concept_dir were not supplied",
-                }
-            )
-        else:
-            try:
-                route_hire_execution = execute_wiki_route_hires(
-                    system,
-                    plan,
-                    run_id=cycle,
-                    run_harness=route_hire_run_harness,
-                    limit=max(0, int(route_hire_limit)),
-                )
-                route_hire_execution_payload = route_hire_execution.to_payload()
-            except Exception as exc:  # noqa: BLE001 - tick records route-hire failures as explicit outcomes.
-                route_hire_failures.append(
-                    {
-                        "step": "wiki_route_hires",
-                        "error": str(exc),
-                        "retryable": True,
-                    }
-                )
-                steps.append(
-                    {
-                        "id": "wiki_route_hires",
-                        "status": "retryable" if retry_budget > 0 else "failed",
-                        "reason": str(exc),
-                    }
-                )
-            else:
-                if route_hire_execution.ok:
-                    steps.append(
-                        {
-                            "id": "wiki_route_hires",
-                            "status": "passed",
-                            "dry_run": route_hire_execution.dry_run,
-                            "spec_count": route_hire_execution.spec_count,
-                            "completed_count": route_hire_execution.completed_count,
-                            "error_count": route_hire_execution.error_count,
-                            "validation_failure_count": route_hire_execution.validation_failure_count,
-                            "max_concurrent_agents": route_hire_execution.max_concurrent,
-                        }
-                    )
-                    if promote_route_outputs:
-                        route_promotion = promote_wiki_route_outputs(
-                            system,
-                            plan,
-                            route_hire_execution,
-                            run_id=cycle,
-                            operator_approval=route_promotion_operator_approval,
-                        )
-                        route_promotion_payload = route_promotion.to_payload()
-                        if route_promotion.ok:
-                            steps.append(
-                                {
-                                    "id": "wiki_route_promotions",
-                                    "status": "passed",
-                                    "item_count": route_promotion.item_count,
-                                    "promoted_count": route_promotion.promoted_count,
-                                    "skipped_count": route_promotion.skipped_count,
-                                }
-                            )
-                        else:
-                            failed_items = [item for item in route_promotion.items if not item.ok]
-                            reason = (
-                                failed_items[0].failures[0]
-                                if failed_items and failed_items[0].failures
-                                else "route output promotion failed"
-                            )
-                            route_promotion_failures.append(
-                                {
-                                    "step": "wiki_route_promotions",
-                                    "error": reason,
-                                    "retryable": False,
-                                }
-                            )
-                            steps.append(
-                                {
-                                    "id": "wiki_route_promotions",
-                                    "status": "failed",
-                                    "reason": reason,
-                                    "item_count": route_promotion.item_count,
-                                    "promoted_count": route_promotion.promoted_count,
-                                    "blocked_count": route_promotion.blocked_count,
-                                    "failed_count": route_promotion.failed_count,
-                                }
-                            )
-                else:
-                    first_error = route_hire_execution.batch.errors[0] if route_hire_execution.batch.errors else {}
-                    reason = str(first_error.get("message") or "route hire output validation failed")
-                    route_hire_failures.append(
-                        {
-                            "step": "wiki_route_hires",
-                            "error": reason,
-                            "retryable": True,
-                        }
-                    )
-                    steps.append(
-                        {
-                            "id": "wiki_route_hires",
-                            "status": "retryable" if retry_budget > 0 else "failed",
-                            "reason": reason,
-                            "spec_count": route_hire_execution.spec_count,
-                            "completed_count": route_hire_execution.completed_count,
-                            "error_count": route_hire_execution.error_count,
-                            "validation_failure_count": route_hire_execution.validation_failure_count,
-                        }
-                    )
-    elif promote_route_outputs:
-        route_promotion_failures.append(
-            {
-                "step": "wiki_route_promotions",
-                "error": "--promote-route-outputs requires --execute-route-hires",
-                "retryable": False,
-            }
-        )
-        steps.append(
-            {
-                "id": "wiki_route_promotions",
-                "status": "failed",
-                "reason": "--promote-route-outputs requires --execute-route-hires",
-            }
-        )
     render_payloads: list[dict[str, Any]] = []
     render_evidence_payloads: list[dict[str, Any]] = []
     if blocked:
         steps.append({"id": "wiki_render", "status": "blocked", "reason": "source import freshness failed"})
     elif execute_render:
-        family_ids = render_family_ids or tuple(family.id for family in discover_families(system.root))
-        if not family_ids:
-            render_failures.append(
-                {
-                    "step": "wiki_render",
-                    "family_id": "",
-                    "error": "no wiki families discovered to render",
-                    "retryable": False,
-                }
-            )
-        for family_id in family_ids:
-            try:
-                render_result = render_family(system.root, family_id, include_talk=include_talk)
-            except WikiEngineError as exc:
-                render_failures.append(
-                    {
-                        "step": "wiki_render",
-                        "family_id": family_id,
-                        "error": str(exc),
-                        "retryable": True,
-                    }
-                )
-                break
-            render_payloads.append(render_result.to_payload(system.root))
-            if record_evidence:
-                render_evidence_payloads.append(record_render_evidence(system, render_result).to_payload())
-        if render_failures:
-            can_retry = retry_budget > 0 and any(bool(item.get("retryable")) for item in render_failures)
-            steps.append(
-                {
-                    "id": "wiki_render",
-                    "status": "retryable" if can_retry else "failed",
-                    "family_count": len(render_payloads),
-                    "failure_count": len(render_failures),
-                    "reason": render_failures[0]["error"],
-                }
-            )
-        else:
-            site_paths = write_site_files(system.root)
-            steps.append(
-                {
-                    "id": "wiki_render",
-                    "status": "passed",
-                    "family_count": len(family_ids),
-                    "site_files": [format_path(path, system.root) for path in site_paths],
-                }
-            )
+        render_request = {
+            "schema_version": 1,
+            "kind": "wiki.render_request",
+            "method": "wiki.refresh",
+            "transport": "daemon-jsonrpc",
+            "socket": "app-support://run/1context.sock",
+            "requested_at": utc_now(),
+            "render_family_ids": list(render_family_ids),
+            "include_talk": include_talk,
+            "record_evidence": record_evidence,
+        }
+        render_request_path = out_dir / "wiki-render-request.json"
+        render_request_path.write_text(json.dumps(render_request, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        render_payloads.append(
+            {
+                **render_request,
+                "path": format_path(render_request_path, system.root),
+            }
+        )
+        steps.append(
+            {
+                "id": "wiki_render",
+                "status": "requested",
+                "method": "wiki.refresh",
+                "path": format_path(render_request_path, system.root),
+            }
+        )
     else:
         steps.append({"id": "wiki_render", "status": "skipped", "reason": "execute_render=false"})
 
-    route_table = load_route_table(system.root)
+    route_table = RouteTableSummary()
     retryable = bool(
         retry_budget > 0
         and any(
             bool(item.get("retryable"))
-            for item in [*migration_failures, *render_failures, *route_hire_failures, *route_promotion_failures]
+            for item in [*migration_failures, *render_failures]
         )
     )
     if blocked:
         status = "blocked"
     elif retryable:
         status = "retryable"
-    elif migration_failures or render_failures or route_hire_failures or route_promotion_failures:
+    elif migration_failures or render_failures:
         status = "failed"
     else:
         status = "completed"
-    source_promoted = bool(route_promotion_payload.get("promoted_count"))
     dry_run = (
-        (not execute_render and not source_promoted)
+        not execute_render
         or blocked
         or bool(migration_failures)
         or bool(render_failures)
-        or bool(route_hire_failures)
-        or bool(route_promotion_failures)
     )
     recovery = {
         "status": status,
@@ -518,13 +300,9 @@ def run_memory_tick(
         "failure_count": (
             len(migration_failures)
             + len(render_failures)
-            + len(route_hire_failures)
-            + len(route_promotion_failures)
         ),
         "failures": [
             *migration_failures,
-            *route_hire_failures,
-            *route_promotion_failures,
             *render_failures,
         ],
         "next_action": recovery_next_action(status, retry_budget),
@@ -539,8 +317,6 @@ def run_memory_tick(
         render_count=len(render_payloads),
         manifest_count=len(route_table.manifests),
         route_count=len(route_table.routes),
-        route_plan_ready=bool(route_preview_payload) and not blocked and not migration_failures,
-        route_agent_layer_closed=not route_hire_failures and not route_promotion_failures,
     )
     invariant_report = build_runtime_invariant_report(
         run_id=cycle,
@@ -549,9 +325,6 @@ def run_memory_tick(
         dry_run=dry_run,
         preflight=preflight,
         steps=steps,
-        route_preview=route_preview_payload,
-        route_artifact=route_artifact_payload,
-        route_hire_execution=route_hire_execution_payload,
         render_count=len(render_payloads),
         manifest_count=len(route_table.manifests),
         route_count=len(route_table.routes),
@@ -590,9 +363,6 @@ def run_memory_tick(
             dry_run=dry_run,
             preflight=preflight,
             steps=steps,
-            route_preview=route_preview_payload,
-            route_artifact=route_artifact_payload,
-            route_hire_execution=route_hire_execution_payload,
             render_count=len(render_payloads),
             manifest_count=len(route_table.manifests),
             route_count=len(route_table.routes),
@@ -620,18 +390,10 @@ def run_memory_tick(
             "max_importer_staleness_hours": system.runtime_policy.get("max_importer_staleness_hours"),
         },
         "inputs": {
-            "workspace": str(workspace.resolve()) if workspace else "",
-            "concept_dir": str(concept_dir.resolve()) if concept_dir else "",
-            "audience": audience,
             "sources": list(normalized_sources),
             "freshness_check": freshness_check,
             "execute_migrations": execute_migrations,
             "execute_render": execute_render,
-            "execute_route_hires": execute_route_hires,
-            "route_hire_limit": max(0, int(route_hire_limit)),
-            "route_hire_run_harness": route_hire_run_harness,
-            "promote_route_outputs": promote_route_outputs,
-            "route_promotion_operator_approval_supplied": bool(route_promotion_operator_approval),
             "render_family_ids": list(render_family_ids),
             "include_talk": include_talk,
             "record_evidence": record_evidence,
@@ -643,10 +405,6 @@ def run_memory_tick(
         "recovery": recovery,
         "freshness": freshness,
         "contract_migrations": migration_payload,
-        "route_preview": route_preview_payload,
-        "route_artifact": route_artifact_payload,
-        "route_hire_execution": route_hire_execution_payload,
-        "route_promotion_execution": route_promotion_payload,
         "runtime_invariant_report": {
             **invariant_artifact.to_payload(),
             "summary": invariant_report.get("summary", {}),
@@ -662,18 +420,16 @@ def run_memory_tick(
         "dsl_contract": {
             "from_ir_contract": ir_contract["transition"],
             "reader_surface_evidence": [
+                "wiki.refresh.requested",
+                "wiki.render.queued",
                 "wiki.render.succeeded",
-                "wiki.manifest.recorded",
-                "wiki.generated.available",
-                "reader_surface.ready",
+            "wiki.manifest.recorded",
             ],
-            "route_evidence": [
-                "wiki_route_execution.preview_written",
-                "wiki_route_plan.ready",
+            "memory_evidence": [
+                "wiki_interface.authoring.available",
                 "source_import.fresh",
                 "contract_migrations.closed",
                 "runtime_invariants.passed",
-                "wiki_apply.source_promotion",
             ],
         },
     }
@@ -697,22 +453,13 @@ def run_memory_tick(
             "cycle_id": cycle,
             "mode": "wiki_only",
             "dry_run": dry_run,
-            "planned_hire_count": planned_hire_count,
-            "non_hire_count": non_hire_count,
-            "route_hire_count": int(route_hire_execution_payload.get("completed_count") or 0),
-            "route_hire_error_count": int(route_hire_execution_payload.get("error_count") or 0)
-            + int(route_hire_execution_payload.get("validation_failure_count") or 0),
-            "route_promotion_count": int(route_promotion_payload.get("promoted_count") or 0),
             "render_count": len(render_payloads),
             "route_count": len(route_table.routes),
             "manifest_count": len(route_table.manifests),
             "source_freshness_status": preflight["source_freshness"]["status"],
             "migration_status": migration_payload.get("status", "skipped"),
             "retry_budget": max(0, int(retry_budget)),
-            "failure_count": len(migration_failures)
-            + len(render_failures)
-            + len(route_hire_failures)
-            + len(route_promotion_failures),
+            "failure_count": len(migration_failures) + len(render_failures),
             "ir_contract": ir_contract["transition"],
         },
     )
@@ -772,20 +519,20 @@ def run_memory_tick(
     if execute_render and status == "completed":
         evidence_rows.append(
             store.append_evidence(
-                "reader_surface.ready",
+                "wiki.refresh.requested",
                 artifact_id=artifact_id,
-                status="passed" if route_table.manifests and route_table.routes else "failed",
+                status="passed" if render_payloads else "failed",
                 checker="memory.tick",
-                text="wiki reader surface has rendered manifests and routes",
+                text="wiki refresh request handed to Swift render queue",
                 checks=[
-                    "render command completed for requested families",
-                    "site manifest/content index written",
-                    "route table has at least one manifest and route",
+                    "memory-core wrote a wiki.refresh request",
+                    "request names the daemon JSON-RPC method",
+                    "renderer internals remain outside memory-core",
                 ],
                 payload={
                     "cycle_id": cycle,
-                    "manifest_count": len(route_table.manifests),
-                    "route_count": len(route_table.routes),
+                    "request_count": len(render_payloads),
+                    "requests": render_payloads,
                 },
             )
         )
@@ -803,12 +550,8 @@ def run_memory_tick(
         )
     else:
         dry_run_checks = ["cycle artifact written"]
-        dry_run_text = "wiki-only memory tick planned without executing renderer"
-        if route_hire_execution_payload:
-            dry_run_checks.append("route hired-agent dry-run births completed")
-            dry_run_text = "wiki-only memory tick planned and dry-ran route hired-agent births"
-        else:
-            dry_run_checks.append("no hired agents launched")
+        dry_run_text = "wiki-only memory tick planned without requesting wiki refresh"
+        dry_run_checks.append("no wiki render requested")
         evidence_rows.append(
             store.append_evidence(
                 "memory_tick.dry_run_planned",
@@ -842,16 +585,11 @@ def run_memory_tick(
             "cycle_id": cycle,
             "status": status,
             "dry_run": dry_run,
-            "planned_hire_count": planned_hire_count,
-            "non_hire_count": non_hire_count,
-            "route_hire_count": int(route_hire_execution_payload.get("completed_count") or 0),
-            "route_hire_error_count": int(route_hire_execution_payload.get("error_count") or 0)
-            + int(route_hire_execution_payload.get("validation_failure_count") or 0),
             "render_count": len(render_payloads),
             "route_count": len(route_table.routes),
             "manifest_count": len(route_table.manifests),
             "retryable": retryable,
-            "failure_count": len(migration_failures) + len(render_failures) + len(route_hire_failures),
+            "failure_count": len(migration_failures) + len(render_failures),
             "migration_status": migration_payload.get("status", "skipped"),
         },
     )
@@ -862,11 +600,6 @@ def run_memory_tick(
         mode="wiki_only",
         status=status,
         dry_run=dry_run,
-        planned_hire_count=planned_hire_count,
-        non_hire_count=non_hire_count,
-        route_hire_count=int(route_hire_execution_payload.get("completed_count") or 0),
-        route_hire_error_count=int(route_hire_execution_payload.get("error_count") or 0)
-        + int(route_hire_execution_payload.get("validation_failure_count") or 0),
         render_count=len(render_payloads),
         route_count=len(route_table.routes),
         manifest_count=len(route_table.manifests),
@@ -1009,8 +742,8 @@ def validate_memory_cycle(system: MemorySystem, cycle_id: str) -> MemoryCycleVal
     if payload.get("inputs", {}).get("execute_render") and payload.get("status") == "completed":
         add_check(
             checks,
-            "evidence.reader_surface_ready",
-            "reader_surface.ready" in evidence_ids,
+            "evidence.wiki_refresh_requested",
+            "wiki.refresh.requested" in evidence_ids,
             ",".join(sorted(evidence_ids)) or "no evidence",
         )
         ir_contract = payload.get("ir_contract") if isinstance(payload.get("ir_contract"), dict) else {}
@@ -1116,7 +849,7 @@ def validate_memory_cycle(system: MemorySystem, cycle_id: str) -> MemoryCycleVal
             checks,
             "state_machine_execution.terminal_complete",
             execution.get("terminal_state") == "complete"
-            and "memory_system_fabric.cycle.building_reader_surface--memory.reader_surface.ready--complete"
+            and "memory_system_fabric.cycle.building_reader_surface--wiki.refresh.requested--complete"
             in transition_ids,
             str(execution.get("terminal_state") or "missing"),
         )
@@ -1152,9 +885,6 @@ def cycle_summary_from_payload(path: Path, payload: dict[str, Any]) -> MemoryCyc
         mode=str(payload.get("mode") or ""),
         dry_run=bool(payload.get("dry_run")),
         created_at=str(payload.get("created_at") or ""),
-        planned_hire_count=int(payload.get("route_preview", {}).get("planned_hire_count") or 0)
-        if isinstance(payload.get("route_preview"), dict)
-        else 0,
         render_count=len(payload.get("renders") or []),
         manifest_count=int(route_table.get("manifest_count") or 0),
         route_count=int(route_table.get("route_count") or 0),
@@ -1202,37 +932,15 @@ def build_state_machine_execution(
     render_count: int,
     manifest_count: int,
     route_count: int,
-    route_plan_ready: bool = False,
-    route_agent_layer_closed: bool = True,
 ) -> dict[str, Any]:
     executions: list[Any] = []
     terminal_state = terminal_state_for_status(status)
     note = ""
-    initial_state = "validating" if route_plan_ready else READER_SURFACE_CONTRACT["source_state"]
-    if route_plan_ready:
-        try:
-            route_transition = record_transition_execution(
-                system,
-                machine_id=READER_SURFACE_CONTRACT["machine"],
-                scope=READER_SURFACE_CONTRACT["scope"],
-                source_state="validating",
-                event_name="memory.agent_outputs.closed",
-                target_state=READER_SURFACE_CONTRACT["source_state"],
-                status="passed",
-                produced_evidence=("wiki_route_plan.ready",),
-                completed_steps=("run_wiki_growth_fabric",),
-                emitted_events=("wiki.fabric.tick",),
-            )
-            executions.append(route_transition)
-            terminal_state = READER_SURFACE_CONTRACT["source_state"]
-        except StateMachineRuntimeError as exc:
-            note = str(exc)
-            terminal_state = "failed"
-
-    should_trace_reader = execute_render and route_agent_layer_closed and status in {"completed", "failed", "retryable"}
+    initial_state = READER_SURFACE_CONTRACT["source_state"]
+    should_trace_reader = execute_render and status in {"completed", "failed", "retryable"}
     if should_trace_reader:
-        reader_ready = bool(render_count and manifest_count and route_count)
-        produced_evidence = ("reader_surface.ready",) if reader_ready else ()
+        reader_ready = bool(render_count)
+        produced_evidence = ("wiki.refresh.requested",) if reader_ready else ()
         try:
             reader_transition = record_transition_execution(
                 system,
@@ -1243,8 +951,8 @@ def build_state_machine_execution(
                 target_state=READER_SURFACE_CONTRACT["target_state"],
                 status="passed" if reader_ready else "failed",
                 produced_evidence=produced_evidence,
-                completed_steps=("run_wiki_reader_loop", "render_wiki_engine_families"),
-                emitted_events=("memory.reader_surface.ready",) if reader_ready else (),
+                completed_steps=("write_wiki_refresh_request", "notify_wiki_render_queue"),
+                emitted_events=("wiki.refresh.requested",) if reader_ready else (),
             )
             executions.append(reader_transition)
             terminal_state = (
@@ -1258,7 +966,7 @@ def build_state_machine_execution(
                     machine_id=READER_SURFACE_CONTRACT["machine"],
                     scope=READER_SURFACE_CONTRACT["scope"],
                     source_state="building_reader_surface",
-                    event_name="memory.reader_surface.ready",
+                    event_name="wiki.refresh.requested",
                     target_state="complete",
                     status="passed",
                     completed_steps=("append_cycle_summary_event",),
@@ -1358,9 +1066,9 @@ def ir_contract_matches_reader_surface_transition(contract: dict[str, Any]) -> b
         and contract.get("event") == READER_SURFACE_CONTRACT["event"]
         and source.get("state") == READER_SURFACE_CONTRACT["source_state"]
         and target_payload.get("state") == READER_SURFACE_CONTRACT["target_state"]
-        and "run_wiki_reader_loop" in set(contract.get("steps") or [])
-        and "render_wiki_engine_families" in set(contract.get("steps") or [])
-        and "reader_surface.ready" in set(contract.get("expects") or [])
+        and "write_wiki_refresh_request" in set(contract.get("steps") or [])
+        and "notify_wiki_render_queue" in set(contract.get("steps") or [])
+        and "wiki.refresh.requested" in set(contract.get("expects") or [])
     )
 
 

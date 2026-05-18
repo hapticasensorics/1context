@@ -484,29 +484,26 @@ src/onectx/memory/wiki.py
   deterministic planner inputs, role route plans, route dry-runs,
   source freshness, and hired-agent preview artifacts
 
-src/onectx/wiki/
-  family discovery, source/talk folder scaffolding, rendering,
-  render manifests, local route tables, browser serving, and render evidence
+src/onectx/memory/wiki_authoring.py
+  route plans, talk appends, proposal/decision records, promotion receipts,
+  preview render requests, and daemon wiki.refresh requests
 
 wiki-engine/
-  portable renderer/theme/tools/schemas copied from the e08 wiki branch
+  portable renderer/theme/tools/schemas consumed by Swift, outside memory-core
 ```
 
-The state machines should not learn Node renderer internals. They should name
-the evidence produced by the renderer:
+The state machines should not learn renderer internals. They should name the
+handoff evidence produced by memory-core:
 
 ```text
-wiki.render.succeeded
-wiki.manifest.recorded
-wiki.generated.available
-wiki.render.completed
+wiki.refresh.requested
 ```
 
-This gives the DSL a concrete reader-surface gate without making it a template
-engine. `wiki_reader_loop` can say "build reader surface and wait for render
-evidence"; `wiki_growth_fabric` can say "after role mutations, rebuild the
-reader surface"; `memory_system_fabric` can say "a tick is not complete until
-the visible wiki output has been regenerated or intentionally skipped."
+This gives the DSL a concrete handoff gate without making it a template engine.
+`wiki_reader_loop` can say "build reader inputs and request publication";
+`wiki_growth_fabric` can say "after role mutations, request publication";
+`memory_system_fabric` can say "a tick is not complete until the Swift render
+queue has been asked to refresh or the request was intentionally skipped."
 
 Do not replace the planner CLI while integrating renderer commands. The public
 surface should be one additive `1context wiki` namespace:

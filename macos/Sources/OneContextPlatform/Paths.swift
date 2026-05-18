@@ -3,7 +3,15 @@ import Darwin
 
 public struct RuntimePaths {
   public let userContentDirectory: URL
+  public let userWikiDirectory: URL
+  public let userWikiSourceDirectory: URL
+  public let userWikiSiteDirectory: URL
+  public let contextEngineDirectory: URL
+  public let contextEngineIndexesDirectory: URL
   public let appSupportDirectory: URL
+  public let appSupportIndexesDirectory: URL
+  public let lanceDBIndexDirectory: URL
+  public let appSupportSetupDirectory: URL
   public let configPath: String
   public let runDirectory: URL
   public let socketPath: String
@@ -26,7 +34,15 @@ public struct RuntimePaths {
   ) {
     let runDirectory = appSupportDirectory.appendingPathComponent("run", isDirectory: true)
     self.userContentDirectory = userContentDirectory
+    self.userWikiDirectory = userContentDirectory.appendingPathComponent("user-wiki", isDirectory: true)
+    self.userWikiSourceDirectory = self.userWikiDirectory.appendingPathComponent("source", isDirectory: true)
+    self.userWikiSiteDirectory = self.userWikiDirectory.appendingPathComponent("site", isDirectory: true)
+    self.contextEngineDirectory = userContentDirectory.appendingPathComponent("context-engine", isDirectory: true)
+    self.contextEngineIndexesDirectory = self.contextEngineDirectory.appendingPathComponent("indexes", isDirectory: true)
     self.appSupportDirectory = appSupportDirectory
+    self.appSupportIndexesDirectory = appSupportDirectory.appendingPathComponent("indexes", isDirectory: true)
+    self.lanceDBIndexDirectory = self.appSupportIndexesDirectory.appendingPathComponent("lancedb", isDirectory: true)
+    self.appSupportSetupDirectory = appSupportDirectory.appendingPathComponent("setup", isDirectory: true)
     self.configPath = appSupportDirectory.appendingPathComponent("config.json").path
     self.runDirectory = runDirectory
     self.socketPath = socketPath ?? runDirectory.appendingPathComponent("1context.sock").path
@@ -42,6 +58,19 @@ public struct RuntimePaths {
   }
 
   public static func current() -> RuntimePaths {
+    #if DEBUG
+    if let runtimeHome = ProcessInfo.processInfo.environment["ONECONTEXT_DEV_RUNTIME_HOME"],
+       !runtimeHome.isEmpty {
+      let root = URL(fileURLWithPath: runtimeHome, isDirectory: true)
+      return RuntimePaths(
+        userContentDirectory: root.appendingPathComponent("1Context", isDirectory: true),
+        appSupportDirectory: root.appendingPathComponent("Library/Application Support/1Context", isDirectory: true),
+        logDirectory: root.appendingPathComponent("Library/Logs/1Context", isDirectory: true),
+        cacheDirectory: root.appendingPathComponent("Library/Caches/1Context", isDirectory: true)
+      )
+    }
+    #endif
+
     let home = FileManager.default.homeDirectoryForCurrentUser
     return RuntimePaths(
       userContentDirectory: home.appendingPathComponent("1Context", isDirectory: true),
@@ -80,7 +109,15 @@ public enum RuntimePermissions {
   public static func repairRuntimePaths(_ paths: RuntimePaths) {
     for directory in [
       paths.userContentDirectory,
+      paths.userWikiDirectory,
+      paths.userWikiSourceDirectory,
+      paths.userWikiSiteDirectory,
+      paths.contextEngineDirectory,
+      paths.contextEngineIndexesDirectory,
       paths.appSupportDirectory,
+      paths.appSupportIndexesDirectory,
+      paths.lanceDBIndexDirectory,
+      paths.appSupportSetupDirectory,
       paths.runDirectory,
       paths.logDirectory,
       paths.cacheDirectory,

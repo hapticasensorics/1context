@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://1context.local/schemas/wiki-engine/page-result.schema.json",
+  "title": "1Context Wiki Page Route Result",
+  "type": "object",
+  "required": [
+    "route",
+    "kind",
+    "slug",
+    "access",
+    "status",
+    "html_path",
+    "markdown_path"
+  ],
+  "properties": {
+    "route": { "type": "string", "pattern": "^/" },
+    "kind": { "enum": ["page", "talk"] },
+    "slug": { "type": "string", "minLength": 1 },
+    "title": { "type": ["string", "null"] },
+    "access": { "enum": ["private", "shared", "public"] },
+    "status": { "type": "string", "minLength": 1 },
+    "html_path": { "type": "string", "pattern": "\\.html$" },
+    "route_index_path": { "type": ["string", "null"] },
+    "markdown_path": { "type": "string", "pattern": "\\.md$" }
+  },
+  "additionalProperties": false
+}

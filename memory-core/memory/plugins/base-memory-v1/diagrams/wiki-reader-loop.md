@@ -16,7 +16,7 @@ flowchart TD
   E["Backlinks index<br/><br/>During resolution, every internal concept link records source -> target into _backlinks.json.<br/><br/>This powers Wikipedia-style What links here without a separate scan."]
   F["Concept staging<br/><br/>Concept pages are copied into staging/concept with renderer frontmatter.<br/>Their own brackets are resolved.<br/>A What links here section is appended from _backlinks.json.<br/><br/>Operator-authored concept prose remains the source of truth."]
   G["Landing and This Week<br/><br/>index.md is the front door: start here, counts, most-cited concepts.<br/>this-week.md is the recent-changes digest: promoted/deferred concepts, decision velocity, concerns, contradictions, open questions.<br/><br/>Both are generated from corpus signals."]
-  H["Renderer-ready tree<br/><br/>The wiki renderer can consume the staged markdown tree plus generated source pages.<br/>The system has outbound links, inbound backlinks, category indexes, project indexes, open questions, and a front door."]
+  H["Refresh-ready tree<br/><br/>The Swift wiki runtime can consume the staged markdown tree plus generated source pages after memory-core requests wiki.refresh.<br/>The system has outbound links, inbound backlinks, category indexes, project indexes, open questions, and a front door."]
   I["Future agentic layers<br/><br/>Redactor tier alignment, cross-era curator hardening, librarian expand/sweep, section consolidation, and true multi-week validation remain agent/state-machine work.<br/><br/>The deterministic reader loop gives those agents a coherent wiki to write into."]
 
   A --> B

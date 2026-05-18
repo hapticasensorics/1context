@@ -12,7 +12,8 @@ Use it as the honest map of what the DSL currently represents:
 - the corpus can retrigger the fabric from `corpus.changed` or `roles.need_reconfiguration`
 - evidence gates are visible as `expect:` labels
 - `building_reader_surface` now invokes both deterministic input building and
-  wiki-engine rendering, with render-manifest evidence as the browser-ready gate
+  a `wiki.refresh` request, with Swift/wiki-engine evidence as the browser-ready
+  gate outside memory-core
 
 The more narrative `wiki-growth-fabric.mmd` explains the intended system. This
 IR diagram is deliberately stricter: if it is missing a behavior, the compiled

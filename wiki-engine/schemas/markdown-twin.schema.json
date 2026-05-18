@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://1context.local/schemas/wiki-engine/markdown-twin.schema.json",
+  "title": "1Context Wiki Markdown Twin",
+  "type": "object",
+  "required": [
+    "role",
+    "path",
+    "sha256",
+    "bytes",
+    "content_type",
+    "kind",
+    "slug",
+    "access",
+    "status",
+    "md_url",
+    "talk_enabled"
+  ],
+  "properties": {
+    "role": { "type": "string", "pattern": "^(page|talk)-markdown$" },
+    "path": { "type": "string", "pattern": "\\.md$" },
+    "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "bytes": { "type": "integer", "minimum": 0 },
+    "content_type": { "const": "text/markdown; charset=utf-8" },
+    "kind": { "enum": ["page", "talk"] },
+    "route": { "type": ["string", "null"] },
+    "html_path": { "type": ["string", "null"] },
+    "route_index_path": { "type": ["string", "null"] },
+    "slug": { "type": "string", "minLength": 1 },
+    "title": { "type": ["string", "null"] },
+    "access": { "enum": ["private", "shared", "public"] },
+    "status": { "type": "string", "minLength": 1 },
+    "md_url": { "type": "string", "minLength": 1 },
+    "talk_enabled": { "type": "boolean" },
+    "talk_url": { "type": ["string", "null"] }
+  },
+  "additionalProperties": false
+}

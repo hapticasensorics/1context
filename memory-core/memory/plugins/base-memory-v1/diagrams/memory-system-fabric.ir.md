@@ -23,8 +23,7 @@ experience and hired-agent birth are now first-class states in the system loop.
 `wiki_growth_fabric` appears here as a child submachine invoked after agent
 outputs settle, not as the whole memory system.
 
-`building_reader_surface` now means the deterministic wiki input pass plus the
-wiki-engine render pass. The evidence expected at that point includes
-`wiki.render.succeeded`, `wiki.manifest.recorded`, and
-`wiki.generated.available`, so the top-level memory cycle closes on a visible
-reader surface rather than only on intermediate markdown staging.
+`building_reader_surface` now means the memory system writes a `wiki.refresh`
+request and hands publication to the Swift render queue. The evidence expected
+at that point is `wiki.refresh.requested`; route manifests and markdown twins
+are validated by the Swift/wiki-engine runtime, outside memory-core.

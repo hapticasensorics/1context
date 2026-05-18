@@ -9,6 +9,14 @@ it into the installed app's `wiki-site/current` release site.
 
 Current goals:
 
+- [1Context Wiki Memory Runtime V0 Goal](1context-wiki-memory-runtime-v0-goal.md)
+  - Status: active closure. Swift render coordination, runtime
+    materialization, browser route proof, package smoke, wiki-interface cleanup,
+    and custom-page fallback proof are in place; remaining work is the final
+    end-to-end proof bundle.
+- [1Context Wiki Engine V0 Goal](1context-wiki-engine-v0-goal.md)
+  - Status: renderer slice extracted into `wiki-engine/`; current closure work
+    is tracked by the Wiki Memory Runtime V0 goal.
 - [1Context Release Factory Goal](1context-release-factory-goal.md)
 
 Archived goals:

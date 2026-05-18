@@ -1,0 +1,237 @@
+import Foundation
+import CryptoKit
+import OneContextPlatform
+
+public struct WikiRuntimeDefaultsInstallResult: Codable, Equatable, Sendable {
+  public var schemaVersion: Int
+  public var status: String
+  public var installedAt: String
+  public var source: String
+  public var copied: [String]
+  public var preserved: [String]
+  public var proposals: [String]
+
+  public init(
+    schemaVersion: Int = 1,
+    status: String,
+    installedAt: String,
+    source: String,
+    copied: [String],
+    preserved: [String],
+    proposals: [String] = []
+  ) {
+    self.schemaVersion = schemaVersion
+    self.status = status
+    self.installedAt = installedAt
+    self.source = source
+    self.copied = copied
+    self.preserved = preserved
+    self.proposals = proposals
+  }
+}
+
+private struct RuntimeDefaultConflictProposal: Codable, Equatable {
+  var schemaVersion: Int = 1
+  var kind: String = "wiki.runtime_default_conflict_proposal"
+  var status: String = "needs_review"
+  var target: String
+  var source: String
+  var reason: String
+  var proposedAction: String
+  var packagedDefaultSHA256: String
+  var userFileSHA256: String
+}
+
+public final class WikiRuntimeDefaultsInstaller: @unchecked Sendable {
+  private let runtimePaths: RuntimePaths
+  private let defaultsRoot: URL?
+  private let fileManager: FileManager
+  private let now: @Sendable () -> Date
+  private let encoder: JSONEncoder
+
+  public init(
+    runtimePaths: RuntimePaths,
+    defaultsRoot: URL? = WikiRuntimeDefaultsInstaller.discoverDefaultsRoot(),
+    fileManager: FileManager = .default,
+    now: @escaping @Sendable () -> Date = Date.init
+  ) {
+    self.runtimePaths = runtimePaths
+    self.defaultsRoot = defaultsRoot
+    self.fileManager = fileManager
+    self.now = now
+    self.encoder = JSONEncoder()
+    self.encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+  }
+
+  public static func discoverDefaultsRoot(environment: [String: String] = ProcessInfo.processInfo.environment) -> URL? {
+    if let path = environment["ONECONTEXT_RUNTIME_DEFAULTS_DIR"], !path.isEmpty {
+      return URL(fileURLWithPath: path, isDirectory: true)
+    }
+
+    if let resourceURL = Bundle.main.resourceURL {
+      let candidate = resourceURL.appendingPathComponent("RuntimeDefaults", isDirectory: true)
+      if FileManager.default.fileExists(atPath: candidate.appendingPathComponent("1Context", isDirectory: true).path) {
+        return candidate
+      }
+    }
+
+    guard let executable = Bundle.main.executableURL else {
+      return nil
+    }
+    let contents = executable
+      .deletingLastPathComponent()
+      .deletingLastPathComponent()
+    let candidate = contents
+      .appendingPathComponent("Resources", isDirectory: true)
+      .appendingPathComponent("RuntimeDefaults", isDirectory: true)
+    if FileManager.default.fileExists(atPath: candidate.appendingPathComponent("1Context", isDirectory: true).path) {
+      return candidate
+    }
+    return nil
+  }
+
+  @discardableResult
+  public func installMissingDefaults() throws -> WikiRuntimeDefaultsInstallResult {
+    guard let defaultsRoot else {
+      let result = result(status: "missing_defaults", copied: [], preserved: [], source: "none")
+      try writeLedger(result)
+      return result
+    }
+
+    let sourceRoot = defaultsRoot.appendingPathComponent("1Context", isDirectory: true)
+    guard fileManager.fileExists(atPath: sourceRoot.path) else {
+      let result = result(status: "missing_defaults", copied: [], preserved: [], source: "app-bundle://RuntimeDefaults/1Context")
+      try writeLedger(result)
+      return result
+    }
+
+    try RuntimePermissions.ensurePrivateDirectory(runtimePaths.userContentDirectory)
+    var copied: [String] = []
+    var preserved: [String] = []
+    var proposals: [String] = []
+
+    if !fileManager.fileExists(atPath: runtimePaths.userContentDirectory.path) {
+      try RuntimePermissions.ensurePrivateDirectory(runtimePaths.userContentDirectory)
+    }
+
+    guard let enumerator = fileManager.enumerator(
+      at: sourceRoot,
+      includingPropertiesForKeys: [.isDirectoryKey, .isSymbolicLinkKey],
+      options: [.skipsHiddenFiles],
+      errorHandler: nil
+    ) else {
+      let result = result(status: "failed", copied: [], preserved: [], source: "app-bundle://RuntimeDefaults/1Context")
+      try writeLedger(result)
+      return result
+    }
+
+    for case let sourceURL as URL in enumerator {
+      let relative = relativePath(sourceURL, under: sourceRoot)
+      if relative.isEmpty { continue }
+      let destination = runtimePaths.userContentDirectory.appendingPathComponent(relative)
+      let values = try sourceURL.resourceValues(forKeys: [.isDirectoryKey, .isSymbolicLinkKey])
+      if values.isSymbolicLink == true {
+        preserved.append(relative)
+        continue
+      }
+      if values.isDirectory == true {
+        if fileManager.fileExists(atPath: destination.path) {
+          preserved.append(relative + "/")
+        } else {
+          try RuntimePermissions.ensurePrivateDirectory(destination)
+          copied.append(relative + "/")
+        }
+        continue
+      }
+
+      if fileManager.fileExists(atPath: destination.path) {
+        if try filesDiffer(sourceURL, destination) {
+          let proposalPath = try writeConflictProposal(relative: relative, sourceURL: sourceURL, destinationURL: destination)
+          proposals.append(proposalPath)
+        }
+        preserved.append(relative)
+        continue
+      }
+      try RuntimePermissions.ensurePrivateDirectory(destination.deletingLastPathComponent())
+      try fileManager.copyItem(at: sourceURL, to: destination)
+      RuntimePermissions.ensurePrivateFile(destination.path)
+      copied.append(relative)
+    }
+
+    let result = result(
+      status: proposals.isEmpty ? (copied.isEmpty ? "already_current" : "installed") : "installed_with_conflicts",
+      copied: copied.sorted(),
+      preserved: preserved.sorted(),
+      proposals: proposals.sorted(),
+      source: "app-bundle://RuntimeDefaults/1Context"
+    )
+    try writeLedger(result)
+    return result
+  }
+
+  private func result(
+    status: String,
+    copied: [String],
+    preserved: [String],
+    proposals: [String] = [],
+    source: String
+  ) -> WikiRuntimeDefaultsInstallResult {
+    WikiRuntimeDefaultsInstallResult(
+      status: status,
+      installedAt: ISO8601DateFormatter().string(from: now()),
+      source: source,
+      copied: copied,
+      preserved: preserved,
+      proposals: proposals
+    )
+  }
+
+  private func writeLedger(_ result: WikiRuntimeDefaultsInstallResult) throws {
+    try RuntimePermissions.ensurePrivateDirectory(runtimePaths.appSupportSetupDirectory)
+    let url = runtimePaths.appSupportSetupDirectory.appendingPathComponent("runtime-defaults-install.json")
+    let data = try encoder.encode(result)
+    try RuntimePermissions.writePrivateData(data, to: url)
+  }
+
+  private func relativePath(_ url: URL, under root: URL) -> String {
+    let rootPath = root.standardizedFileURL.path
+    let path = url.standardizedFileURL.path
+    guard path.hasPrefix(rootPath + "/") else {
+      return ""
+    }
+    return String(path.dropFirst(rootPath.count + 1))
+  }
+
+  private func filesDiffer(_ lhs: URL, _ rhs: URL) throws -> Bool {
+    try Data(contentsOf: lhs) != Data(contentsOf: rhs)
+  }
+
+  private func writeConflictProposal(relative: String, sourceURL: URL, destinationURL: URL) throws -> String {
+    let proposal = RuntimeDefaultConflictProposal(
+      target: "1Context/\(relative)",
+      source: "app-bundle://RuntimeDefaults/1Context/\(relative)",
+      reason: "Packaged runtime default differs from an existing user-owned file.",
+      proposedAction: "Review the packaged default and merge intentionally; the installer preserved the user file.",
+      packagedDefaultSHA256: try sha256(sourceURL),
+      userFileSHA256: try sha256(destinationURL)
+    )
+    let relativeProposalPath = "context-engine/proposals/wiki/runtime-defaults/\(proposalFileName(relative))"
+    let proposalURL = runtimePaths.userContentDirectory.appendingPathComponent(relativeProposalPath)
+    try RuntimePermissions.ensurePrivateDirectory(proposalURL.deletingLastPathComponent())
+    let data = try encoder.encode(proposal)
+    try RuntimePermissions.writePrivateData(data, to: proposalURL)
+    return "1Context/\(relativeProposalPath)"
+  }
+
+  private func proposalFileName(_ relative: String) -> String {
+    let sanitized = relative
+      .replacingOccurrences(of: "/", with: "__")
+      .replacingOccurrences(of: ":", with: "_")
+    return sanitized + ".proposal.json"
+  }
+
+  private func sha256(_ url: URL) throws -> String {
+    let digest = SHA256.hash(data: try Data(contentsOf: url))
+    return digest.map { String(format: "%02x", $0) }.joined()
+  }
+}

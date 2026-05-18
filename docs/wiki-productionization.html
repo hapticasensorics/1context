@@ -95,23 +95,23 @@
         <tbody>
           <tr>
             <td>Repo wiki source</td>
-            <td>Four seed families exist in <code>memory-core/wiki/menu</code>.</td>
-            <td>These are seed/template sources, not installed personal content.</td>
+            <td>Public-safe defaults live in <code>runtime/1Context/user-wiki</code>.</td>
+            <td>These are templates and first-run source seeds, not installed personal content.</td>
           </tr>
           <tr>
             <td>Renderer</td>
-            <td>Node wiki engine renders Markdown and talk folders through Python commands.</td>
-            <td>Generated outputs are currently absent in the working tree unless render is run.</td>
+            <td>The first-class <code>wiki-engine/</code> renders Markdown, talk folders, routes, and indexes.</td>
+            <td>Swift calls the bundled renderer and preserves the last good site on render failure.</td>
           </tr>
           <tr>
             <td>Routes and indexes</td>
-            <td>Python can build route tables, site manifests, content indexes, and stats.</td>
-            <td>No render manifests means route table is empty before rendering.</td>
+            <td>The renderer writes route manifests, content indexes, markdown twins, and page results.</td>
+            <td>Configured pages use user source first and fall back to templates when source is absent.</td>
           </tr>
           <tr>
             <td>Installed local web</td>
             <td>Swift/Caddy serves <code>wiki-site/current</code> and dynamic <code>/api/wiki/*</code>.</td>
-            <td>The daemon currently prepares only the bundled placeholder shell.</td>
+            <td>The daemon installs runtime defaults, renders, gates, and atomically publishes.</td>
           </tr>
           <tr>
             <td>User wiki source</td>
@@ -647,12 +647,12 @@ Agent non-goals:
         </thead>
         <tbody>
           <tr>
-            <td>Python wiki core</td>
-            <td><code>uv run --project memory-core --with pytest pytest tests/test_wiki_*.py</code></td>
+            <td>Python wiki interface</td>
+            <td><code>cd memory-core &amp;&amp; uv run --with pytest pytest tests/test_wiki_authoring_facade.py tests/test_wiki_interface_boundary.py</code></td>
           </tr>
           <tr>
             <td>Renderer</td>
-            <td><code>npm ci --prefix memory-core/wiki-engine</code> then <code>npm test --prefix memory-core/wiki-engine</code></td>
+            <td><code>npm ci --prefix wiki-engine</code> then <code>npm test --prefix wiki-engine</code></td>
           </tr>
           <tr>
             <td>Publish invariants</td>

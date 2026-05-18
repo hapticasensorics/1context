@@ -15,6 +15,8 @@ INFO="$APP/Contents/Info.plist"
 DAEMON_PLIST="$APP/Contents/Library/LaunchDaemons/com.haptica.1context.local-web-proxy.plist"
 MEMORY_CORE="$APP/Contents/Resources/memory-core"
 MEMORY_RUNTIME="$APP/Contents/Resources/memory-runtime"
+RUNTIME_DEFAULTS="$APP/Contents/Resources/RuntimeDefaults/1Context"
+WIKI_ENGINE="$APP/Contents/Resources/WikiEngine"
 
 plutil -lint "$INFO" >/dev/null
 plutil -lint "$DAEMON_PLIST" >/dev/null
@@ -76,8 +78,40 @@ for path in root.rglob("*"):
     if path.is_file() and path.suffix in {".py", ".pyc", ".sh", ".swift", ".ts", ".tsx", ".js", ".mjs", ".md"}:
         raise SystemExit(f"memory-runtime contains source/script file: {path.relative_to(root)}")
 PY
+if [[ ! -f "$RUNTIME_DEFAULTS/user-wiki/wiki.toml" ]]; then
+  echo "Packaged app must include user-wiki runtime defaults." >&2
+  exit 1
+fi
+if [[ ! -f "$RUNTIME_DEFAULTS/user-wiki/site/.1context/route-manifest.json" ]]; then
+  echo "Packaged runtime defaults must include a pre-rendered last-good wiki site." >&2
+  exit 1
+fi
+if [[ ! -f "$WIKI_ENGINE/tools/render-site.mjs" ]]; then
+  echo "Packaged app must include the first-class wiki renderer source." >&2
+  exit 1
+fi
+if [[ -e "$WIKI_ENGINE/node_modules" || -e "$WIKI_ENGINE/package-lock.json" ]]; then
+  echo "Packaged wiki renderer source must not include runtime package installs." >&2
+  exit 1
+fi
+if find "$APP/Contents/Resources" -path '*/runtime-test/*' -print -quit | grep -q .; then
+  echo "Packaged app must not include generated runtime-test state." >&2
+  exit 1
+fi
 if find "$APP/Contents/Resources" -path '*/generated/*' -print -quit | grep -q .; then
   echo "Packaged app must not include generated wiki source output." >&2
+  exit 1
+fi
+if find "$APP/Contents/Resources" -path '*/context-engine/observations/*' -type f -print -quit | grep -q .; then
+  echo "Packaged app must not include raw observations." >&2
+  exit 1
+fi
+if find "$APP/Contents/Resources" -path '*/context-engine/runs/*' -type f -print -quit | grep -q .; then
+  echo "Packaged app must not include run transcripts." >&2
+  exit 1
+fi
+if find "$APP/Contents/Resources" -path '*/context-engine/artifacts/wiki/previews/*' -type f -print -quit | grep -q .; then
+  echo "Packaged app must not include private preview artifacts." >&2
   exit 1
 fi
 if find "$APP/Contents/Resources" -type f -print0 \
@@ -87,8 +121,8 @@ if find "$APP/Contents/Resources" -type f -print0 \
   exit 1
 fi
 if find "$APP/Contents/Resources" -type f -print0 \
-  | xargs -0 grep -I -n -E '/Users/paulhan|paulhan|/dev/1context|(^|[^[:alnum:]_])/goal([^[:alnum:]_]|$)|goal\\.html|goal\\.md' >/tmp/1context-package-local-paths.txt; then
-  echo "Packaged resources must not include local developer paths or development goal routes. Matches:" >&2
+  | xargs -0 grep -I -n -E '/Users/paulhan|paulhan|/dev/1context|runtime-test|1context-private|(^|[^[:alnum:]_])/goal([^[:alnum:]_]|$)|goal\\.html|goal\\.md' >/tmp/1context-package-local-paths.txt; then
+  echo "Packaged resources must not include local developer paths, private fixtures, runtime-test, or development goal routes. Matches:" >&2
   cat /tmp/1context-package-local-paths.txt >&2
   exit 1
 fi

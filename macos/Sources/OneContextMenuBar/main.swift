@@ -1579,17 +1579,28 @@ private struct WikiMenuSnapshot {
   let running: Bool
   let url: String
   let health: String
+  let renderState: String
+  let renderLastStatus: String?
+  let renderBackoffRemainingMilliseconds: Int
 
   init(running: Bool, url: String, health: String) {
     self.running = running
     self.url = url
     self.health = health
+    self.renderState = health
+    self.renderLastStatus = nil
+    self.renderBackoffRemainingMilliseconds = 0
   }
 
   init(payload: [String: Any]) {
     self.running = payload["running"] as? Bool ?? false
     self.url = payload["url"] as? String ?? LocalWebDefaults.defaultWikiURL
     self.health = payload["health"] as? String ?? "unknown"
+    let render = payload["render"] as? [String: Any] ?? [:]
+    self.renderState = render["state"] as? String ?? self.health
+    self.renderBackoffRemainingMilliseconds = render["backoff_remaining_ms"] as? Int ?? 0
+    let last = render["last"] as? [String: Any]
+    self.renderLastStatus = last?["status"] as? String
   }
 }
 

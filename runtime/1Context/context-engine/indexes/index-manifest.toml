@@ -1,0 +1,5 @@
+schema_version = 1
+
+[indexes]
+lancedb_dir = "~/Library/Application Support/1Context/indexes/lancedb"
+rebuild_from = ["user-wiki", "context-engine"]

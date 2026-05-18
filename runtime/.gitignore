@@ -1,0 +1,33 @@
+# Runtime is the blessed public-safe data tree.
+#
+# The production-shaped folders under runtime/1Context are intentionally
+# trackable after review. Do private iteration in repo-root runtime-test/,
+# then promote only scrubbed/public-safe files back here.
+
+/local-user-data/
+/fixtures/
+/imports/
+/probe/
+
+.DS_Store
+**/.DS_Store
+
+# Application Support, logs, and caches are machinery, not canonical data.
+/Library/Application Support/1Context/**/*
+!/Library/Application Support/1Context/**/
+!/Library/Application Support/1Context/**/.gitkeep
+
+/Library/Logs/1Context/**/*
+!/Library/Logs/1Context/**/
+!/Library/Logs/1Context/**/.gitkeep
+
+/Library/Caches/1Context/**/*
+!/Library/Caches/1Context/**/
+!/Library/Caches/1Context/**/.gitkeep
+
+# Heavy/generated local index stores should be rebuilt, not committed.
+**/*.lance/
+**/*.lancedb/
+**/*.sqlite
+**/*.sqlite-shm
+**/*.sqlite-wal

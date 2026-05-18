@@ -51,7 +51,7 @@ class StateMachineVerificationResult:
 REQUIRED_MEMORY_SYSTEM_EVIDENCE = {
     "memory_cycle.artifact_written",
     "source_import.fresh",
-    "reader_surface.ready",
+    "wiki.refresh.requested",
     "memory_tick.recovery_recorded",
 }
 REQUIRED_MEMORY_SYSTEM_CYCLE_TERMINALS = {"complete", "blocked", "retryable", "failed"}

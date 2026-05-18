@@ -25,7 +25,7 @@ flowchart TD
 
   H["Review-ready wiki<br/><br/>The wiki is navigable:<br/>outbound links, inbound backlinks, generated indexes, open worklist, recent-changes digest, staged concepts, and talk-folder audit trail.<br/><br/>New changes feed the next fabric tick."]
 
-  I["State-machine DSL representation<br/><br/>Scopes:<br/>corpus, page, talk, agent_role<br/><br/>Clocks:<br/>filesystem, ledger, timer, human<br/><br/>Evidence:<br/>wiki_inventory.ready, role_route_plan.ready, agent_layer.closed, reader_surface.ready<br/><br/>Transitions are signal-driven, so the system can grow new page/role circuits over time."]
+  I["State-machine DSL representation<br/><br/>Scopes:<br/>corpus, page, talk, agent_role<br/><br/>Clocks:<br/>filesystem, ledger, timer, human<br/><br/>Evidence:<br/>wiki_inventory.ready, role_route_plan.ready, agent_layer.closed, wiki.refresh.requested<br/><br/>Transitions are signal-driven, so the system can grow new page/role circuits over time."]
 
   A --> B --> C --> D --> E --> F --> G --> H
   H --> A

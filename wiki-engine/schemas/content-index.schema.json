@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://1context.local/schemas/wiki-engine/content-index.schema.json",
+  "title": "1Context Wiki Content Index",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "generated_at",
+    "output",
+    "page_count",
+    "talk_count",
+    "markdown_twin_count",
+    "pages",
+    "markdown_twins",
+    "export_allowlist"
+  ],
+  "properties": {
+    "schema_version": { "const": "wiki.content-index.v1" },
+    "generated_at": { "type": "string", "format": "date-time" },
+    "output": { "type": "string", "minLength": 1 },
+    "page_count": { "type": "integer", "minimum": 0 },
+    "talk_count": { "type": "integer", "minimum": 0 },
+    "markdown_twin_count": { "type": "integer", "minimum": 0 },
+    "pages": {
+      "type": "array",
+      "items": { "$ref": "page-result.schema.json" }
+    },
+    "markdown_twins": {
+      "type": "array",
+      "items": { "$ref": "markdown-twin.schema.json" }
+    },
+    "export_allowlist": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 }
+    }
+  },
+  "additionalProperties": false
+}

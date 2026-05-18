@@ -8,13 +8,12 @@ The reader loop now has two deterministic phases:
 
 - build reader inputs: topics, projects, open questions, backlinks, landing,
   this-week, bracket staging, and staged concept pages
-- render browser surface: wiki-engine family render, render manifest, site
-  manifest, content index, and localhost route table
+- request browser publication: write a `wiki.refresh` request for the Swift
+  render queue
 
-The evidence gate is no longer just "markdown inputs exist." The loop expects
-the renderer/browser subsystem to leave `wiki.render.succeeded`,
-`wiki.manifest.recorded`, and `wiki.generated.available` evidence before the
-wiki is considered rendered.
+The evidence gate is no longer "memory-core rendered the browser surface." The
+loop expects `wiki.refresh.requested`; the renderer/browser subsystem proves
+routes, markdown twins, and manifests in the Swift/wiki-engine runtime.
 
 ```mermaid
 %% See wiki-reader-loop.ir.mmd for generated source.

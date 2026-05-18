@@ -50,11 +50,11 @@ deterministic rendering.
 
 ## Current Landing Zones
 
-- Route planning and evidence: `src/onectx/wiki/` and the memory fabric state
-  machines.
+- Route planning and evidence: `src/onectx/memory/wiki.py`,
+  `src/onectx/memory/wiki_authoring.py`, and the memory fabric state machines.
 - Job contracts: `jobs/`.
 - Prompt contracts: `prompts/`.
 - Hired-agent execution shape: `harnesses/`, `linking.toml`, and runtime
   experience artifacts.
-- Deterministic rendering: `wiki-engine/` plus `1context-memory-core wiki
-  render`.
+- Deterministic rendering: top-level `wiki-engine/` invoked by the Swift wiki
+  runtime after memory-core requests `wiki.refresh`.

@@ -375,16 +375,15 @@ def build() -> Machine:
         description="The dynamic wiki fabric has decided what page-level work should run.",
     )
     machine.evidence(
-        "reader_surface.ready",
-        artifact="reader_surface",
+        "wiki.refresh.requested",
+        artifact="wiki_refresh_request",
         checks=[
             "wiki_reader_loop built indexes, bracket staging, backlinks, landing page, and this-week digest",
-            "wiki.render.succeeded exists for rendered page families",
-            "wiki.manifest.recorded records each render-manifest hash",
-            "wiki.generated.available proves routeable generated files exist",
+            "memory-core wrote a daemon wiki.refresh request",
+            "Swift render queue owns renderer execution",
             "source markdown was not clobbered by generated staging output",
         ],
-        description="The memory system has a rendered, navigable reader surface for humans and future agents.",
+        description="The memory system has handed publication to the Swift wiki runtime.",
     )
     machine.evidence(
         "memory_cycle.artifact_written",
@@ -711,14 +710,14 @@ def build() -> Machine:
         cycle,
         "building_reader_surface",
         do=sequence(
-            step("run_wiki_reader_loop"),
-            step("render_wiki_engine_families"),
-            expect("reader_surface.ready"),
-            emit("memory.reader_surface.ready"),
+            step("write_wiki_refresh_request"),
+            step("notify_wiki_render_queue"),
+            expect("wiki.refresh.requested"),
+            emit("wiki.refresh.requested"),
         ),
     )
 
-    machine.from_(cycle, "building_reader_surface").on(event("memory.reader_surface.ready")).to(
+    machine.from_(cycle, "building_reader_surface").on(event("wiki.refresh.requested")).to(
         cycle,
         "complete",
         do=sequence(

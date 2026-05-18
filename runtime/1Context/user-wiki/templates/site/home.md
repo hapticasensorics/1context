@@ -1,0 +1,3 @@
+# {{ wiki_title }}
+
+{{ body }}

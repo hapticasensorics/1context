@@ -177,23 +177,21 @@ Wikipedia-style "What links here". Agents still own judgment, forgetting,
 skipping, and prose. This job keeps the reader surface navigable after they
 write.
 
-The wiki engine integration adds the visible renderer/browser side while
-keeping the planner separate:
+The visible renderer/browser side now lives outside memory-core. Memory-core
+keeps the deterministic planner and authoring surfaces, then asks the Swift
+daemon render queue to publish:
 
 ```bash
-uv run 1context wiki list
-uv run 1context wiki ensure
-uv run 1context wiki render for-you
-uv run 1context wiki routes
+uv run 1context wiki build-inputs
+uv run 1context wiki route-dry-run
+uv run 1context memory tick --wiki-only --execute-render --render-family for-you
 ```
 
 `src/onectx/memory/wiki.py` owns deterministic planner inputs and role routing.
-`src/onectx/wiki/` owns page-family discovery, scaffolding, rendering, render
-manifests, route tables, and render evidence. The Swift local web layer publishes
-the generated files behind the packaged Caddy server. A successful render
-records `wiki.render.succeeded`, `wiki.manifest.recorded`,
-`wiki.generated.available`, and `wiki.render.completed` in the lakestore, which
-is the evidence the state machines should wait on.
+`src/onectx/memory/wiki_authoring.py` owns route plans, talk appends,
+proposal/decision records, preview requests, promotion receipts, and daemon
+`wiki.refresh` requests. Swift owns page materialization, queued rendering,
+route manifests, markdown twins, validation, and publication.
 
 The e08 prototype should be translated into this plugin through
 [docs/e08-to-system-translation.md](docs/e08-to-system-translation.md). Treat
@@ -262,21 +260,22 @@ uv run 1context memory tick --wiki-only --freshness-check always --require-fresh
 ```
 
 It writes a cycle artifact under `memory/runtime/cycles/<cycle_id>/cycle.json`,
-records `memory_cycle.artifact_written`, and, when rendering executes, records
-`reader_surface.ready` after the wiki engine leaves routeable manifests. This is
+records `memory_cycle.artifact_written`, and, when render execution is requested,
+records `wiki.refresh.requested` after writing a daemon refresh request. This is
 not the full runner yet. It is the narrow executable bridge for the DSL path:
 
 ```text
-route dry-run or skip -> wiki render or dry-run -> evidence -> cycle event
+route dry-run or skip -> wiki.refresh request or dry-run -> evidence -> cycle event
 ```
 
 The cycle artifact now includes an `ir_contract` extracted from the compiled
 `memory_system_fabric` state-machine IR. For the reader-surface tick, that
 contract names the transition from `cycle.routing_wiki` on
 `wiki.agent_layer.closed` to `cycle.building_reader_surface`, including the DSL
-steps `run_wiki_reader_loop` and `render_wiki_engine_families` and the expected
-evidence `reader_surface.ready`. Validation checks the cycle against that
-compiled contract instead of relying only on a hand-maintained evidence list.
+steps `write_wiki_refresh_request` and `notify_wiki_render_queue` and the
+expected evidence `wiki.refresh.requested`. Validation checks the cycle against
+that compiled contract instead of relying only on a hand-maintained evidence
+list.
 
 Future runner work should grow from this point rather than from another shell
 script.

@@ -37,8 +37,8 @@ def test_memory_system_fabric_renders_top_level_memory_loop() -> None:
     assert "step: launch_claude_account_clean_harness" in source
     assert "step: run_runtime_invariant_preflight_postflight_diff" in source
     assert "step: run_wiki_growth_fabric" in source
-    assert "step: run_wiki_reader_loop" in source
-    assert "step: render_wiki_engine_families" in source
+    assert "step: write_wiki_refresh_request" in source
+    assert "step: notify_wiki_render_queue" in source
 
 
 def test_wiki_reader_loop_renders_engine_stage_from_ir() -> None:
@@ -50,9 +50,9 @@ def test_wiki_reader_loop_renders_engine_stage_from_ir() -> None:
     assert "Wiki Reader Loop / wiki IR" in source
     assert "wiki_building_inputs" in source
     assert "wiki_rendering" in source
-    assert "step: run_wiki_engine_render" in source
-    assert "step: write_site_manifest_and_content_index" in source
-    assert "expect: wiki_render.ready" in source
+    assert "step: write_wiki_refresh_request" in source
+    assert "step: notify_wiki_render_queue" in source
+    assert "expect: wiki.refresh.requested" in source
 
 
 def test_memory_system_fabric_renders_replay_scope() -> None:

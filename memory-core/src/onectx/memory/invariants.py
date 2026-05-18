@@ -10,24 +10,6 @@ from onectx.config import MemorySystem
 from onectx.storage import LakeStore, stable_id, utc_now
 
 
-EXPLICIT_OUTCOMES = {
-    "already_current",
-    "blocked",
-    "defer",
-    "deferred",
-    "failed",
-    "forget",
-    "hire",
-    "needs_approval",
-    "needs_fresh_events",
-    "no_change",
-    "retryable",
-    "skip",
-    "skipped",
-    "split_parent",
-}
-
-
 @dataclass(frozen=True)
 class RuntimeInvariantReportArtifact:
     artifact_id: str
@@ -60,9 +42,6 @@ def build_runtime_invariant_report(
     dry_run: bool,
     preflight: dict[str, Any] | None = None,
     steps: list[dict[str, Any]] | None = None,
-    route_preview: dict[str, Any] | None = None,
-    route_artifact: dict[str, Any] | None = None,
-    route_hire_execution: dict[str, Any] | None = None,
     render_count: int = 0,
     manifest_count: int = 0,
     route_count: int = 0,
@@ -76,9 +55,6 @@ def build_runtime_invariant_report(
     """
     preflight_payload = preflight or {}
     step_rows = list(steps or [])
-    route_payload = route_preview or {}
-    route_artifact_payload = route_artifact or {}
-    route_hire_payload = route_hire_execution or {}
 
     expected: list[dict[str, Any]] = []
     produced: list[dict[str, Any]] = []
@@ -86,22 +62,7 @@ def build_runtime_invariant_report(
     missing: list[dict[str, Any]] = []
 
     classify_source_freshness(preflight_payload, explicit_outcomes, missing)
-    classify_route_preview(
-        route_payload,
-        route_artifact_payload,
-        expected,
-        produced,
-        explicit_outcomes,
-        missing,
-    )
     classify_steps(step_rows, explicit_outcomes, missing)
-    classify_route_hire_execution(
-        route_hire_payload,
-        expected,
-        produced,
-        explicit_outcomes,
-        missing,
-    )
     classify_render_surface(
         execute_render=execute_render,
         status=status,
@@ -141,110 +102,6 @@ def build_runtime_invariant_report(
             "passed": len(silent) == 0,
         },
     }
-
-
-def classify_route_hire_execution(
-    route_hire_execution: dict[str, Any],
-    expected: list[dict[str, Any]],
-    produced: list[dict[str, Any]],
-    explicit_outcomes: list[dict[str, Any]],
-    missing: list[dict[str, Any]],
-) -> None:
-    if not route_hire_execution:
-        return
-
-    spec_count = int(route_hire_execution.get("spec_count") or 0)
-    completed_count = int(route_hire_execution.get("completed_count") or 0)
-    error_count = int(route_hire_execution.get("error_count") or 0)
-    dry_run = bool(route_hire_execution.get("dry_run"))
-    batch = route_hire_execution.get("batch") if isinstance(route_hire_execution.get("batch"), dict) else {}
-    results = list(batch.get("results") or [])
-    errors = list(batch.get("errors") or [])
-    expected.append(
-        {
-            "kind": "wiki_route_hired_agent_execution",
-            "reason": "opt-in route hire execution should birth every selected hired-agent spec or record an explicit error",
-            "spec_count": spec_count,
-            "dry_run": dry_run,
-        }
-    )
-
-    if spec_count == 0:
-        explicit_outcomes.append(
-            {
-                "kind": "wiki_route_hired_agent_execution",
-                "outcome": "no_change",
-                "reason": "route hire execution was requested but no hire rows were selected",
-            }
-        )
-        return
-
-    if completed_count + error_count >= spec_count:
-        produced.append(
-            {
-                "kind": "wiki_route_hired_agent_execution_batch",
-                "spec_count": spec_count,
-                "completed_count": completed_count,
-                "error_count": error_count,
-                "dry_run": dry_run,
-            }
-        )
-    else:
-        missing.append(
-            {
-                "kind": "wiki_route_hired_agent_execution_batch",
-                "reason": "fewer hired-agent executions completed or errored than were scheduled",
-                "spec_count": spec_count,
-                "completed_count": completed_count,
-                "error_count": error_count,
-                "explained": False,
-            }
-        )
-
-    for index, result in enumerate(results):
-        if not isinstance(result, dict):
-            missing.append(
-                {
-                    "kind": "wiki_route_hired_agent_execution",
-                    "index": index,
-                    "reason": "batch result slot was empty without an associated error",
-                    "explained": False,
-                }
-            )
-            continue
-        hire = result.get("hire") if isinstance(result.get("hire"), dict) else {}
-        prompt_path = str(result.get("prompt_path") or "")
-        hired_agent_uuid = str(hire.get("hired_agent_uuid") or "")
-        if hired_agent_uuid and prompt_path:
-            produced.append(
-                {
-                    "kind": "wiki_route_hired_agent_birth",
-                    "index": index,
-                    "hired_agent_uuid": hired_agent_uuid,
-                    "prompt_path": prompt_path,
-                    "dry_run": bool(result.get("dry_run")),
-                }
-            )
-        else:
-            missing.append(
-                {
-                    "kind": "wiki_route_hired_agent_birth",
-                    "index": index,
-                    "reason": "hired-agent result missing uuid or prompt path",
-                    "explained": False,
-                }
-            )
-
-    for error in errors:
-        explicit_outcomes.append(
-            {
-                "kind": "wiki_route_hired_agent_execution",
-                "outcome": "failed",
-                "index": error.get("index", ""),
-                "job_ids": list(error.get("job_ids") or []),
-                "reason": str(error.get("message") or error.get("error_type") or "hired-agent execution failed"),
-            }
-        )
 
 
 def classify_source_freshness(
@@ -289,107 +146,6 @@ def classify_source_freshness(
                 "reason": "required sources were fresh enough",
             }
         )
-
-
-def classify_route_preview(
-    route_preview: dict[str, Any],
-    route_artifact: dict[str, Any],
-    expected: list[dict[str, Any]],
-    produced: list[dict[str, Any]],
-    explicit_outcomes: list[dict[str, Any]],
-    missing: list[dict[str, Any]],
-) -> None:
-    if not route_preview:
-        explicit_outcomes.append(
-            {
-                "kind": "wiki_route_execution",
-                "outcome": "skipped",
-                "reason": "no workspace/concept route preview requested",
-            }
-        )
-        return
-
-    planned_hires = list(route_preview.get("planned_hires") or [])
-    non_hires = list(route_preview.get("non_hire_outcomes") or [])
-    expected.append(
-        {
-            "kind": "wiki_route_execution_preview",
-            "reason": "route rows should become planned hires or explicit non-hire outcomes",
-            "planned_hire_count": len(planned_hires),
-            "non_hire_count": len(non_hires),
-        }
-    )
-    if route_artifact.get("path") or route_preview.get("artifact_path"):
-        produced.append(
-            {
-                "kind": "wiki_route_execution_preview",
-                "path": route_artifact.get("path") or route_preview.get("artifact_path"),
-                "planned_hire_count": len(planned_hires),
-                "non_hire_count": len(non_hires),
-            }
-        )
-    else:
-        explicit_outcomes.append(
-            {
-                "kind": "wiki_route_execution_preview",
-                "outcome": "dry_run",
-                "reason": "route preview was computed in memory without artifact persistence",
-            }
-        )
-
-    for hire in planned_hires:
-        job_key = str(hire.get("job_key") or hire.get("route_id") or "")
-        expected.append(
-            {
-                "kind": "planned_hire_birth_preview",
-                "job_key": job_key,
-                "job_ids": list(hire.get("job_ids") or []),
-                "reason": "hire route should include birth preview and prompt stack",
-            }
-        )
-        birth = hire.get("birth_certificate_preview") if isinstance(hire.get("birth_certificate_preview"), dict) else {}
-        prompt = hire.get("prompt_stack_preview") if isinstance(hire.get("prompt_stack_preview"), dict) else {}
-        if birth and prompt:
-            produced.append(
-                {
-                    "kind": "planned_hire_birth_preview",
-                    "job_key": job_key,
-                    "job_ids": list(hire.get("job_ids") or []),
-                }
-            )
-        else:
-            missing.append(
-                {
-                    "kind": "planned_hire_birth_preview",
-                    "job_key": job_key,
-                    "reason": "missing birth certificate or prompt stack preview",
-                    "explained": False,
-                }
-            )
-
-    for outcome in non_hires:
-        name = str(outcome.get("outcome") or "")
-        reason = str(outcome.get("reason") or "")
-        if name in EXPLICIT_OUTCOMES and reason:
-            explicit_outcomes.append(
-                {
-                    "kind": "route_non_hire",
-                    "job_key": outcome.get("job_key", ""),
-                    "job": outcome.get("job", ""),
-                    "outcome": name,
-                    "reason": reason,
-                }
-            )
-        else:
-            missing.append(
-                {
-                    "kind": "route_non_hire",
-                    "job_key": outcome.get("job_key", ""),
-                    "outcome": name,
-                    "reason": "non-hire outcome missing recognized outcome or reason",
-                    "explained": False,
-                }
-            )
 
 
 def classify_steps(
@@ -457,13 +213,13 @@ def classify_render_surface(
     expected.append(
         {
             "kind": "reader_surface",
-            "reason": "execute_render=true should produce rendered manifests and routes",
+            "reason": "execute_render=true should produce a Swift wiki.refresh request",
         }
     )
-    if render_count > 0 and manifest_count > 0 and route_count > 0:
+    if render_count > 0:
         produced.append(
             {
-                "kind": "reader_surface",
+                "kind": "wiki_refresh_request",
                 "render_count": render_count,
                 "manifest_count": manifest_count,
                 "route_count": route_count,
@@ -472,8 +228,8 @@ def classify_render_surface(
     else:
         missing.append(
             {
-                "kind": "reader_surface",
-                "reason": "render requested but no rendered route table was available",
+                "kind": "wiki_refresh_request",
+                "reason": "render requested but no Swift wiki.refresh request was recorded",
                 "render_count": render_count,
                 "manifest_count": manifest_count,
                 "route_count": route_count,

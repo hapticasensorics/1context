@@ -6,7 +6,6 @@ access: private
 summary: "A destructive greenfield cleanup goal for deleting old release paths, compatibility shims, source-checkout packaging, stale docs, and product test hooks before the next release train."
 status: development-doc
 last_updated: 2026-05-13
-former_wiki_route: /goal/delete-bloat
 toc_enabled: true
 talk_enabled: false
 agent_view_enabled: true

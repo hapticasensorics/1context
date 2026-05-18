@@ -28,7 +28,7 @@ def test_wiki_only_tick_writes_durable_cycle_artifact() -> None:
     assert payload["runtime_invariant_report"]["summary"]["passed"] is True
     assert payload["runtime_invariant_report"]["summary"]["silent_noops"] == 0
     assert (result.path / "runtime-invariants.json").is_file()
-    assert payload["steps"][0]["id"] == "wiki_route_dry_run"
+    assert payload["steps"][0]["id"] == "wiki_interface"
     assert payload["steps"][1]["id"] == "wiki_render"
 
 
@@ -46,27 +46,28 @@ def test_wiki_only_tick_can_execute_render_and_record_reader_gate() -> None:
     assert result.status == "completed"
     assert result.dry_run is False
     assert result.render_count == 1
-    assert result.manifest_count >= 1
-    assert result.route_count >= 1
+    assert result.manifest_count == 0
+    assert result.route_count == 0
     payload = json.loads((result.path / "cycle.json").read_text(encoding="utf-8"))
-    assert payload["renders"][0]["family"]["id"] == "for-you"
+    assert payload["renders"][0]["method"] == "wiki.refresh"
+    assert payload["renders"][0]["render_family_ids"] == ["for-you"]
     assert payload["ir_contract"]["machine"] == "memory_system_fabric"
     assert payload["ir_contract"]["event"] == "wiki.agent_layer.closed"
     assert payload["ir_contract"]["source"] == {"scope": "cycle", "state": "routing_wiki"}
     assert payload["ir_contract"]["target"] == {"scope": "cycle", "state": "building_reader_surface"}
-    assert payload["ir_contract"]["steps"] == ["run_wiki_reader_loop", "render_wiki_engine_families"]
-    assert payload["ir_contract"]["expects"] == ["reader_surface.ready"]
+    assert payload["ir_contract"]["steps"] == ["write_wiki_refresh_request", "notify_wiki_render_queue"]
+    assert payload["ir_contract"]["expects"] == ["wiki.refresh.requested"]
     execution = payload["state_machine_execution"]
     assert execution["terminal_state"] == "complete"
     assert [item["event"] for item in execution["transitions"]] == [
         "wiki.agent_layer.closed",
-        "memory.reader_surface.ready",
+        "wiki.refresh.requested",
     ]
-    assert execution["transitions"][0]["produced_evidence"] == ["reader_surface.ready"]
+    assert execution["transitions"][0]["produced_evidence"] == ["wiki.refresh.requested"]
     assert execution["transitions"][0]["missing_expected_evidence"] == []
     assert execution["scope_state"]["state"] == "complete"
     assert Path(execution["scope_state"]["path"]).is_file()
-    assert "reader_surface.ready" in payload["dsl_contract"]["reader_surface_evidence"]
+    assert "wiki.refresh.requested" in payload["dsl_contract"]["reader_surface_evidence"]
 
 
 def test_memory_cycle_can_be_listed_loaded_and_validated() -> None:
@@ -95,14 +96,14 @@ def test_memory_cycle_can_be_listed_loaded_and_validated() -> None:
         "artifact.row_exists",
         "artifact.hash_matches_file",
         "evidence.memory_cycle_artifact_written",
-        "runtime_invariant_report.exists",
-        "evidence.runtime_invariants_passed",
-        "preflight.source_freshness.present",
-        "evidence.reader_surface_ready",
-        "event.cycle_terminal",
-        "dsl_contract.present",
-        "ir_contract.present",
-        "ir_contract.reader_surface_transition",
+            "runtime_invariant_report.exists",
+            "evidence.runtime_invariants_passed",
+            "preflight.source_freshness.present",
+            "evidence.wiki_refresh_requested",
+            "event.cycle_terminal",
+            "dsl_contract.present",
+            "ir_contract.present",
+            "ir_contract.reader_surface_transition",
         "ir_contract.expected_evidence_satisfied",
         "state_machine_execution.present",
         "state_machine_scope_state.persisted",
@@ -140,49 +141,49 @@ def test_memory_tick_freshness_preflight_can_block_when_required() -> None:
     }
 
 
-def test_memory_tick_records_retryable_render_failure_when_budget_remains() -> None:
+def test_memory_tick_records_unknown_render_family_as_refresh_request() -> None:
     system = load_system(Path.cwd())
-    cycle_id = "test-wiki-render-retryable"
+    cycle_id = "test-wiki-refresh-unknown-family"
 
     result = run_memory_tick(
         system,
         wiki_only=True,
         execute_render=True,
-        render_family_ids=("missing-family-for-retry",),
-        retry_budget=1,
+        render_family_ids=("missing-family-for-queue",),
         cycle_id=cycle_id,
     )
 
-    assert result.status == "retryable"
-    assert result.dry_run is True
+    assert result.status == "completed"
+    assert result.dry_run is False
     payload = load_memory_cycle(system, cycle_id)
-    assert payload["recovery"]["retryable"] is True
-    assert payload["recovery"]["next_action"] == "retry_on_next_tick"
-    assert payload["steps"][1]["status"] == "retryable"
+    assert payload["renders"][0]["render_family_ids"] == ["missing-family-for-queue"]
+    assert payload["recovery"]["retryable"] is False
+    assert payload["recovery"]["next_action"] == "none"
+    assert payload["steps"][1]["status"] == "requested"
     validation = validate_memory_cycle(system, cycle_id)
     assert validation.passed is True
     assert {check["id"] for check in validation.checks} >= {
-        "recovery.recorded",
-        "evidence.recovery_recorded",
+        "evidence.wiki_refresh_requested",
+        "ir_contract.expected_evidence_satisfied",
     }
 
 
-def test_memory_tick_records_failed_render_failure_without_retry_budget() -> None:
+def test_memory_tick_records_refresh_request_without_retry_budget_failure() -> None:
     system = load_system(Path.cwd())
-    cycle_id = "test-wiki-render-failed"
+    cycle_id = "test-wiki-refresh-not-render-failure"
 
     result = run_memory_tick(
         system,
         wiki_only=True,
         execute_render=True,
-        render_family_ids=("missing-family-for-failure",),
+        render_family_ids=("missing-family-for-failure-is-swift-owned",),
         retry_budget=0,
         cycle_id=cycle_id,
     )
 
-    assert result.status == "failed"
+    assert result.status == "completed"
     payload = load_memory_cycle(system, cycle_id)
     assert payload["recovery"]["retryable"] is False
-    assert payload["recovery"]["next_action"] == "operator_review"
-    assert payload["steps"][1]["status"] == "failed"
+    assert payload["recovery"]["next_action"] == "none"
+    assert payload["steps"][1]["status"] == "requested"
     assert validate_memory_cycle(system, cycle_id).passed is True

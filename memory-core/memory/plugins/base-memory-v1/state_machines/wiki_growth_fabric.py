@@ -221,19 +221,19 @@ def build() -> Machine:
         description="The dynamic agent layer has settled for this tick.",
     )
     machine.evidence(
-        "reader_surface.ready",
-        artifact="reader_surface",
+        "wiki.refresh.requested",
+        artifact="wiki_refresh_request",
         checks=[
             "memory.wiki.build_inputs completed",
             "topics/projects/open-questions/landing/this-week exist",
             "bracket aliases and external fallbacks resolved in staging",
             "backlinks index exists",
             "concept pages are staged with What links here",
-            "wiki.render.succeeded exists after source mutations",
-            "wiki.manifest.recorded exists for the render manifest",
-            "wiki.generated.available exposes localhost routes",
+            "memory-core wrote a wiki.refresh request",
+            "Swift daemon render queue owns renderer execution",
+            "renderer output is validated outside memory-core before publication",
         ],
-        description="The wiki is reader-ready after source mutations.",
+        description="The wiki has been handed to the Swift publisher after source mutations.",
     )
 
     machine.signal(
@@ -398,12 +398,12 @@ def build() -> Machine:
         "building_reader_surface",
         do=sequence(
             step("run_memory_wiki_build_inputs"),
-            step("run_wiki_engine_render"),
-            expect("reader_surface.ready"),
-            emit("wiki.reader_surface.ready"),
+            step("write_wiki_refresh_request"),
+            expect("wiki.refresh.requested"),
+            emit("wiki.refresh.requested"),
         ),
     )
-    machine.from_(corpus, "building_reader_surface").on(event("wiki.reader_surface.ready")).to(corpus, "review_ready")
+    machine.from_(corpus, "building_reader_surface").on(event("wiki.refresh.requested")).to(corpus, "review_ready")
 
     machine.from_(corpus, "review_ready").on(signal_edge("corpus.changed")).stay(
         do=emit("wiki.fabric.tick", reason="corpus changed; reconfigure active wiki roles")

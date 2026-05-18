@@ -96,14 +96,14 @@ def build() -> Machine:
         description="Recent-changes style digest from talk folder decisions and wiki motion.",
     )
     machine.artifact(
-        "render_manifest",
+        "wiki_refresh_request",
         kind="json_manifest",
-        path="{wiki_family}/generated/render-manifest.json",
-        schema="wiki_render_manifest.v1",
-        policies=["deterministic", "generated", "route_table_source"],
+        path="{context_engine}/artifacts/wiki/refresh-requests/{run_id}.json",
+        schema="wiki_refresh_request.v1",
+        policies=["deterministic", "generated", "daemon_queue_source"],
         description=(
-            "The wiki-engine render manifest for one page family. It records source "
-            "inputs, generated files, localhost routes, renderer version, and theme assets."
+            "A memory-core request for the Swift daemon render queue. The actual "
+            "renderer output and route manifests are produced outside memory-core."
         ),
     )
     machine.artifact(
@@ -141,16 +141,14 @@ def build() -> Machine:
         description="The wiki has outbound links, inbound backlinks, generated indexes, and a worklist.",
     )
     machine.evidence(
-        "wiki_render.ready",
-        artifact="render_manifest",
+        "wiki.refresh.requested",
+        artifact="wiki_refresh_request",
         checks=[
-            "wiki.render.succeeded exists for every rendered family",
-            "wiki.manifest.recorded exists for every rendered family",
-            "wiki.generated.available exists for every rendered family",
-            "site manifest and content index are refreshed after family renders",
-            "localhost routes resolve from render manifests without requiring agent context",
+            "memory-core writes a wiki.refresh request artifact",
+            "Swift daemon render queue accepts the request",
+            "renderer execution remains outside memory-core",
         ],
-        description="The wiki engine has turned source/talk folders into visible reader pages.",
+        description="Memory-core has handed wiki publication to the Swift render queue.",
     )
 
     machine.from_(wiki, "dirty").on(event("wiki.inputs.requested")).to(
@@ -174,13 +172,13 @@ def build() -> Machine:
         wiki,
         "rendering",
         do=sequence(
-            step("run_wiki_engine_render"),
-            step("write_site_manifest_and_content_index"),
-            expect("wiki_render.ready"),
-            emit("wiki.render.ready"),
+            step("write_wiki_refresh_request"),
+            step("notify_wiki_render_queue"),
+            expect("wiki.refresh.requested"),
+            emit("wiki.refresh.requested"),
         ),
     )
 
-    machine.from_(wiki, "rendering").on(event("wiki.render.ready")).to(wiki, "rendered")
+    machine.from_(wiki, "rendering").on(event("wiki.refresh.requested")).to(wiki, "rendered")
 
     return machine

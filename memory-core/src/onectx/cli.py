@@ -27,13 +27,6 @@ from .memory.quality import QualityError, run_quality_probes, write_quality_repo
 from .memory.runner import HiredAgentRunnerError, execute_hired_agent
 from .memory.replay import ReplayError, run_replay_dry_run
 from .memory.scheduler import SchedulerError, plan_scheduler_tick, write_scheduler_plan
-from .memory.wiki_apply import (
-    WikiApplyError,
-    apply_curator_decision_to_sandbox,
-    promote_wiki_apply_result_to_source,
-    write_wiki_apply_promotion_result,
-    write_wiki_apply_result,
-)
 from .memory.tick import (
     MemoryTickError,
     list_memory_cycles,
@@ -55,25 +48,6 @@ from .memory.day_hourlies import (
 )
 from .memory.for_you_runner import ForYouRunnerError, run_for_you_month
 from .memory.talk import render_talk_folder
-from .memory.wiki import (
-    WikiError,
-    brackify_text,
-    build_wiki_inputs,
-    collect_concepts,
-    evaluate_wiki_route_source_freshness,
-    plan_wiki_roles,
-    preview_wiki_route_execution,
-    write_wiki_route_execution_artifact,
-    write_wiki_route_plan_artifact,
-)
-from .wiki.cli import (
-    cmd_wiki_ensure as cmd_wiki_engine_ensure,
-    cmd_wiki_list as cmd_wiki_engine_list,
-    cmd_wiki_render as cmd_wiki_engine_render,
-    cmd_wiki_routes as cmd_wiki_engine_routes,
-    cmd_wiki_stats as cmd_wiki_engine_stats,
-)
-from .wiki.families import WikiError as WikiEngineError
 from .memory.experience import (
     ExperienceError,
     configured_native_memory_formats,
@@ -108,9 +82,6 @@ def main(argv: list[str] | None = None) -> int:
         return args.func(args)
     except ConfigError as exc:
         print(f"config error: {exc}", file=sys.stderr)
-        return 1
-    except WikiEngineError as exc:
-        print(f"wiki error: {exc}", file=sys.stderr)
         return 1
     except StateMachineProductionError as exc:
         print(f"state-machine production error: {exc}", file=sys.stderr)
@@ -223,9 +194,6 @@ def build_parser() -> argparse.ArgumentParser:
     p_memory_tick = memory_sub.add_parser("tick", help="execute one concrete memory state-machine tick")
     add_context_options(p_memory_tick, suppress_defaults=True)
     p_memory_tick.add_argument("--wiki-only", action="store_true", help="Run the wiki-only tick bridge")
-    p_memory_tick.add_argument("--workspace", type=Path, help="Optional e08-style markdown wiki workspace for role planning")
-    p_memory_tick.add_argument("--concept-dir", type=Path, help="Optional concept page directory for role planning")
-    p_memory_tick.add_argument("--audience", default="private", help="Audience tier for wiki role planning")
     p_memory_tick.add_argument("--sources", default="codex,claude-code", help="Comma-separated source importers for freshness checks")
     p_memory_tick.add_argument(
         "--max-source-age-hours",
@@ -238,41 +206,15 @@ def build_parser() -> argparse.ArgumentParser:
         "--freshness-check",
         choices=["auto", "always", "skip"],
         default="auto",
-        help="Source freshness preflight policy; auto checks when source-derived route planning is requested",
+        help="Source freshness preflight policy",
     )
     p_memory_tick.add_argument("--run-migrations", action="store_true", help="Run contract migration receipts during this tick")
-    p_memory_tick.add_argument("--execute-render", action="store_true", help="Render wiki-engine families during this tick")
+    p_memory_tick.add_argument("--execute-render", action="store_true", help="Write a Swift wiki.refresh request during this tick")
     p_memory_tick.add_argument(
         "--render-family",
         action="append",
         default=[],
-        help="Wiki family id to render; repeatable. Defaults to all families when --execute-render is set",
-    )
-    p_memory_tick.add_argument(
-        "--execute-route-hires",
-        action="store_true",
-        help="Birth the planned wiki route hired agents and write their prompt inputs",
-    )
-    p_memory_tick.add_argument(
-        "--route-hire-limit",
-        type=int,
-        default=0,
-        help="Limit route hired-agent births; 0 means all planned hire rows",
-    )
-    p_memory_tick.add_argument(
-        "--run-route-harness",
-        action="store_true",
-        help="Actually launch Claude for route hires instead of only writing prompt inputs",
-    )
-    p_memory_tick.add_argument(
-        "--promote-route-outputs",
-        action="store_true",
-        help="After successful route hires, apply validated curator outputs to the source workspace",
-    )
-    p_memory_tick.add_argument(
-        "--operator-approval",
-        default="",
-        help="Required exact approval token for source promotion",
+        help="Logical wiki family id to include in the refresh request; repeatable",
     )
     p_memory_tick.add_argument("--skip-talk", action="store_true", help="When rendering, render source pages only")
     p_memory_tick.add_argument("--no-evidence", action="store_true", help="When rendering, skip per-family render evidence rows")
@@ -329,21 +271,6 @@ def build_parser() -> argparse.ArgumentParser:
     p_memory_quality.add_argument("--no-record", action="store_true", help="Do not write runtime artifact/evidence")
     p_memory_quality.add_argument("--json", action="store_true", help="print machine-readable result")
     p_memory_quality.set_defaults(func=cmd_memory_quality)
-
-    p_memory_wiki_apply = memory_sub.add_parser("wiki-apply", help="apply one curator decision to a sandboxed wiki copy")
-    add_context_options(p_memory_wiki_apply, suppress_defaults=True)
-    p_memory_wiki_apply.add_argument("--source-workspace", type=Path, required=True)
-    p_memory_wiki_apply.add_argument("--decision", type=Path, required=True, help="Curator decision markdown artifact")
-    p_memory_wiki_apply.add_argument("--route-row-json", type=Path, help="Route row JSON carrying ownership")
-    p_memory_wiki_apply.add_argument("--article", type=Path, help="Article path for ad-hoc ownership")
-    p_memory_wiki_apply.add_argument("--section", default="", help="Section slug for ad-hoc ownership")
-    p_memory_wiki_apply.add_argument("--sandbox-root", type=Path, help="Sandbox parent directory")
-    p_memory_wiki_apply.add_argument("--promote-to-source", action="store_true", help="After a successful sandbox apply, copy the validated sandbox change into the source workspace")
-    p_memory_wiki_apply.add_argument("--operator-approval", default="", help="Required exact approval token for --promote-to-source")
-    p_memory_wiki_apply.add_argument("--run-id", default="", help="Optional stable apply run id")
-    p_memory_wiki_apply.add_argument("--no-record", action="store_true", help="Do not write runtime artifact/evidence")
-    p_memory_wiki_apply.add_argument("--json", action="store_true", help="print machine-readable result")
-    p_memory_wiki_apply.set_defaults(func=cmd_memory_wiki_apply)
 
     p_memory_schedule = memory_sub.add_parser("schedule", help="plan memory cadence fires with source freshness gating")
     add_context_options(p_memory_schedule, suppress_defaults=True)
@@ -775,119 +702,6 @@ def build_parser() -> argparse.ArgumentParser:
     add_context_options(p_agent_install, suppress_defaults=True)
     add_agent_install_options(p_agent_install)
     p_agent_install.set_defaults(func=cmd_agent_install_integrations)
-
-    p_wiki = sub.add_parser("wiki", help="build deterministic wiki input surfaces")
-    add_context_options(p_wiki, suppress_defaults=True)
-    p_wiki.set_defaults(func=cmd_wiki_help)
-    wiki_sub = p_wiki.add_subparsers(dest="wiki_command")
-
-    p_wiki_list = wiki_sub.add_parser("list", help="list wiki page families")
-    add_context_options(p_wiki_list, suppress_defaults=True)
-    p_wiki_list.add_argument("--json", action="store_true", help="print machine-readable JSON")
-    p_wiki_list.set_defaults(func=cmd_wiki_engine_list)
-
-    p_wiki_ensure = wiki_sub.add_parser("ensure", help="create missing wiki pages, talk folders, and templates")
-    add_context_options(p_wiki_ensure, suppress_defaults=True)
-    p_wiki_ensure.add_argument("family_id", nargs="?", help="Family id to ensure; defaults to all families")
-    p_wiki_ensure.add_argument("--json", action="store_true", help="print machine-readable JSON")
-    p_wiki_ensure.set_defaults(func=cmd_wiki_engine_ensure)
-
-    p_wiki_render = wiki_sub.add_parser("render", help="render one or all wiki families")
-    add_context_options(p_wiki_render, suppress_defaults=True)
-    p_wiki_render.add_argument("family_id", nargs="?", help="Family id to render; defaults to all families")
-    p_wiki_render.add_argument("--output-dir", type=Path, help="Override the family generated/ output directory")
-    p_wiki_render.add_argument("--skip-talk", action="store_true", help="Render source pages only")
-    p_wiki_render.add_argument("--no-evidence", action="store_true", help="Do not write lakestore evidence rows")
-    p_wiki_render.add_argument("--json", action="store_true", help="print machine-readable JSON")
-    p_wiki_render.set_defaults(func=cmd_wiki_engine_render)
-
-    p_wiki_routes = wiki_sub.add_parser("routes", help="show rendered wiki localhost route table")
-    add_context_options(p_wiki_routes, suppress_defaults=True)
-    p_wiki_routes.add_argument("--json", action="store_true", help="print machine-readable JSON")
-    p_wiki_routes.set_defaults(func=cmd_wiki_engine_routes)
-
-    p_wiki_stats = wiki_sub.add_parser("stats", help="show generated wiki health and content stats")
-    add_context_options(p_wiki_stats, suppress_defaults=True)
-    p_wiki_stats.add_argument("--json", action="store_true", help="print machine-readable JSON")
-    p_wiki_stats.set_defaults(func=cmd_wiki_engine_stats)
-
-    p_wiki_build = wiki_sub.add_parser(
-        "build-inputs",
-        help="generate indexes, resolve brackets, stage backlinks, and write landing/digest pages",
-    )
-    add_context_options(p_wiki_build, suppress_defaults=True)
-    p_wiki_build.add_argument("--workspace", type=Path, required=True, help="Markdown wiki workspace")
-    p_wiki_build.add_argument("--concept-dir", type=Path, required=True, help="Directory of concept pages")
-    p_wiki_build.add_argument("--staging", type=Path, required=True, help="Render staging directory")
-    p_wiki_build.add_argument("--web-base", default="/paul-demo2", help="Public URL base for generated links")
-    p_wiki_build.add_argument("--json", action="store_true", help="print machine-readable result")
-    p_wiki_build.set_defaults(func=cmd_wiki_build_inputs)
-
-    p_wiki_plan = wiki_sub.add_parser(
-        "plan-roles",
-        help="scan a wiki workspace and derive the dynamic agent role route plan",
-    )
-    add_context_options(p_wiki_plan, suppress_defaults=True)
-    p_wiki_plan.add_argument("--workspace", type=Path, required=True, help="Markdown wiki workspace")
-    p_wiki_plan.add_argument("--concept-dir", type=Path, required=True, help="Directory of concept pages")
-    p_wiki_plan.add_argument("--audience", default="private", help="Audience tier for talk-folder routing")
-    p_wiki_plan.add_argument(
-        "--write-artifact",
-        action="store_true",
-        help="Persist the route plan under memory/runtime and lakestore",
-    )
-    p_wiki_plan.add_argument("--json", action="store_true", help="print machine-readable result")
-    p_wiki_plan.set_defaults(func=cmd_wiki_plan_roles)
-
-    p_wiki_route_dry_run = wiki_sub.add_parser(
-        "route-dry-run",
-        help="derive a route plan and preview the hired-agent births without launching agents",
-    )
-    add_context_options(p_wiki_route_dry_run, suppress_defaults=True)
-    p_wiki_route_dry_run.add_argument("--workspace", type=Path, required=True, help="Markdown wiki workspace")
-    p_wiki_route_dry_run.add_argument("--concept-dir", type=Path, required=True, help="Directory of concept pages")
-    p_wiki_route_dry_run.add_argument("--audience", default="private", help="Audience tier for talk-folder routing")
-    p_wiki_route_dry_run.add_argument(
-        "--sources",
-        default="codex,claude-code",
-        help="Comma-separated source importers that must be fresh enough for session-derived work",
-    )
-    p_wiki_route_dry_run.add_argument(
-        "--max-source-age-hours",
-        type=int,
-        default=None,
-        help="Override runtime_policy.max_importer_staleness_hours for this freshness check",
-    )
-    p_wiki_route_dry_run.add_argument(
-        "--require-fresh",
-        action="store_true",
-        help="Return a non-zero exit if required source importers are stale or missing",
-    )
-    p_wiki_route_dry_run.add_argument(
-        "--freshness-check",
-        choices=["always", "skip"],
-        default="always",
-        help="Source freshness preflight policy for route dry-runs",
-    )
-    p_wiki_route_dry_run.add_argument(
-        "--write-artifact",
-        action="store_true",
-        help="Persist the dry-run execution report under memory/runtime and lakestore",
-    )
-    p_wiki_route_dry_run.add_argument("--json", action="store_true", help="print machine-readable result")
-    p_wiki_route_dry_run.set_defaults(func=cmd_wiki_route_dry_run)
-
-    p_wiki_brackify = wiki_sub.add_parser(
-        "brackify",
-        help="conservatively add [[Subject]] brackets to a markdown file",
-    )
-    add_context_options(p_wiki_brackify, suppress_defaults=True)
-    p_wiki_brackify.add_argument("file", type=Path, help="Markdown file to scan")
-    p_wiki_brackify.add_argument("--concept-dir", type=Path, required=True, help="Directory of concept pages")
-    p_wiki_brackify.add_argument("--bracket-all", action="store_true", help="Bracket every occurrence, not first per paragraph")
-    p_wiki_brackify.add_argument("--write", action="store_true", help="Write changes; default is dry-run")
-    p_wiki_brackify.add_argument("--json", action="store_true", help="print machine-readable result")
-    p_wiki_brackify.set_defaults(func=cmd_wiki_brackify)
 
     p_lab = sub.add_parser("lab", help="run small local 1Context lab loops")
     add_context_options(p_lab, suppress_defaults=True)
@@ -1426,19 +1240,11 @@ def cmd_memory_tick(args: argparse.Namespace) -> int:
         result = run_memory_tick(
             system,
             wiki_only=args.wiki_only,
-            workspace=args.workspace,
-            concept_dir=args.concept_dir,
-            audience=args.audience,
             sources=sources,
             max_source_age_hours=args.max_source_age_hours,
             require_fresh=args.require_fresh,
             freshness_check=args.freshness_check,
             execute_render=args.execute_render,
-            execute_route_hires=args.execute_route_hires,
-            route_hire_limit=args.route_hire_limit,
-            route_hire_run_harness=args.run_route_harness,
-            promote_route_outputs=args.promote_route_outputs,
-            route_promotion_operator_approval=args.operator_approval,
             render_family_ids=tuple(args.render_family),
             include_talk=not args.skip_talk,
             record_evidence=not args.no_evidence,
@@ -1460,11 +1266,7 @@ def cmd_memory_tick(args: argparse.Namespace) -> int:
     print(f"mode: {result.mode}")
     print(f"status: {result.status}")
     print(f"dry run: {'yes' if result.dry_run else 'no'}")
-    print(f"planned hires: {result.planned_hire_count}")
-    print(f"non-hire outcomes: {result.non_hire_count}")
-    print(f"route hire dry-runs: {result.route_hire_count}")
-    print(f"route hire errors: {result.route_hire_error_count}")
-    print(f"renders: {result.render_count}")
+    print(f"render requests: {result.render_count}")
     print(f"manifests: {result.manifest_count}")
     print(f"routes: {result.route_count}")
     print(f"path: {result.path}")
@@ -1610,83 +1412,6 @@ def cmd_memory_quality(args: argparse.Namespace) -> int:
     if report.issue_count > 20:
         print(f"  ... {report.issue_count - 20} more")
     return 0 if report.passed else 2
-
-
-def cmd_memory_wiki_apply(args: argparse.Namespace) -> int:
-    system = load_system(args.root, args.plugin)
-    try:
-        route_row = load_apply_route_row(args)
-        run_id = args.run_id or f"wiki-apply-{int(time.time())}"
-        sandbox_root = args.sandbox_root or (system.runtime_dir / "wiki" / "apply-sandboxes" / run_id)
-        result = apply_curator_decision_to_sandbox(
-            source_workspace=args.source_workspace,
-            decision_path=args.decision,
-            route_row=route_row,
-            sandbox_root=sandbox_root,
-        )
-        record = {} if args.no_record else write_wiki_apply_result(system, result, run_id=run_id)
-        promotion = None
-        promotion_record = {}
-        if args.promote_to_source:
-            promotion = promote_wiki_apply_result_to_source(
-                system,
-                result,
-                run_id=run_id,
-                operator_approval=args.operator_approval,
-            )
-            promotion_record = {} if args.no_record else write_wiki_apply_promotion_result(system, promotion, run_id=run_id)
-    except (OSError, WikiApplyError, json.JSONDecodeError) as exc:
-        print(f"memory wiki-apply error: {exc}", file=sys.stderr)
-        return 1
-    payload = result.to_payload()
-    if record:
-        payload["record"] = record
-    if promotion is not None:
-        payload["promotion"] = promotion.to_payload()
-    if promotion_record:
-        payload["promotion_record"] = promotion_record
-    if args.json:
-        print(json.dumps(payload, indent=2))
-        return 0 if result.ok and (promotion is None or promotion.ok) else 2
-    print("memory wiki-apply")
-    print(f"status: {result.status}")
-    print(f"section: {result.section}")
-    print(f"sandbox: {result.sandbox_workspace}")
-    print(f"changed paths: {', '.join(result.diff.get('changed_paths', [])) or '-'}")
-    if record:
-        print(f"artifact id: {record['artifact_id']}")
-    if promotion is not None:
-        print(f"promotion: {promotion.status}")
-        print(f"backup: {promotion.backup_path}")
-    if promotion_record:
-        print(f"promotion artifact id: {promotion_record['artifact_id']}")
-    for failure in result.failures:
-        print(f"  failure: {failure}")
-    if promotion is not None:
-        for failure in promotion.failures:
-            print(f"  promotion failure: {failure}")
-    return 0 if result.ok and (promotion is None or promotion.ok) else 2
-
-
-def load_apply_route_row(args: argparse.Namespace) -> dict[str, Any]:
-    if args.route_row_json:
-        raw = json.loads(args.route_row_json.read_text(encoding="utf-8"))
-        if not isinstance(raw, dict):
-            raise WikiApplyError("--route-row-json must contain a JSON object")
-        return raw
-    if not args.article or not args.section:
-        raise WikiApplyError("either --route-row-json or both --article and --section are required")
-    article_path = args.article
-    article_value = str(article_path.resolve()) if not article_path.is_absolute() and article_path.exists() else str(article_path)
-    return {
-        "route_id": "ad-hoc-wiki-apply",
-        "job": "memory.wiki.curator",
-        "ownership": {
-            "kind": "article_sections",
-            "path": article_value,
-            "sections": [args.section],
-        },
-    }
 
 
 def cmd_memory_schedule(args: argparse.Namespace) -> int:
@@ -2254,237 +1979,6 @@ def cmd_lab_help(args: argparse.Namespace) -> int:
 def cmd_job_help(args: argparse.Namespace) -> int:
     print("job commands:")
     print("  run JOB_ID       prepare or run one manifest-driven memory job")
-    return 0
-
-
-def cmd_wiki_help(args: argparse.Namespace) -> int:
-    print("wiki commands:")
-    print("  list             list wiki page families")
-    print("  ensure           create missing page/talk/template scaffolding")
-    print("  render           render wiki families and record render evidence")
-    print("  routes           show rendered localhost route table")
-    print("  serve            serve rendered wiki pages over localhost")
-    print("  open             open or print a rendered wiki URL")
-    print("  build-inputs     generate wiki indexes, links, backlinks, landing, and digest")
-    print("  plan-roles       derive the dynamic agent role route plan")
-    print("  route-dry-run    preview hired-agent births from the route plan")
-    print("  brackify         add [[Subject]] brackets to markdown")
-    return 0
-
-
-def cmd_wiki_build_inputs(args: argparse.Namespace) -> int:
-    try:
-        result = build_wiki_inputs(
-            workspace=args.workspace,
-            concept_dir=args.concept_dir,
-            staging=args.staging,
-            web_base=args.web_base,
-        )
-    except WikiError as exc:
-        print(f"wiki error: {exc}", file=sys.stderr)
-        return 1
-
-    payload = result.to_payload()
-    if args.json:
-        print(json.dumps(payload, indent=2))
-        return 0
-
-    print("wiki inputs built")
-    print(f"workspace: {result.workspace}")
-    print(f"staging: {result.staging}")
-    print(f"concepts: {result.concept_count}")
-    print(f"projects: {result.project_count}")
-    print(f"open questions: {result.open_question_count}")
-    print(f"internal links: {result.internal_link_count}")
-    print(f"backlink edges: {result.backlink_edge_count}")
-    print(f"staged concepts: {result.staged_concept_count}")
-    print(f"landing: {result.landing_path}")
-    print(f"this-week: {result.this_week_path}")
-    print(f"backlinks: {result.backlinks_path}")
-    return 0
-
-
-def cmd_wiki_plan_roles(args: argparse.Namespace) -> int:
-    try:
-        result = plan_wiki_roles(
-            workspace=args.workspace,
-            concept_dir=args.concept_dir,
-            audience=args.audience,
-        )
-        written = write_wiki_route_plan_artifact(load_system(args.root, args.plugin), result) if args.write_artifact else None
-    except WikiError as exc:
-        print(f"wiki error: {exc}", file=sys.stderr)
-        return 1
-
-    payload = result.to_payload()
-    if written:
-        payload["written_artifact"] = written.to_payload()
-    if args.json:
-        print(json.dumps(payload, indent=2))
-        return 0
-
-    print("wiki role route plan")
-    print(f"workspace: {result.workspace}")
-    print(f"concept dir: {result.concept_dir}")
-    print(f"audience: {result.audience}")
-    print(f"planned hires: {result.planned_hire_count}")
-    if written:
-        print(f"artifact: {written.path}")
-        print(f"artifact id: {written.artifact_id}")
-    for key, count in result.route_counts.items():
-        print(f"  {key}: {count}")
-    return 0
-
-
-def cmd_wiki_route_dry_run(args: argparse.Namespace) -> int:
-    system = load_system(args.root, args.plugin)
-    max_source_age_hours = int(
-        args.max_source_age_hours
-        if args.max_source_age_hours is not None
-        else system.runtime_policy.get("max_importer_staleness_hours", 24)
-    )
-    sources = tuple(item.strip() for item in args.sources.split(",") if item.strip())
-    try:
-        plan = plan_wiki_roles(
-            workspace=args.workspace,
-            concept_dir=args.concept_dir,
-            audience=args.audience,
-        )
-        if args.freshness_check == "skip":
-            freshness = {}
-            freshness_status = "skipped"
-            freshness_reason = "freshness_check=skip"
-        else:
-            store = LakeStore(system.storage_dir)
-            store.ensure()
-            freshness = evaluate_wiki_route_source_freshness(
-                store,
-                required_sources=sources,
-                max_age_hours=max_source_age_hours,
-            )
-            freshness_status = "passed" if freshness.get("passed") else "failed"
-            freshness_reason = "checked source importer freshness"
-        plan_artifact = write_wiki_route_plan_artifact(system, plan, freshness=freshness) if args.write_artifact else None
-        result = preview_wiki_route_execution(plan, system=system, freshness=freshness)
-        written = write_wiki_route_execution_artifact(system, result) if args.write_artifact else None
-        invariant_report = build_runtime_invariant_report(
-            run_id=(written.artifact_id if written else "wiki-route-dry-run"),
-            mode="wiki_route_dry_run",
-            status="planned",
-            dry_run=True,
-            preflight={
-                "source_freshness": {
-                    "status": freshness_status,
-                    "mode": args.freshness_check,
-                    "required": bool(args.require_fresh),
-                    "reason": freshness_reason,
-                    "freshness": freshness,
-                }
-            },
-            steps=[
-                {
-                    "id": "wiki_route_dry_run",
-                    "status": "passed",
-                    "planned_hire_count": result.planned_hire_count,
-                    "non_hire_count": result.non_hire_count,
-                }
-            ],
-            route_preview=result.to_payload(),
-            route_artifact=written.to_payload() if written else {},
-            execute_render=False,
-        )
-        invariant_artifact = (
-            write_runtime_invariant_report_artifact(
-                system,
-                invariant_report,
-                run_id=written.artifact_id if written else "wiki-route-dry-run",
-                checker="memory.wiki.route_executor",
-            )
-            if args.write_artifact
-            else None
-        )
-    except WikiError as exc:
-        print(f"wiki error: {exc}", file=sys.stderr)
-        return 1
-
-    payload = result.to_payload()
-    payload["runtime_invariant_report"] = {
-        "summary": invariant_report.get("summary", {}),
-        **(invariant_artifact.to_payload() if invariant_artifact else {}),
-    }
-    if args.write_artifact and plan_artifact:
-        payload["route_plan_artifact"] = plan_artifact.to_payload()
-    if written:
-        payload["written_artifact"] = written.to_payload()
-    if args.json:
-        print(json.dumps(payload, indent=2))
-        return 2 if args.require_fresh and args.freshness_check != "skip" and not payload["freshness"].get("passed", True) else 0
-
-    print("wiki route dry-run")
-    print(f"workspace: {result.workspace}")
-    print(f"concept dir: {result.concept_dir}")
-    print(f"audience: {result.audience}")
-    if result.freshness:
-        status = "fresh" if result.freshness.get("passed") else "stale/missing"
-        print(f"source freshness: {status} (max age {result.freshness.get('max_age_hours')}h)")
-        for source, item in result.freshness.get("sources", {}).items():
-            latest = item.get("latest_ts") or "-"
-            print(f"  {source}: {item.get('status')} latest={latest} rows={item.get('session_or_event_rows', 0)}")
-    print(f"planned hires: {result.planned_hire_count}")
-    print(f"non-hire outcomes: {result.non_hire_count}")
-    invariant_summary = invariant_report.get("summary", {})
-    print(
-        "runtime invariants: "
-        f"{'passed' if invariant_summary.get('passed') else 'failed'} "
-        f"(silent no-ops {invariant_summary.get('silent_noops', 0)})"
-    )
-    if written:
-        if plan_artifact:
-            print(f"route plan artifact: {plan_artifact.path}")
-        print(f"artifact: {written.path}")
-        print(f"artifact id: {written.artifact_id}")
-        if invariant_artifact:
-            print(f"invariant report: {invariant_artifact.path}")
-    for hire in result.planned_hires:
-        print(f"  hire {hire['job_key']}: {', '.join(hire['job_ids'])}")
-    for outcome in result.non_hire_outcomes:
-        print(f"  {outcome['outcome']} {outcome['job_key']}: {outcome['reason']}")
-    return 2 if args.require_fresh and args.freshness_check != "skip" and result.freshness and not result.freshness.get("passed", True) else 0
-
-
-def cmd_wiki_brackify(args: argparse.Namespace) -> int:
-    target = args.file.resolve()
-    concept_dir = args.concept_dir.resolve()
-    if not target.is_file():
-        print(f"wiki error: file not found: {target}", file=sys.stderr)
-        return 1
-    if not concept_dir.is_dir():
-        print(f"wiki error: concept dir not found: {concept_dir}", file=sys.stderr)
-        return 1
-    concepts = collect_concepts(concept_dir)
-    text = target.read_text(encoding="utf-8")
-    rendered, count, seen = brackify_text(text, concepts, bracket_all=args.bracket_all)
-    if args.write and rendered != text:
-        target.write_text(rendered, encoding="utf-8")
-    payload = {
-        "file": str(target),
-        "concept_dir": str(concept_dir),
-        "concept_count": len(concepts),
-        "brackets_added": count,
-        "bracketed_terms": sorted(seen),
-        "written": bool(args.write and rendered != text),
-        "dry_run": not args.write,
-    }
-    if args.json:
-        print(json.dumps(payload, indent=2))
-        return 0
-    print("wiki brackify")
-    print(f"file: {target}")
-    print(f"concepts: {len(concepts)}")
-    print(f"brackets added: {count}")
-    if seen:
-        print(f"terms: {', '.join(sorted(seen))}")
-    print("written: yes" if payload["written"] else "written: no")
     return 0
 
 

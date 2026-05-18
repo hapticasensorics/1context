@@ -1,0 +1,9 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://1context.local/schemas/wiki-engine/render-result.schema.json",
+  "title": "1Context Wiki Render Result",
+  "oneOf": [
+    { "$ref": "render-success-result.schema.json" },
+    { "$ref": "render-error-result.schema.json" }
+  ]
+}

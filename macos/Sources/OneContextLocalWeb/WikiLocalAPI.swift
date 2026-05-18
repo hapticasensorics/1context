@@ -124,7 +124,7 @@ public final class WikiLocalAPIHandler: @unchecked Sendable {
       "status": "ok",
       "service": "1context-wiki-api",
       "render_state": renderState(),
-      "current_site": paths.wikiCurrent.path,
+      "current_site": "app-support://wiki-site/current",
       "current_site_exists": fileManager.fileExists(atPath: paths.wikiCurrent.appendingPathComponent("index.html").path),
       "published_at": publishManifest?["published_at"] as? String ?? NSNull()
     ]
@@ -158,6 +158,7 @@ public final class WikiLocalAPIHandler: @unchecked Sendable {
 
   private func contentPages() -> [[String: Any]] {
     for url in [
+      paths.wikiCurrent.appendingPathComponent(".1context/content-index.json"),
       paths.wikiCurrent.appendingPathComponent("content-index.json"),
       paths.wikiCurrent.appendingPathComponent("api/wiki/pages.json"),
       paths.wikiCurrent.appendingPathComponent("site-manifest.json")
@@ -197,7 +198,7 @@ public final class WikiLocalAPIHandler: @unchecked Sendable {
     var state = readJSON(paths.wikiBrowserStateFile) ?? [:]
     state["_storage"] = [
       "exists": fileManager.fileExists(atPath: paths.wikiBrowserStateFile.path),
-      "path": paths.wikiBrowserStateFile.path
+      "uri": "app-support://local-web/wiki-browser-state.json"
     ]
     if state["settings"] == nil { state["settings"] = [:] }
     if state["bookmarks"] == nil { state["bookmarks"] = [] }

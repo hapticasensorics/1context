@@ -40,7 +40,6 @@ include = [
     "/storage/.gitignore",
     "/storage/README.md",
     "/storage/lakestore/README.md",
-    "/wiki",
 ]
 exclude = [
     "**/__pycache__",

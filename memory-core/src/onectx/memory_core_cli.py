@@ -18,11 +18,6 @@ DEFAULT_ROOT = Path(__file__).resolve().parents[2]
 ALLOWED_SHAPES = {
     ("status", "--json"),
     ("storage", "init", "--json"),
-    ("wiki", "list", "--json"),
-    ("wiki", "ensure", "--json"),
-    ("wiki", "render", "--json"),
-    ("wiki", "render", "for-you", "--no-evidence", "--json"),
-    ("wiki", "routes", "--json"),
     ("memory", "tick", "--wiki-only", "--json"),
     ("memory", "cycles", "list", "--json"),
 }

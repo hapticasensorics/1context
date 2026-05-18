@@ -16,6 +16,7 @@ Swift owns local web infrastructure and served-site uptime:
 - prepares the private local wiki shell in `wiki-site/current`
 - mechanically gates candidate static bundles before swapping them into
   `wiki-site/current`
+- publishes the last-good rendered wiki artifacts in `wiki-site/current`
 - installs or repairs the required local HTTPS setup through an explicit admin
   authorization flow
 - does not decide whether wiki prose, frontmatter, routes, or agent edits are
@@ -77,8 +78,9 @@ signed release, but release packages should converge on the rule above.
 ## Serving Invariant
 
 The browser always sees the last successful published render from
-`wiki-site/current`. If no render has ever been published, Swift writes a themed
-fallback shell using the same 1Context CSS, JS, and icons.
+`wiki-site/current`. If no render has ever been published, setup and status
+report an uninitialized or failed wiki state instead of hiding it behind a
+placeholder page.
 
 Published static artifacts remain portable. `site-manifest.json`,
 `content-index.json`, `wiki-stats.json`, and static `api/wiki/*.json` files are
@@ -110,10 +112,10 @@ should report the missing requirement instead of starting a fallback web edge.
 Quitting 1Context stops Caddy; uninstall removes the ServiceManagement helper and
 trusted local CA.
 
-The daemon owns runtime state and the local wiki API adapter. In the current
-public app it prepares a small local wiki shell; future memory publication can
-extend the same static site and `/api/wiki/*` contract without changing the
-local HTTPS edge. Stopping the daemon must not tear down Caddy; static pages
+The daemon owns runtime state, the local wiki API adapter, and the
+`wiki.refresh` publication entrypoint. Memory publication extends the same
+static site and `/api/wiki/*` contract without changing the local HTTPS edge.
+Stopping the daemon must not tear down Caddy; already-published static pages
 should still load, with dynamic API calls degrading cleanly.
 
 ## Cloud Compatibility
