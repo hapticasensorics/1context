@@ -103,6 +103,10 @@ let package = Package(
     .testTarget(
       name: "OneContextLocalWebTests",
       dependencies: ["OneContextLocalWeb"]
+    ),
+    .testTarget(
+      name: "OneContextSupervisorTests",
+      dependencies: ["OneContextSupervisor"]
     )
   ]
 )
