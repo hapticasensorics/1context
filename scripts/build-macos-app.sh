@@ -25,7 +25,6 @@ CADDY_VERSION="2.11.2"
 CADDY_TOOL_ARCHIVE="$ROOT/release/tools/caddy/darwin-$ARCH/caddy-v$CADDY_VERSION-darwin-$ARCH.tar.gz"
 CADDY_TOOL_SHA256="$CADDY_TOOL_ARCHIVE.sha256"
 CADDY_TOOL_WORK_DIR="$ROOT/dist/release-tools/caddy/darwin-$ARCH"
-MEMORY_RUNTIME_BUILD_DIR="$ROOT/dist/release-tools/memory-runtime"
 CADDY_SOURCE=""
 CADDY_NOTICE_SOURCE_DIR=""
 RUNTIME_DEFAULTS_WORK_DIR="$ROOT/dist/runtime-defaults"
@@ -163,11 +162,10 @@ if [[ -n "$CADDY_NOTICE_SOURCE_DIR" ]]; then
     fi
   done
 fi
-"$ROOT/scripts/build-memory-runtime-artifact.sh" >/dev/null
-ditto "$MEMORY_RUNTIME_BUILD_DIR" "$RESOURCES_DIR/memory-runtime"
 
 rm -rf "$RUNTIME_DEFAULTS_WORK_DIR" "$RUNTIME_DEFAULTS_RESOURCE_DIR" "$WIKI_ENGINE_RESOURCE_DIR"
 mkdir -p "$RUNTIME_DEFAULTS_WORK_DIR" "$RUNTIME_DEFAULTS_RESOURCE_DIR" "$WIKI_ENGINE_RESOURCE_DIR"
+npm ci --omit=dev --ignore-scripts --prefix "$ROOT/wiki-engine" >/dev/null
 rsync -a \
   --exclude '.gitkeep' \
   --exclude 'README.md' \
@@ -178,10 +176,18 @@ node "$ROOT/wiki-engine/tools/render-site.mjs" \
   --source-root "$RUNTIME_DEFAULTS_WORK_DIR/1Context/user-wiki/source" \
   --output "$RUNTIME_DEFAULTS_WORK_DIR/1Context/user-wiki/site" \
   --result-json "$RUNTIME_DEFAULTS_WORK_DIR/render-site-result.json" >/dev/null
+python3 "$ROOT/scripts/write-runtime-defaults-manifest.py" \
+  --runtime-defaults-root "$RUNTIME_DEFAULTS_WORK_DIR/1Context" \
+  --wiki-engine-root "$ROOT/wiki-engine" \
+  --render-result "$RUNTIME_DEFAULTS_WORK_DIR/render-site-result.json" \
+  --version "$VERSION" \
+  --output "$RUNTIME_DEFAULTS_WORK_DIR/1Context/.1context/runtime-defaults-manifest.json"
 ditto "$RUNTIME_DEFAULTS_WORK_DIR/1Context" "$RUNTIME_DEFAULTS_RESOURCE_DIR/1Context"
 rsync -a \
-  --exclude 'node_modules' \
   --exclude 'package-lock.json' \
+  --exclude 'node_modules/.bin' \
+  --exclude 'node_modules/.package-lock.json' \
+  --exclude 'node_modules/*/bin' \
   --exclude 'README.md' \
   "$ROOT/wiki-engine/" \
   "$WIKI_ENGINE_RESOURCE_DIR/"

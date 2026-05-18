@@ -487,7 +487,7 @@ plugin tree. The factory must keep package-smoke checks that fail on
   the original exit code. Regression proof: `scripts/test-release-train.sh`
   creates a tracked-file dirty fixture and asserts official dry-run build stops
   at `build-official-validate-preflight` with status `failed`.
-- 2026-05-13: Reintroduced memory runtime as a small release artifact instead
+- 2026-05-13: Historical now-retired path: reintroduced memory runtime as a small release artifact instead
   of a source checkout. `release/memory-runtime/CONTRACT.md` defines the
   allowlist; `scripts/build-memory-runtime-artifact.sh` builds
   `dist/release-tools/memory-runtime` from static HTML/JSON source, rejects
@@ -502,7 +502,8 @@ plugin tree. The factory must keep package-smoke checks that fail on
   macos`, `./scripts/test-release-train.sh`, `./scripts/package-macos-smoke.sh`,
   `./scripts/test-launch-agent-package.sh`, `./scripts/test.sh`, and
   `git diff --check`. The packaged artifact is 40 KB on disk and contains only
-  the allowlisted static wiki seed plus manifest.
+  the allowlisted static wiki seed plus manifest. This path was superseded on
+  2026-05-18 by the single RuntimeDefaults plus WikiEngine production shape.
 - 2026-05-13: Wired the official real-Mac proof to cover the remaining
   uninstall/reinstall lane for the next tagged release. Official
   `release-train.sh prove --runner-execute` now enables

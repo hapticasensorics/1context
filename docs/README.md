@@ -9,6 +9,9 @@ that operators and contributors should use.
 - [Wiki Memory Runtime V0 Goal](goals/1context-wiki-memory-runtime-v0-goal.md):
   active close-loop checklist for the user-owned wiki runtime, Swift publisher,
   bundled renderer, local web proof, and future memory-core authoring surfaces.
+- [Wiki Runtime Production Shape Goal](goals/1context-wiki-runtime-production-shape-goal.md):
+  active cleanup checklist for retiring duplicate shipped wiki runtime
+  artifacts and proving the `RuntimeDefaults` plus `WikiEngine` app shape.
 - [Delete Bloat Goal](goals/1context-delete-bloat-goal.md): active priority for
   deleting old release paths, compatibility shims, stale docs, generated state,
   and product test hooks before adding more release machinery.

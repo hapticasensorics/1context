@@ -22,7 +22,15 @@ struct WikiRuntimeDefaultsInstallerTests {
       withIntermediateDirectories: true
     )
     try FileManager.default.createDirectory(
+      at: defaultOneContext.appendingPathComponent("user-wiki/site/.1context", isDirectory: true),
+      withIntermediateDirectories: true
+    )
+    try FileManager.default.createDirectory(
       at: defaultOneContext.appendingPathComponent("context-engine/prompts", isDirectory: true),
+      withIntermediateDirectories: true
+    )
+    try FileManager.default.createDirectory(
+      at: defaultOneContext.appendingPathComponent(".1context", isDirectory: true),
       withIntermediateDirectories: true
     )
     try "# Default Wiki\n".write(
@@ -35,8 +43,28 @@ struct WikiRuntimeDefaultsInstallerTests {
       atomically: true,
       encoding: .utf8
     )
+    try #"{"schema_version":"wiki.route-manifest.v1"}"#.write(
+      to: defaultOneContext.appendingPathComponent("user-wiki/site/.1context/route-manifest.json"),
+      atomically: true,
+      encoding: .utf8
+    )
     try "# Prompt\n".write(
       to: defaultOneContext.appendingPathComponent("context-engine/prompts/agent.md"),
+      atomically: true,
+      encoding: .utf8
+    )
+    try """
+    {
+      "schema_version": "1context.runtime-defaults-manifest.v1",
+      "release_version": "0.1.test",
+      "hashes": {
+        "runtime_defaults_source": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "runtime_defaults_site": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "wiki_engine": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+      }
+    }
+    """.write(
+      to: defaultOneContext.appendingPathComponent(".1context/runtime-defaults-manifest.json"),
       atomically: true,
       encoding: .utf8
     )
@@ -65,13 +93,18 @@ struct WikiRuntimeDefaultsInstallerTests {
     #expect(result.source == "app-bundle://RuntimeDefaults/1Context")
     #expect(result.preserved.contains("user-wiki/wiki.toml"))
     #expect(result.copied.contains("user-wiki/site/index.html"))
+    #expect(result.copied.contains("user-wiki/site/.1context/route-manifest.json"))
     #expect(result.copied.contains("context-engine/prompts/agent.md"))
+    #expect(result.packagedManifest?.releaseVersion == "0.1.test")
+    #expect(result.packagedManifest?.runtimeDefaultsSourceHash == "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
     #expect(result.proposals.contains("1Context/context-engine/proposals/wiki/runtime-defaults/user-wiki__wiki.toml.proposal.json"))
     #expect(
       try String(contentsOf: paths.userWikiDirectory.appendingPathComponent("wiki.toml"), encoding: .utf8)
         == "user edit\n"
     )
     #expect(FileManager.default.fileExists(atPath: paths.userWikiSiteDirectory.appendingPathComponent("index.html").path))
+    #expect(FileManager.default.fileExists(atPath: paths.userWikiSiteDirectory.appendingPathComponent(".1context/route-manifest.json").path))
+    #expect(!FileManager.default.fileExists(atPath: paths.userContentDirectory.appendingPathComponent(".1context/runtime-defaults-manifest.json").path))
 
     let ledger = paths.appSupportSetupDirectory.appendingPathComponent("runtime-defaults-install.json")
     #expect(FileManager.default.fileExists(atPath: ledger.path))
@@ -79,6 +112,7 @@ struct WikiRuntimeDefaultsInstallerTests {
     #expect(!ledgerText.contains(root.path))
     let ledgerResult = try JSONDecoder().decode(WikiRuntimeDefaultsInstallResult.self, from: Data(ledgerText.utf8))
     #expect(ledgerResult.copied.contains("user-wiki/site/index.html"))
+    #expect(ledgerResult.packagedManifest == result.packagedManifest)
     #expect(ledgerResult.proposals == result.proposals)
     let proposal = paths.userContentDirectory.appendingPathComponent("context-engine/proposals/wiki/runtime-defaults/user-wiki__wiki.toml.proposal.json")
     #expect(FileManager.default.fileExists(atPath: proposal.path))

@@ -303,9 +303,10 @@ renderer slice. This goal is the close-loop product milestone around it.
 - [x] Delete old renderer/package scripts that require host Node, runtime
   `npm install`, or source-tree assumptions in the installed app path. Evidence:
   `scripts/build-macos-app.sh` pre-materializes and pre-renders
-  `RuntimeDefaults/1Context/user-wiki/site` at build time; package smoke proves
-  `Contents/Resources/WikiEngine` has no `node_modules` or `package-lock.json`
-  and the app bundle has no `memory-core` source checkout.
+  `RuntimeDefaults/1Context/user-wiki/site` at build time; production-shape
+  cleanup vendors the small `WikiEngine` production dependencies while package
+  smoke still forbids package locks, executable npm shims, runtime package
+  installs, and a bundled `memory-core` source checkout.
 - [x] Delete placeholder publication behavior after Swift coordinator lands.
   Evidence: `ensurePlaceholderSite()` and `placeholderHTML()` are gone from
   `macos/Sources` and `macos/Tests`; `wiki.prepare` now calls

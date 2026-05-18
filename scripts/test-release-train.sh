@@ -109,10 +109,9 @@ bash -n \
   "$ROOT/scripts/release/internal/lib-gui-evidence.sh" \
   "$ROOT/scripts/release/internal/prove-remote-sparkle-update.sh" \
   "$ROOT/scripts/release/internal/self-hosted-update-proof.sh" \
-  "$ROOT/scripts/build-memory-runtime-artifact.sh" \
   "$ROOT/scripts/write-runner-attestation.sh" \
   "$ROOT/scripts/package-macos-smoke.sh"
-python3 -m py_compile "$ROOT/scripts/release-manifest.py"
+python3 -m py_compile "$ROOT/scripts/release-manifest.py" "$ROOT/scripts/write-runtime-defaults-manifest.py"
 
 "$ROOT/scripts/release-manifest.py" validate
 if ! /bin/bash "$ROOT/scripts/release-train.sh" validate > "$TMP_DIR/system-bash-validate.out" 2>&1; then
@@ -156,10 +155,12 @@ test -f "$ROOT/release/tools/caddy/darwin-arm64/caddy-v2.11.2-darwin-arm64.tar.g
   cd "$ROOT/release/tools/caddy/darwin-arm64"
   shasum -a 256 -c caddy-v2.11.2-darwin-arm64.tar.gz.sha256
 ) >/dev/null
-"$ROOT/scripts/build-memory-runtime-artifact.sh" >/dev/null
-test -f "$ROOT/dist/release-tools/memory-runtime/manifest.json"
-test -f "$ROOT/dist/release-tools/memory-runtime/wiki-site/index.html"
-grep -q '"schema_version": "1context.memory-runtime.v1"' "$ROOT/dist/release-tools/memory-runtime/manifest.json"
+if scan_text "build-memory-runtime-artifact|release/memory-runtime" "$ROOT/scripts" "$ROOT/macos/Sources" \
+  | grep -v "scripts/test-release-train.sh" >/tmp/1ctx-retired-memory-runtime-active-refs.txt; then
+  echo "Active build/runtime code must not reference the retired memory-runtime artifact." >&2
+  cat /tmp/1ctx-retired-memory-runtime-active-refs.txt >&2
+  exit 1
+fi
 
 MANDATORY_OK="$TMP_DIR/mandatory-ok.xml"
 MANDATORY_WITH_NOTES="$TMP_DIR/mandatory-with-notes.xml"

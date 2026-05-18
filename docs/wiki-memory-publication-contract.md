@@ -141,16 +141,19 @@ Installed app bundle shape:
   Contents/MacOS/1Context
   Contents/MacOS/OneContextDaemon
   Contents/Resources/WikiEngine/
-    render-site
-    assets/
-    schemas/
+    tools/render-site.mjs
+    tools/render-to-dir.mjs
+    theme/
   Contents/Resources/RuntimeDefaults/
     1Context/user-wiki/
     1Context/context-engine/
+    1Context/.1context/runtime-defaults-manifest.json
 ```
 
 The installed app must not need the development `memory-core` tree in order to
-open the wiki.
+open the wiki. It also must not ship the retired `memory-runtime` fallback
+artifact; freshness is proven by the RuntimeDefaults manifest and the packaged
+WikiEngine source/artifact identity.
 
 ## Logical Ids
 
@@ -561,6 +564,8 @@ tests is a release blocker.
 - Wiki rendering is not a conceptual child of `memory-core`.
 - No installed-app path requires source checkout, `uv run`, system Python,
   system Node, `npm install`, or `npm ci`.
+- Packaged defaults include a portable `runtime-defaults-manifest.json` with
+  release version, source hash, site hash, renderer hash, and render counts.
 - `runtime-test` and generated state are never packaged as public defaults.
 
 ## V0 Blockers

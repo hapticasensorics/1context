@@ -7,6 +7,7 @@ public struct WikiRuntimeDefaultsInstallResult: Codable, Equatable, Sendable {
   public var status: String
   public var installedAt: String
   public var source: String
+  public var packagedManifest: WikiRuntimeDefaultsManifestIdentity?
   public var copied: [String]
   public var preserved: [String]
   public var proposals: [String]
@@ -16,6 +17,7 @@ public struct WikiRuntimeDefaultsInstallResult: Codable, Equatable, Sendable {
     status: String,
     installedAt: String,
     source: String,
+    packagedManifest: WikiRuntimeDefaultsManifestIdentity? = nil,
     copied: [String],
     preserved: [String],
     proposals: [String] = []
@@ -24,9 +26,32 @@ public struct WikiRuntimeDefaultsInstallResult: Codable, Equatable, Sendable {
     self.status = status
     self.installedAt = installedAt
     self.source = source
+    self.packagedManifest = packagedManifest
     self.copied = copied
     self.preserved = preserved
     self.proposals = proposals
+  }
+}
+
+public struct WikiRuntimeDefaultsManifestIdentity: Codable, Equatable, Sendable {
+  public var schemaVersion: String
+  public var releaseVersion: String
+  public var runtimeDefaultsSourceHash: String
+  public var runtimeDefaultsSiteHash: String
+  public var wikiEngineHash: String
+
+  public init(
+    schemaVersion: String,
+    releaseVersion: String,
+    runtimeDefaultsSourceHash: String,
+    runtimeDefaultsSiteHash: String,
+    wikiEngineHash: String
+  ) {
+    self.schemaVersion = schemaVersion
+    self.releaseVersion = releaseVersion
+    self.runtimeDefaultsSourceHash = runtimeDefaultsSourceHash
+    self.runtimeDefaultsSiteHash = runtimeDefaultsSiteHash
+    self.wikiEngineHash = wikiEngineHash
   }
 }
 
@@ -40,6 +65,30 @@ private struct RuntimeDefaultConflictProposal: Codable, Equatable {
   var proposedAction: String
   var packagedDefaultSHA256: String
   var userFileSHA256: String
+}
+
+private struct RuntimeDefaultsManifestDocument: Decodable {
+  var schemaVersion: String
+  var releaseVersion: String
+  var hashes: Hashes
+
+  struct Hashes: Decodable {
+    var runtimeDefaultsSource: String
+    var runtimeDefaultsSite: String
+    var wikiEngine: String
+
+    enum CodingKeys: String, CodingKey {
+      case runtimeDefaultsSource = "runtime_defaults_source"
+      case runtimeDefaultsSite = "runtime_defaults_site"
+      case wikiEngine = "wiki_engine"
+    }
+  }
+
+  enum CodingKeys: String, CodingKey {
+    case schemaVersion = "schema_version"
+    case releaseVersion = "release_version"
+    case hashes
+  }
 }
 
 public final class WikiRuntimeDefaultsInstaller: @unchecked Sendable {
@@ -104,6 +153,7 @@ public final class WikiRuntimeDefaultsInstaller: @unchecked Sendable {
       try writeLedger(result)
       return result
     }
+    let manifestIdentity = packagedManifestIdentity(sourceRoot: sourceRoot)
 
     try RuntimePermissions.ensurePrivateDirectory(runtimePaths.userContentDirectory)
     var copied: [String] = []
@@ -117,10 +167,16 @@ public final class WikiRuntimeDefaultsInstaller: @unchecked Sendable {
     guard let enumerator = fileManager.enumerator(
       at: sourceRoot,
       includingPropertiesForKeys: [.isDirectoryKey, .isSymbolicLinkKey],
-      options: [.skipsHiddenFiles],
+      options: [],
       errorHandler: nil
     ) else {
-      let result = result(status: "failed", copied: [], preserved: [], source: "app-bundle://RuntimeDefaults/1Context")
+      let result = result(
+        status: "failed",
+        copied: [],
+        preserved: [],
+        source: "app-bundle://RuntimeDefaults/1Context",
+        packagedManifest: manifestIdentity
+      )
       try writeLedger(result)
       return result
     }
@@ -130,6 +186,12 @@ public final class WikiRuntimeDefaultsInstaller: @unchecked Sendable {
       if relative.isEmpty { continue }
       let destination = runtimePaths.userContentDirectory.appendingPathComponent(relative)
       let values = try sourceURL.resourceValues(forKeys: [.isDirectoryKey, .isSymbolicLinkKey])
+      if relative == ".1context" || relative.hasPrefix(".1context/") {
+        if values.isDirectory == true {
+          enumerator.skipDescendants()
+        }
+        continue
+      }
       if values.isSymbolicLink == true {
         preserved.append(relative)
         continue
@@ -163,7 +225,8 @@ public final class WikiRuntimeDefaultsInstaller: @unchecked Sendable {
       copied: copied.sorted(),
       preserved: preserved.sorted(),
       proposals: proposals.sorted(),
-      source: "app-bundle://RuntimeDefaults/1Context"
+      source: "app-bundle://RuntimeDefaults/1Context",
+      packagedManifest: manifestIdentity
     )
     try writeLedger(result)
     return result
@@ -174,12 +237,14 @@ public final class WikiRuntimeDefaultsInstaller: @unchecked Sendable {
     copied: [String],
     preserved: [String],
     proposals: [String] = [],
-    source: String
+    source: String,
+    packagedManifest: WikiRuntimeDefaultsManifestIdentity? = nil
   ) -> WikiRuntimeDefaultsInstallResult {
     WikiRuntimeDefaultsInstallResult(
       status: status,
       installedAt: ISO8601DateFormatter().string(from: now()),
       source: source,
+      packagedManifest: packagedManifest,
       copied: copied,
       preserved: preserved,
       proposals: proposals
@@ -191,6 +256,24 @@ public final class WikiRuntimeDefaultsInstaller: @unchecked Sendable {
     let url = runtimePaths.appSupportSetupDirectory.appendingPathComponent("runtime-defaults-install.json")
     let data = try encoder.encode(result)
     try RuntimePermissions.writePrivateData(data, to: url)
+  }
+
+  private func packagedManifestIdentity(sourceRoot: URL) -> WikiRuntimeDefaultsManifestIdentity? {
+    let manifestURL = sourceRoot
+      .appendingPathComponent(".1context", isDirectory: true)
+      .appendingPathComponent("runtime-defaults-manifest.json")
+    guard let data = try? Data(contentsOf: manifestURL),
+      let manifest = try? JSONDecoder().decode(RuntimeDefaultsManifestDocument.self, from: data)
+    else {
+      return nil
+    }
+    return WikiRuntimeDefaultsManifestIdentity(
+      schemaVersion: manifest.schemaVersion,
+      releaseVersion: manifest.releaseVersion,
+      runtimeDefaultsSourceHash: manifest.hashes.runtimeDefaultsSource,
+      runtimeDefaultsSiteHash: manifest.hashes.runtimeDefaultsSite,
+      wikiEngineHash: manifest.hashes.wikiEngine
+    )
   }
 
   private func relativePath(_ url: URL, under root: URL) -> String {

@@ -14,8 +14,8 @@ fi
 INFO="$APP/Contents/Info.plist"
 DAEMON_PLIST="$APP/Contents/Library/LaunchDaemons/com.haptica.1context.local-web-proxy.plist"
 MEMORY_CORE="$APP/Contents/Resources/memory-core"
-MEMORY_RUNTIME="$APP/Contents/Resources/memory-runtime"
 RUNTIME_DEFAULTS="$APP/Contents/Resources/RuntimeDefaults/1Context"
+RUNTIME_DEFAULTS_MANIFEST="$RUNTIME_DEFAULTS/.1context/runtime-defaults-manifest.json"
 WIKI_ENGINE="$APP/Contents/Resources/WikiEngine"
 
 plutil -lint "$INFO" >/dev/null
@@ -45,39 +45,10 @@ if [[ -e "$MEMORY_CORE" ]]; then
   echo "Packaged app must not include the memory-core source checkout." >&2
   exit 1
 fi
-if [[ ! -f "$MEMORY_RUNTIME/manifest.json" || ! -f "$MEMORY_RUNTIME/wiki-site/index.html" ]]; then
-  echo "Packaged app must include the allowlisted memory-runtime artifact." >&2
+if [[ -e "$APP/Contents/Resources/memory-runtime" ]]; then
+  echo "Packaged app must not include the retired memory-runtime artifact." >&2
   exit 1
 fi
-python3 - "$MEMORY_RUNTIME" <<'PY'
-import json
-import sys
-from pathlib import Path
-
-root = Path(sys.argv[1])
-manifest = json.loads((root / "manifest.json").read_text(encoding="utf-8"))
-if manifest.get("schema_version") != "1context.memory-runtime.v1":
-    raise SystemExit("memory-runtime manifest schema mismatch")
-total_bytes = int(manifest.get("total_bytes") or 0)
-if total_bytes <= 0 or total_bytes > 262_144:
-    raise SystemExit(f"memory-runtime size outside contract: {total_bytes}")
-paths = {entry.get("path") for entry in manifest.get("files", [])}
-required = {
-    "wiki-site/index.html",
-    "wiki-site/your-context/index.html",
-    "wiki-site/for-you/index.html",
-    "wiki-site/__1context/health",
-    "wiki-site/api/wiki/search.json",
-    "wiki-site/api/wiki/bookmarks.json",
-    "wiki-site/api/wiki/state.json",
-}
-missing = sorted(required - paths)
-if missing:
-    raise SystemExit("memory-runtime missing files: " + ", ".join(missing))
-for path in root.rglob("*"):
-    if path.is_file() and path.suffix in {".py", ".pyc", ".sh", ".swift", ".ts", ".tsx", ".js", ".mjs", ".md"}:
-        raise SystemExit(f"memory-runtime contains source/script file: {path.relative_to(root)}")
-PY
 if [[ ! -f "$RUNTIME_DEFAULTS/user-wiki/wiki.toml" ]]; then
   echo "Packaged app must include user-wiki runtime defaults." >&2
   exit 1
@@ -86,12 +57,53 @@ if [[ ! -f "$RUNTIME_DEFAULTS/user-wiki/site/.1context/route-manifest.json" ]]; 
   echo "Packaged runtime defaults must include a pre-rendered last-good wiki site." >&2
   exit 1
 fi
+if [[ ! -f "$RUNTIME_DEFAULTS_MANIFEST" ]]; then
+  echo "Packaged runtime defaults must include a freshness manifest." >&2
+  exit 1
+fi
+python3 - "$RUNTIME_DEFAULTS_MANIFEST" "$VERSION" <<'PY'
+import json
+import re
+import sys
+from pathlib import Path
+
+manifest = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+version = sys.argv[2]
+if manifest.get("schema_version") != "1context.runtime-defaults-manifest.v1":
+    raise SystemExit("runtime defaults manifest schema mismatch")
+if manifest.get("release_version") != version:
+    raise SystemExit("runtime defaults manifest version mismatch")
+if manifest.get("runtime_defaults") != "app-bundle://RuntimeDefaults/1Context":
+    raise SystemExit("runtime defaults manifest must use portable defaults identity")
+if manifest.get("wiki_engine") != "app-bundle://WikiEngine":
+    raise SystemExit("runtime defaults manifest must use portable renderer identity")
+hashes = manifest.get("hashes") or {}
+for key in ["runtime_defaults_source", "runtime_defaults_site", "wiki_engine"]:
+    value = hashes.get(key)
+    if not isinstance(value, str) or not re.fullmatch(r"[0-9a-f]{64}", value):
+        raise SystemExit(f"runtime defaults manifest has invalid hash: {key}")
+render = manifest.get("render_result") or {}
+if render.get("status") != "published":
+    raise SystemExit("runtime defaults manifest must record a successful render")
+if int(render.get("route_count") or 0) < 5:
+    raise SystemExit("runtime defaults manifest route count is too small")
+if int(render.get("markdown_twin_count") or 0) < 5:
+    raise SystemExit("runtime defaults manifest markdown twin count is too small")
+PY
 if [[ ! -f "$WIKI_ENGINE/tools/render-site.mjs" ]]; then
   echo "Packaged app must include the first-class wiki renderer source." >&2
   exit 1
 fi
-if [[ -e "$WIKI_ENGINE/node_modules" || -e "$WIKI_ENGINE/package-lock.json" ]]; then
-  echo "Packaged wiki renderer source must not include runtime package installs." >&2
+if [[ ! -d "$WIKI_ENGINE/node_modules/gray-matter" || ! -d "$WIKI_ENGINE/node_modules/marked" ]]; then
+  echo "Packaged wiki renderer must include vendored production dependencies." >&2
+  exit 1
+fi
+if [[ -e "$WIKI_ENGINE/package-lock.json" || -e "$WIKI_ENGINE/node_modules/.bin" || -e "$WIKI_ENGINE/node_modules/.package-lock.json" ]]; then
+  echo "Packaged wiki renderer must not include package locks or executable npm bin shims." >&2
+  exit 1
+fi
+if find "$WIKI_ENGINE/node_modules" -path '*/bin/*' -print -quit | grep -q .; then
+  echo "Packaged wiki renderer must not include executable npm package bin directories." >&2
   exit 1
 fi
 if find "$APP/Contents/Resources" -path '*/runtime-test/*' -print -quit | grep -q .; then

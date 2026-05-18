@@ -258,37 +258,30 @@
 </code></pre>
 
       <h3>Repo-owned implementation files</h3>
-      <pre><code>memory-core/
-  wiki/
-    README.md
-    wiki.toml
-    menu/                         # seed/template families only
-  src/onectx/wiki/
-    families.py                   # discover family.toml
-    ensure.py                     # create missing source/talk/templates
-    render.py                     # call wiki-engine renderer
-    routes.py                     # load generated render-manifest routes
-    site.py                       # site-manifest, content-index, stats
-    publish.py                    # new: build, validate, atomic publish bundle
-    agent_status.py               # new: summarize wiki state for agent startup
-    cli.py                        # expose wiki publish and diagnostics
-  tests/
-    test_wiki_publish.py          # new publish invariants
-    test_wiki_stats.py
-    test_wiki_ensure.py
-    test_wiki_route_executor.py
+      <pre><code>runtime/
+  1Context/
+    user-wiki/                    # public-safe shipped defaults
+    context-engine/               # public-safe prompts, agents, ledgers
+
+wiki-engine/
+  tools/render-site.mjs           # whole-site renderer entrypoint
+  tools/render-to-dir.mjs         # page/talk renderer
+  theme/                          # bundled CSS, JS, and icons
+
+macos/Sources/OneContextWikiRuntime/
+  WikiRuntimeDefaultsInstaller.swift  # copy missing defaults, preserve user files
+  WikiEngineRenderer.swift            # invoke bundled renderer with explicit roots
+  WikiRenderCoordinator.swift         # hash-aware staging, validation, promotion
 
 macos/Sources/OneContextLocalWeb/
-  LocalWeb.swift                  # Caddy lifecycle, current site paths
+  LocalWeb.swift                  # Caddy lifecycle and current site paths
   WikiLocalAPI.swift              # dynamic /api/wiki/* adapter
-  WikiStaticBundleGate.swift      # new: mechanical safe-to-serve gate and swap helper
 
 macos/Sources/OneContextDaemon/
-  main.swift                      # call publisher instead of placeholder-only path
+  main.swift                      # install defaults, start API, request render/publish
 
-release/memory-runtime/
-  CONTRACT.md
-  source/wiki-site/               # bundled fallback shell only
+memory-core/src/onectx/wiki_interface/
+  *.py                            # memory-facing wiki authoring boundary only
 </code></pre>
     </section>
 
@@ -621,8 +614,8 @@ Agent non-goals:
       <h3>4. Make local web consume published bundles</h3>
       <ul>
         <li>Add <code>WikiStaticBundleGate.swift</code> for mechanical bundle checks and atomic directory swaps between <code>next</code>, <code>current</code>, and <code>previous</code>.</li>
-        <li>Change daemon refresh from placeholder-only to: use last good bundle, publish fresh bundle when available, otherwise seed placeholder.</li>
-        <li>Keep the static fallback shell in <code>release/memory-runtime/source/wiki-site</code>.</li>
+        <li>Change daemon refresh from placeholder-only to: install missing <code>RuntimeDefaults</code>, render fresh source through <code>WikiEngine</code>, publish the new last-good bundle when validation passes, and preserve the previous last-good bundle on failure.</li>
+        <li>Do not keep a separate static fallback shell; the retired <code>release/memory-runtime</code> artifact has been replaced by <code>RuntimeDefaults</code> plus the renderer freshness manifest.</li>
       </ul>
 
       <h3>5. Expose the right context to agents</h3>

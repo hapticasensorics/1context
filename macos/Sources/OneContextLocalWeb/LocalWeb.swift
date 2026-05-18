@@ -556,9 +556,6 @@ public final class CaddyManager: @unchecked Sendable {
 
   public func ensureStaticSupportFiles() throws {
     try RuntimePermissions.ensurePrivateDirectory(paths.wikiCurrent)
-    if try copyBundledMemoryRuntimeSiteIfNeeded() {
-      return
-    }
     try RuntimePermissions.ensurePrivateDirectory(paths.wikiCurrent.appendingPathComponent("__1context", isDirectory: true))
     try writeString(staticJSON(["status": "ok", "service": "1context-local-web"]), to: paths.wikiCurrent.appendingPathComponent("__1context/health"))
     try writeString(staticJSON(["query": "", "matches": [], "pages": []]), to: paths.wikiCurrent.appendingPathComponent("api/wiki/search.json"))
@@ -880,54 +877,6 @@ public final class CaddyManager: @unchecked Sendable {
   private func writeString(_ value: String, to url: URL) throws {
     try RuntimePermissions.ensurePrivateDirectory(url.deletingLastPathComponent())
     try RuntimePermissions.writePrivateString(value, toFile: url.path)
-  }
-
-  private func copyBundledMemoryRuntimeSiteIfNeeded() throws -> Bool {
-    guard !fileManager.fileExists(atPath: paths.wikiCurrent.appendingPathComponent("index.html").path),
-      let source = bundledMemoryRuntimeSiteURL(),
-      fileManager.fileExists(atPath: source.appendingPathComponent("index.html").path)
-    else {
-      return false
-    }
-
-    try copyDirectoryContents(from: source, to: paths.wikiCurrent)
-    return true
-  }
-
-  private func copyDirectoryContents(from source: URL, to destination: URL) throws {
-    try RuntimePermissions.ensurePrivateDirectory(destination)
-    guard let enumerator = fileManager.enumerator(
-      at: source,
-      includingPropertiesForKeys: [.isDirectoryKey],
-      options: [.skipsHiddenFiles]
-    ) else {
-      return
-    }
-
-    for case let sourceURL as URL in enumerator {
-      let relativePath = sourceURL.path.replacingOccurrences(of: source.path + "/", with: "")
-      let destinationURL = destination.appendingPathComponent(relativePath)
-      let values = try sourceURL.resourceValues(forKeys: [.isDirectoryKey])
-      if values.isDirectory == true {
-        try RuntimePermissions.ensurePrivateDirectory(destinationURL)
-      } else {
-        try RuntimePermissions.ensurePrivateDirectory(destinationURL.deletingLastPathComponent())
-        if fileManager.fileExists(atPath: destinationURL.path) {
-          try fileManager.removeItem(at: destinationURL)
-        }
-        try fileManager.copyItem(at: sourceURL, to: destinationURL)
-        chmod(destinationURL.path, RuntimePermissions.privateFileMode)
-      }
-    }
-  }
-
-  private func bundledMemoryRuntimeSiteURL() -> URL? {
-    guard let executableDirectory = currentExecutableURL()?.deletingLastPathComponent() else {
-      return nil
-    }
-    return executableDirectory
-      .deletingLastPathComponent()
-      .appendingPathComponent("Resources/memory-runtime/wiki-site", isDirectory: true)
   }
 
   private func staticJSON(_ payload: [String: Any]) throws -> String {

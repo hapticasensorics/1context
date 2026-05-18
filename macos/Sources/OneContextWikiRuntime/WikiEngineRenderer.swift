@@ -12,11 +12,18 @@ public struct WikiEngineRendererConfig: Equatable, Sendable {
     self.renderTool = renderTool
   }
 
-  public static func discover(environment: [String: String] = ProcessInfo.processInfo.environment) -> WikiEngineRendererConfig? {
-    guard let enginePath = environment["ONECONTEXT_WIKI_ENGINE_DIR"], !enginePath.isEmpty else {
+  public static func discover(
+    environment: [String: String] = ProcessInfo.processInfo.environment,
+    resourceURL: URL? = Bundle.main.resourceURL,
+    executableURL: URL? = Bundle.main.executableURL
+  ) -> WikiEngineRendererConfig? {
+    guard let engine = discoverEngineDirectory(
+      environment: environment,
+      resourceURL: resourceURL,
+      executableURL: executableURL
+    ) else {
       return nil
     }
-    let engine = URL(fileURLWithPath: enginePath, isDirectory: true)
     let nodePath = environment["ONECONTEXT_NODE"] ?? "/usr/bin/env"
     let nodeExecutable = URL(fileURLWithPath: nodePath)
     return WikiEngineRendererConfig(
@@ -24,6 +31,36 @@ public struct WikiEngineRendererConfig: Equatable, Sendable {
       engineDirectory: engine,
       renderTool: engine.appendingPathComponent("tools/render-site.mjs")
     )
+  }
+
+  private static func discoverEngineDirectory(
+    environment: [String: String],
+    resourceURL: URL?,
+    executableURL: URL?
+  ) -> URL? {
+    if let enginePath = environment["ONECONTEXT_WIKI_ENGINE_DIR"], !enginePath.isEmpty {
+      return URL(fileURLWithPath: enginePath, isDirectory: true)
+    }
+
+    if let resourceURL {
+      let candidate = resourceURL.appendingPathComponent("WikiEngine", isDirectory: true)
+      if FileManager.default.fileExists(atPath: candidate.appendingPathComponent("tools/render-site.mjs").path) {
+        return candidate
+      }
+    }
+
+    guard let executableURL else {
+      return nil
+    }
+    let candidate = executableURL
+      .deletingLastPathComponent()
+      .deletingLastPathComponent()
+      .appendingPathComponent("Resources", isDirectory: true)
+      .appendingPathComponent("WikiEngine", isDirectory: true)
+    if FileManager.default.fileExists(atPath: candidate.appendingPathComponent("tools/render-site.mjs").path) {
+      return candidate
+    }
+    return nil
   }
 }
 
