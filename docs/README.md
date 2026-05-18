@@ -22,7 +22,7 @@ that operators and contributors should use.
   permissions, update, install, and local-web boundaries.
 - [Local Web Contract](local-web-contract.md): local HTTPS, Caddy, static wiki
   publication, daemon API, cloud compatibility, and user-wiki boundaries.
-- [Wiki Productionization Spec](wiki-productionization.md): where wiki source,
+- [Wiki Productionization Plan](wiki-productionization.html): where wiki source,
   default templates, generated files, and served local-web artifacts live in the
   repo and on an installed Mac.
 - [Permissions](../PERMISSIONS.md): ownership, consent, storage, privacy, and

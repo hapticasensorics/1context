@@ -1,0 +1,1510 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Apple Signing, Developer Certificates, Provisioning, and Release Workflows</title>
+  <style>
+    :root {
+      --ink: #1c1f24;
+      --muted: #5d6673;
+      --paper: #fbfaf7;
+      --panel: #ffffff;
+      --line: #d9dde3;
+      --line-strong: #b8c0cc;
+      --teal: #0a6f68;
+      --teal-soft: #dff4f0;
+      --green: #287342;
+      --green-soft: #e4f4e9;
+      --amber: #9b6200;
+      --amber-soft: #fff0cf;
+      --rose: #a33d5a;
+      --rose-soft: #fde5ec;
+      --blue: #2f64a3;
+      --blue-soft: #e4eefc;
+      --code: #f4f6f8;
+      --shadow: 0 18px 40px rgba(24, 31, 42, .09);
+      --radius: 8px;
+      --max: 1180px;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html {
+      scroll-behavior: smooth;
+    }
+
+    body {
+      margin: 0;
+      color: var(--ink);
+      background: var(--paper);
+      font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      line-height: 1.55;
+    }
+
+    a {
+      color: var(--blue);
+      text-decoration: none;
+    }
+
+    a:hover {
+      text-decoration: underline;
+    }
+
+    code, pre, kbd {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+    }
+
+    pre {
+      overflow-x: auto;
+      background: var(--code);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 16px;
+      font-size: 13px;
+      line-height: 1.55;
+    }
+
+    code {
+      background: var(--code);
+      border: 1px solid #e6e9ed;
+      border-radius: 5px;
+      padding: 1px 5px;
+      font-size: .92em;
+    }
+
+    pre code {
+      padding: 0;
+      border: 0;
+      background: transparent;
+      font-size: inherit;
+    }
+
+    .hero {
+      background:
+        linear-gradient(135deg, rgba(10, 111, 104, .08), rgba(47, 100, 163, .08) 45%, rgba(155, 98, 0, .08));
+      border-bottom: 1px solid var(--line);
+    }
+
+    .hero-inner {
+      max-width: var(--max);
+      margin: 0 auto;
+      padding: 56px 24px 28px;
+      display: grid;
+      grid-template-columns: minmax(0, 1.06fr) minmax(360px, .94fr);
+      gap: 34px;
+      align-items: center;
+    }
+
+    .eyebrow {
+      display: inline-flex;
+      gap: 8px;
+      align-items: center;
+      padding: 5px 9px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: rgba(255, 255, 255, .75);
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 650;
+    }
+
+    h1 {
+      margin: 18px 0 16px;
+      max-width: 900px;
+      font-size: clamp(36px, 6vw, 78px);
+      line-height: .98;
+      letter-spacing: 0;
+    }
+
+    .subtitle {
+      max-width: 760px;
+      color: #39414d;
+      font-size: clamp(18px, 2vw, 23px);
+      line-height: 1.42;
+      margin: 0 0 22px;
+    }
+
+    .hero-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .tag {
+      border: 1px solid var(--line);
+      background: rgba(255, 255, 255, .78);
+      border-radius: 999px;
+      padding: 6px 10px;
+    }
+
+    .hero-art {
+      background: rgba(255, 255, 255, .84);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      min-height: 360px;
+      padding: 18px;
+    }
+
+    .hero-art svg,
+    .diagram svg {
+      width: 100%;
+      height: auto;
+      display: block;
+    }
+
+    .layout {
+      max-width: var(--max);
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: 270px minmax(0, 1fr);
+      gap: 34px;
+      padding: 26px 24px 72px;
+    }
+
+    nav {
+      position: sticky;
+      top: 18px;
+      align-self: start;
+      background: rgba(255, 255, 255, .82);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 16px;
+      box-shadow: 0 10px 24px rgba(28, 31, 36, .05);
+    }
+
+    nav h2 {
+      margin: 0 0 10px;
+      font-size: 13px;
+      text-transform: uppercase;
+      letter-spacing: .08em;
+      color: var(--muted);
+    }
+
+    nav a {
+      display: block;
+      color: var(--ink);
+      padding: 7px 0;
+      border-top: 1px solid #eef0f2;
+      font-size: 14px;
+    }
+
+    main {
+      min-width: 0;
+    }
+
+    section {
+      margin: 0 0 34px;
+      padding: 28px;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      box-shadow: 0 10px 30px rgba(28, 31, 36, .045);
+    }
+
+    .plain-section {
+      background: transparent;
+      border: 0;
+      box-shadow: none;
+      padding: 0;
+    }
+
+    h2 {
+      margin: 0 0 12px;
+      font-size: clamp(26px, 3vw, 40px);
+      line-height: 1.1;
+      letter-spacing: 0;
+    }
+
+    h3 {
+      margin: 24px 0 9px;
+      font-size: 21px;
+      line-height: 1.2;
+      letter-spacing: 0;
+    }
+
+    h4 {
+      margin: 18px 0 8px;
+      font-size: 16px;
+      line-height: 1.25;
+    }
+
+    p {
+      margin: 0 0 14px;
+    }
+
+    ul, ol {
+      padding-left: 22px;
+      margin-top: 8px;
+      margin-bottom: 14px;
+    }
+
+    li {
+      margin: 6px 0;
+    }
+
+    .lede {
+      font-size: 18px;
+      color: #38404b;
+    }
+
+    .callout {
+      border: 1px solid var(--line);
+      border-left: 5px solid var(--teal);
+      background: var(--teal-soft);
+      border-radius: var(--radius);
+      padding: 16px;
+      margin: 18px 0;
+    }
+
+    .callout.amber {
+      border-left-color: var(--amber);
+      background: var(--amber-soft);
+    }
+
+    .callout.rose {
+      border-left-color: var(--rose);
+      background: var(--rose-soft);
+    }
+
+    .grid {
+      display: grid;
+      gap: 16px;
+    }
+
+    .grid.two {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .grid.three {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .card {
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: #fff;
+      padding: 16px;
+    }
+
+    .card h3,
+    .card h4 {
+      margin-top: 0;
+    }
+
+    .pill-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin: 10px 0;
+    }
+
+    .pill {
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 5px 9px;
+      background: #fff;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .file-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+    }
+
+    .file {
+      min-height: 144px;
+      padding: 14px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: #fff;
+    }
+
+    .file strong {
+      display: block;
+      margin-bottom: 6px;
+      font-size: 18px;
+    }
+
+    .file span {
+      display: block;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .diagram {
+      border: 1px solid var(--line);
+      background: #fff;
+      border-radius: var(--radius);
+      padding: 18px;
+      margin: 18px 0;
+      overflow: hidden;
+    }
+
+    .caption {
+      color: var(--muted);
+      font-size: 13px;
+      margin-top: 8px;
+    }
+
+    .timeline {
+      display: grid;
+      gap: 12px;
+      margin-top: 18px;
+    }
+
+    .timeline-item {
+      display: grid;
+      grid-template-columns: 130px minmax(0, 1fr);
+      gap: 16px;
+      padding: 14px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: #fff;
+    }
+
+    .timeline-date {
+      font-weight: 800;
+      color: var(--teal);
+    }
+
+    .steps {
+      counter-reset: step;
+      display: grid;
+      gap: 12px;
+    }
+
+    .step {
+      counter-increment: step;
+      display: grid;
+      grid-template-columns: 42px minmax(0, 1fr);
+      gap: 12px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 14px;
+      background: #fff;
+    }
+
+    .step::before {
+      content: counter(step);
+      width: 32px;
+      height: 32px;
+      border-radius: 999px;
+      display: grid;
+      place-items: center;
+      color: #fff;
+      background: var(--teal);
+      font-weight: 800;
+    }
+
+    .step h4 {
+      margin: 3px 0 6px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 14px;
+      background: #fff;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      overflow: hidden;
+      display: block;
+    }
+
+    thead, tbody, tr {
+      width: 100%;
+      display: table;
+      table-layout: fixed;
+    }
+
+    th, td {
+      border-bottom: 1px solid var(--line);
+      padding: 10px;
+      text-align: left;
+      vertical-align: top;
+    }
+
+    th {
+      background: #f2f5f6;
+      color: #303842;
+    }
+
+    tr:last-child td {
+      border-bottom: 0;
+    }
+
+    details {
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: #fff;
+      margin: 12px 0;
+      padding: 12px 14px;
+    }
+
+    summary {
+      cursor: pointer;
+      font-weight: 750;
+    }
+
+    .source-list {
+      columns: 2;
+      column-gap: 28px;
+    }
+
+    .source-list li {
+      break-inside: avoid;
+      margin-bottom: 10px;
+    }
+
+    .print-note {
+      display: none;
+    }
+
+    @media (max-width: 940px) {
+      .hero-inner,
+      .layout {
+        grid-template-columns: 1fr;
+      }
+
+      nav {
+        position: static;
+      }
+
+      .grid.two,
+      .grid.three,
+      .file-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    @media (max-width: 560px) {
+      .hero-inner,
+      .layout {
+        padding-left: 16px;
+        padding-right: 16px;
+      }
+
+      section {
+        padding: 20px;
+      }
+
+      .timeline-item,
+      .step {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    @media print {
+      body {
+        background: #fff;
+      }
+
+      .hero,
+      section,
+      nav {
+        box-shadow: none;
+      }
+
+      nav {
+        display: none;
+      }
+
+      .layout,
+      .hero-inner {
+        display: block;
+        max-width: none;
+      }
+
+      a::after {
+        content: " (" attr(href) ")";
+        font-size: 10px;
+        color: #555;
+      }
+
+      .print-note {
+        display: block;
+      }
+    }
+  </style>
+</head>
+<body>
+  <header class="hero">
+    <div class="hero-inner">
+      <div>
+        <div class="eyebrow">Professional guide | Updated May 18, 2026</div>
+        <h1>Apple Signing, Developer Certificates, and Provisioning</h1>
+        <p class="subtitle">
+          How Apple went from Mac code signatures to a full release trust system:
+          certificates, private keys, App IDs, entitlements, provisioning profiles,
+          Gatekeeper, notarization, TestFlight, App Store distribution, and CI.
+        </p>
+        <div class="hero-meta" aria-label="Topics covered">
+          <span class="tag">History</span>
+          <span class="tag">File extensions</span>
+          <span class="tag">Apple Developer website steps</span>
+          <span class="tag">Xcode and CI release flows</span>
+        </div>
+      </div>
+
+      <figure class="hero-art" aria-label="Illustration of Apple signing assets">
+        <svg viewBox="0 0 760 520" role="img" aria-labelledby="hero-title hero-desc">
+          <title id="hero-title">Signing system map</title>
+          <desc id="hero-desc">A certificate, profile, signed app, Apple service, and devices connected by trust lines.</desc>
+          <defs>
+            <filter id="softShadow" x="-20%" y="-20%" width="140%" height="140%">
+              <feDropShadow dx="0" dy="8" stdDeviation="10" flood-color="#1c1f24" flood-opacity=".16"/>
+            </filter>
+            <linearGradient id="deviceGrad" x1="0" x2="1" y1="0" y2="1">
+              <stop offset="0" stop-color="#0a6f68"/>
+              <stop offset="1" stop-color="#2f64a3"/>
+            </linearGradient>
+          </defs>
+
+          <rect x="22" y="24" width="716" height="472" rx="18" fill="#f7fbfa" stroke="#d9dde3"/>
+          <path d="M126 250 C206 104 376 104 444 220 C507 329 606 276 664 142" fill="none" stroke="#b8c0cc" stroke-width="3" stroke-dasharray="8 10"/>
+          <path d="M126 250 C235 375 432 380 554 286" fill="none" stroke="#b8c0cc" stroke-width="3" stroke-dasharray="8 10"/>
+
+          <g filter="url(#softShadow)">
+            <rect x="58" y="170" width="156" height="160" rx="16" fill="#ffffff" stroke="#c7d0d9"/>
+            <rect x="83" y="208" width="106" height="72" rx="8" fill="#fff0cf" stroke="#dca634"/>
+            <path d="M96 208 v-20 a40 40 0 0 1 80 0 v20" fill="none" stroke="#9b6200" stroke-width="10" stroke-linecap="round"/>
+            <circle cx="136" cy="244" r="12" fill="#9b6200"/>
+            <rect x="132" y="252" width="8" height="18" rx="4" fill="#9b6200"/>
+            <text x="136" y="306" text-anchor="middle" font-family="system-ui, sans-serif" font-weight="800" font-size="18" fill="#1c1f24">Private key</text>
+          </g>
+
+          <g filter="url(#softShadow)">
+            <rect x="282" y="70" width="184" height="132" rx="16" fill="#ffffff" stroke="#c7d0d9"/>
+            <rect x="314" y="98" width="120" height="78" rx="6" fill="#e4eefc" stroke="#9eb9dc"/>
+            <text x="374" y="130" text-anchor="middle" font-family="ui-monospace, monospace" font-size="17" font-weight="800" fill="#2f64a3">.cer</text>
+            <text x="374" y="154" text-anchor="middle" font-family="system-ui, sans-serif" font-size="13" fill="#5d6673">Apple certificate</text>
+            <text x="374" y="190" text-anchor="middle" font-family="system-ui, sans-serif" font-weight="800" font-size="18" fill="#1c1f24">Identity</text>
+          </g>
+
+          <g filter="url(#softShadow)">
+            <rect x="486" y="198" width="190" height="146" rx="16" fill="#ffffff" stroke="#c7d0d9"/>
+            <rect x="518" y="226" width="126" height="70" rx="7" fill="#e4f4e9" stroke="#98c5a8"/>
+            <text x="581" y="255" text-anchor="middle" font-family="ui-monospace, monospace" font-size="16" font-weight="800" fill="#287342">.mobile</text>
+            <text x="581" y="275" text-anchor="middle" font-family="ui-monospace, monospace" font-size="16" font-weight="800" fill="#287342">provision</text>
+            <text x="581" y="320" text-anchor="middle" font-family="system-ui, sans-serif" font-weight="800" font-size="18" fill="#1c1f24">Permission</text>
+          </g>
+
+          <g filter="url(#softShadow)">
+            <rect x="245" y="286" width="236" height="152" rx="16" fill="#ffffff" stroke="#c7d0d9"/>
+            <rect x="280" y="318" width="166" height="86" rx="10" fill="url(#deviceGrad)" opacity=".95"/>
+            <rect x="297" y="335" width="132" height="52" rx="5" fill="#ffffff" opacity=".92"/>
+            <text x="363" y="367" text-anchor="middle" font-family="ui-monospace, monospace" font-size="20" font-weight="800" fill="#1c1f24">MyApp.app</text>
+            <text x="363" y="424" text-anchor="middle" font-family="system-ui, sans-serif" font-weight="800" font-size="18" fill="#1c1f24">Signed app</text>
+          </g>
+
+          <g filter="url(#softShadow)">
+            <rect x="560" y="54" width="116" height="94" rx="16" fill="#ffffff" stroke="#c7d0d9"/>
+            <circle cx="618" cy="88" r="22" fill="#fde5ec" stroke="#d590a4"/>
+            <path d="M606 90 l9 9 l18 -24" fill="none" stroke="#a33d5a" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+            <text x="618" y="132" text-anchor="middle" font-family="system-ui, sans-serif" font-weight="800" font-size="16" fill="#1c1f24">Apple</text>
+          </g>
+
+          <g filter="url(#softShadow)">
+            <rect x="86" y="380" width="82" height="82" rx="16" fill="#ffffff" stroke="#c7d0d9"/>
+            <rect x="111" y="392" width="32" height="56" rx="7" fill="#1c1f24"/>
+            <circle cx="127" cy="442" r="2" fill="#fff"/>
+            <text x="127" y="474" text-anchor="middle" font-family="system-ui, sans-serif" font-size="13" fill="#5d6673">device</text>
+          </g>
+
+          <g filter="url(#softShadow)">
+            <rect x="610" y="384" width="82" height="82" rx="16" fill="#ffffff" stroke="#c7d0d9"/>
+            <rect x="628" y="402" width="46" height="36" rx="5" fill="#1c1f24"/>
+            <rect x="641" y="438" width="20" height="6" rx="3" fill="#1c1f24"/>
+            <text x="651" y="474" text-anchor="middle" font-family="system-ui, sans-serif" font-size="13" fill="#5d6673">Mac</text>
+          </g>
+        </svg>
+        <figcaption class="caption">The signing system is a graph of assets. A certificate without the private key cannot sign; a profile without matching entitlements or devices cannot authorize a launch.</figcaption>
+      </figure>
+    </div>
+  </header>
+
+  <div class="layout">
+    <nav aria-label="Table of contents">
+      <h2>Contents</h2>
+      <a href="#mental-model">Mental model</a>
+      <a href="#history">History</a>
+      <a href="#technical">Technical mechanics</a>
+      <a href="#files">File extensions</a>
+      <a href="#website">Website mechanics</a>
+      <a href="#xcode">Xcode workflow</a>
+      <a href="#release">Release pipelines</a>
+      <a href="#ci">CI and team operation</a>
+      <a href="#debugging">Debugging</a>
+      <a href="#sources">Sources</a>
+    </nav>
+
+    <main>
+      <section id="mental-model">
+        <h2>The Mental Model</h2>
+        <p class="lede">
+          Apple signing is not one thing. It is a chain of identity, permission,
+          integrity, policy, and distribution. Most confusion comes from treating
+          certificates and provisioning profiles as interchangeable. They are not.
+        </p>
+
+        <div class="grid three">
+          <div class="card">
+            <h3>Certificate</h3>
+            <p>
+              Answers: <strong>who signed this?</strong> A signing certificate is issued by Apple
+              to a person or team. Signing requires the matching private key, usually stored
+              in Keychain or exported as a password-protected <code>.p12</code>.
+            </p>
+          </div>
+          <div class="card">
+            <h3>Provisioning profile</h3>
+            <p>
+              Answers: <strong>is this app allowed to run this way?</strong> A profile binds
+              Team ID, App ID, certificate, entitlements, devices where needed, and an
+              expiration window.
+            </p>
+          </div>
+          <div class="card">
+            <h3>Code signature</h3>
+            <p>
+              Answers: <strong>has this exact bundle changed?</strong> The signature seals the
+              executable, resources, <code>Info.plist</code>, entitlements, and signing
+              requirements. Modify the app after signing and validation fails.
+            </p>
+          </div>
+        </div>
+
+        <div class="callout">
+          <strong>Practical rule:</strong> A downloaded <code>.cer</code> is not enough.
+          If the Mac or CI runner does not have the matching private key, Xcode may show
+          the certificate, but it cannot sign with it.
+        </div>
+
+        <figure class="diagram">
+          <svg viewBox="0 0 980 265" role="img" aria-labelledby="chain-title chain-desc">
+            <title id="chain-title">Identity and permission chain</title>
+            <desc id="chain-desc">Developer account, private key, certificate, provisioning profile, signature, and operating system verification.</desc>
+            <defs>
+              <marker id="arrow" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto">
+                <path d="M2 2 L10 6 L2 10 Z" fill="#5d6673"/>
+              </marker>
+            </defs>
+            <rect x="20" y="40" width="140" height="88" rx="10" fill="#fff0cf" stroke="#d7a340"/>
+            <text x="90" y="76" text-anchor="middle" font-size="16" font-weight="800" fill="#1c1f24">Developer</text>
+            <text x="90" y="101" text-anchor="middle" font-size="13" fill="#5d6673">team + roles</text>
+
+            <rect x="205" y="40" width="140" height="88" rx="10" fill="#e4eefc" stroke="#91abd0"/>
+            <text x="275" y="76" text-anchor="middle" font-size="16" font-weight="800" fill="#1c1f24">Private key</text>
+            <text x="275" y="101" text-anchor="middle" font-size="13" fill="#5d6673">Keychain / CI</text>
+
+            <rect x="390" y="40" width="140" height="88" rx="10" fill="#e4f4e9" stroke="#90bf9d"/>
+            <text x="460" y="76" text-anchor="middle" font-size="16" font-weight="800" fill="#1c1f24">Certificate</text>
+            <text x="460" y="101" text-anchor="middle" font-size="13" fill="#5d6673">Apple-issued</text>
+
+            <rect x="575" y="40" width="160" height="88" rx="10" fill="#fde5ec" stroke="#d78aa0"/>
+            <text x="655" y="76" text-anchor="middle" font-size="16" font-weight="800" fill="#1c1f24">Profile</text>
+            <text x="655" y="101" text-anchor="middle" font-size="13" fill="#5d6673">App ID + rights</text>
+
+            <rect x="790" y="40" width="150" height="88" rx="10" fill="#f7fbfa" stroke="#b8c0cc"/>
+            <text x="865" y="76" text-anchor="middle" font-size="16" font-weight="800" fill="#1c1f24">Signed app</text>
+            <text x="865" y="101" text-anchor="middle" font-size="13" fill="#5d6673">sealed bundle</text>
+
+            <path d="M160 84 H198" stroke="#5d6673" stroke-width="2" marker-end="url(#arrow)"/>
+            <path d="M345 84 H383" stroke="#5d6673" stroke-width="2" marker-end="url(#arrow)"/>
+            <path d="M530 84 H568" stroke="#5d6673" stroke-width="2" marker-end="url(#arrow)"/>
+            <path d="M735 84 H783" stroke="#5d6673" stroke-width="2" marker-end="url(#arrow)"/>
+
+            <rect x="210" y="170" width="560" height="54" rx="10" fill="#ffffff" stroke="#d9dde3"/>
+            <text x="490" y="203" text-anchor="middle" font-size="16" font-weight="800" fill="#1c1f24">OS verification checks certificate chain, profile authorization, entitlements, bundle integrity, and launch policy.</text>
+            <path d="M865 129 C865 164 770 197 776 197" fill="none" stroke="#5d6673" stroke-width="2" marker-end="url(#arrow)"/>
+          </svg>
+          <figcaption class="caption">The operating system cares about both cryptography and policy. A cryptographically valid signature can still be rejected if the profile, entitlement, device list, or Gatekeeper policy does not match.</figcaption>
+        </figure>
+      </section>
+
+      <section id="history">
+        <h2>Historical Arc</h2>
+        <p>
+          Apple started with a relatively open Mac model and progressively added
+          formal identity, distribution, launch policy, and malware scanning. On iPhone
+          and iPad, Apple took a stricter path from the beginning: centralized distribution,
+          mandatory code signing, App Review, and sandboxing. The systems now share a
+          vocabulary, but their default policies are still different.
+        </p>
+
+        <div class="timeline" aria-label="Historical timeline">
+          <div class="timeline-item">
+            <div class="timeline-date">2007</div>
+            <div>
+              <strong>Modern Mac signing documentation appears.</strong>
+              Apple had already been building the machinery for signed code in Mac OS X.
+              Leopard-era documentation formalized code signatures, requirements, and
+              verification concepts.
+            </div>
+          </div>
+          <div class="timeline-item">
+            <div class="timeline-date">2008</div>
+            <div>
+              <strong>iPhone SDK and App Store.</strong>
+              Native iPhone apps arrive with a developer program, device testing,
+              signing certificates, and App Store distribution.
+            </div>
+          </div>
+          <div class="timeline-item">
+            <div class="timeline-date">2011</div>
+            <div>
+              <strong>Mac App Store.</strong>
+              The Mac gains a store-distribution channel where apps are reviewed,
+              distributed, and ultimately signed for store delivery.
+            </div>
+          </div>
+          <div class="timeline-item">
+            <div class="timeline-date">2012</div>
+            <div>
+              <strong>Gatekeeper and Developer ID.</strong>
+              OS X Mountain Lion introduces Gatekeeper, allowing users to prefer Mac App
+              Store apps and apps signed by identified developers with Developer ID.
+            </div>
+          </div>
+          <div class="timeline-item">
+            <div class="timeline-date">2013-2014</div>
+            <div>
+              <strong>Mavericks-era v2 signatures.</strong>
+              Apple tightens bundle sealing rules. Resource rules that let developers
+              exclude files from the seal become obsolete.
+            </div>
+          </div>
+          <div class="timeline-item">
+            <div class="timeline-date">2017</div>
+            <div>
+              <strong>Developer ID profile lifetime policy.</strong>
+              Developer ID provisioning profiles generated after February 22, 2017 are
+              valid for 18 years, independent of the Developer ID certificate expiration.
+            </div>
+          </div>
+          <div class="timeline-item">
+            <div class="timeline-date">2018-2019</div>
+            <div>
+              <strong>Notarization becomes central for Mac distribution.</strong>
+              Developer ID-signed software distributed outside the Mac App Store moves
+              toward mandatory notarization under default Gatekeeper settings.
+            </div>
+          </div>
+          <div class="timeline-item">
+            <div class="timeline-date">2021</div>
+            <div>
+              <strong>DER entitlements for newer OS checks.</strong>
+              iOS 15, iPadOS 15, tvOS 15, and watchOS 8 enforce newer signature formats
+              for affected apps with entitlements.
+            </div>
+          </div>
+          <div class="timeline-item">
+            <div class="timeline-date">2023</div>
+            <div>
+              <strong><code>notarytool</code> replaces the old notarization path.</strong>
+              As of November 1, 2023, Apple no longer accepts notarization uploads from
+              <code>altool</code> or Xcode 13 and earlier.
+            </div>
+          </div>
+          <div class="timeline-item">
+            <div class="timeline-date">2024</div>
+            <div>
+              <strong>EU alternative iOS distribution.</strong>
+              iOS 17.4 adds DMA-related alternative distribution options in the EU, with
+              iOS app notarization, marketplace authorization, install disclosures, and
+              extra malware protections.
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="technical">
+        <h2>How the Technical Pieces Fit</h2>
+
+        <h3>1. Signing identities</h3>
+        <p>
+          A signing identity is the useful thing: <strong>certificate plus private key</strong>.
+          The certificate is public and comes from Apple. The private key is generated on
+          your Mac when you create a certificate signing request, or managed by Xcode/cloud
+          systems. The private key is what actually signs. Without it, the certificate is
+          only an identity document.
+        </p>
+
+        <h3>2. App IDs and bundle IDs</h3>
+        <p>
+          The bundle ID is the app name in Apple policy space, usually
+          <code>com.company.product</code>. The App ID in the developer account connects
+          that bundle ID to capabilities such as Push Notifications, iCloud, App Groups,
+          Associated Domains, Apple Pay, Sign in with Apple, or HealthKit. Wildcard App IDs
+          are convenient for simple development, but explicit App IDs are required for many
+          real capabilities and for App Store Connect distribution.
+        </p>
+
+        <h3>3. Entitlements</h3>
+        <p>
+          Entitlements are key-value claims embedded into the code signature. They are not
+          comments and they are not merely project settings. When you turn on a capability
+          in Xcode, Xcode typically updates an <code>.entitlements</code> plist and also
+          updates or requests signing assets so the final app signature and profile agree.
+        </p>
+
+        <pre><code>&lt;key&gt;com.apple.security.app-sandbox&lt;/key&gt;
+&lt;true/&gt;
+&lt;key&gt;com.apple.security.network.client&lt;/key&gt;
+&lt;true/&gt;</code></pre>
+
+        <p>
+          The operating system uses these signed entitlements to decide what privileged
+          behaviors are permitted. If your app claims an entitlement that your provisioning
+          profile or developer account does not authorize, signing, upload, install, or
+          launch can fail.
+        </p>
+
+        <h3>4. Provisioning profiles</h3>
+        <p>
+          Provisioning profiles are Apple-signed authorization documents. They are commonly
+          decoded with <code>security cms -D</code> because their payload is a property list
+          wrapped in a CMS signature.
+        </p>
+
+        <figure class="diagram">
+          <svg viewBox="0 0 940 430" role="img" aria-labelledby="profile-title profile-desc">
+            <title id="profile-title">Provisioning profile anatomy</title>
+            <desc id="profile-desc">A provisioning profile containing Team ID, App ID, certificates, devices, entitlements, and expiration.</desc>
+            <rect x="36" y="28" width="868" height="372" rx="18" fill="#ffffff" stroke="#b8c0cc"/>
+            <rect x="66" y="58" width="808" height="68" rx="10" fill="#e4f4e9" stroke="#90bf9d"/>
+            <text x="470" y="100" text-anchor="middle" font-size="25" font-weight="800" fill="#1c1f24">Provisioning profile</text>
+
+            <rect x="86" y="158" width="230" height="78" rx="10" fill="#f7fbfa" stroke="#d9dde3"/>
+            <text x="201" y="190" text-anchor="middle" font-size="16" font-weight="800">Team ID</text>
+            <text x="201" y="214" text-anchor="middle" font-size="13" fill="#5d6673">10-character team identifier</text>
+
+            <rect x="356" y="158" width="230" height="78" rx="10" fill="#fff0cf" stroke="#d7a340"/>
+            <text x="471" y="190" text-anchor="middle" font-size="16" font-weight="800">App ID / Bundle ID</text>
+            <text x="471" y="214" text-anchor="middle" font-size="13" fill="#5d6673">com.company.product</text>
+
+            <rect x="626" y="158" width="230" height="78" rx="10" fill="#e4eefc" stroke="#91abd0"/>
+            <text x="741" y="190" text-anchor="middle" font-size="16" font-weight="800">Certificates</text>
+            <text x="741" y="214" text-anchor="middle" font-size="13" fill="#5d6673">allowed signing identities</text>
+
+            <rect x="86" y="272" width="230" height="78" rx="10" fill="#fde5ec" stroke="#d78aa0"/>
+            <text x="201" y="304" text-anchor="middle" font-size="16" font-weight="800">Devices</text>
+            <text x="201" y="328" text-anchor="middle" font-size="13" fill="#5d6673">development/ad hoc only</text>
+
+            <rect x="356" y="272" width="230" height="78" rx="10" fill="#f7fbfa" stroke="#d9dde3"/>
+            <text x="471" y="304" text-anchor="middle" font-size="16" font-weight="800">Entitlements</text>
+            <text x="471" y="328" text-anchor="middle" font-size="13" fill="#5d6673">capabilities Apple authorizes</text>
+
+            <rect x="626" y="272" width="230" height="78" rx="10" fill="#e4f4e9" stroke="#90bf9d"/>
+            <text x="741" y="304" text-anchor="middle" font-size="16" font-weight="800">Expiration</text>
+            <text x="741" y="328" text-anchor="middle" font-size="13" fill="#5d6673">profile validity window</text>
+          </svg>
+          <figcaption class="caption">A profile is not just a certificate. It is the permission envelope for an app configuration.</figcaption>
+        </figure>
+
+        <h3>5. Code signatures inside bundles</h3>
+        <p>
+          For app bundles, signing creates a seal over the executable, resources,
+          <code>Info.plist</code>, nested code, requirements, and entitlements. macOS app
+          bundles store resource seal data under paths such as
+          <code>Contents/_CodeSignature/CodeResources</code>. iOS app bundles commonly
+          contain an embedded provisioning profile at <code>embedded.mobileprovision</code>.
+        </p>
+
+        <pre><code>MyApp.app/
+  Info.plist
+  MyApp
+  embedded.mobileprovision
+  _CodeSignature/
+    CodeResources
+  Frameworks/
+    SomeFramework.framework/</code></pre>
+
+        <p>
+          Nested code must be signed before the outer app is signed. That includes
+          frameworks, extensions, helper tools, login items, plug-ins, and sometimes bundled
+          command-line tools.
+        </p>
+      </section>
+
+      <section id="files">
+        <h2>File Extensions You Will Actually See</h2>
+        <p>
+          These are the mundane files that make Apple signing feel opaque. Treat this as a
+          map from file name to responsibility.
+        </p>
+
+        <div class="file-grid">
+          <div class="file">
+            <strong><code>.certSigningRequest</code></strong>
+            <span>CSR created from Keychain Access or command line. Upload this to Apple to request a certificate.</span>
+          </div>
+          <div class="file">
+            <strong><code>.cer</code></strong>
+            <span>Downloaded public certificate from Apple. Install by double-clicking. Not useful for signing unless the matching private key is present.</span>
+          </div>
+          <div class="file">
+            <strong><code>.p12</code> / <code>.pfx</code></strong>
+            <span>Password-protected export containing certificate plus private key. Used to move a signing identity to another Mac or CI.</span>
+          </div>
+          <div class="file">
+            <strong><code>.mobileprovision</code></strong>
+            <span>iOS-family provisioning profile file. Downloaded from Apple or managed by Xcode.</span>
+          </div>
+          <div class="file">
+            <strong><code>.provisionprofile</code></strong>
+            <span>macOS provisioning profile extension, especially for Developer ID or Mac profiles with advanced capabilities.</span>
+          </div>
+          <div class="file">
+            <strong><code>.entitlements</code></strong>
+            <span>Property list describing requested capabilities. Final entitlements are embedded into the code signature.</span>
+          </div>
+          <div class="file">
+            <strong><code>.app</code></strong>
+            <span>Application bundle. It is a directory presented as a single app in Finder.</span>
+          </div>
+          <div class="file">
+            <strong><code>.ipa</code></strong>
+            <span>iOS app archive for device/App Store distribution. Xcode exports this from an <code>.xcarchive</code>.</span>
+          </div>
+          <div class="file">
+            <strong><code>.xcarchive</code></strong>
+            <span>Xcode archive bundle containing the built app, dSYMs, signing metadata, and export inputs.</span>
+          </div>
+          <div class="file">
+            <strong><code>.plist</code></strong>
+            <span>Property list. Common examples: <code>Info.plist</code>, <code>ExportOptions.plist</code>, <code>DistributionSummary.plist</code>.</span>
+          </div>
+          <div class="file">
+            <strong><code>.pkg</code></strong>
+            <span>macOS flat installer package. Sign with a Developer ID Installer cert for direct distribution.</span>
+          </div>
+          <div class="file">
+            <strong><code>.dmg</code></strong>
+            <span>macOS disk image. Often signed and notarized for direct-download apps.</span>
+          </div>
+          <div class="file">
+            <strong><code>.zip</code></strong>
+            <span>Can carry a Mac app for notarization upload. Stapling applies to the contained app, pkg, or dmg, not a plain zip itself.</span>
+          </div>
+          <div class="file">
+            <strong><code>.dSYM</code></strong>
+            <span>Debug symbols. Not signing assets, but usually archived and uploaded for crash symbolication.</span>
+          </div>
+          <div class="file">
+            <strong><code>.p8</code></strong>
+            <span>App Store Connect API key private key, used to sign API JWTs. This is not a code-signing certificate.</span>
+          </div>
+        </div>
+      </section>
+
+      <section id="website">
+        <h2>The Website Mechanics: What to Click</h2>
+        <p class="lede">
+          The Apple Developer website is not organized around your task. It is organized
+          around asset types. When you feel lost, go back to this sequence:
+          <strong>Identifier -> Capability -> Certificate -> Device -> Profile</strong>.
+        </p>
+
+        <div class="callout amber">
+          <strong>Roles matter.</strong> Account Holder and Admin can create many distribution
+          assets. Regular team members may be blocked. If buttons are missing, check your
+          role before debugging Xcode.
+        </div>
+
+        <h3>Find the right place</h3>
+        <ol>
+          <li>Go to <a href="https://developer.apple.com/account/resources/" target="_blank" rel="noopener">developer.apple.com/account/resources</a>.</li>
+          <li>Open <strong>Certificates, Identifiers &amp; Profiles</strong>.</li>
+          <li>Use the left sidebar: <strong>Certificates</strong>, <strong>Identifiers</strong>, <strong>Devices</strong>, <strong>Profiles</strong>.</li>
+          <li>If you belong to several teams, switch to the correct team first. A wrong team creates assets that will never match your app.</li>
+        </ol>
+
+        <h3>Create a certificate manually</h3>
+        <div class="steps">
+          <div class="step">
+            <div>
+              <h4>Create the CSR on the Mac that should own the private key</h4>
+              <p>
+                Open <strong>Keychain Access</strong> at <code>/Applications/Utilities</code>.
+                Choose <strong>Keychain Access &gt; Certificate Assistant &gt; Request a Certificate from a Certificate Authority</strong>.
+                Enter your email and a recognizable common name, leave CA Email empty,
+                choose <strong>Saved to disk</strong>, and save the <code>.certSigningRequest</code>.
+              </p>
+            </div>
+          </div>
+          <div class="step">
+            <div>
+              <h4>Choose the certificate type on Apple&apos;s site</h4>
+              <p>
+                In <strong>Certificates</strong>, click <strong>+</strong>. Pick the type:
+                <code>Apple Development</code> for device development,
+                <code>Apple Distribution</code> for TestFlight/App Store/ad hoc,
+                <code>Developer ID Application</code> for direct Mac apps, or
+                <code>Developer ID Installer</code> for direct Mac installer packages.
+              </p>
+            </div>
+          </div>
+          <div class="step">
+            <div>
+              <h4>Upload the CSR and download the certificate</h4>
+              <p>
+                Upload the <code>.certSigningRequest</code>. Apple returns a <code>.cer</code>.
+                Download it. Double-click it on the same Mac that created the CSR. It should
+                appear in Keychain Access under <strong>My Certificates</strong> with a
+                private-key disclosure triangle.
+              </p>
+            </div>
+          </div>
+          <div class="step">
+            <div>
+              <h4>Confirm the private key exists</h4>
+              <p>
+                In Keychain Access, the certificate should expand to show a private key.
+                If it does not, you installed only the public certificate. Either find the
+                Mac that generated the CSR or create a new certificate from this Mac.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <h3>Export a <code>.p12</code> for another Mac or CI</h3>
+        <ol>
+          <li>Open Xcode &gt; Settings &gt; Accounts.</li>
+          <li>Select your Apple Account and team, then click <strong>Manage Certificates</strong>.</li>
+          <li>Control-click the certificate and choose <strong>Export Certificate</strong>.</li>
+          <li>Save it as a <code>.p12</code> with a strong password.</li>
+          <li>Store the <code>.p12</code> and password in your team secret manager. Do not commit them.</li>
+        </ol>
+
+        <h3>Create or update an App ID</h3>
+        <ol>
+          <li>Open <strong>Identifiers</strong>, click <strong>+</strong>, choose <strong>App IDs</strong>, then choose <strong>App</strong>.</li>
+          <li>Use an explicit Bundle ID like <code>com.example.product</code> for production apps.</li>
+          <li>Turn on capabilities here or from Xcode&apos;s <strong>Signing &amp; Capabilities</strong> pane.</li>
+          <li>If you add a capability later, regenerate or refresh profiles so the entitlement appears in them.</li>
+        </ol>
+
+        <h3>Register test devices</h3>
+        <ol>
+          <li>Open <strong>Devices</strong>, click <strong>+</strong>.</li>
+          <li>Add the device name and UDID. Xcode can also register devices automatically when automatic signing is enabled.</li>
+          <li>Remember: development and ad hoc profiles need registered devices. App Store/TestFlight profiles do not use a device list in the same way.</li>
+        </ol>
+
+        <h3>Create a provisioning profile</h3>
+        <div class="grid two">
+          <div class="card">
+            <h4>Development profile</h4>
+            <p>
+              Use for running on your own devices while developing. It includes development
+              certificate(s), the App ID, entitlements, and selected devices.
+            </p>
+          </div>
+          <div class="card">
+            <h4>Ad hoc profile</h4>
+            <p>
+              Use for distributing an <code>.ipa</code> to registered devices outside
+              TestFlight. It includes a distribution certificate and selected devices.
+            </p>
+          </div>
+          <div class="card">
+            <h4>App Store Connect profile</h4>
+            <p>
+              Use for App Store/TestFlight upload when signing manually. It uses an
+              explicit App ID and one distribution certificate.
+            </p>
+          </div>
+          <div class="card">
+            <h4>Developer ID profile</h4>
+            <p>
+              Use for some direct-distributed Mac apps that need advanced capabilities such
+              as CloudKit or push notifications.
+            </p>
+          </div>
+        </div>
+
+        <p>
+          To download a profile, open <strong>Profiles</strong>, select the profile, and
+          click <strong>Download</strong>. Apple documents downloaded profile extensions as
+          <code>.mobileprovision</code> or <code>.provisionprofile</code>.
+        </p>
+
+        <details>
+          <summary>If the profile looks stale or wrong</summary>
+          <ol>
+            <li>Check the App ID capabilities first.</li>
+            <li>Edit or regenerate the profile after capability/device/certificate changes.</li>
+            <li>In Xcode, download manual profiles from Accounts settings.</li>
+            <li>If automatic signing is stuck, remove stale files from <code>~/Library/MobileDevice/Provisioning Profiles/</code> and rebuild.</li>
+          </ol>
+        </details>
+      </section>
+
+      <section id="xcode">
+        <h2>Xcode Workflow</h2>
+
+        <h3>Automatic signing</h3>
+        <p>
+          For most solo and small-team development, automatic signing is the right default.
+          Add your Apple ID in Xcode, assign a team to each target, turn on capabilities,
+          and let Xcode create development certificates, App IDs, devices, and profiles
+          as needed.
+        </p>
+
+        <div class="callout">
+          <strong>Use automatic signing when:</strong> you are building a normal app,
+          your team roles allow it, CI can use Xcode Cloud or cloud-managed certificates,
+          and you do not need exact control over which certificate/profile signs each target.
+        </div>
+
+        <h3>Manual signing</h3>
+        <p>
+          Use manual signing when you need reproducible CI builds, strict separation of
+          development/release identities, client accounts, multiple bundle IDs, or
+          extension-heavy projects where each target needs a different profile.
+        </p>
+
+        <table>
+          <thead>
+            <tr>
+              <th>Setting</th>
+              <th>What it must match</th>
+              <th>Common failure</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>PRODUCT_BUNDLE_IDENTIFIER</code></td>
+              <td>App ID / provisioning profile</td>
+              <td>Profile does not include the app identifier.</td>
+            </tr>
+            <tr>
+              <td><code>DEVELOPMENT_TEAM</code></td>
+              <td>Team ID in cert/profile</td>
+              <td>Assets created under wrong developer team.</td>
+            </tr>
+            <tr>
+              <td><code>CODE_SIGN_STYLE</code></td>
+              <td>Automatic or Manual workflow</td>
+              <td>CI expects manual profiles but Xcode tries to auto-manage.</td>
+            </tr>
+            <tr>
+              <td><code>CODE_SIGN_IDENTITY</code></td>
+              <td>Certificate type</td>
+              <td>Using development cert for distribution or Developer ID.</td>
+            </tr>
+            <tr>
+              <td><code>PROVISIONING_PROFILE_SPECIFIER</code></td>
+              <td>Profile name or UUID</td>
+              <td>Wrong target gets wrong profile, especially extensions.</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <h3>Archive and export</h3>
+        <p>
+          Xcode&apos;s release unit is usually an <code>.xcarchive</code>. From that archive,
+          Xcode can upload to App Store Connect or export local files. Apple documents that
+          the export folder can include <code>ExportOptions.plist</code>,
+          <code>DistributionSummary.plist</code>, <code>Packaging.log</code>, and an
+          installer file such as an <code>.ipa</code> or <code>.pkg</code>.
+        </p>
+
+        <pre><code>xcodebuild archive \
+  -scheme MyApp \
+  -configuration Release \
+  -archivePath build/MyApp.xcarchive
+
+xcodebuild -exportArchive \
+  -archivePath build/MyApp.xcarchive \
+  -exportOptionsPlist ExportOptions.plist \
+  -exportPath build/export</code></pre>
+      </section>
+
+      <section id="release">
+        <h2>Release Pipelines</h2>
+        <p>
+          Different distribution channels use the same primitives but different policies.
+          The diagram below shows the common professional flows.
+        </p>
+
+        <figure class="diagram">
+          <svg viewBox="0 0 980 520" role="img" aria-labelledby="pipes-title pipes-desc">
+            <title id="pipes-title">Release pipelines</title>
+            <desc id="pipes-desc">Development, App Store, and direct Mac release pipelines.</desc>
+            <defs>
+              <marker id="pipeArrow" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto">
+                <path d="M2 2 L10 6 L2 10 Z" fill="#5d6673"/>
+              </marker>
+            </defs>
+
+            <rect x="24" y="34" width="286" height="434" rx="14" fill="#f7fbfa" stroke="#d9dde3"/>
+            <text x="167" y="70" text-anchor="middle" font-size="20" font-weight="800">Local development</text>
+            <rect x="58" y="104" width="218" height="52" rx="9" fill="#ffffff" stroke="#b8c0cc"/>
+            <text x="167" y="137" text-anchor="middle" font-size="15">Apple Development cert</text>
+            <rect x="58" y="190" width="218" height="52" rx="9" fill="#ffffff" stroke="#b8c0cc"/>
+            <text x="167" y="223" text-anchor="middle" font-size="15">Development profile</text>
+            <rect x="58" y="276" width="218" height="52" rx="9" fill="#ffffff" stroke="#b8c0cc"/>
+            <text x="167" y="309" text-anchor="middle" font-size="15">Registered device</text>
+            <rect x="58" y="362" width="218" height="52" rx="9" fill="#e4f4e9" stroke="#90bf9d"/>
+            <text x="167" y="395" text-anchor="middle" font-size="15" font-weight="800">Run from Xcode</text>
+            <path d="M167 156 V184" stroke="#5d6673" stroke-width="2" marker-end="url(#pipeArrow)"/>
+            <path d="M167 242 V270" stroke="#5d6673" stroke-width="2" marker-end="url(#pipeArrow)"/>
+            <path d="M167 328 V356" stroke="#5d6673" stroke-width="2" marker-end="url(#pipeArrow)"/>
+
+            <rect x="347" y="34" width="286" height="434" rx="14" fill="#f7fbfa" stroke="#d9dde3"/>
+            <text x="490" y="70" text-anchor="middle" font-size="20" font-weight="800">TestFlight / App Store</text>
+            <rect x="381" y="104" width="218" height="52" rx="9" fill="#ffffff" stroke="#b8c0cc"/>
+            <text x="490" y="137" text-anchor="middle" font-size="15">Apple Distribution cert</text>
+            <rect x="381" y="190" width="218" height="52" rx="9" fill="#ffffff" stroke="#b8c0cc"/>
+            <text x="490" y="223" text-anchor="middle" font-size="15">App Store profile</text>
+            <rect x="381" y="276" width="218" height="52" rx="9" fill="#ffffff" stroke="#b8c0cc"/>
+            <text x="490" y="309" text-anchor="middle" font-size="15">Archive and upload</text>
+            <rect x="381" y="362" width="218" height="52" rx="9" fill="#e4eefc" stroke="#91abd0"/>
+            <text x="490" y="395" text-anchor="middle" font-size="15" font-weight="800">App Store Connect</text>
+            <path d="M490 156 V184" stroke="#5d6673" stroke-width="2" marker-end="url(#pipeArrow)"/>
+            <path d="M490 242 V270" stroke="#5d6673" stroke-width="2" marker-end="url(#pipeArrow)"/>
+            <path d="M490 328 V356" stroke="#5d6673" stroke-width="2" marker-end="url(#pipeArrow)"/>
+
+            <rect x="670" y="34" width="286" height="434" rx="14" fill="#f7fbfa" stroke="#d9dde3"/>
+            <text x="813" y="70" text-anchor="middle" font-size="20" font-weight="800">Mac direct download</text>
+            <rect x="704" y="104" width="218" height="52" rx="9" fill="#ffffff" stroke="#b8c0cc"/>
+            <text x="813" y="137" text-anchor="middle" font-size="15">Developer ID cert</text>
+            <rect x="704" y="190" width="218" height="52" rx="9" fill="#ffffff" stroke="#b8c0cc"/>
+            <text x="813" y="223" text-anchor="middle" font-size="15">Hardened runtime</text>
+            <rect x="704" y="276" width="218" height="52" rx="9" fill="#ffffff" stroke="#b8c0cc"/>
+            <text x="813" y="309" text-anchor="middle" font-size="15">Notarize with notarytool</text>
+            <rect x="704" y="362" width="218" height="52" rx="9" fill="#fff0cf" stroke="#d7a340"/>
+            <text x="813" y="395" text-anchor="middle" font-size="15" font-weight="800">Staple and ship</text>
+            <path d="M813 156 V184" stroke="#5d6673" stroke-width="2" marker-end="url(#pipeArrow)"/>
+            <path d="M813 242 V270" stroke="#5d6673" stroke-width="2" marker-end="url(#pipeArrow)"/>
+            <path d="M813 328 V356" stroke="#5d6673" stroke-width="2" marker-end="url(#pipeArrow)"/>
+          </svg>
+        </figure>
+
+        <h3>iOS, iPadOS, tvOS, watchOS, visionOS</h3>
+        <p>
+          These platforms require Apple-issued signatures for executable code. Development
+          builds run on registered devices under development profiles. Ad hoc builds run on
+          registered devices under ad hoc profiles. TestFlight and App Store builds are
+          uploaded to App Store Connect, processed, and distributed through Apple systems.
+        </p>
+
+        <h3>macOS App Store</h3>
+        <p>
+          Mac App Store apps use Mac App Store distribution signing assets and App Store
+          Connect. Store delivery is distinct from direct Developer ID distribution.
+        </p>
+
+        <h3>macOS outside the Mac App Store</h3>
+        <p>
+          Direct Mac distribution usually means <code>Developer ID Application</code> for
+          the app, <code>Developer ID Installer</code> for a flat <code>.pkg</code>, hardened
+          runtime, secure timestamping, notarization with <code>notarytool</code>, and
+          stapling with <code>stapler</code>.
+        </p>
+
+        <pre><code>codesign --force --options runtime --timestamp \
+  --sign "Developer ID Application: Example Inc. (TEAMID)" \
+  MyApp.app
+
+ditto -c -k --keepParent MyApp.app MyApp.zip
+
+xcrun notarytool submit MyApp.zip \
+  --keychain-profile "notary-profile" \
+  --wait
+
+xcrun stapler staple MyApp.app
+spctl -a -vvv -t exec MyApp.app</code></pre>
+      </section>
+
+      <section id="ci">
+        <h2>CI and Team Operation</h2>
+        <p>
+          Professional teams try to make signing boring. That means naming assets clearly,
+          limiting who can create/revoke distribution certificates, storing secrets in a
+          proper secret manager, and separating development, beta, production, and direct
+          Mac release workflows.
+        </p>
+
+        <h3>Typical non-Xcode-Cloud CI setup</h3>
+        <ol>
+          <li>Store the <code>.p12</code> in CI secrets or a signing asset repository with encryption.</li>
+          <li>Store the <code>.p12</code> password separately.</li>
+          <li>Store provisioning profiles as secret files or fetch them with a controlled tool.</li>
+          <li>At job start, create a temporary keychain, import the <code>.p12</code>, unlock the keychain, and install profiles.</li>
+          <li>Run tests, archive, export, then upload with Xcode, Transporter, App Store Connect workflows, or platform tooling.</li>
+          <li>Delete the temporary keychain after the job.</li>
+        </ol>
+
+        <pre><code>security create-keychain -p "$KEYCHAIN_PASSWORD" build.keychain
+security import signing.p12 -k build.keychain -P "$P12_PASSWORD" -T /usr/bin/codesign
+mkdir -p "$HOME/Library/MobileDevice/Provisioning Profiles"
+cp profiles/*.mobileprovision "$HOME/Library/MobileDevice/Provisioning Profiles/"</code></pre>
+
+        <h3>Xcode Cloud</h3>
+        <p>
+          Xcode Cloud can reduce local signing pain because Apple can use cloud-managed
+          certificates and workflows tied to your Apple Developer team. It is often the
+          cleanest option for standard App Store/TestFlight pipelines. You still need to
+          understand bundle IDs, capabilities, entitlements, and team roles because Xcode
+          Cloud cannot fix a logically wrong App ID or missing entitlement.
+        </p>
+
+        <h3>Rotation and incident handling</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>Event</th>
+              <th>What to do</th>
+              <th>Risk</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Development cert expires</td>
+              <td>Create a new development cert/profile or let Xcode refresh automatic signing.</td>
+              <td>Developers cannot install debug builds until refreshed.</td>
+            </tr>
+            <tr>
+              <td>Distribution cert expires</td>
+              <td>Create a new distribution cert, regenerate profiles, update CI secrets.</td>
+              <td>Uploads and ad hoc/in-house distribution can break.</td>
+            </tr>
+            <tr>
+              <td>Private key lost</td>
+              <td>Export <code>.p12</code> from original Mac or create/revoke as appropriate.</td>
+              <td>A visible certificate cannot sign without its private key.</td>
+            </tr>
+            <tr>
+              <td>Private key compromised</td>
+              <td>Revoke affected certificate, create new cert, regenerate profiles, audit shipped software.</td>
+              <td>Revocation can affect installs/launches depending on channel.</td>
+            </tr>
+            <tr>
+              <td>Capability changed</td>
+              <td>Regenerate profile and verify entitlements in the final signed app.</td>
+              <td>App may upload but feature fails, or upload/install fails.</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section id="debugging">
+        <h2>Debugging Signing Problems</h2>
+
+        <h3>Inspection commands</h3>
+        <pre><code># List usable code-signing identities
+security find-identity -v -p codesigning
+
+# Decode a provisioning profile
+security cms -D -i MyProfile.mobileprovision &gt; profile.plist
+
+# Show signature metadata
+codesign -dv --verbose=4 MyApp.app
+
+# Show embedded entitlements
+codesign -d --entitlements :- MyApp.app
+
+# Verify app signature deeply and strictly
+codesign --verify --deep --strict --verbose=2 MyApp.app
+
+# Assess Gatekeeper policy for a Mac app
+spctl -a -vvv -t exec MyApp.app</code></pre>
+
+        <h3>Common errors translated</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>Error shape</th>
+              <th>Likely meaning</th>
+              <th>First checks</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>&quot;Missing private key&quot;</td>
+              <td>You installed a <code>.cer</code> but not the private key.</td>
+              <td>Check Keychain &gt; My Certificates. Export/import <code>.p12</code> or recreate cert from this Mac.</td>
+            </tr>
+            <tr>
+              <td>&quot;Profile doesn&apos;t include signing certificate&quot;</td>
+              <td>The selected profile was generated for a different certificate.</td>
+              <td>Edit/regenerate profile with the active certificate; refresh Xcode profiles.</td>
+            </tr>
+            <tr>
+              <td>&quot;Entitlement not supported&quot;</td>
+              <td>The app signature claims a right not authorized by the profile/account.</td>
+              <td>Check App ID capabilities, profile entitlements, and final app entitlements.</td>
+            </tr>
+            <tr>
+              <td>&quot;No matching provisioning profiles&quot;</td>
+              <td>Bundle ID, team, device, cert type, or profile type does not match.</td>
+              <td>Compare <code>PRODUCT_BUNDLE_IDENTIFIER</code>, Team ID, device UDID, and distribution method.</td>
+            </tr>
+            <tr>
+              <td>Gatekeeper says app cannot be checked</td>
+              <td>Mac app is unsigned, signed with wrong identity, not notarized, or altered after notarization.</td>
+              <td>Run <code>codesign</code>, <code>spctl</code>, and <code>stapler validate</code>.</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <details>
+          <summary>A reliable manual-signing checklist</summary>
+          <ol>
+            <li>Confirm the Apple Developer team is correct.</li>
+            <li>Confirm the bundle ID matches the App ID exactly.</li>
+            <li>Confirm the certificate type matches the distribution method.</li>
+            <li>Confirm the profile includes that certificate.</li>
+            <li>Confirm the profile includes the device for development/ad hoc.</li>
+            <li>Confirm the profile includes the required entitlements.</li>
+            <li>Confirm every nested target has its own matching profile.</li>
+            <li>Archive cleanly, inspect final entitlements, then upload/export.</li>
+          </ol>
+        </details>
+      </section>
+
+      <section id="sources">
+        <h2>Primary Sources</h2>
+        <p>
+          This article is based on Apple documentation and Apple platform security material,
+          with additional synthesis from the research agents.
+        </p>
+        <ul class="source-list">
+          <li><a href="https://developer.apple.com/help/account/certificates/certificates-overview/" target="_blank" rel="noopener">Apple Developer: Certificates overview</a></li>
+          <li><a href="https://developer.apple.com/help/account/certificates/create-a-certificate-signing-request" target="_blank" rel="noopener">Apple Developer: Create a certificate signing request</a></li>
+          <li><a href="https://developer.apple.com/help/account/certificates/create-developer-id-certificates/" target="_blank" rel="noopener">Apple Developer: Developer ID certificates</a></li>
+          <li><a href="https://developer.apple.com/help/account/provisioning-profiles/provisioning-profile-updates/" target="_blank" rel="noopener">Apple Developer: Provisioning profile updates</a></li>
+          <li><a href="https://developer.apple.com/help/account/provisioning-profiles/edit-download-or-delete-profiles/" target="_blank" rel="noopener">Apple Developer: Edit, download, or delete provisioning profiles</a></li>
+          <li><a href="https://developer.apple.com/help/account/provisioning-profiles/create-an-app-store-provisioning-profile" target="_blank" rel="noopener">Apple Developer: Create an App Store Connect provisioning profile</a></li>
+          <li><a href="https://support.apple.com/guide/security/app-code-signing-process-sec7c917bf14/web" target="_blank" rel="noopener">Apple Platform Security: App code signing process in iOS, iPadOS, tvOS, visionOS, and watchOS</a></li>
+          <li><a href="https://support.apple.com/guide/security/app-code-signing-process-sec3ad8e6e53/web" target="_blank" rel="noopener">Apple Platform Security: App code signing process in macOS</a></li>
+          <li><a href="https://support.apple.com/guide/security/gatekeeper-and-runtime-protection-sec5599b66df/web" target="_blank" rel="noopener">Apple Platform Security: Gatekeeper and runtime protection</a></li>
+          <li><a href="https://developer.apple.com/documentation/security/notarizing-macos-software-before-distribution" target="_blank" rel="noopener">Apple Developer: Notarizing macOS software before distribution</a></li>
+          <li><a href="https://developer.apple.com/documentation/security/notarizing_macos_software_before_distribution/customizing_the_notarization_workflow" target="_blank" rel="noopener">Apple Developer: Customizing the notarization workflow</a></li>
+          <li><a href="https://developer.apple.com/library/archive/technotes/tn2206/" target="_blank" rel="noopener">Apple Technical Note TN2206: macOS Code Signing In Depth</a></li>
+          <li><a href="https://developer.apple.com/library/archive/documentation/Security/Conceptual/CodeSigningGuide/AboutCS/AboutCS.html" target="_blank" rel="noopener">Apple Code Signing Guide: Understanding the Code Signature</a></li>
+          <li><a href="https://help.apple.com/xcode/mac/current/en.lproj/dev60b6fbbc7.html" target="_blank" rel="noopener">Xcode Help: Signing &amp; Capabilities workflow</a></li>
+          <li><a href="https://help.apple.com/xcode/mac/current/en.lproj/dev154b28f09.html" target="_blank" rel="noopener">Xcode Help: Create, export, and delete signing certificates</a></li>
+          <li><a href="https://help.apple.com/xcode/mac/current/en.lproj/deva1f2ab5a2.html" target="_blank" rel="noopener">Xcode Help: Archive export files</a></li>
+          <li><a href="https://help.apple.com/xcode/mac/current/en.lproj/dev442d7f2ca.html" target="_blank" rel="noopener">Xcode Help: Upload an app to App Store Connect</a></li>
+          <li><a href="https://developer.apple.com/help/app-store-connect/test-a-beta-version/testflight-overview/" target="_blank" rel="noopener">App Store Connect Help: TestFlight overview</a></li>
+          <li><a href="https://www.apple.com/newsroom/2012/02/16Apple-Releases-OS-X-Mountain-Lion-Developer-Preview-with-Over-100-New-Features/" target="_blank" rel="noopener">Apple Newsroom: OS X Mountain Lion Developer Preview and Gatekeeper</a></li>
+          <li><a href="https://www.apple.com/newsroom/2024/01/apple-announces-changes-to-ios-safari-and-the-app-store-in-the-european-union/" target="_blank" rel="noopener">Apple Newsroom: EU iOS distribution changes</a></li>
+        </ul>
+        <p class="print-note">Printed from the local HTML guide in this repository.</p>
+      </section>
+    </main>
+  </div>
+</body>
+</html>
