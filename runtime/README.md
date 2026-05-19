@@ -131,15 +131,15 @@ The current wiki-engine V0 review slice uses:
 scripts/init-dev-wiki-runtime.sh
   copies the runtime tree into runtime-test and optionally imports a local fixture
 
-scripts/test-wiki-runtime-v0.sh
-  builds a synthetic fixture and runtime in /tmp, imports it twice, and verifies
-  the contract without polluting repo-root runtime-test
+scripts/test-wiki.sh
+  materializes the configured wiki, renders the site, serves it locally, and
+  checks source, talk, custom, menu, markdown-twin, and 404 routes in a browser
 ```
 
 Run:
 
 ```bash
-./scripts/test-wiki-runtime-v0.sh
+./scripts/test-wiki.sh
 ```
 
 When a local fixture is imported, the initializer writes import state to

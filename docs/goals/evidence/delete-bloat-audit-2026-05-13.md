@@ -22,7 +22,7 @@ Comparison base: `dd5ccd2` (`Close 0.1.65 release lockdown goal`)
 - Deleted `scripts/audit-github-release-assets.sh`; public asset checks now run
   inside `scripts/release-train.sh audit` and `publish`.
 - Moved `scripts/self-hosted-update-proof.sh` to
-  `scripts/release/internal/self-hosted-update-proof.sh`; the self-hosted
+  `release/tools/proof/self-hosted-update-proof.sh`; the self-hosted
   workflow now executes it through
   `scripts/release-train.sh prove --runner-execute`.
 
@@ -147,7 +147,7 @@ Passed on 2026-05-13:
 - `./scripts/test-launch-agent-package.sh`
 - `cd memory-core && uv run --with pytest pytest`
 - `actionlint .github/workflows/ci.yml .github/workflows/release.yml .github/workflows/self-hosted-mac-update-proof.yml`
-- `bash -n scripts/release-train.sh scripts/release/internal/self-hosted-update-proof.sh scripts/test-release-train.sh scripts/build-macos-app.sh scripts/test.sh scripts/package-macos-smoke.sh scripts/test-release-app-product-https.sh`
+- `bash -n scripts/release-train.sh release/tools/proof/self-hosted-update-proof.sh scripts/test-release-train.sh scripts/build-macos-app.sh scripts/test.sh scripts/package-macos-smoke.sh scripts/test-release-app-product-https.sh`
 - `git diff --check`
 - `./scripts/measure-shipped-app-lines.sh`
 

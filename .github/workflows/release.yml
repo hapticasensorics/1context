@@ -2,23 +2,48 @@ name: Release
 
 on:
   workflow_dispatch:
+    inputs:
+      run_self_hosted_proof:
+        description: "Run the real-Mac Sparkle proof and bless the release evidence."
+        required: false
+        default: false
+        type: boolean
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: release-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
-  release:
+  validate:
+    name: Validate release runner
+    runs-on: macos-15
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+      - name: Install release runner dependencies
+        run: npm --prefix release/runner ci
+      - name: Build release runner
+        run: npm --prefix release/runner run build
+      - name: Test release runner
+        run: npm --prefix release/runner test
+      - name: Validate release manifest before credentials
+        run: ./scripts/release-train.sh validate
+
+  build_publish:
+    name: Build and publish artifacts
+    needs: validate
     runs-on: [self-hosted, macOS, ARM64, onecontext-update-runner]
     timeout-minutes: 45
     environment: onecontext-update-runner
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v6
-      - name: Validate release manifest before credentials
-        run: ./scripts/release-train.sh validate
+      - name: Install release runner dependencies
+        run: npm --prefix release/runner ci
       - name: Prepare release keychain
         env:
           ONECONTEXT_RELEASE_KEYCHAIN: ${{ vars.ONECONTEXT_RELEASE_KEYCHAIN }}
@@ -30,7 +55,8 @@ jobs:
         run: |
           swift --version
           xcodebuild -version
-          python3 --version
+          node --version
+          npm --version
           security find-identity -v -p codesigning
       - name: Check local release credentials
         env:
@@ -53,14 +79,58 @@ jobs:
       - name: Upload GitHub release artifacts
         if: startsWith(github.ref, 'refs/tags/')
         env:
-          CODESIGN_IDENTITY: ${{ vars.ONECONTEXT_CODESIGN_IDENTITY }}
-          ONECONTEXT_RELEASE_KEYCHAIN: ${{ vars.ONECONTEXT_RELEASE_KEYCHAIN }}
-          ONECONTEXT_SPARKLE_PUBLIC_ED_KEY: ${{ vars.ONECONTEXT_SPARKLE_PUBLIC_ED_KEY }}
-          SPARKLE_PRIVATE_ED_KEY: ${{ secrets.ONECONTEXT_SPARKLE_PRIVATE_ED_KEY }}
-          SPARKLE_KEY_ACCOUNT: ${{ vars.ONECONTEXT_SPARKLE_KEY_ACCOUNT }}
-          NOTARYTOOL_PROFILE: ${{ vars.ONECONTEXT_NOTARYTOOL_PROFILE }}
           GH_TOKEN: ${{ github.token }}
         run: |
           ONECONTEXT_RELEASE_AUDIT_PROBES=2 \
           ONECONTEXT_RELEASE_AUDIT_INTERVAL_SECONDS=60 \
             ./scripts/release-train.sh publish
+      - name: Upload release evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: release-build-publish-evidence
+          path: |
+            dist/release-evidence/**
+            dist/appcast.xml
+            dist/asset-manifest.json
+          if-no-files-found: warn
+          retention-days: 30
+
+  audit_optional_proof:
+    name: Audit with optional real-Mac proof
+    needs: build_publish
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: macos-15
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      actions: write
+    steps:
+      - uses: actions/checkout@v6
+      - name: Install release runner dependencies
+        run: npm --prefix release/runner ci
+      - name: Download release evidence
+        uses: actions/download-artifact@v7
+        with:
+          name: release-build-publish-evidence
+          path: .
+      - name: Audit published assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: ./scripts/release-train.sh audit
+      - name: Dispatch and collect real-Mac proof
+        if: ${{ inputs.run_self_hosted_proof }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: ./scripts/release-train.sh prove --proof-reason "official release workflow proof for $GITHUB_REF"
+      - name: Bless release evidence
+        if: ${{ inputs.run_self_hosted_proof }}
+        run: ./scripts/release-train.sh bless
+      - name: Upload final release evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: release-final-evidence
+          path: dist/release-evidence/**
+          if-no-files-found: warn
+          retention-days: 30

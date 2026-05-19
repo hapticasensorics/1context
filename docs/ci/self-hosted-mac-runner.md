@@ -51,8 +51,8 @@ The release train dispatches the self-hosted proof job, which:
 3. Installs `previous_version` from the manifest into
    `/Applications/1Context.app`.
 4. Uses the manifest appcast URL and update class for the update hop.
-5. Runs `scripts/release/internal/prove-remote-sparkle-update.sh`.
-6. Runs `scripts/release/internal/verify-macos-steady-state.sh`.
+5. Runs `release/tools/proof/prove-remote-sparkle-update.sh`.
+6. Runs `release/tools/proof/verify-macos-steady-state.sh`.
 7. Uploads evidence from `dist/self-hosted-update-proof/`.
 
 The self-hosted workflow validates the appcast against `release/release.toml`.
@@ -130,9 +130,12 @@ gh auth status
 
 ONECONTEXT_RUNNER_REPO=hapticasensorics/1context \
 ONECONTEXT_RUNNER_NAME="$(hostname -s)-1context-update" \
-ONECONTEXT_RUNNER_LABELS=onecontext-update-runner \
-./scripts/self-hosted-mac-runner-enroll.sh
+ONECONTEXT_RUNNER_LABELS=onecontext-update-runner
 ```
+
+Use the current GitHub runner enrollment command from the repository Settings
+page, then add the `self-hosted`, `macOS`, `ARM64`, and
+`onecontext-update-runner` labels.
 
 Run it from the logged-in GUI session:
 

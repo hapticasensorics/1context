@@ -239,7 +239,7 @@ Review implementation:
 Current proof:
 
 ```bash
-./scripts/test-wiki-runtime-v0.sh
+./scripts/test-wiki.sh
 swift test --package-path macos --filter PathAndPermissionTests
 ```
 
@@ -372,10 +372,10 @@ Acceptance:
 Proof commands for V0:
 
 ```bash
-./scripts/test-wiki-runtime-v0.sh
+./scripts/test-wiki.sh
 swift test --package-path macos --filter PathAndPermissionTests
 swift test --package-path macos --filter WikiRenderCoordinatorTests
-./scripts/package-macos-smoke.sh
+./scripts/release-train.sh build --channel dev
 ```
 
 Browser proof should open the local wiki after `wiki.refresh`, verify the home

@@ -41,7 +41,7 @@ See [macos-app-architecture.md](macos-app-architecture.md) and
 Local ad-hoc package:
 
 ```bash
-./scripts/package-macos-smoke.sh
+./scripts/release-train.sh build --channel dev
 ```
 
 Release factory builds:
@@ -63,11 +63,10 @@ appcast.
 Run these before treating a release candidate as locally proved:
 
 ```bash
-./scripts/check-version-consistency.sh
-./scripts/release-train.sh validate
+./scripts/release-train.sh validate --channel dev
 swift test --package-path macos
 ./scripts/test.sh
-./scripts/package-macos-smoke.sh
+./scripts/release-train.sh build --channel dev
 ./scripts/test-launch-agent-package.sh
 ```
 

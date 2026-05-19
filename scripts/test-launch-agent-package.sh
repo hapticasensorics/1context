@@ -7,7 +7,7 @@ APP="${ONECONTEXT_PACKAGE_APP:-$ROOT/dist/1Context.app}"
 
 if [[ ! -d "$APP" ]]; then
   echo "Packaged app not found: $APP" >&2
-  echo "Run ./scripts/package-macos-smoke.sh first." >&2
+  echo "Run ./scripts/release-train.sh build --channel dev first." >&2
   exit 1
 fi
 
@@ -143,6 +143,6 @@ if grep -R -a -n -E '/opt/homebrew|/usr/local/Cellar|/Cellar/caddy' "$APP" >/tmp
   cat /tmp/1context-package-homebrew-paths.txt >&2
   exit 1
 fi
-"$ROOT/scripts/audit-macos-app-dependencies.sh" "$APP"
+"$ROOT/macos/tools/audit-app-dependencies.sh" "$APP"
 
 echo "Packaged LaunchAgent smoke passed."

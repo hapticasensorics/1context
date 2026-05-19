@@ -40,7 +40,7 @@ jobs:
         id: manifest
         shell: bash
         run: |
-          eval "$(./scripts/release-manifest.py export-env --channel private)"
+          eval "$(./scripts/release-train.sh manifest export-env --channel private)"
           {
             echo "previous_version=$ONECONTEXT_RELEASE_PREVIOUS_VERSION"
             echo "version=$ONECONTEXT_RELEASE_VERSION"

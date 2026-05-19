@@ -83,7 +83,7 @@ feed. Public update controls live in the app, not in the CLI.
 Local ad-hoc packaging:
 
 ```bash
-./scripts/package-macos-smoke.sh
+./scripts/release-train.sh build --channel dev
 ```
 
 Maintainer release packaging uses Developer ID signing, notarization, and the
@@ -114,10 +114,10 @@ Production packaging signs and notarizes both layers:
 2. `dist/1Context-<version>-macos-arm64.dmg` is signed, submitted, stapled, and
    assessed with Gatekeeper.
 
-`scripts/package-macos-smoke.sh` is the only local unsigned package path. It is
-not a release command. Prototype, private, and official channels must bundle
-their release-owned runtime inputs and must not install or resolve Homebrew
-packages while creating the shipped `.app` or DMG.
+`scripts/release-train.sh build --channel dev` is the local unsigned package
+path. It is not a release command. Prototype, private, and official channels
+must bundle their release-owned runtime inputs and must not install or resolve
+Homebrew packages while creating the shipped `.app` or DMG.
 
 The self-hosted Mac update proof is required for official releases that list it
 in `release/release.toml`. Private and official updater hops should be proved by
@@ -138,6 +138,6 @@ To notarize a built release artifact directly, first configure a `notarytool`
 keychain profile. Direct DMG notarization expects the DMG to already be signed:
 
 ```bash
-NOTARYTOOL_PROFILE=1context-notary ./scripts/notarize-macos-artifact.sh dist/1Context.app
-NOTARYTOOL_PROFILE=1context-notary ./scripts/notarize-macos-artifact.sh dist/1Context-<version>-macos-arm64.dmg
+NOTARYTOOL_PROFILE=1context-notary ./release/tools/notarize-macos-artifact.sh dist/1Context.app
+NOTARYTOOL_PROFILE=1context-notary ./release/tools/notarize-macos-artifact.sh dist/1Context-<version>-macos-arm64.dmg
 ```

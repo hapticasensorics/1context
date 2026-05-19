@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Peekaboo Evidence Wall</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div>
+        <h1>Peekaboo Evidence Wall</h1>
+        <div class="subline" id="runMeta">booting</div>
+      </div>
+      <div class="top-actions">
+        <label class="toggle"><input id="freezeToggle" type="checkbox" /> Freeze</label>
+        <button id="refreshButton" type="button">Refresh</button>
+        <a class="button-link" href="/agent-feed/latest" target="_blank" rel="noreferrer">Agent JSON</a>
+      </div>
+    </header>
+
+    <main class="layout">
+      <section class="panel capture-panel" id="screenA">
+        <div class="panel-head">
+          <h2>Work Screen A</h2>
+          <span class="pill" data-field="status">waiting</span>
+        </div>
+        <div class="image-stage"><img data-field="image" alt="Work screen A capture" /></div>
+        <dl class="metrics"></dl>
+      </section>
+
+      <section class="panel capture-panel" id="screenB">
+        <div class="panel-head">
+          <h2>Work Screen B</h2>
+          <span class="pill" data-field="status">waiting</span>
+        </div>
+        <div class="image-stage"><img data-field="image" alt="Work screen B capture" /></div>
+        <dl class="metrics"></dl>
+      </section>
+
+      <section class="panel capture-panel terminal-panel" id="codexTerminal">
+        <div class="panel-head">
+          <h2>Codex Terminal Lens</h2>
+          <span class="pill" data-field="status">waiting</span>
+        </div>
+        <div class="image-stage terminal-stage"><img data-field="image" alt="Codex terminal capture" /></div>
+        <dl class="metrics"></dl>
+        <div class="terminal-lines" id="terminalLines"></div>
+      </section>
+
+      <section class="panel agent-panel">
+        <div class="panel-head">
+          <h2>Agent Visible Feed</h2>
+          <span class="pill" id="agentEventCount">0 events</span>
+        </div>
+        <pre id="agentFeed">{}</pre>
+      </section>
+
+      <section class="panel">
+        <div class="panel-head">
+          <h2>UI Map</h2>
+          <span class="pill" id="uiCount">waiting</span>
+        </div>
+        <div class="split-list" id="uiElements"></div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-head">
+          <h2>Live Burst</h2>
+          <span class="pill" id="burstStats">waiting</span>
+        </div>
+        <div class="burst-preview"><img id="burstImage" alt="Peekaboo capture live contact sheet" /></div>
+        <div class="split-list" id="burstFrames"></div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-head">
+          <h2>Capabilities</h2>
+          <span class="pill" id="capabilityStatus">waiting</span>
+        </div>
+        <div class="cap-grid" id="capabilities"></div>
+      </section>
+
+      <section class="panel log-panel">
+        <div class="panel-head">
+          <h2>Event Log</h2>
+          <span class="pill" id="eventClock">live</span>
+        </div>
+        <div id="eventLog" class="event-log"></div>
+      </section>
+    </main>
+
+    <script src="/static/app.js"></script>
+  </body>
+</html>

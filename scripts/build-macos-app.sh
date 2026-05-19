@@ -3,9 +3,9 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 if [[ -n "${ONECONTEXT_RELEASE_CHANNEL:-}" ]]; then
-  eval "$("$ROOT/scripts/release-manifest.py" export-env --channel "$ONECONTEXT_RELEASE_CHANNEL")"
+  eval "$("$ROOT/scripts/release-train.sh" manifest export-env --channel "$ONECONTEXT_RELEASE_CHANNEL")"
 else
-  eval "$("$ROOT/scripts/release-manifest.py" export-env)"
+  eval "$("$ROOT/scripts/release-train.sh" manifest export-env)"
 fi
 MACOS_DIR="$ROOT/macos"
 APP_DIR="$ROOT/dist/1Context.app"
@@ -171,12 +171,12 @@ rsync -a \
   --exclude 'README.md' \
   "$ROOT/runtime/1Context/" \
   "$RUNTIME_DEFAULTS_WORK_DIR/1Context/"
-python3 "$ROOT/scripts/materialize-wiki-pages.py" "$RUNTIME_DEFAULTS_WORK_DIR" >/dev/null
+python3 "$ROOT/wiki-engine/tools/materialize-wiki-pages.py" "$RUNTIME_DEFAULTS_WORK_DIR" >/dev/null
 node "$ROOT/wiki-engine/tools/render-site.mjs" \
   --source-root "$RUNTIME_DEFAULTS_WORK_DIR/1Context/user-wiki/source" \
   --output "$RUNTIME_DEFAULTS_WORK_DIR/1Context/user-wiki/site" \
   --result-json "$RUNTIME_DEFAULTS_WORK_DIR/render-site-result.json" >/dev/null
-python3 "$ROOT/scripts/write-runtime-defaults-manifest.py" \
+python3 "$ROOT/wiki-engine/tools/write-runtime-defaults-manifest.py" \
   --runtime-defaults-root "$RUNTIME_DEFAULTS_WORK_DIR/1Context" \
   --wiki-engine-root "$ROOT/wiki-engine" \
   --render-result "$RUNTIME_DEFAULTS_WORK_DIR/render-site-result.json" \
@@ -188,6 +188,9 @@ rsync -a \
   --exclude 'node_modules/.bin' \
   --exclude 'node_modules/.package-lock.json' \
   --exclude 'node_modules/*/bin' \
+  --exclude 'tools/materialize-wiki-pages.py' \
+  --exclude 'tools/serve-site.mjs' \
+  --exclude 'tools/write-runtime-defaults-manifest.py' \
   --exclude 'README.md' \
   "$ROOT/wiki-engine/" \
   "$WIKI_ENGINE_RESOURCE_DIR/"
@@ -390,7 +393,7 @@ if [[ "$ONECONTEXT_RELEASE_CHANNEL" != "dev" ]]; then
     exit 1
   fi
   rm -f "$homebrew_path_report"
-  "$ROOT/scripts/audit-macos-app-dependencies.sh" "$APP_DIR"
+  "$ROOT/macos/tools/audit-app-dependencies.sh" "$APP_DIR"
 fi
 
 echo "$APP_DIR"

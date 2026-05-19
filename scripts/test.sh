@@ -14,7 +14,6 @@ swift build --package-path "$MACOS_DIR"
 BIN_DIR="$(swift build --package-path "$MACOS_DIR" --show-bin-path)"
 trap cleanup EXIT
 
-"$ROOT/scripts/check-version-consistency.sh"
 "$ROOT/scripts/test-release-train.sh"
 "$BIN_DIR/1context" | grep -q "1Context $VERSION"
 test "$("$BIN_DIR/1context" --version)" = "$VERSION"

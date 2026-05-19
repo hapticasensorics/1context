@@ -62,13 +62,13 @@ Collapse the wiki runtime into one knowable production shape:
 
 - [x] Generate a build-time `RuntimeDefaults` manifest with version, source
   hash, site hash, renderer hash, and render counts. Evidence:
-  `scripts/write-runtime-defaults-manifest.py`; rebuilt app manifest reports
+  `wiki-engine/tools/write-runtime-defaults-manifest.py`; rebuilt app manifest reports
   schema `1context.runtime-defaults-manifest.v1`, version `0.1.86`, 8 routes,
   8 markdown twins, and renderer hash prefix `adc9d1511403`.
 - [x] Validate that manifest in package and installed-path smoke tests.
   Evidence: `ONECONTEXT_ALLOW_LAUNCH_AGENT_SMOKE=1
   ./scripts/test-launch-agent-package.sh` and
-  `./scripts/test-wiki-installed-path-smoke.sh` pass.
+  `./scripts/test-wiki.sh` pass.
 - [x] Record the manifest identity in the first-run/defaults install ledger.
   Evidence: `WikiRuntimeDefaultsInstallerTests.copiesMissingDefaultsAndPreservesExistingFiles`
   asserts `packagedManifest` survives into `runtime-defaults-install.json`.
@@ -91,10 +91,10 @@ Collapse the wiki runtime into one knowable production shape:
 - [x] `./scripts/test-release-train.sh`
 - [x] `swift test --package-path macos`
 - [x] `npm test --prefix wiki-engine`
-- [x] `/usr/bin/time -p ./scripts/package-macos-smoke.sh` completed in
+- [x] `/usr/bin/time -p ./scripts/release-train.sh build --channel dev` completed in
   93.77 seconds and produced `dist/1Context-0.1.86-macos-arm64.dmg`.
 - [x] `ONECONTEXT_ALLOW_LAUNCH_AGENT_SMOKE=1 ./scripts/test-launch-agent-package.sh`
-- [x] `./scripts/test-wiki-installed-path-smoke.sh`
+- [x] `./scripts/test-wiki.sh`
 - [x] `git diff --check`
 
 ## Evidence Log

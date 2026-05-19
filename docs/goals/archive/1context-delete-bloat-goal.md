@@ -146,30 +146,30 @@ tranche is to make production packaging/proof enter through
   exist.
 - [x] Move mandatory/optional release policy, appcast validation, Sparkle env
   derivation, release notes policy, and post-install message policy into
-  `release/release.toml` plus `scripts/release-manifest.py`.
+  `release/release.toml` plus `scripts/release-train.sh manifest`.
 - [x] Remove the release-manifest validation dependency on
   `docs/goals/archive/1context-release-lockdown-goal.md`; docs must not be
   release truth.
 - [x] Decide whether `release/release.schema.json` is enforced or deleted. If
   kept, schema validation must run in the normal release train.
-- [x] Delete the fallback homegrown TOML parser in `scripts/release-manifest.py`
+- [x] Delete the fallback homegrown TOML parser in `scripts/release-train.sh manifest`
   and require modern Python `tomllib` on release runners.
 - [x] Add a negative check proving no production release code reads
   `release/update-policy.*`.
 
 Evidence, 2026-05-13: update policy data now lives in `release/release.toml`;
-`scripts/release-manifest.py` exports the Sparkle/update UI environment and
+`scripts/release-train.sh manifest` exports the Sparkle/update UI environment and
 validates mandatory/optional appcast cases. Deleted files:
 `release/update-policy.toml`, `release/update-policy.schema.json`,
 `scripts/update-policy.py`, `scripts/check-update-policy.sh`, and
 `scripts/test-update-policy.sh`. Proof:
-`scripts/release-manifest.py validate`, `scripts/test-release-train.sh`,
+`scripts/release-train.sh manifest validate`, `scripts/test-release-train.sh`,
 `git diff --check`, and `rg` over production release code for old
 `update-policy` paths.
 
 Evidence, 2026-05-13: deleted documentation-only
 `release/release.schema.json`; the enforced release manifest contract remains
-`scripts/release-manifest.py validate` and `scripts/release-train.sh`.
+`scripts/release-train.sh manifest validate` and `scripts/release-train.sh`.
 
 ### 3. One Production Release Command
 
@@ -194,7 +194,7 @@ Evidence, 2026-05-13: production package/sign/notarize/appcast logic moved into
 local/CI unsigned package smoke only. CI now uses the smoke script; the protected
 release workflow validates before credential-bearing steps and production
 release steps enter through `scripts/release-train.sh`. Proof:
-`scripts/release-manifest.py validate`, `scripts/test-release-train.sh`,
+`scripts/release-train.sh manifest validate`, `scripts/test-release-train.sh`,
 `actionlint`, `git diff --check`, and `rg` for old package wrappers and bypass
 env.
 
@@ -204,7 +204,7 @@ env.
 - [x] Delete `scripts/test-release-proof-request.sh` after proof request
   coverage moves into `scripts/test-release-train.sh`.
 - [x] Delete `scripts/audit-github-release-assets.sh` after asset checks move
-  into `scripts/release-train.sh audit` or `scripts/release-manifest.py`.
+  into `scripts/release-train.sh audit` or `scripts/release-train.sh manifest`.
 - [x] Change `.github/workflows/self-hosted-mac-update-proof.yml` to enter
   through `scripts/release-train.sh prove`.
 - [x] Collapse the self-hosted proof workflow dispatch form to manifest-only
@@ -226,7 +226,7 @@ env.
 
 Evidence, 2026-05-13: old lockdown evidence scripts and the old upgrade-path
 grep test were deleted, and CI no longer calls `scripts/test-upgrade-paths.sh`.
-Proof: `scripts/release-manifest.py validate`, `scripts/test-release-train.sh`,
+Proof: `scripts/release-train.sh manifest validate`, `scripts/test-release-train.sh`,
 and `git diff --check`.
 
 Evidence, 2026-05-13: `scripts/release-train.sh prove` now owns proof request
@@ -236,14 +236,14 @@ redaction entry. Deleted `scripts/request-release-proof.sh` and
 `mandatory_automatic_success.json` proof was removed; bless now still requires
 real matrix proof JSON. Proof: `scripts/test-release-train.sh`.
 
-Evidence, 2026-05-13: `scripts/audit-evidence-redaction.sh` no longer edits
+Evidence, 2026-05-13: `release/tools/audit-evidence-redaction.sh` no longer edits
 `proof-results/*.json`; it only writes `redaction-report.json` and fails on
 forbidden evidence. Proof: `scripts/test-release-train.sh`.
 
 Evidence, 2026-05-13: moved the GitHub public asset audit into
 `scripts/release-train.sh audit`/`publish`, deleted
 `scripts/audit-github-release-assets.sh`, moved the real-Mac proof engine to
-`scripts/release/internal/self-hosted-update-proof.sh`, and changed the
+`release/tools/proof/self-hosted-update-proof.sh`, and changed the
 self-hosted workflow to execute it only through
 `scripts/release-train.sh prove --runner-execute`. Proof:
 `scripts/test-release-train.sh`, `bash -n`, and negative `rg` over active docs,
@@ -375,7 +375,7 @@ the rare post-install popup remains founder-controlled but disabled by default
 (`enabled = false`, title default `1Context Improved!`). The manifest validator
 enforces both policies and rejects appcasts that include a description while
 release notes are hidden. Proof: `./scripts/test-release-train.sh` and
-`./scripts/release-manifest.py validate`.
+`./scripts/release-train.sh manifest validate`.
 
 ### 7. First-Party Agent Integration Deletion
 
@@ -422,7 +422,7 @@ operator script internals and preflights Local Wiki setup with redacted
 `diagnose`. Proof: `swift build --package-path macos`,
 `swift test --package-path macos`, `./scripts/test.sh`, `bash -n
 scripts/test.sh scripts/test-release-app-product-https.sh
-scripts/release/internal/self-hosted-update-proof.sh`, negative `rg` over the
+release/tools/proof/self-hosted-update-proof.sh`, negative `rg` over the
 deleted CLI functions, and `scripts/measure-shipped-app-lines.sh` reporting
 7,558 shipped-app nonblank lines after the desired-state deletion.
 
@@ -483,7 +483,7 @@ and the app-bundle memory-core copy block. The daemon now prepares the small
 app-owned wiki shell directly; the package smoke asserts
 `Contents/Resources/memory-core` is absent. Proof: `swift test --package-path
 macos`, `./scripts/test.sh`, `./scripts/package-macos-smoke.sh`,
-`./scripts/test-launch-agent-package.sh`, `./scripts/release-manifest.py
+`./scripts/test-launch-agent-package.sh`, `./scripts/release-train.sh manifest
 validate`, `./scripts/test-release-train.sh`, `bash -n`, and `git diff --check`
 passed. `scripts/measure-shipped-app-lines.sh` reports 8,796 nonblank
 shipped-app lines, an 85.65% reduction from baseline.
@@ -579,7 +579,7 @@ Evidence, 2026-05-13: deleted the stale grep-based
 behavioral CLI/setup/update/package contracts and release proof JSON. Current
 proof: `swift test --package-path macos`, `./scripts/test.sh`,
 `./scripts/test-release-train.sh`, `./scripts/package-macos-smoke.sh`,
-`./scripts/test-launch-agent-package.sh`, `./scripts/release-manifest.py
+`./scripts/test-launch-agent-package.sh`, `./scripts/release-train.sh manifest
 validate`, `cd memory-core && uv run --with pytest pytest`, `actionlint`,
 `bash -n`, `git diff --check`, and `scripts/measure-shipped-app-lines.sh`.
 
@@ -614,7 +614,7 @@ Evidence, 2026-05-13: prepared `0.1.66` release metadata for the next clean
 tag: `VERSION`, `Core.swift`, `release/release.toml`, `RELEASE_NOTES.md`, and
 the self-hosted proof workflow default now agree on `0.1.65 -> 0.1.66`.
 Proof: `./scripts/check-version-consistency.sh`,
-`./scripts/release-manifest.py validate`, `swift test --package-path macos`,
+`./scripts/release-train.sh manifest validate`, `swift test --package-path macos`,
 `./scripts/test.sh`, `./scripts/test-release-train.sh`,
 `./scripts/release-train.sh prove --dry-run`,
 `./scripts/package-macos-smoke.sh`, `git diff --check`, and packaged
@@ -656,7 +656,7 @@ manifest-only release train, collapsed `.github/workflows/self-hosted-mac-update
 so the only manual workflow input is `proof_reason`, and changed
 `scripts/build-macos-app.sh` so updater UI copy and Sparkle feed URL come from
 `release/release.toml` instead of caller-provided update-copy env defaults.
-Proof: `bash -n`, `python3 -m py_compile scripts/release-manifest.py`, and
+Proof: `bash -n`, release-runner TypeScript build/test, and
 `scripts/test-release-train.sh` negative checks for old workflow inputs,
 deleted release fact dispatch flags, and packaging update-copy env overrides.
 

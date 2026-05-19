@@ -16,3 +16,7 @@ memory-core/wiki/generated/
 memory-core/wiki/menu/**/generated/
 memory-core/storage/lakestore/*.lance/
 wiki-engine/node_modules/
+wiki-engine/**/__pycache__/
+*.pyc
+release/runner/node_modules/
+release/runner/dist/

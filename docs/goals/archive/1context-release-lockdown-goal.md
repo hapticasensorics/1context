@@ -1354,7 +1354,7 @@ Descartes maximal release-delivery plan:
   `--watch`, and ambiguous matching workflow runs fail closed.
 - [x] Harden DMG creation against transient `hdiutil create` resource-busy
   failures in CI.
-  Evidence: `scripts/create-macos-dmg.sh` now creates the compressed DMG at an
+  Evidence: `release/tools/create-macos-dmg.sh` now creates the compressed DMG at an
   isolated temp output path, retries `hdiutil create` up to three times, then
   moves the completed image into `dist`. Local proof:
   `ALLOW_UNNOTARIZED=1 NOTARIZE=0 GENERATE_SPARKLE_APPCAST=1

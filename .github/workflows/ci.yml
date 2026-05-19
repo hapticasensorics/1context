@@ -22,9 +22,17 @@ jobs:
         run: |
           swift --version
           xcodebuild -version
-      - run: ./scripts/check-version-consistency.sh
+          node --version
+          npm --version
+      - name: Install release runner dependencies
+        run: npm --prefix release/runner ci
+      - name: Build release runner
+        run: npm --prefix release/runner run build
+      - name: Test release runner
+        run: npm --prefix release/runner test
+      - run: ./scripts/release-train.sh validate --channel dev
       - run: swift test --package-path macos
       - run: ./scripts/test.sh
-      - run: ./scripts/package-macos-smoke.sh
+      - run: ./scripts/release-train.sh build --channel dev
       - name: Packaged LaunchAgent smoke
         run: ONECONTEXT_ALLOW_LAUNCH_AGENT_SMOKE=1 ./scripts/test-launch-agent-package.sh

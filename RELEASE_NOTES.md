@@ -1,35 +1,20 @@
-# 1Context v0.1.86 Public Preview
+# 1Context v0.1.87 Public Preview
 
 This release includes:
 
-- `0.1.86` makes the official release proof deterministic after setup
-  restoration. The protected runner now re-pins the previous public build after
-  Local Wiki Access is ready, so an aggressive mandatory auto-update cannot
-  preempt the measured Sparkle update step.
-- `0.1.85` finished the release-factory uninstall/reinstall proof repair. The
-  protected runner watches `1context-cli uninstall` for macOS certificate trust
-  authorization prompts and approves them while the CLI subprocess is blocked.
-- The password helper no longer uses the broad focused-password fallback unless
-  it is explicitly enabled, so proof loops capture the prompt and retry through
-  scoped Accessibility actions instead of typing into an arbitrary focused
-  field.
-- The proof contract now explicitly preserves the product boundary: an already
-  setup user should not need sudo or a fresh Local Wiki Access grant during an
-  app update.
-- The protected runner can use an explicit admin-authorization secret only for
-  setup and reinstall proof prompts, so the release lane can automate the same
-  first-setup macOS prompt a tester sees without making updates depend on sudo.
-- Signed app setup ignores stale runner `SUDO_USER` environment variables
-  when the app is actually running as the logged-in macOS user, so Local Wiki
-  Access can finish from the real setup window.
-- The official proof runner treats setup restoration as a closed-loop GUI
-  workflow, captures each `Grant` / `Check Again` action, and keeps checking
-  diagnose until Local Wiki Access and runtime health are actually restored.
-- Distributable `.app` and DMG builds reject Homebrew, host Caddy, local library
-  links, and executable script interpreters that depend on developer-machine
-  package managers or language runtimes.
-- Private and official appcasts are validated against `release/release.toml`
-  instead of using compatibility skips.
+- `0.1.87` moves release orchestration into a typed release runner with explicit
+  dev, prototype, private, and official channels.
+- The signed release workflow keeps self-hosted proof optional by default while
+  still auditing published assets after a tagged build.
+- Release tooling is slimmer and easier to reason about: retired compatibility
+  scripts were removed, and the remaining shell entrypoints delegate to the
+  release runner.
+- Wiki runtime tooling now lives with the wiki engine instead of being scattered
+  through the release and memory-runtime surfaces.
+- Official release permissions are narrower by default; artifact attestations
+  remain disabled until that path is intentionally designed.
+- Appcasts, release assets, version metadata, and Sparkle update policy continue
+  to validate against `release/release.toml`.
 - Mandatory Sparkle updates remain quiet and automatic; manual `Check for
   Updates` remains a normal user action.
 

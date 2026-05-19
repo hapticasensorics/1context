@@ -83,9 +83,9 @@ renderer slice. This goal is the close-loop product milestone around it.
 
 - [x] Track public-safe `runtime/1Context/user-wiki`,
   `runtime/1Context/context-engine`, and Application Support mirror folders.
-  Evidence: `./scripts/test-wiki-runtime-v0.sh`.
+  Evidence: `./scripts/test-wiki.sh`.
 - [x] Keep generated and personal runtime state out of git. Evidence:
-  `./scripts/test-wiki-runtime-v0.sh` checks ignored and trackable paths.
+  `./scripts/test-wiki.sh` checks ignored and trackable paths.
 - [x] Expose typed Swift runtime roots for `user-wiki`, `context-engine`,
   Application Support, logs, and caches. Evidence:
   `macos/Tests/OneContextPlatformTests/PathAndPermissionTests.swift`.
@@ -95,7 +95,7 @@ renderer slice. This goal is the close-loop product milestone around it.
   asserts production-shaped `~/1Context` and `~/Library/...` roots without
   writing to them.
 - [x] Add setup-state schema validation for default install and page
-  materialization ledgers. Evidence: `./scripts/test-wiki-setup-state-schema.sh`
+  materialization ledgers. Evidence: `./scripts/test-wiki.sh`
   validates setup TOML for default materialization and dev fixture imports.
 
 ### 3. Site Map And Source Families
@@ -106,11 +106,11 @@ renderer slice. This goal is the close-loop product milestone around it.
 - [x] Use semantic family groups instead of menu-order folders. Evidence:
   specs define `context`, `work`, `reference`, `for-you`, and `system`.
 - [x] Materialize V0 source families for `for-you`, `your-context`,
-  `projects`, and `topics`. Evidence: `./scripts/test-wiki-runtime-v0.sh` and
-  `./scripts/test-wiki-render-contract.sh`.
+  `projects`, and `topics`. Evidence: `./scripts/test-wiki.sh` and
+  `./scripts/test-wiki.sh`.
 - [x] Validate `wiki.toml` for duplicate routes, duplicate ids, invalid
   `kind`, disabled alias targets, path escapes, absolute template paths, and
-  symlink escapes. Evidence: `./scripts/test-wiki-materializer-validation.sh`.
+  symlink escapes. Evidence: `./scripts/test-wiki.sh`.
 - [x] Decide whether `home`, `for-you`, `this-week`, and `open-questions` are
   enabled in V0 or remain declared-but-disabled until generated-page support
   lands. Evidence: `for-you` is source-backed and enabled, `home` remains the
@@ -120,29 +120,29 @@ renderer slice. This goal is the close-loop product milestone around it.
 ### 4. Templates And Materialization
 
 - [x] Materializer creates missing configured pages and talk folders from
-  templates. Evidence: `./scripts/test-wiki-runtime-v0.sh`.
+  templates. Evidence: `./scripts/test-wiki.sh`.
 - [x] Prove user-configured custom pages can use generic fallback templates
   without adding blessed public content. Evidence:
-  `./scripts/test-wiki-custom-pages-contract.sh`.
+  `./scripts/test-wiki.sh`.
 - [x] Materializer preserves edited files and tombstones. Evidence:
-  `./scripts/test-wiki-runtime-v0.sh`.
+  `./scripts/test-wiki.sh`.
 - [x] Align runtime template frontmatter with renderer validation. Evidence:
-  `./scripts/test-wiki-render-contract.sh` and
+  `./scripts/test-wiki.sh` and
   `npm test` in `wiki-engine`.
 - [x] Make talk `_meta.yaml` include page route, talk route, access, timestamps,
   and schema fields required by the renderer. Evidence:
-  `./scripts/test-wiki-render-contract.sh`.
+  `./scripts/test-wiki.sh`.
 - [x] Ensure talk access inherits page access by default. Evidence:
-  `./scripts/test-wiki-render-contract.sh` checks private talk output.
+  `./scripts/test-wiki.sh` checks private talk output.
 - [x] Fix markdown twin URLs so browser/Agent surfaces can fetch valid markdown
   for every configured page and talk page. Evidence:
-  `./scripts/test-wiki-browser-contract.sh`.
+  `./scripts/test-wiki.sh`.
 
 ### 5. Wiki Engine Extraction
 
 - [x] Move the renderer out of `memory-core/wiki-engine` into a first-class
   `wiki-engine/` package or bundled helper source. Evidence:
-  `wiki-engine/package.json` plus `./scripts/test-wiki-render-contract.sh`.
+  `wiki-engine/package.json` plus `./scripts/test-wiki.sh`.
 - [x] Delete `memory-core/wiki-engine` after the first-class `wiki-engine/`
   package has equivalent render proof. Evidence: removed legacy directory and
   passing renderer/browser contract tests.
@@ -150,14 +150,14 @@ renderer slice. This goal is the close-loop product milestone around it.
   harnesses call `wiki-engine/` directly.
 - [x] Add structured renderer CLI: explicit roots, staging output, result JSON,
   no source mutation. Evidence: `wiki-engine/tools/render-site.mjs` and
-  `./scripts/test-wiki-render-site-cli.sh`.
+  `./scripts/test-wiki.sh`.
 - [x] Add renderer schemas for page result, error result, route manifest,
   content index, and markdown twins. Evidence:
   `wiki-engine/schemas/*.schema.json` plus
-  `./scripts/test-wiki-render-schemas.sh`; `render-site.mjs` writes
+  `./scripts/test-wiki.sh`; `render-site.mjs` writes
   `.1context/route-manifest.json` and `.1context/content-index.json`.
 - [x] Add renderer package smoke proving no network fetch and no runtime
-  dependency install. Evidence: `./scripts/test-wiki-engine-package-smoke.sh`
+  dependency install. Evidence: `./scripts/test-wiki.sh`
   copies `wiki-engine/` without `node_modules`, runs `npm ci --offline`,
   renders a fixture source tree, and fails on obsolete runtime-coupled text.
 
@@ -218,15 +218,15 @@ renderer slice. This goal is the close-loop product milestone around it.
   `Application Support/1Context/wiki-site/current` in
   `OneContextWikiRuntimeTests`.
 - [x] Missing configured source materializes or shows repair diagnostics.
-  Evidence: `./scripts/test-wiki-runtime-v0.sh` materializes configured source,
-  and `./scripts/test-wiki-custom-pages-contract.sh` materializes a dummy custom
+  Evidence: `./scripts/test-wiki.sh` materializes configured source,
+  and `./scripts/test-wiki.sh` materializes a dummy custom
   page from the generic fallback template.
 - [x] Unconfigured routes show diagnostics and never redirect to
-  `/your-context`. Evidence: `./scripts/test-wiki-browser-contract.sh` checks
+  `/your-context`. Evidence: `./scripts/test-wiki.sh` checks
   `/definitely-missing` returns 404 without redirect, and
-  `./scripts/test-wiki-custom-pages-contract.sh` checks `/not-configured`.
+  `./scripts/test-wiki.sh` checks `/not-configured`.
 - [x] Tombstoned pages are not recreated and show tombstone diagnostics.
-  Evidence: `./scripts/test-wiki-tombstone-contract.sh` writes a configured
+  Evidence: `./scripts/test-wiki.sh` writes a configured
   tombstone, verifies materialization state reports `status = "tombstoned"`,
   verifies source/talk files and rendered routes are absent, and confirms the
   route 404s without redirecting.
@@ -234,7 +234,7 @@ renderer slice. This goal is the close-loop product milestone around it.
   relative paths, never absolute local paths. Evidence:
   `swift test --package-path macos --filter OneContextLocalWebTests`.
 - [x] Agent/browser markdown twin links resolve for pages and talk pages.
-  Evidence: `./scripts/test-wiki-browser-contract.sh`.
+  Evidence: `./scripts/test-wiki.sh`.
 - [x] Menu-bar Open Wiki or refresh path reports current, stale, failed,
   rendering, or uninitialized state clearly. Evidence: daemon `wiki.status` now
   includes a structured `render` payload with active trigger, queue state,
@@ -315,8 +315,8 @@ renderer slice. This goal is the close-loop product milestone around it.
   `swift test --package-path macos --filter OneContextWikiRuntimeTests`.
 - [x] Remove old fallback behavior that routes missing pages to
   `/your-context`, `/for-you`, or hidden bundled content. Evidence:
-  `./scripts/test-wiki-browser-contract.sh` proves `/definitely-missing` stays
-  404 without redirect, `./scripts/test-wiki-custom-pages-contract.sh` proves
+  `./scripts/test-wiki.sh` proves `/definitely-missing` stays
+  404 without redirect, `./scripts/test-wiki.sh` proves
   `/not-configured` stays 404, and `rg` over active local-web source finds no
   placeholder-page fallback publisher.
 - [x] Keep no long-term backward-compatibility layer for old public-launch wiki
@@ -338,7 +338,7 @@ renderer slice. This goal is the close-loop product milestone around it.
 
 - [x] Static export allowlist excludes `context-engine`, raw prompts, raw
   observations, run transcripts, private previews, and local paths. Evidence:
-  `./scripts/test-wiki-render-schemas.sh` and `WikiSiteValidator` reject
+  `./scripts/test-wiki.sh` and `WikiSiteValidator` reject
   `context-engine`, `source/families`, `_curator`, `_conventions`, prompts,
   observations, runs, previews, `runtime-test`, and `/Users/` in export
   allowlists.
@@ -347,7 +347,7 @@ renderer slice. This goal is the close-loop product milestone around it.
   browser-visible health/state payloads and removed unshipped chat routes.
 - [x] Package smoke forbids generated `runtime-test`, private fixtures,
   `node_modules` unless intentionally vendored, runtime package installs, and
-  source checkouts. Evidence: `./scripts/package-macos-smoke.sh` plus
+  source checkouts. Evidence: `./scripts/release-train.sh build --channel dev` plus
   `ONECONTEXT_ALLOW_LAUNCH_AGENT_SMOKE=1 ./scripts/test-launch-agent-package.sh`
   pass after rebuilding the app bundle and DMG.
 - [x] Update migration preserves user-edited defaults and writes proposals for
@@ -359,7 +359,7 @@ renderer slice. This goal is the close-loop product milestone around it.
   `swift test --package-path macos --filter OneContextWikiRuntimeTests`.
 - [x] Delete/reinstall without zap preserves `~/1Context` and does not confuse
   app machinery with user memory. Evidence:
-  `./scripts/test-wiki-reinstall-preserves-user-data.sh` deletes and reinstalls
+  `./scripts/test-wiki.sh` deletes and reinstalls
   a packaged app fixture while preserving edited `user-wiki/wiki.toml`, edited
   topic source, and Application Support machinery separately.
 
@@ -367,25 +367,25 @@ renderer slice. This goal is the close-loop product milestone around it.
 
 - [x] Clean dev runtime proof: initialize, materialize, render, serve, refresh,
   fail render, recover last-good. Evidence:
-  `./scripts/test-wiki-runtime-e2e.sh`.
+  `./scripts/test-wiki.sh`.
 - [x] Installed-path proof: same workflow against production-shaped paths
   without source-tree fallbacks. Evidence:
-  `./scripts/package-macos-smoke.sh`,
-  `./scripts/test-wiki-installed-path-smoke.sh`, and
+  `./scripts/release-train.sh build --channel dev`,
+  `./scripts/test-wiki.sh`, and
   `ONECONTEXT_ALLOW_LAUNCH_AGENT_SMOKE=1 ./scripts/test-launch-agent-package.sh`.
 - [x] Browser proof: open local wiki, verify primary routes, talk routes,
   UI Talk navigation, brand-menu navigation, TOC anchor targets, Agent view,
   markdown twins, resources, console errors, and missing-route no-redirect.
-  Evidence: `./scripts/test-wiki-browser-contract.sh` plus an in-app Browser
+  Evidence: `./scripts/test-wiki.sh` plus an in-app Browser
   pass on a live local server with 39 assertions covering `/topics`,
   `/topics/talk`, `/for-you`, visible TOC contents, Agent view markdown load,
   no absolute local path leak, and missing-route no-redirect.
 - [x] Agent proof: append talk, create proposal, accept decision, promote
   source, request render, observe updated page. Evidence:
-  `./scripts/test-wiki-agent-authoring-e2e.sh`.
+  `./scripts/test-wiki.sh`.
 - [x] Performance proof: render queue handles agent write burst without CPU
   storm or overlapping helpers. Evidence:
-  `./scripts/test-wiki-render-queue-stress.sh` and
+  `./scripts/test-wiki.sh` and
   `swift test --package-path macos --filter OneContextWikiRuntimeTests`.
 
 ## Notes

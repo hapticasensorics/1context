@@ -5,7 +5,7 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 TMP_DIR="$(mktemp -d /tmp/1ctx-release-train-XXXXXX)"
 trap 'rm -rf "$TMP_DIR"' EXIT
 VERSION="$(tr -d '[:space:]' < "$ROOT/VERSION")"
-eval "$("$ROOT/scripts/release-manifest.py" export-env)"
+eval "$("$ROOT/scripts/release-train.sh" manifest export-env)"
 PREVIOUS_VERSION="$ONECONTEXT_RELEASE_PREVIOUS_VERSION"
 
 scan_text() {
@@ -103,31 +103,33 @@ PY
 
 bash -n \
   "$ROOT/scripts/release-train.sh" \
-  "$ROOT/scripts/audit-macos-app-dependencies.sh" \
-  "$ROOT/scripts/redact-evidence.sh" \
-  "$ROOT/scripts/audit-evidence-redaction.sh" \
-  "$ROOT/scripts/release/internal/lib-gui-evidence.sh" \
-  "$ROOT/scripts/release/internal/prove-remote-sparkle-update.sh" \
-  "$ROOT/scripts/release/internal/self-hosted-update-proof.sh" \
-  "$ROOT/scripts/write-runner-attestation.sh" \
-  "$ROOT/scripts/package-macos-smoke.sh"
-python3 -m py_compile "$ROOT/scripts/release-manifest.py" "$ROOT/scripts/write-runtime-defaults-manifest.py"
+  "$ROOT/macos/tools/audit-app-dependencies.sh" \
+  "$ROOT/release/tools/redact-evidence.sh" \
+  "$ROOT/release/tools/audit-evidence-redaction.sh" \
+  "$ROOT/release/tools/proof/lib-gui-evidence.sh" \
+  "$ROOT/release/tools/proof/prove-remote-sparkle-update.sh" \
+  "$ROOT/release/tools/proof/self-hosted-update-proof.sh" \
+  "$ROOT/release/tools/write-runner-attestation.sh" \
+  "$ROOT/scripts/test-wiki.sh"
+npm --prefix "$ROOT/release/runner" run build >/dev/null
+npm --prefix "$ROOT/release/runner" test >/dev/null
+python3 -m py_compile "$ROOT/wiki-engine/tools/write-runtime-defaults-manifest.py"
 
-"$ROOT/scripts/release-manifest.py" validate
+"$ROOT/scripts/release-train.sh" manifest validate
 if ! /bin/bash "$ROOT/scripts/release-train.sh" validate > "$TMP_DIR/system-bash-validate.out" 2>&1; then
   grep -Eq "Release tree is dirty|Release must run from" "$TMP_DIR/system-bash-validate.out"
 fi
 /bin/bash "$ROOT/scripts/release-train.sh" validate --channel dev >/dev/null
-ONECONTEXT_RELEASE_MANIFEST_FORCE_SIMPLE_TOML=1 "$ROOT/scripts/release-manifest.py" validate
-test "$("$ROOT/scripts/release-manifest.py" matrix-cases | wc -l | tr -d '[:space:]')" = "14"
-"$ROOT/scripts/release-manifest.py" matrix-cases | grep -q "^login_restart_recovery$"
-"$ROOT/scripts/release-manifest.py" matrix-cases | grep -q "^real_uninstall_reinstall$"
-grep -q '"case": "login_restart_recovery"' "$ROOT/scripts/release/internal/self-hosted-update-proof.sh"
-grep -q '"case": "real_uninstall_reinstall"' "$ROOT/scripts/release/internal/self-hosted-update-proof.sh"
-grep -q "env -u SUDO_USER -u SUDO_UID -u SUDO_GID -u SUDO_COMMAND" "$ROOT/scripts/release/internal/self-hosted-update-proof.sh"
-grep -q "repin_old_baseline_after_setup_restore" "$ROOT/scripts/release/internal/self-hosted-update-proof.sh"
-grep -q "baseline-repin-after-setup" "$ROOT/scripts/release/internal/self-hosted-update-proof.sh"
-"$ROOT/scripts/release-manifest.py" write-fixture-proof-results --output-dir "$TMP_DIR/fixture-proof-results" > "$TMP_DIR/fixture-proof-results.out"
+ONECONTEXT_RELEASE_MANIFEST_FORCE_SIMPLE_TOML=1 "$ROOT/scripts/release-train.sh" manifest validate
+test "$("$ROOT/scripts/release-train.sh" manifest matrix-cases | wc -l | tr -d '[:space:]')" = "14"
+"$ROOT/scripts/release-train.sh" manifest matrix-cases | grep -q "^login_restart_recovery$"
+"$ROOT/scripts/release-train.sh" manifest matrix-cases | grep -q "^real_uninstall_reinstall$"
+grep -q '"case": "login_restart_recovery"' "$ROOT/release/tools/proof/self-hosted-update-proof.sh"
+grep -q '"case": "real_uninstall_reinstall"' "$ROOT/release/tools/proof/self-hosted-update-proof.sh"
+grep -q "env -u SUDO_USER -u SUDO_UID -u SUDO_GID -u SUDO_COMMAND" "$ROOT/release/tools/proof/self-hosted-update-proof.sh"
+grep -q "repin_old_baseline_after_setup_restore" "$ROOT/release/tools/proof/self-hosted-update-proof.sh"
+grep -q "baseline-repin-after-setup" "$ROOT/release/tools/proof/self-hosted-update-proof.sh"
+"$ROOT/scripts/release-train.sh" manifest write-fixture-proof-results --output-dir "$TMP_DIR/fixture-proof-results" > "$TMP_DIR/fixture-proof-results.out"
 test "$(find "$TMP_DIR/fixture-proof-results" -name '*.json' | wc -l | tr -d '[:space:]')" = "7"
 grep -q "^optional_prompt$" "$TMP_DIR/fixture-proof-results.out"
 grep -q '"proof": "sparkle_fixture"' "$TMP_DIR/fixture-proof-results/optional_prompt.json"
@@ -138,17 +140,17 @@ cat > "$TMP_DIR/BadDependency.app/Contents/MacOS/bad-python" <<'SCRIPT'
 print("not a distributable dependency")
 SCRIPT
 chmod +x "$TMP_DIR/BadDependency.app/Contents/MacOS/bad-python"
-if "$ROOT/scripts/audit-macos-app-dependencies.sh" "$TMP_DIR/BadDependency.app" > "$TMP_DIR/bad-dependency-audit.out" 2>&1; then
+if "$ROOT/macos/tools/audit-app-dependencies.sh" "$TMP_DIR/BadDependency.app" > "$TMP_DIR/bad-dependency-audit.out" 2>&1; then
   echo "app dependency audit must reject Homebrew-hosted script interpreters." >&2
   exit 1
 fi
 grep -q "host package managers or language runtimes" "$TMP_DIR/bad-dependency-audit.out"
-"$ROOT/scripts/release-manifest.py" export-env --channel dev | grep -q "ONECONTEXT_RELEASE_CHANNEL=dev"
-"$ROOT/scripts/release-manifest.py" export-env --channel dev | grep -q "ONECONTEXT_RELEASE_BUDGET_ADVISORY=1"
-"$ROOT/scripts/release-manifest.py" export-env --channel private | grep -q "ONECONTEXT_RELEASE_CHANNEL_APPCAST=private"
-"$ROOT/scripts/release-manifest.py" export-env --channel private | grep -q "ONECONTEXT_RELEASE_CHANNEL_ARTIFACT_REPO=hapticasensorics/1context-preview-release"
-"$ROOT/scripts/release-manifest.py" export-env --channel private | grep -q "ONECONTEXT_RELEASE_BUDGET_ADVISORY=0"
-"$ROOT/scripts/release-manifest.py" export-env --channel official | grep -q "ONECONTEXT_RELEASE_BUDGET_ADVISORY=0"
+"$ROOT/scripts/release-train.sh" manifest export-env --channel dev | grep -q "ONECONTEXT_RELEASE_CHANNEL=dev"
+"$ROOT/scripts/release-train.sh" manifest export-env --channel dev | grep -q "ONECONTEXT_RELEASE_BUDGET_ADVISORY=1"
+"$ROOT/scripts/release-train.sh" manifest export-env --channel private | grep -q "ONECONTEXT_RELEASE_CHANNEL_APPCAST=private"
+"$ROOT/scripts/release-train.sh" manifest export-env --channel private | grep -q "ONECONTEXT_RELEASE_CHANNEL_ARTIFACT_REPO=hapticasensorics/1context-preview-release"
+"$ROOT/scripts/release-train.sh" manifest export-env --channel private | grep -q "ONECONTEXT_RELEASE_BUDGET_ADVISORY=0"
+"$ROOT/scripts/release-train.sh" manifest export-env --channel official | grep -q "ONECONTEXT_RELEASE_BUDGET_ADVISORY=0"
 test -f "$ROOT/release/tools/caddy/darwin-arm64/caddy-v2.11.2-darwin-arm64.tar.gz"
 test -f "$ROOT/release/tools/caddy/darwin-arm64/caddy-v2.11.2-darwin-arm64.tar.gz.sha256"
 (
@@ -186,40 +188,40 @@ write_appcast "$OPTIONAL_OK" "" ""
 write_appcast "$OPTIONAL_WITH_CRITICAL" "      <sparkle:criticalUpdate sparkle:version=\"$VERSION\"/>" ""
 write_optional_manifest "$OPTIONAL_MANIFEST"
 
-"$ROOT/scripts/release-manifest.py" validate --appcast "$MANDATORY_OK"
+"$ROOT/scripts/release-train.sh" manifest validate --appcast "$MANDATORY_OK"
 
-if "$ROOT/scripts/release-manifest.py" validate --appcast "$MANDATORY_WITH_NOTES" >/dev/null 2>&1; then
+if "$ROOT/scripts/release-train.sh" manifest validate --appcast "$MANDATORY_WITH_NOTES" >/dev/null 2>&1; then
   echo "Mandatory release policy should reject appcast descriptions when release notes are hidden." >&2
   exit 1
 fi
-if "$ROOT/scripts/release-manifest.py" validate --appcast "$MANDATORY_WRONG_CRITICAL" >/dev/null 2>&1; then
+if "$ROOT/scripts/release-train.sh" manifest validate --appcast "$MANDATORY_WRONG_CRITICAL" >/dev/null 2>&1; then
   echo "Mandatory release policy should reject wrong critical update versions." >&2
   exit 1
 fi
-if "$ROOT/scripts/release-manifest.py" validate --appcast "$MANDATORY_FOREIGN_URL" >/dev/null 2>&1; then
+if "$ROOT/scripts/release-train.sh" manifest validate --appcast "$MANDATORY_FOREIGN_URL" >/dev/null 2>&1; then
   echo "Mandatory release policy should reject foreign enclosure URLs." >&2
   exit 1
 fi
-if "$ROOT/scripts/release-manifest.py" validate --appcast "$MANDATORY_MISSING_SIGNATURE" >/dev/null 2>&1; then
+if "$ROOT/scripts/release-train.sh" manifest validate --appcast "$MANDATORY_MISSING_SIGNATURE" >/dev/null 2>&1; then
   echo "Mandatory release policy should reject missing EdDSA signatures." >&2
   exit 1
 fi
-if "$ROOT/scripts/release-manifest.py" validate --appcast "$MANDATORY_MISSING_ENCLOSURE" >/dev/null 2>&1; then
+if "$ROOT/scripts/release-train.sh" manifest validate --appcast "$MANDATORY_MISSING_ENCLOSURE" >/dev/null 2>&1; then
   echo "Mandatory release policy should reject missing enclosures." >&2
   exit 1
 fi
-if "$ROOT/scripts/release-manifest.py" validate --appcast "$MANDATORY_MISSING_LENGTH" >/dev/null 2>&1; then
+if "$ROOT/scripts/release-train.sh" manifest validate --appcast "$MANDATORY_MISSING_LENGTH" >/dev/null 2>&1; then
   echo "Mandatory release policy should reject missing enclosure lengths." >&2
   exit 1
 fi
-if "$ROOT/scripts/release-manifest.py" validate --appcast "$MANDATORY_STALE_MINIMUM" >/dev/null 2>&1; then
+if "$ROOT/scripts/release-train.sh" manifest validate --appcast "$MANDATORY_STALE_MINIMUM" >/dev/null 2>&1; then
   echo "Mandatory release policy should reject stale minimum autoupdate versions." >&2
   exit 1
 fi
 
-"$ROOT/scripts/release-manifest.py" validate --manifest "$OPTIONAL_MANIFEST" --appcast "$OPTIONAL_OK"
+"$ROOT/scripts/release-train.sh" manifest validate --manifest "$OPTIONAL_MANIFEST" --appcast "$OPTIONAL_OK"
 
-if "$ROOT/scripts/release-manifest.py" validate --manifest "$OPTIONAL_MANIFEST" --appcast "$OPTIONAL_WITH_CRITICAL" >/dev/null 2>&1; then
+if "$ROOT/scripts/release-train.sh" manifest validate --manifest "$OPTIONAL_MANIFEST" --appcast "$OPTIONAL_WITH_CRITICAL" >/dev/null 2>&1; then
   echo "Optional release policy should reject critical update metadata." >&2
   exit 1
 fi
@@ -229,7 +231,7 @@ test ! -e "$ROOT/scripts/package-macos-release.sh"
 test ! -e "$ROOT/scripts/check-release-manifest.sh"
 test ! -e "$ROOT/scripts/audit-github-release-assets.sh"
 test ! -e "$ROOT/scripts/self-hosted-update-proof.sh"
-test -x "$ROOT/scripts/release/internal/self-hosted-update-proof.sh"
+test -x "$ROOT/release/tools/proof/self-hosted-update-proof.sh"
 grep -q "./scripts/release-train.sh prove --runner-execute" "$ROOT/.github/workflows/self-hosted-mac-update-proof.yml"
 grep -q "proof_reason:" "$ROOT/.github/workflows/self-hosted-mac-update-proof.yml"
 grep -q "./scripts/release-train.sh prove --channel private --runner-execute" "$ROOT/.github/workflows/self-hosted-mac-private-update-proof.yml"
@@ -251,15 +253,57 @@ if grep -q "run: ./scripts/self-hosted-update-proof.sh" "$ROOT/.github/workflows
   exit 1
 fi
 grep -q "./scripts/release-train.sh build --channel official" "$ROOT/.github/workflows/release.yml"
-grep -q "ONECONTEXT_REMOTE_APPCAST_GITHUB_REPO" "$ROOT/scripts/release-train.sh"
-grep -q "ONECONTEXT_REMOTE_APPCAST_GITHUB_REPO" "$ROOT/scripts/release/internal/prove-remote-sparkle-update.sh"
-grep -q -- "--pattern asset-manifest.json" "$ROOT/scripts/release-train.sh"
+grep -q "./scripts/release-train.sh prove --proof-reason" "$ROOT/.github/workflows/release.yml"
+grep -q "./scripts/release-train.sh audit" "$ROOT/.github/workflows/release.yml"
+grep -q "./scripts/release-train.sh bless" "$ROOT/.github/workflows/release.yml"
+grep -q "run_self_hosted_proof:" "$ROOT/.github/workflows/release.yml"
+grep -q "default: false" "$ROOT/.github/workflows/release.yml"
+grep -q 'if: ${{ inputs.run_self_hosted_proof }}' "$ROOT/.github/workflows/release.yml"
+grep -q "release-final-evidence" "$ROOT/.github/workflows/release.yml"
+grep -q "contents: read" "$ROOT/.github/workflows/release.yml"
+grep -q "contents: write" "$ROOT/.github/workflows/release.yml"
+grep -q "actions: write" "$ROOT/.github/workflows/release.yml"
+if scan_text '^[[:space:]]+(id-token|attestations):[[:space:]]+write' "$ROOT/.github/workflows/release.yml" > "$TMP_DIR/release-attestation-permissions.out"; then
+  cat "$TMP_DIR/release-attestation-permissions.out" >&2
+  echo "release workflow must keep artifact attestations/OIDC disabled until we intentionally wire that path." >&2
+  exit 1
+fi
+grep -q "ONECONTEXT_REMOTE_APPCAST_GITHUB_REPO" "$ROOT/release/runner/src/phases.ts"
+grep -q "ONECONTEXT_REMOTE_APPCAST_GITHUB_REPO" "$ROOT/release/tools/proof/prove-remote-sparkle-update.sh"
+grep -q "asset-manifest.json" "$ROOT/release/runner/src/phases.ts"
+python3 - "$ROOT/.github/workflows/release.yml" <<'PY'
+from pathlib import Path
+import re
+import sys
+
+text = Path(sys.argv[1]).read_text(encoding="utf-8")
+match = re.search(r"- name: Upload GitHub release artifacts\n(?P<body>.*?)(?:\n      - name:|\Z)", text, re.S)
+if not match:
+  raise SystemExit("release workflow missing publish step")
+for forbidden in (
+  "SPARKLE_PRIVATE_ED_KEY",
+  "NOTARYTOOL_PROFILE",
+  "ONECONTEXT_RELEASE_KEYCHAIN_PASSWORD",
+  "CODESIGN_IDENTITY",
+  "ONECONTEXT_SPARKLE_PUBLIC_ED_KEY",
+):
+  if forbidden in match.group("body"):
+    raise SystemExit(f"publish step should not expose signing/notary/Sparkle credential: {forbidden}")
+PY
 if scan_text --exclude 'test-release-train.sh' 'release-train\.sh package|ONECONTEXT_RUNTIME_ROOT|ONECONTEXT_REMOTE_UPDATE_VALIDATE_REPO_POLICY|dev-runtime-env|with-dev-runtime|release/update-policy' \
   "$ROOT/.github" "$ROOT/scripts" "$ROOT/docs/README.md" "$ROOT/docs/development.md" "$ROOT/docs/macos-release-runbook.md" "$ROOT/docs/ci/self-hosted-mac-runner.md" "$ROOT/release" \
   > "$TMP_DIR/no-shim-scan.out"
 then
   cat "$TMP_DIR/no-shim-scan.out" >&2
   echo "active release surfaces must not mention deleted shims, old package commands, or old update-policy files." >&2
+  exit 1
+fi
+if scan_text --exclude 'test-release-train.sh' 'release-manifest\.py' \
+  "$ROOT/.github" "$ROOT/scripts" "$ROOT/release" \
+  > "$TMP_DIR/no-python-manifest-scan.out"
+then
+  cat "$TMP_DIR/no-python-manifest-scan.out" >&2
+  echo "active release surfaces must use the TypeScript runner manifest subcommands, not the deleted Python manifest helper." >&2
   exit 1
 fi
 if scan_text '(^|[^[:alnum:]_])brew (install|--prefix)([^[:alnum:]_]|$)|command -v caddy' \
@@ -281,9 +325,9 @@ then
   exit 1
 fi
 if scan_text '(^|[^[:alnum:]_])1context-cli (start|stop|quit|restart|status|logs|update|setup)([^[:alnum:]_]|$)|"\$CLI" (start|stop|quit|restart|status|logs|update|setup)([^[:alnum:]_]|$)|\$CLI (start|stop|quit|restart|status|logs|update|setup)([^[:alnum:]_]|$)' \
-  "$ROOT/scripts/release" \
-  "$ROOT/scripts/release/internal/prove-remote-sparkle-update.sh" \
-  "$ROOT/scripts/release/internal/verify-macos-steady-state.sh" > "$TMP_DIR/deleted-cli-script-uses.out"
+  "$ROOT/release/tools/proof" \
+  "$ROOT/release/tools/proof/prove-remote-sparkle-update.sh" \
+  "$ROOT/release/tools/proof/verify-macos-steady-state.sh" > "$TMP_DIR/deleted-cli-script-uses.out"
 then
   cat "$TMP_DIR/deleted-cli-script-uses.out" >&2
   echo "release proof scripts must not depend on deleted public CLI control-plane commands." >&2
@@ -328,7 +372,7 @@ if "$ROOT/scripts/release-train.sh" package > "$TMP_DIR/package-command.out" 2>&
   echo "release-train package must not remain as a compatibility shim." >&2
   exit 1
 fi
-grep -q "Unknown release train command: package" "$TMP_DIR/package-command.out"
+grep -Eq "unknown command 'package'|Unknown release train command: package" "$TMP_DIR/package-command.out"
 
 ONECONTEXT_RELEASE_EVIDENCE_DIR="$TMP_DIR/proof-evidence" \
   "$ROOT/scripts/release-train.sh" prove --dry-run --ref main --proof-reason "fixture proof" \
@@ -337,7 +381,7 @@ grep -q "mode: dry-run" "$TMP_DIR/prove-dry-run.out"
 grep -q "old_version: $PREVIOUS_VERSION" "$TMP_DIR/prove-dry-run.out"
 grep -q "new_version: $VERSION" "$TMP_DIR/prove-dry-run.out"
 grep -q "workflow run self-hosted-mac-update-proof.yml" "$TMP_DIR/prove-dry-run.out"
-grep -q "proof_reason=fixture\\\\ proof" "$TMP_DIR/prove-dry-run.out"
+grep -q "proof_reason=fixture proof" "$TMP_DIR/prove-dry-run.out"
 if grep -Eq -- '-f (old_version|new_version|staging_appcast_url|update_class|old_tag|old_dmg_url|update_timeout_seconds|steady_state_seconds|artifact_retention_days)=' "$TMP_DIR/prove-dry-run.out"; then
   cat "$TMP_DIR/prove-dry-run.out" >&2
   echo "release-train prove dispatch must pass only proof_reason to the workflow." >&2
@@ -378,7 +422,7 @@ text = path.read_text(encoding="utf-8")
 text = text.replace(f'version = "{version}"', 'version = "9.9.9"', 1)
 path.write_text(text, encoding="utf-8")
 PY
-if "$ROOT/scripts/release-manifest.py" validate --manifest "$bad_manifest" > "$TMP_DIR/bad-version.out" 2>&1; then
+if "$ROOT/scripts/release-train.sh" manifest validate --manifest "$bad_manifest" > "$TMP_DIR/bad-version.out" 2>&1; then
   echo "release manifest validation should fail when manifest version drifts from VERSION." >&2
   exit 1
 fi
@@ -391,7 +435,7 @@ printf 'versioned sha\n' > "$asset_dist/1Context-$VERSION-macos-arm64.dmg.sha256
 printf 'stable dmg\n' > "$asset_dist/1Context.dmg"
 printf 'stable sha\n' > "$asset_dist/1Context.dmg.sha256"
 printf '<rss />\n' > "$asset_dist/appcast.xml"
-"$ROOT/scripts/release-manifest.py" write-asset-manifest \
+"$ROOT/scripts/release-train.sh" manifest write-asset-manifest \
   --dist-dir "$asset_dist" \
   --output "$TMP_DIR/asset-manifest-ok.json" > "$TMP_DIR/asset-manifest-ok.out"
 if grep -Eq '"/|/Users/' "$TMP_DIR/asset-manifest-ok.json"; then
@@ -400,7 +444,7 @@ if grep -Eq '"/|/Users/' "$TMP_DIR/asset-manifest-ok.json"; then
 fi
 grep -q "\"path\": \"dist/1Context-$VERSION-macos-arm64.dmg\"" "$TMP_DIR/asset-manifest-ok.json"
 
-if "$ROOT/scripts/release-manifest.py" write-asset-manifest \
+if "$ROOT/scripts/release-train.sh" manifest write-asset-manifest \
   --dist-dir "$TMP_DIR/missing-dist" \
   --output "$TMP_DIR/asset-manifest.json" > "$TMP_DIR/missing-assets.out" 2>&1; then
   echo "asset manifest generation should fail when release artifacts are missing." >&2
@@ -415,7 +459,7 @@ printf 'clean\n' > "$dirty_repo/tracked.txt"
 git -C "$dirty_repo" add tracked.txt
 git -C "$dirty_repo" -c user.name=Test -c user.email=test@example.com -c commit.gpgsign=false commit -qm init
 printf 'dirty\n' > "$dirty_repo/untracked.txt"
-if "$ROOT/scripts/release-manifest.py" check-clean-tree --root "$dirty_repo" > "$TMP_DIR/dirty-tree.out" 2>&1; then
+if "$ROOT/scripts/release-train.sh" manifest check-clean-tree --root "$dirty_repo" > "$TMP_DIR/dirty-tree.out" 2>&1; then
   echo "clean-tree gate should fail on untracked release files." >&2
   exit 1
 fi
@@ -435,7 +479,7 @@ chmod +x "$helper_repo/scripts/main.sh"
 git -C "$helper_repo" add scripts/main.sh
 git -C "$helper_repo" -c user.name=Test -c user.email=test@example.com -c commit.gpgsign=false commit -qm init
 printf '# helper\n' > "$helper_repo/scripts/helper.sh"
-if "$ROOT/scripts/release-manifest.py" check-sourced-helpers --root "$helper_repo" > "$TMP_DIR/helper.out" 2>&1; then
+if "$ROOT/scripts/release-train.sh" manifest check-sourced-helpers --root "$helper_repo" > "$TMP_DIR/helper.out" 2>&1; then
   echo "sourced-helper gate should fail when a sourced helper is untracked." >&2
   exit 1
 fi
@@ -465,8 +509,8 @@ path = Path(sys.argv[1])
 version = sys.argv[2]
 path.write_text(path.read_text(encoding="utf-8").replace("__VERSION__", version), encoding="utf-8")
 PY
-"$ROOT/scripts/redact-evidence.sh" "$evidence_dir"
-"$ROOT/scripts/audit-evidence-redaction.sh" "$evidence_dir" > "$TMP_DIR/redaction-audit.out"
+"$ROOT/release/tools/redact-evidence.sh" "$evidence_dir"
+"$ROOT/release/tools/audit-evidence-redaction.sh" "$evidence_dir" > "$TMP_DIR/redaction-audit.out"
 if grep -q "/Users/paulhan" "$evidence_dir/raw.txt"; then
   echo "redaction script left a home path in evidence." >&2
   exit 1

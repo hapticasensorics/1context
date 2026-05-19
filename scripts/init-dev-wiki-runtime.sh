@@ -159,7 +159,7 @@ fi
 copy_runtime_defaults
 
 if [[ "${ONECONTEXT_SKIP_WIKI_MATERIALIZE:-0}" != "1" ]]; then
-  python3 "$ROOT/scripts/materialize-wiki-pages.py" "$RUNTIME_TEST"
+  python3 "$ROOT/wiki-engine/tools/materialize-wiki-pages.py" "$RUNTIME_TEST"
 fi
 
 printf 'runtime_test=%s\n' "$RUNTIME_TEST"

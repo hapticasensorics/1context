@@ -179,7 +179,7 @@ plugin tree. The factory must keep package-smoke checks that fail on
 
 - [x] Extend `release/release.toml` with channel policies, timing budgets,
   artifact policy, and private appcast facts.
-- [x] Validate those fields in `scripts/release-manifest.py`.
+- [x] Validate those fields in `scripts/release-train.sh manifest`.
 - [x] Replace `release-train.sh package` with `release-train.sh build`.
 - [x] Route GitHub release workflow through `build --channel official`.
 - [x] Keep the self-hosted proof workflow manifest-only, with humans supplying
@@ -241,7 +241,7 @@ plugin tree. The factory must keep package-smoke checks that fail on
   `scripts/with-dev-runtime.sh`; removed the `ONECONTEXT_RUNTIME_ROOT` product
   path override diff from Swift, tests, docs, and `scripts/test.sh`.
 - 2026-05-13: First factory tranche landed. Added channel policy and timing
-  budgets to `release/release.toml`; validated them in `scripts/release-manifest.py`;
+  budgets to `release/release.toml`; validated them in `scripts/release-train.sh manifest`;
   replaced `release-train.sh package` with `release-train.sh build`; routed the
   protected release workflow through `build --channel official`; deleted
   `scripts/check-release-manifest.sh`; and added the no-shim scan in
@@ -252,7 +252,7 @@ plugin tree. The factory must keep package-smoke checks that fail on
 - 2026-05-13: Bumped the next honest train to `0.1.67` so current `main` no
   longer pretends to be the already-cut `0.1.66` tag. Updated `VERSION`,
   `Core.swift`, `RELEASE_NOTES.md`, the runbook, and `release/release.toml`.
-  Proof: `./scripts/release-manifest.py validate`, `./scripts/test-release-train.sh`,
+  Proof: `./scripts/release-train.sh manifest validate`, `./scripts/test-release-train.sh`,
   `./scripts/test.sh`, `swift test --package-path macos`, and `git diff --check`.
 - 2026-05-13: Proved the prototype channel. `./scripts/release-train.sh build
   --channel prototype` produced `dist/1Context-0.1.67-macos-arm64.dmg`, signed
@@ -267,7 +267,7 @@ plugin tree. The factory must keep package-smoke checks that fail on
   reloads the manifest. `./scripts/release-train.sh build --channel private`
   produced a signed/notarized `0.1.67` DMG and a private appcast at
   `dist/private/appcast.xml`. The app `SUFeedURL` is the private latest appcast
-  URL, and `./scripts/release-manifest.py validate --channel private --appcast
+  URL, and `./scripts/release-train.sh manifest validate --channel private --appcast
   dist/private/appcast.xml`, `codesign --verify`, `spctl --assess`, and
   `./scripts/test-launch-agent-package.sh` passed. Elapsed private build time:
   135 seconds.
@@ -285,7 +285,7 @@ plugin tree. The factory must keep package-smoke checks that fail on
   only `proof_reason`, but it runs `release-train.sh prove --channel private
   --runner-execute`, uses the private release repo for old/new DMG downloads, and
   leaves the runner on the private feed by policy. Proof:
-  `./scripts/release-manifest.py validate`, `./scripts/test-release-train.sh`,
+  `./scripts/release-train.sh manifest validate`, `./scripts/test-release-train.sh`,
   `actionlint`, and `git diff --check`.
 - 2026-05-13: Added and implemented the shipped dependency boundary. Vendored
   Caddy `v2.11.2` as a release-owned darwin-arm64 artifact under
@@ -305,7 +305,7 @@ plugin tree. The factory must keep package-smoke checks that fail on
   ./scripts/release-train.sh build --channel prototype` produced signed,
   notarized, stapled `dist/1Context-0.1.68-macos-arm64.dmg` in 101 seconds,
   under the 3 minute warmed prototype budget. Proof: `./scripts/test-release-train.sh`,
-  `./scripts/test.sh`, `swift test --package-path macos`, `./scripts/package-macos-smoke.sh`,
+  `./scripts/test.sh`, `swift test --package-path macos`, `./scripts/release-train.sh build --channel dev`,
   `./scripts/test-launch-agent-package.sh`, `actionlint`, `git diff --check`,
   `codesign --verify --deep --strict dist/1Context.app`, `spctl --assess`, and
   a bundle scan showing no `/opt/homebrew`, `/usr/local/Cellar`, or
@@ -338,7 +338,7 @@ plugin tree. The factory must keep package-smoke checks that fail on
   the `ONECONTEXT_PRIVATE_GITHUB_REPO` side channel from `release-train.sh`.
   Created `hapticasensorics/1context-preview-release` as a public release-asset
   repo for the private channel, and proved the manifest/test wiring with
-  `./scripts/release-manifest.py validate`, private-channel `export-env`,
+  `./scripts/release-train.sh manifest validate`, private-channel `export-env`,
   `bash -n`, `actionlint`, and `./scripts/test-release-train.sh`.
 - 2026-05-13: Built and published app-reachable preview assets. The clean
   worktree private `0.1.68` build wrote
@@ -367,7 +367,7 @@ plugin tree. The factory must keep package-smoke checks that fail on
   records the menu process list and accepts either a launchd-owned menu PID or a
   live `/Applications/1Context.app/Contents/MacOS/1Context` process plus a
   loaded menu LaunchAgent. Harness proof: `bash -n
-  scripts/release/internal/verify-macos-steady-state.sh`, `./scripts/test-release-train.sh`,
+  release/tools/proof/verify-macos-steady-state.sh`, `./scripts/test-release-train.sh`,
   `./scripts/test.sh`, and `git diff --check`.
 - 2026-05-13: Private proof run `25835624162` passed on the self-hosted Mac
   runner after the steady-state harness accepted Sparkle-relaunched menu
@@ -389,12 +389,12 @@ plugin tree. The factory must keep package-smoke checks that fail on
   summary as required evidence. The summary exposes build, notarization, DMG,
   appcast, publish/upload, proof dispatch/watch/download, redaction, audit, and
   bless timing without requiring a human to read a shell transcript. Proof:
-  `./scripts/release-manifest.py validate`, private-channel `export-env`
+  `./scripts/release-train.sh manifest validate`, private-channel `export-env`
   showing `ONECONTEXT_RELEASE_BUDGET_ADVISORY=0`, `./scripts/test-release-train.sh`,
   and `git diff --check`.
 - 2026-05-13: Internalized the remaining top-level proof engines. Moved
   `lib-gui-evidence.sh`, `prove-remote-sparkle-update.sh`, and
-  `verify-macos-steady-state.sh` under `scripts/release/internal/`, updated the
+  `verify-macos-steady-state.sh` under `release/tools/proof/`, updated the
   self-hosted proof runner and tests to call those internal paths, and deleted
   the stale `scripts/clean-release-artifacts.sh` helper instead of preserving
   another release-shaped public command. Proof: no runnable top-level proof
@@ -448,15 +448,15 @@ plugin tree. The factory must keep package-smoke checks that fail on
 - 2026-05-13: Added release-factory support for fixture-owned updater matrix
   proof results. `release-train.sh prove` now runs the focused
   `OneContextSparkleUpdateTests` fixture suite after real-Mac artifacts
-  download, then asks `release-manifest.py write-fixture-proof-results` to emit
+  download, then asks `scripts/release-train.sh manifest write-fixture-proof-results` to emit
   normalized JSON for the seven `sparkle_fixture` cases. This leaves only the
   `login_restart_recovery` / real uninstall-reinstall proof missing before
   `release-train.sh bless` can pass the full matrix.
 - 2026-05-13: Tightened the shipped dependency boundary beyond path greps.
-  Added `scripts/audit-macos-app-dependencies.sh`, wired it into non-dev app
+  Added `macos/tools/audit-app-dependencies.sh`, wired it into non-dev app
   builds and package smoke, and added a regression test that rejects an
   executable script whose shebang points at Homebrew Python. Local proof:
-  `./scripts/audit-macos-app-dependencies.sh dist/1Context.app` passed.
+  `./macos/tools/audit-app-dependencies.sh dist/1Context.app` passed.
 - 2026-05-13: Added the missing real-Mac `login_restart_recovery` proof step to
   the self-hosted update runner. After the update and already-current check,
   the runner now stops 1Context, reopens the installed app, and runs the
@@ -499,7 +499,7 @@ plugin tree. The factory must keep package-smoke checks that fail on
   shell. Package smoke now requires the artifact, validates schema, required
   files, and size, and still rejects `Contents/Resources/memory-core`. Proof:
   `./scripts/build-memory-runtime-artifact.sh`, `swift test --package-path
-  macos`, `./scripts/test-release-train.sh`, `./scripts/package-macos-smoke.sh`,
+  macos`, `./scripts/test-release-train.sh`, `./scripts/release-train.sh build --channel dev`,
   `./scripts/test-launch-agent-package.sh`, `./scripts/test.sh`, and
   `git diff --check`. The packaged artifact is 40 KB on disk and contains only
   the allowlisted static wiki seed plus manifest. This path was superseded on
