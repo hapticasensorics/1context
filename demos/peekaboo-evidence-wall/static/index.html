@@ -8,9 +8,23 @@
   </head>
   <body>
     <header class="topbar">
-      <div>
+      <div class="brand-block">
         <h1>Peekaboo Evidence Wall</h1>
         <div class="subline" id="runMeta">booting</div>
+      </div>
+      <div class="status-strip">
+        <div class="status-tile">
+          <span>CPU</span>
+          <strong id="cpuTotal">--</strong>
+        </div>
+        <div class="status-tile">
+          <span>Target</span>
+          <strong id="cpuTarget">5%</strong>
+        </div>
+        <div class="status-tile">
+          <span>Profile</span>
+          <strong id="profileName">--</strong>
+        </div>
       </div>
       <div class="top-actions">
         <label class="toggle"><input id="freezeToggle" type="checkbox" /> Freeze</label>
@@ -20,65 +34,104 @@
     </header>
 
     <main class="layout">
-      <section class="panel capture-panel" id="screenA">
+      <section class="panel live-panel" id="screenA">
         <div class="panel-head">
-          <h2>Work Screen A</h2>
+          <h2 data-field="title">Work Screen A</h2>
           <span class="pill" data-field="status">waiting</span>
         </div>
-        <div class="image-stage"><img data-field="image" alt="Work screen A capture" /></div>
+        <div class="image-stage"><img data-field="image" alt="Work Screen A evidence frame" /></div>
         <dl class="metrics"></dl>
       </section>
 
-      <section class="panel capture-panel" id="screenB">
+      <section class="panel live-panel" id="screenB">
         <div class="panel-head">
-          <h2>Work Screen B</h2>
+          <h2 data-field="title">Work Screen B</h2>
           <span class="pill" data-field="status">waiting</span>
         </div>
-        <div class="image-stage"><img data-field="image" alt="Work screen B capture" /></div>
+        <div class="image-stage"><img data-field="image" alt="Work Screen B evidence frame" /></div>
         <dl class="metrics"></dl>
       </section>
 
-      <section class="panel capture-panel terminal-panel" id="codexTerminal">
+      <section class="panel live-panel codex-panel" id="codexWindow">
         <div class="panel-head">
-          <h2>Codex Terminal Lens</h2>
+          <h2 data-field="title">Codex Window Stream</h2>
           <span class="pill" data-field="status">waiting</span>
         </div>
-        <div class="image-stage terminal-stage"><img data-field="image" alt="Codex terminal capture" /></div>
+        <div class="image-stage codex-stage"><img data-field="image" alt="Codex window evidence frame" /></div>
         <dl class="metrics"></dl>
-        <div class="terminal-lines" id="terminalLines"></div>
       </section>
 
-      <section class="panel agent-panel">
+      <section class="panel feature-panel">
         <div class="panel-head">
-          <h2>Agent Visible Feed</h2>
-          <span class="pill" id="agentEventCount">0 events</span>
+          <h2>Feature Coverage</h2>
+          <span class="pill" id="featureCount">pending</span>
         </div>
-        <pre id="agentFeed">{}</pre>
+        <div class="feature-grid" id="featureGrid"></div>
+      </section>
+
+      <section class="panel evidence-contract-panel">
+        <div class="panel-head">
+          <h2>Agent Evidence Contract</h2>
+          <span class="pill" id="contractStatus">waiting</span>
+        </div>
+        <div class="contract-grid" id="contractGrid"></div>
       </section>
 
       <section class="panel">
         <div class="panel-head">
-          <h2>UI Map</h2>
+          <h2>Permissions & Runtime</h2>
+          <span class="pill" id="permissionStatus">waiting</span>
+        </div>
+        <div class="permission-grid" id="permissionGrid"></div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-head">
+          <h2>Inventory</h2>
+          <span class="pill" id="inventoryStatus">waiting</span>
+        </div>
+        <div class="inventory-grid" id="inventoryGrid"></div>
+      </section>
+
+      <section class="panel provenance-panel">
+        <div class="panel-head">
+          <h2>Artifact Provenance</h2>
+          <span class="pill" id="provenanceStatus">waiting</span>
+        </div>
+        <div class="provenance-list" id="provenanceList"></div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-head">
+          <h2>OCR Plan</h2>
+          <span class="pill warn" id="ocrStatus">deferred</span>
+        </div>
+        <div class="note-list" id="ocrPlan"></div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-head">
+          <h2>UI Evidence</h2>
           <span class="pill" id="uiCount">waiting</span>
         </div>
+        <div class="keyframe-stage"><img id="uiImage" alt="Annotated UI evidence" /></div>
         <div class="split-list" id="uiElements"></div>
       </section>
 
       <section class="panel">
         <div class="panel-head">
-          <h2>Live Burst</h2>
-          <span class="pill" id="burstStats">waiting</span>
+          <h2>Keyframes</h2>
+          <span class="pill" id="keyframeCount">waiting</span>
         </div>
-        <div class="burst-preview"><img id="burstImage" alt="Peekaboo capture live contact sheet" /></div>
-        <div class="split-list" id="burstFrames"></div>
+        <div class="keyframe-grid" id="keyframes"></div>
       </section>
 
-      <section class="panel">
+      <section class="panel agent-panel">
         <div class="panel-head">
-          <h2>Capabilities</h2>
-          <span class="pill" id="capabilityStatus">waiting</span>
+          <h2>Agent Feed</h2>
+          <span class="pill" id="agentEventCount">0 events</span>
         </div>
-        <div class="cap-grid" id="capabilities"></div>
+        <pre id="agentFeed">{}</pre>
       </section>
 
       <section class="panel log-panel">
