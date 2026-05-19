@@ -13,7 +13,7 @@ The normal closed-loop path is:
 
 ```text
 edit user source/talk/wiki.toml
-  -> materialize missing configured pages
+  -> create/delete pages when structure changes
   -> render to staging
   -> validate route manifest and markdown twins
   -> publish user-wiki/site
@@ -27,9 +27,9 @@ backfill missing files, preserve existing user files, write conflict proposals,
 and record a setup ledger before the render runs from actual user data.
 
 Current caveat: app startup renders existing source, but production does not
-yet expose a bundled materialize-then-publish action. Dev/build harnesses call
-the materializer directly. The target API is `wiki.publish` with
-`materialize=true` so agents can add pages through one consumer-facing action.
+yet expose the page lifecycle actions. Dev/build harnesses call the materializer
+directly. The target API replaces that with explicit `wiki.page.create` /
+`wiki.page.delete` operations plus Swift-owned publish preflight checks.
 
 ## Quick Local Proof
 
@@ -75,6 +75,26 @@ runtime-test/my-scenario/Library/Caches/1Context/
 ```
 
 ## Add A Configured Page
+
+Target production shape:
+
+```json
+{
+  "action": "wiki.page.create",
+  "page": {
+    "id": "dummy-custom",
+    "title": "Dummy Custom",
+    "route": "/dummy-custom",
+    "family_group": "custom",
+    "family_id": "dummy-custom",
+    "type": "context-page",
+    "template": "pages/context-page.md",
+    "talk_conventions_template": "talk/conventions.md"
+  }
+}
+```
+
+Current dev fixture shape:
 
 Edit:
 
@@ -133,6 +153,16 @@ If a page has been intentionally removed, add a tombstone:
 
 Materialization must then report the page as tombstoned and must not recreate
 `dummy-custom.md`.
+
+Target production deletion:
+
+```json
+{
+  "action": "wiki.page.delete",
+  "page": {"id": "dummy-custom"},
+  "mode": "tombstone"
+}
+```
 
 ## Render A Runtime Fixture
 
@@ -318,11 +348,13 @@ For a normal memory agent:
 3. For source edits, preserve old hash and ownership scope in the proposal.
 4. Promote accepted changes into `user-wiki/source`, `templates`, or
    `wiki.toml`.
-5. If the change adds a configured page, materialize missing files before
-   publishing. In the target API this is `wiki.publish(materialize=true)`;
-   today dev harnesses call `materialize-wiki-pages.py`.
-6. Request `wiki.refresh` through the daemon for existing materialized source.
-7. Read render/ledger evidence instead of assuming publication succeeded.
+5. If the change adds a page, call target `wiki.page.create`; today dev
+   harnesses call `materialize-wiki-pages.py`.
+6. If the change removes a page, call target `wiki.page.delete` so deletion is
+   tombstone-first and reviewable.
+7. Request `wiki.publish` in the target API, or `wiki.refresh` through the
+   current daemon for existing source-backed pages.
+8. Read render/ledger evidence instead of assuming publication succeeded.
 
 Agents may write under:
 
@@ -364,7 +396,7 @@ On daemon startup:
 Important startup limitation: `wiki.prepare` currently prepares/publishes
 existing user source. It does not yet run a production-bundled materializer for
 new user-authored `[[pages]]` entries. That belongs in the greenfield
-`wiki.publish` action.
+`wiki.page.create` operation and Swift publish preflight.
 
 Development override:
 
@@ -450,8 +482,8 @@ test -f ~/1Context/user-wiki/source/families/custom/dummy-custom/talk/dummy-cust
 ```
 
 If only `wiki.toml` changed, the page has not become a render input yet. Run
-the materializer in dev, or use the future `wiki.publish(materialize=true)`
-action once it exists in the app.
+the materializer in dev, or use the future `wiki.page.create` action once it
+exists in the app.
 
 ### Render fails
 

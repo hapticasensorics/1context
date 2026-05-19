@@ -5,10 +5,10 @@
 
 This is the master contract for publishing 1Context wiki memory from
 user-owned files into app-served static output. It covers authoring inputs,
-site-map materialization, rendering, validation, Swift last-good publication,
-local web serving, RuntimeDefaults backfill, package evidence, and the freeze
-boundary. It also distinguishes the current shipped trigger from the cleaner
-consumer API the wiki system should grow into.
+page lifecycle, template fallback, rendering, validation, Swift last-good
+publication, local web serving, RuntimeDefaults backfill, package evidence, and
+the freeze boundary. It also distinguishes the current shipped trigger from the
+cleaner consumer API the wiki system should grow into.
 
 Older goal docs record how this shape was reached. This document is the
 starting point for building against it.
@@ -16,7 +16,7 @@ starting point for building against it.
 ## One-Line Shape
 
 ```text
-wiki.toml + templates -> materialized source -> JS render -> validated site -> Swift last-good publish
+page lifecycle + file edits -> Swift publish preflight -> JS render -> validated site -> Swift last-good publish
 ```
 
 ## Publishing Pipeline
@@ -27,8 +27,9 @@ The stable publishing pipeline is:
    `~/1Context/context-engine`.
 2. `wiki.toml` declares available pages, navigation, aliases, and generated
    site pages.
-3. The materializer creates only missing editable source pages, talk folders,
-   and family-local templates.
+3. Structure-changing operations create only missing editable source pages,
+   talk folders, and family-local templates. Current build/dev harnesses do
+   this with the materializer; the target app surface is `wiki.page.create`.
 4. RuntimeDefaults install copies only missing packaged defaults into user data
    and writes proposals for changed existing files.
 5. The renderer builds a complete static site from actual user source into a
@@ -71,10 +72,12 @@ source tree and either re-renders the site or skips the renderer when the
 accepted inputs are unchanged and the existing site validates.
 
 Current implementation gap: the daemon trigger publishes whatever source files
-already exist. It does not yet own materialization from `wiki.toml`, and the
+already exist. It does not yet own page creation from `wiki.toml`, and the
 Python materializer is used by build/test/dev harnesses rather than bundled as
 the production daemon's page creation engine. The target consumer API below
-closes that gap by making materialization an explicit publish-stage option.
+closes that gap by making template-backed creation and tombstone deletion
+explicit page operations, with Swift publish checks verifying the resulting
+tree before render.
 
 ## Component Map
 
@@ -150,12 +153,12 @@ Installed user data:
 
 Stable concepts:
 
-- `[[pages]]` materialize editable source pages under `source/families/**`.
+- `[[pages]]` declare editable source pages under `source/families/**`.
 - `[[site_pages]]` declare generated pages, aliases, and diagnostics.
 - Navigation order lives in `wiki.toml`, not in folder-name prefixes.
 - Missing unconfigured routes diagnose; they do not redirect to
   `/your-context` or hidden bundled pages.
-- Tombstoned source is not recreated by materialization.
+- Tombstoned source is not recreated by page creation or publish preflight.
 
 ### Configured Page Placement
 
@@ -174,7 +177,7 @@ talk_conventions_template = "talk/conventions/topics.md"
 talk_curator_template = "talk/curators/topics.md"
 ```
 
-The materializer creates or verifies this user-owned shape:
+The page creation step creates or verifies this user-owned shape:
 
 ```text
 ~/1Context/user-wiki/source/families/reference/group.toml
@@ -204,9 +207,9 @@ Rules:
 - Missing talk metadata is generated from the page registry.
 - Missing `_conventions.md` and `_curator.md` are created from their configured
   talk templates when present.
-- Existing files are never overwritten by materialization.
+- Existing files are never overwritten by page creation or publish preflight.
 - Existing differing files are recorded as `skipped_existing` in
-  `wiki-page-materialize.toml`.
+  `wiki-page-materialize.toml` by the current dev/build materializer.
 - `source/<slug>.tombstone.toml` blocks recreation of that page.
 - Templates are copied into the family-local `templates/` folder so future
   agents can inspect the shape that created the page.
@@ -258,8 +261,8 @@ The current renderer skips:
 - talk folders whose page has a matching source tombstone
 
 This separation matters for agents: adding `[[pages]]` to `wiki.toml` only
-changes the registry. The page becomes renderable after materialization creates
-the source and talk files.
+changes the registry. The page becomes renderable after `wiki.page.create`, or
+today's dev/build materializer, creates the source and talk files.
 
 ### Published Route Placement
 
@@ -346,10 +349,11 @@ materialized_pages=<count> state=<state-path>
 ```
 
 Current production caveat: this command is Python and is not bundled into
-`Contents/Resources/WikiEngine` today. Build and test harnesses call it; the
-greenfield production shape should move materialization into the bundled wiki
-engine or a Swift-owned materialization bridge so daemon consumers can add
-configured pages without reaching into repo-only tooling.
+`Contents/Resources/WikiEngine` today. Build and test harnesses call it. The
+greenfield production shape should replace this public concept with
+`wiki.page.create`, `wiki.page.delete`, and Swift publish preflight checks that
+use the same template rules without exposing "materialize" as a consumer
+operation.
 
 ### Render Site
 
@@ -528,10 +532,9 @@ The coordinator:
 - preserves last-good output on failure
 
 Fingerprint scope is currently the source directory only. Template or
-`wiki.toml` edits affect a render only after they change materialized source or
-talk files. The target API should fingerprint the complete publish input set:
-`wiki.toml`, source, talk, templates, assets, renderer version, and
-materialization state.
+`wiki.toml` edits affect a render only after they change source or talk files.
+The target API should fingerprint the complete publish input set: `wiki.toml`,
+source, talk, templates, assets, renderer version, and publish preflight state.
 
 Failure behavior:
 
@@ -613,68 +616,235 @@ The render queue:
 - backs off automatic retries after failures
 
 Current limitation: the daemon RPC is a trigger, not the final wiki consumer
-API. It has no route/page scope, no materialization option, no wait mode, no
-structured page-dirty list, and no typed repair hints.
+API. It has no route/page scope, no create/delete page operation, no wait mode,
+no structured page-dirty list, and no typed validation summary.
 
-## Target Consumer Action API
+## Greenfield Consumer API
 
-Greenfield wiki work should converge on an app-wide action API that can later
-serve the rest of 1Context, with wiki publishing as the first clean target.
+This is the API I would want to use if I were actively writing, editing, and
+publishing my own wiki.
 
-Primary request:
+The filesystem remains the editing interface. Markdown, talk folders,
+templates, and `wiki.toml` are meant to be readable and hand-editable. The app
+API should own lifecycle, checks, publication, and evidence. In other words:
+
+```text
+create/open page -> edit files -> validate -> publish -> inspect status
+```
+
+Do not expose `materialize`, `preview`, or `explain` as primary operations.
+Materialization is an internal creation/preflight phase. Preview is too much
+surface for V0. Explanation belongs in `wiki.validate` issues and render
+ledgers.
+
+### Design Rules
+
+- Page structure changes are explicit: create, delete, restore later.
+- Page content edits happen in files.
+- Publish owns Swift checks, rendering, validation, last-good promotion, and
+  failure preservation.
+- Publish does not invent new pages from registry records. It may safe-fill
+  unambiguous support files for an existing page, but page birth belongs to
+  `wiki.page.create`.
+- List and open tell agents where things are; agents should not guess
+  `source/families/**` paths.
+- Status stays small; validation carries details.
+- The implementation may full-render internally, even when the request scope is
+  one page. The scope is the caller's intent and evidence boundary, not a
+  promise of incremental rendering.
+
+### Preferred Agent Loop
+
+This is the loop I would actually use:
+
+1. Call `wiki.list` to see configured, source-backed, rendered, missing, and
+   tombstoned pages.
+2. Call `wiki.page.open` for the page I intend to edit.
+3. Edit the returned source, talk, curator, or convention files directly.
+4. For new pages, call `wiki.page.create` before writing content beyond the
+   returned source/talk files.
+5. For removed pages, call `wiki.page.delete` and let tombstones protect the
+   user history.
+6. Call `wiki.validate` when I need detailed diagnostics before publishing.
+7. Call `wiki.publish` with `wait: "completed"` when I want the app-visible
+   site updated.
+8. Read the publish evidence. On failure, repair the source or write a talk
+   proposal; do not blindly retry.
+
+### `wiki.page.open`
+
+Open is a read-only resolver for editing. It answers "where do I work?"
+
+Request:
 
 ```json
 {
-  "action": "wiki.publish",
-  "scope": {
-    "kind": "page",
+  "action": "wiki.page.open",
+  "page": {"id": "topics"}
+}
+```
+
+Result:
+
+```json
+{
+  "schema_version": 1,
+  "status": "ok",
+  "page": {
     "id": "topics",
-    "route": "/topics"
+    "route": "/topics",
+    "title": "Topics",
+    "state": "rendered"
   },
-  "options": {
-    "materialize": true,
-    "render": "if_changed",
-    "publish": true,
-    "wait": "completed"
+  "paths": {
+    "source": "user-wiki/source/families/reference/topics/source/topics.md",
+    "talk": "user-wiki/source/families/reference/topics/talk/topics.talk/",
+    "curator": "user-wiki/source/families/reference/topics/talk/topics.talk/_curator.md",
+    "conventions": "user-wiki/source/families/reference/topics/talk/topics.talk/_conventions.md",
+    "published_html": "app-support://wiki-site/current/topics.html",
+    "markdown_twin": "app-support://wiki-site/current/topics.md"
   },
-  "actor": {
-    "kind": "agent",
-    "name": "memory-agent"
+  "hashes": {
+    "source_sha256": "..."
   }
 }
 ```
 
-Target operations:
+### `wiki.page.create`
 
-- `wiki.resolve`: page id or route to source, talk, template, and published
-  paths.
-- `wiki.materialize`: create missing configured pages from templates, never
-  overwrite user files.
-- `wiki.publish`: materialize if requested, render if changed or forced,
-  validate, publish last-good, and return structured evidence.
-- `wiki.status`: queue state, last successful publish, last failure, current
-  route counts, and backoff state.
-- `wiki.explain`: explain why a route exists, is missing, is tombstoned, or
-  failed validation.
+Create a page from templates and return the paths I should edit next. This is
+the consumer-facing replacement for "materialize."
 
-Target `wiki.publish` result:
+Request:
+
+```json
+{
+  "action": "wiki.page.create",
+  "page": {
+    "id": "dummy-custom",
+    "title": "Dummy Custom",
+    "route": "/dummy-custom",
+    "family_group": "custom",
+    "family_id": "dummy-custom",
+    "type": "context-page",
+    "template": "pages/context-page.md",
+    "talk_conventions_template": "talk/conventions.md"
+  },
+  "open_after_create": true,
+  "actor": {"kind": "agent", "name": "memory-agent"}
+}
+```
+
+Responsibilities:
+
+- reserve the page id, slug, and route
+- write the `wiki.toml` page entry
+- create source, talk metadata, conventions, curator file, family metadata, and
+  family-local templates
+- never overwrite existing user files
+- reject route/id collisions
+- respect tombstones unless the caller explicitly requests restore
+- return created, unchanged, skipped, and tombstoned paths
+
+Result:
+
+```json
+{
+  "schema_version": 1,
+  "status": "created",
+  "page": {"id": "dummy-custom", "route": "/dummy-custom"},
+  "created": [
+    "user-wiki/source/families/custom/dummy-custom/source/dummy-custom.md",
+    "user-wiki/source/families/custom/dummy-custom/talk/dummy-custom.talk/_meta.yaml",
+    "user-wiki/source/families/custom/dummy-custom/talk/dummy-custom.talk/_conventions.md"
+  ],
+  "unchanged": [],
+  "skipped_existing": [],
+  "open": {
+    "source": "user-wiki/source/families/custom/dummy-custom/source/dummy-custom.md",
+    "talk": "user-wiki/source/families/custom/dummy-custom/talk/dummy-custom.talk/"
+  }
+}
+```
+
+### `wiki.page.delete`
+
+Delete is tombstone-first. It removes the page from the active rendered surface
+without destroying the user's history by default.
+
+Request:
+
+```json
+{
+  "action": "wiki.page.delete",
+  "page": {"id": "dummy-custom"},
+  "mode": "tombstone",
+  "publish": true,
+  "actor": {"kind": "operator"}
+}
+```
+
+Responsibilities:
+
+- disable the active `wiki.toml` page entry or mark it tombstoned by policy
+- write `source/<slug>.tombstone.toml`
+- preserve source, talk, and proposal history unless an explicit destructive
+  purge is approved
+- make the next publish remove rendered routes for that page
+- return the tombstone and affected routes
+
+### `wiki.publish`
+
+Publish current user data to the served site. This is the operation I would
+call after editing files.
+
+Request:
+
+```json
+{
+  "action": "wiki.publish",
+  "scope": {"kind": "page", "id": "topics", "route": "/topics"},
+  "mode": "if_changed",
+  "wait": "completed",
+  "actor": {"kind": "agent", "name": "memory-agent"}
+}
+```
+
+Responsibilities:
+
+- run Swift-owned publish preflight checks
+- safe-fill missing support files only when unambiguous and no user file would
+  be overwritten
+- fail validation rather than silently inventing ambiguous pages
+- fingerprint full publish inputs
+- render if changed or forced
+- validate staged output
+- preserve last-good output on failure
+- return structured evidence
+
+Target preflight checks:
+
+- `wiki.toml` parses and has no duplicate ids or routes
+- every enabled page is either backed by source, tombstoned, generated, or a
+  valid alias
+- template paths stay under `user-wiki/templates`
+- talk folders have valid `_meta.yaml`
+- browser-visible output will not expose local paths
+- source/talk/template fingerprints are recorded for skip decisions
+
+Target success:
 
 ```json
 {
   "schema_version": 1,
   "status": "published",
   "action_id": "uuid",
-  "trigger": "agent.accepted-edit",
   "scope": {"kind": "page", "id": "topics", "route": "/topics"},
-  "materialization": {
-    "status": "applied",
-    "created": ["user-wiki/source/families/reference/topics/source/topics.md"],
-    "skipped_existing": []
-  },
+  "preflight": {"status": "passed", "issue_count": 0},
   "render": {
     "status": "published",
     "skipped": false,
-    "dirty_pages": ["topics"],
+    "routes_changed": ["/topics", "/topics/talk"],
     "route_count": 8,
     "markdown_twin_count": 8
   },
@@ -685,27 +855,99 @@ Target `wiki.publish` result:
 }
 ```
 
-Target failure result:
+Target failure:
 
 ```json
 {
   "schema_version": 1,
   "status": "failed",
   "action_id": "uuid",
-  "failed_stage": "render",
+  "failed_stage": "validate",
   "last_good_preserved": true,
   "served_site": "app-support://wiki-site/current",
-  "repair": {
-    "kind": "template_frontmatter_error",
-    "message": "topics.md is missing slug frontmatter",
-    "paths": ["user-wiki/source/families/reference/topics/source/topics.md"]
-  }
+  "issues": [
+    {
+      "code": "page_missing_slug",
+      "severity": "error",
+      "message": "topics.md is missing slug frontmatter",
+      "paths": ["user-wiki/source/families/reference/topics/source/topics.md"]
+    }
+  ]
 }
 ```
 
+### `wiki.list`
+
+Return a joined view of configured pages, source files, talk folders, tombstones,
+and rendered routes.
+
+```json
+{
+  "action": "wiki.list",
+  "include": ["configured", "source", "talk", "rendered", "tombstoned"]
+}
+```
+
+This replaces path guessing. A caller should be able to ask "what pages are
+available?" without walking `source/families/**`.
+
+### `wiki.validate`
+
+Run checks without publishing. This is the detailed diagnostic surface.
+
+Validation should report:
+
+- registry errors
+- missing source or talk folders
+- missing templates
+- route collisions
+- tombstones
+- renderer-frontmatter errors
+- stale served output
+- unsafe public output
+
+The output should be a typed issue list with severities and paths. That is
+enough; V0 does not need a separate `wiki.explain`.
+
+### `wiki.status`
+
+Status should be tiny:
+
+```json
+{
+  "state": "idle",
+  "last_publish": {"status": "published", "at": "ISO-8601"},
+  "served_site": "last_good",
+  "validation": {"status": "ok", "issue_count": 0}
+}
+```
+
+No renderer logs, no verbose path dump, no explanation engine. If the user or
+agent wants details, call `wiki.validate` or read the render ledger.
+
+### Talk And Curator Direction
+
+The page API should not pretend talk is only a rendered companion page. The
+private-4 system points at the better model: a talk folder is an append-only
+workbench and inbox for proposals, concerns, questions, decisions, deferrals,
+redactions, contradictions, and curator closures.
+
+For the first publishing API, `wiki.page.open` returning talk, curator, and
+conventions paths is enough. The next layer should be designed separately and
+kept small:
+
+- `wiki.talk.append`: append one validated typed entry to a page talk folder.
+- `wiki.talk.list`: list pending entries by page, kind, parent, and decision
+  state without forcing agents to scan every file.
+- `wiki.curator.apply`: apply an accepted decision through an owned section,
+  sandbox/diff check, operator-touched gate, source promotion, and publish.
+
+That keeps the wiki publishing core boring while still giving the memory system
+a real governance surface. Talk remains durable source, not hidden chat state.
+
 This target is deliberately not just a wiki detail. It is the pattern the rest
-of the app can reuse: accept an intent, resolve durable file ownership,
-materialize missing user-owned structure when allowed, run bounded work,
+of the app can reuse: accept an intent, resolve durable file ownership, create
+or delete user-owned structure through explicit operations, run bounded work,
 publish only validated output, and return evidence.
 
 ## Local Web API
