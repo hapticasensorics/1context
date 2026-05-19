@@ -112,6 +112,14 @@ Routine request:
 ./scripts/release-train.sh prove
 ```
 
+The GitHub `Release` workflow has two explicit switches:
+
+- `run_signed_publish=false` validates the release runner only and avoids the
+  protected self-hosted signing/notary/publish Mac.
+- `run_signed_publish=true` starts the signed public release lane. Add
+  `run_self_hosted_proof=true` only when the real-Mac Sparkle proof and bless
+  evidence are part of that release pass.
+
 The factory resolves the old version, new version, update class, appcast URL,
 timeout budget, artifact retention, and required proof matrix from
 `release/release.toml`. The workflow dispatch form should ask only for a short

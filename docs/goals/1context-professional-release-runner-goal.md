@@ -61,6 +61,8 @@ The shell layer remains only where it is the right tool: macOS packaging, signin
 
 - [x] Add CI runner install/build/test steps for `release/runner`.
 - [x] Add workflow guard tests for self-hosted runner use, protected environments, and trusted refs.
+- [x] Make the protected self-hosted signing/notarization/publish lane opt-in with `run_signed_publish`.
+  Proof: `.github/workflows/release.yml` defaults `run_signed_publish=false`, emits an explicit validation-only job when disabled, and `./scripts/test-release-train.sh` guards the switch.
 - [x] Add secret-boundary tests so publish/prove/audit do not expose signing/notary/Sparkle private credentials unnecessarily.
 - [x] Make self-hosted Mac proof opt-in for the release workflow, with bless tied to that proof.
 - [x] Disable artifact attestation/OIDC permissions until that path is intentionally designed.
@@ -89,5 +91,5 @@ The shell layer remains only where it is the right tool: macOS packaging, signin
 
 ## Notes
 
-- Current status: local professional release runner migration is complete and `0.1.87` has passed the local dev release proof layer.
-- Immediate next step: commit/tag `v0.1.87`, run the protected signed release workflow, and leave `run_self_hosted_proof=false` unless we intentionally want the real-Mac update bench for this release.
+- Current status: local professional release runner migration is complete and `0.1.87` has passed the local dev release proof layer, but the signed publish run is queued until the protected self-hosted Mac comes online.
+- Future workflow dispatches default to validation-only mode; use `run_signed_publish=true` for the real signed public release lane and add `run_self_hosted_proof=true` only when the real-Mac update bench should run too.

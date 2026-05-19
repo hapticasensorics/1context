@@ -101,6 +101,11 @@ protected self-hosted release workflow,
 `scripts/prepare-macos-release-keychain.sh` unlocks the dedicated release
 keychain and `scripts/check-macos-release-credentials.sh` preflights Developer ID
 signing, Sparkle signing, and the notary profile before any artifact is built.
+The GitHub `Release` workflow defaults to validation-only mode so it does not
+queue the protected self-hosted Mac by accident. Dispatch it with
+`run_signed_publish=true` to build, sign, notarize, publish, and audit public
+assets. Keep `run_self_hosted_proof=false` unless you also want the real-Mac
+Sparkle proof and bless pass for that release.
 
 Release packaging validates that archives do not contain local owner/group
 metadata, AppleDouble files, Homebrew paths, local build paths, SwiftPM

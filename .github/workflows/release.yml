@@ -3,6 +3,11 @@ name: Release
 on:
   workflow_dispatch:
     inputs:
+      run_signed_publish:
+        description: "Run the protected self-hosted signing/notarization/publish lane."
+        required: false
+        default: false
+        type: boolean
       run_self_hosted_proof:
         description: "Run the real-Mac Sparkle proof and bless the release evidence."
         required: false
@@ -31,10 +36,29 @@ jobs:
         run: npm --prefix release/runner test
       - name: Validate release manifest before credentials
         run: ./scripts/release-train.sh validate
+      - name: Validate workflow input combination
+        run: |
+          if [[ "${{ inputs.run_self_hosted_proof }}" == "true" && "${{ inputs.run_signed_publish }}" != "true" ]]; then
+            echo "run_self_hosted_proof requires run_signed_publish because proof consumes the published release assets." >&2
+            exit 1
+          fi
+
+  signed_publish_disabled:
+    name: Signed publish disabled
+    needs: validate
+    if: ${{ !inputs.run_signed_publish }}
+    runs-on: macos-15
+    timeout-minutes: 5
+    steps:
+      - name: Explain release mode
+        run: |
+          echo "Release validation completed without starting the protected self-hosted signing/notarization/publish lane."
+          echo "Dispatch with run_signed_publish=true to create the signed public release."
 
   build_publish:
     name: Build and publish artifacts
     needs: validate
+    if: ${{ inputs.run_signed_publish }}
     runs-on: [self-hosted, macOS, ARM64, onecontext-update-runner]
     timeout-minutes: 45
     environment: onecontext-update-runner
@@ -99,7 +123,7 @@ jobs:
   audit_optional_proof:
     name: Audit with optional real-Mac proof
     needs: build_publish
-    if: startsWith(github.ref, 'refs/tags/')
+    if: ${{ inputs.run_signed_publish && startsWith(github.ref, 'refs/tags/') }}
     runs-on: macos-15
     timeout-minutes: 60
     permissions:
