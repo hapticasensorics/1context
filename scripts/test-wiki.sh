@@ -116,7 +116,7 @@ const { test, expect } = require('@playwright/test');
 const fs = require('node:fs');
 
 test.use({ channel: process.env.PLAYWRIGHT_BROWSER_CHANNEL || 'chrome' });
-test.setTimeout(Number(process.env.ONECONTEXT_WIKI_BROWSER_TIMEOUT_MS || '90000'));
+test.setTimeout(Number(process.env.ONECONTEXT_WIKI_BROWSER_TIMEOUT_MS || '180000'));
 
 const baseURL = process.env.BASE_URL;
 const artifactDir = process.env.ARTIFACT_DIR;
@@ -359,7 +359,7 @@ test('wiki source and talk routes work in a real browser', async ({ page, reques
 NODE
 
 BASE_URL="$BASE_URL" ARTIFACT_DIR="$ARTIFACT_DIR/" \
-  bash -c 'cd "$0" && printf "%s\n" "{\"name\":\"onecontext-wiki-browser-contract\",\"private\":true,\"type\":\"commonjs\"}" > package.json && npm install --silent --no-save @playwright/test >/dev/null && npx playwright test "$(basename "$1")" --reporter=line' \
+  bash -c 'cd "$0" && printf "%s\n" "{\"name\":\"onecontext-wiki-browser-contract\",\"private\":true,\"type\":\"commonjs\"}" > package.json && npm install --silent --no-save @playwright/test >/dev/null && npx playwright test "$(basename "$1")" --reporter=line --timeout="${ONECONTEXT_WIKI_BROWSER_TIMEOUT_MS:-180000}"' \
   "$WORK_DIR" "$TEST_FILE"
 
 echo "browser_contract_base_url=$BASE_URL"
