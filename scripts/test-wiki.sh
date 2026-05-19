@@ -116,6 +116,7 @@ const { test, expect } = require('@playwright/test');
 const fs = require('node:fs');
 
 test.use({ channel: process.env.PLAYWRIGHT_BROWSER_CHANNEL || 'chrome' });
+test.setTimeout(Number(process.env.ONECONTEXT_WIKI_BROWSER_TIMEOUT_MS || '90000'));
 
 const baseURL = process.env.BASE_URL;
 const artifactDir = process.env.ARTIFACT_DIR;
@@ -128,10 +129,10 @@ const pages = [
 ];
 
 async function internalLinks(page) {
-  return await page.evaluate(() => Array.from(document.links)
+  return await page.evaluate(() => Array.from(new Set(Array.from(document.links)
     .map((link) => link.href)
     .filter((href) => href.startsWith(location.origin))
-    .filter((href) => !href.includes('#')));
+    .filter((href) => !href.includes('#')))));
 }
 
 async function assertTocTargets(page, route, fail) {
@@ -238,9 +239,9 @@ test('wiki source and talk routes work in a real browser', async ({ page, reques
       }
     }
 
-    const resourceLinks = await page.evaluate(() => Array.from(document.querySelectorAll('link[href], script[src], img[src]'))
+    const resourceLinks = await page.evaluate(() => Array.from(new Set(Array.from(document.querySelectorAll('link[href], script[src], img[src]'))
       .map((el) => el.href || el.src)
-      .filter((href) => href.startsWith(location.origin)));
+      .filter((href) => href.startsWith(location.origin)))));
     for (const href of resourceLinks) {
       const resourceResponse = await request.get(href);
       if (resourceResponse.status() >= 400) {
@@ -248,12 +249,12 @@ test('wiki source and talk routes work in a real browser', async ({ page, reques
       }
     }
 
-    const markdownLinks = await page.evaluate(() => [
+    const markdownLinks = await page.evaluate(() => Array.from(new Set([
       ...Array.from(document.links).map((link) => link.href),
       ...Array.from(document.querySelectorAll('link[rel="alternate"][type="text/markdown"]')).map((link) => link.href),
     ]
       .filter((href) => href.startsWith(location.origin))
-      .filter((href) => href.endsWith('.md')));
+      .filter((href) => href.endsWith('.md')))));
     if (markdownLinks.length === 0) {
       fail('missing-markdown-twin', `${route} exposes no markdown twin link`);
     }
