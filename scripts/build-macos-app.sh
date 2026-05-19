@@ -177,19 +177,21 @@ node "$ROOT/wiki-engine/tools/render-site.mjs" \
   --output "$RUNTIME_DEFAULTS_WORK_DIR/1Context/user-wiki/site" \
   --result-json "$RUNTIME_DEFAULTS_WORK_DIR/render-site-result.json" >/dev/null
 GIT_COMMIT="$(git -C "$ROOT" rev-parse HEAD 2>/dev/null || printf 'unknown')"
-GIT_DIRTY_ARGS=()
+RUNTIME_DEFAULTS_MANIFEST_ARGS=(
+  --runtime-defaults-root "$RUNTIME_DEFAULTS_WORK_DIR/1Context"
+  --wiki-engine-root "$ROOT/wiki-engine"
+  --render-result "$RUNTIME_DEFAULTS_WORK_DIR/render-site-result.json"
+  --version "$VERSION"
+  --git-commit "$GIT_COMMIT"
+)
 if ! git -C "$ROOT" diff --quiet --ignore-submodules -- 2>/dev/null \
   || ! git -C "$ROOT" diff --cached --quiet --ignore-submodules -- 2>/dev/null; then
-  GIT_DIRTY_ARGS+=(--git-dirty)
+  RUNTIME_DEFAULTS_MANIFEST_ARGS+=(--git-dirty)
 fi
-python3 "$ROOT/wiki-engine/tools/write-runtime-defaults-manifest.py" \
-  --runtime-defaults-root "$RUNTIME_DEFAULTS_WORK_DIR/1Context" \
-  --wiki-engine-root "$ROOT/wiki-engine" \
-  --render-result "$RUNTIME_DEFAULTS_WORK_DIR/render-site-result.json" \
-  --version "$VERSION" \
-  --git-commit "$GIT_COMMIT" \
-  "${GIT_DIRTY_ARGS[@]}" \
+RUNTIME_DEFAULTS_MANIFEST_ARGS+=(
   --output "$RUNTIME_DEFAULTS_WORK_DIR/1Context/.1context/runtime-defaults-manifest.json"
+)
+python3 "$ROOT/wiki-engine/tools/write-runtime-defaults-manifest.py" "${RUNTIME_DEFAULTS_MANIFEST_ARGS[@]}"
 ditto "$RUNTIME_DEFAULTS_WORK_DIR/1Context" "$RUNTIME_DEFAULTS_RESOURCE_DIR/1Context"
 rsync -a \
   --exclude 'package-lock.json' \
