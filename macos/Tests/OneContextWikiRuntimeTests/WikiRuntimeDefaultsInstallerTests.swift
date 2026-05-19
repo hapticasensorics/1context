@@ -57,10 +57,22 @@ struct WikiRuntimeDefaultsInstallerTests {
     {
       "schema_version": "1context.runtime-defaults-manifest.v1",
       "release_version": "0.1.test",
+      "source_control": {
+        "git_commit": "dddddddddddddddddddddddddddddddddddddddd",
+        "git_dirty": false
+      },
       "hashes": {
         "runtime_defaults_source": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
         "runtime_defaults_site": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-        "wiki_engine": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+        "wiki_engine": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "materializer": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "renderer": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+        "manifest_writer": "1111111111111111111111111111111111111111111111111111111111111111"
+      },
+      "render_summary": {
+        "status": "published",
+        "route_count": 8,
+        "markdown_twin_count": 8
       }
     }
     """.write(
@@ -97,6 +109,12 @@ struct WikiRuntimeDefaultsInstallerTests {
     #expect(result.copied.contains("context-engine/prompts/agent.md"))
     #expect(result.packagedManifest?.releaseVersion == "0.1.test")
     #expect(result.packagedManifest?.runtimeDefaultsSourceHash == "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
+    #expect(result.packagedManifest?.materializerHash == "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee")
+    #expect(result.packagedManifest?.rendererHash == "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")
+    #expect(result.packagedManifest?.gitCommit == "dddddddddddddddddddddddddddddddddddddddd")
+    #expect(result.packagedManifest?.gitDirty == false)
+    #expect(result.packagedManifest?.renderStatus == "published")
+    #expect(result.packagedManifest?.renderRouteCount == 8)
     #expect(result.proposals.contains("1Context/context-engine/proposals/wiki/runtime-defaults/user-wiki__wiki.toml.proposal.json"))
     #expect(
       try String(contentsOf: paths.userWikiDirectory.appendingPathComponent("wiki.toml"), encoding: .utf8)

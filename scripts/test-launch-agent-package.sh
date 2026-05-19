@@ -67,27 +67,50 @@ import re
 import sys
 from pathlib import Path
 
+HEX64 = re.compile(r"[0-9a-f]{64}")
 manifest = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
 version = sys.argv[2]
 if manifest.get("schema_version") != "1context.runtime-defaults-manifest.v1":
     raise SystemExit("runtime defaults manifest schema mismatch")
 if manifest.get("release_version") != version:
     raise SystemExit("runtime defaults manifest version mismatch")
+source_control = manifest.get("source_control") or {}
+git_commit = source_control.get("git_commit")
+if git_commit != "unknown" and not (isinstance(git_commit, str) and re.fullmatch(r"[0-9a-f]{40}", git_commit)):
+    raise SystemExit("runtime defaults manifest must record a git commit or unknown")
+if not isinstance(source_control.get("git_dirty"), bool):
+    raise SystemExit("runtime defaults manifest must record git_dirty as a boolean")
 if manifest.get("runtime_defaults") != "app-bundle://RuntimeDefaults/1Context":
     raise SystemExit("runtime defaults manifest must use portable defaults identity")
 if manifest.get("wiki_engine") != "app-bundle://WikiEngine":
     raise SystemExit("runtime defaults manifest must use portable renderer identity")
 hashes = manifest.get("hashes") or {}
-for key in ["runtime_defaults_source", "runtime_defaults_site", "wiki_engine"]:
+for key in ["runtime_defaults_source", "runtime_defaults_site", "wiki_engine", "materializer", "renderer", "manifest_writer"]:
     value = hashes.get(key)
-    if not isinstance(value, str) or not re.fullmatch(r"[0-9a-f]{64}", value):
+    if not isinstance(value, str) or not HEX64.fullmatch(value):
         raise SystemExit(f"runtime defaults manifest has invalid hash: {key}")
+tools = manifest.get("tools") or {}
+for key, expected_path in [
+    ("materializer", "tools/materialize-wiki-pages.py"),
+    ("renderer", "tools/render-site.mjs"),
+    ("manifest_writer", "tools/write-runtime-defaults-manifest.py"),
+]:
+    tool = tools.get(key) or {}
+    if tool.get("path") != expected_path:
+        raise SystemExit(f"runtime defaults manifest has invalid tool path: {key}")
+    if tool.get("sha256") != hashes.get(key):
+        raise SystemExit(f"runtime defaults manifest tool hash mismatch: {key}")
+    if int(tool.get("bytes") or 0) <= 0:
+        raise SystemExit(f"runtime defaults manifest has invalid tool byte count: {key}")
+summary = manifest.get("render_summary") or {}
 render = manifest.get("render_result") or {}
-if render.get("status") != "published":
+if summary.get("status") != "published" or render.get("status") != "published":
     raise SystemExit("runtime defaults manifest must record a successful render")
-if int(render.get("route_count") or 0) < 5:
+if summary.get("route_count") != render.get("route_count"):
+    raise SystemExit("runtime defaults manifest render summary route count drifted")
+if int(summary.get("route_count") or 0) < 5:
     raise SystemExit("runtime defaults manifest route count is too small")
-if int(render.get("markdown_twin_count") or 0) < 5:
+if int(summary.get("markdown_twin_count") or 0) < 5:
     raise SystemExit("runtime defaults manifest markdown twin count is too small")
 PY
 if [[ ! -f "$WIKI_ENGINE/tools/render-site.mjs" ]]; then
@@ -104,6 +127,10 @@ if [[ -e "$WIKI_ENGINE/package-lock.json" || -e "$WIKI_ENGINE/node_modules/.bin"
 fi
 if find "$WIKI_ENGINE/node_modules" -path '*/bin/*' -print -quit | grep -q .; then
   echo "Packaged wiki renderer must not include executable npm package bin directories." >&2
+  exit 1
+fi
+if find "$WIKI_ENGINE" \( -name '__pycache__' -o -name '*.pyc' \) -print -quit | grep -q .; then
+  echo "Packaged wiki renderer must not include Python bytecode caches." >&2
   exit 1
 fi
 if find "$APP/Contents/Resources" -path '*/runtime-test/*' -print -quit | grep -q .; then

@@ -39,19 +39,43 @@ public struct WikiRuntimeDefaultsManifestIdentity: Codable, Equatable, Sendable 
   public var runtimeDefaultsSourceHash: String
   public var runtimeDefaultsSiteHash: String
   public var wikiEngineHash: String
+  public var materializerHash: String?
+  public var rendererHash: String?
+  public var manifestWriterHash: String?
+  public var gitCommit: String?
+  public var gitDirty: Bool?
+  public var renderStatus: String?
+  public var renderRouteCount: Int?
+  public var renderMarkdownTwinCount: Int?
 
   public init(
     schemaVersion: String,
     releaseVersion: String,
     runtimeDefaultsSourceHash: String,
     runtimeDefaultsSiteHash: String,
-    wikiEngineHash: String
+    wikiEngineHash: String,
+    materializerHash: String? = nil,
+    rendererHash: String? = nil,
+    manifestWriterHash: String? = nil,
+    gitCommit: String? = nil,
+    gitDirty: Bool? = nil,
+    renderStatus: String? = nil,
+    renderRouteCount: Int? = nil,
+    renderMarkdownTwinCount: Int? = nil
   ) {
     self.schemaVersion = schemaVersion
     self.releaseVersion = releaseVersion
     self.runtimeDefaultsSourceHash = runtimeDefaultsSourceHash
     self.runtimeDefaultsSiteHash = runtimeDefaultsSiteHash
     self.wikiEngineHash = wikiEngineHash
+    self.materializerHash = materializerHash
+    self.rendererHash = rendererHash
+    self.manifestWriterHash = manifestWriterHash
+    self.gitCommit = gitCommit
+    self.gitDirty = gitDirty
+    self.renderStatus = renderStatus
+    self.renderRouteCount = renderRouteCount
+    self.renderMarkdownTwinCount = renderMarkdownTwinCount
   }
 }
 
@@ -70,24 +94,58 @@ private struct RuntimeDefaultConflictProposal: Codable, Equatable {
 private struct RuntimeDefaultsManifestDocument: Decodable {
   var schemaVersion: String
   var releaseVersion: String
+  var sourceControl: SourceControl?
   var hashes: Hashes
+  var renderSummary: RenderSummary?
+  var renderResult: RenderSummary?
+
+  struct SourceControl: Decodable {
+    var gitCommit: String?
+    var gitDirty: Bool?
+
+    enum CodingKeys: String, CodingKey {
+      case gitCommit = "git_commit"
+      case gitDirty = "git_dirty"
+    }
+  }
 
   struct Hashes: Decodable {
     var runtimeDefaultsSource: String
     var runtimeDefaultsSite: String
     var wikiEngine: String
+    var materializer: String?
+    var renderer: String?
+    var manifestWriter: String?
 
     enum CodingKeys: String, CodingKey {
       case runtimeDefaultsSource = "runtime_defaults_source"
       case runtimeDefaultsSite = "runtime_defaults_site"
       case wikiEngine = "wiki_engine"
+      case materializer
+      case renderer
+      case manifestWriter = "manifest_writer"
+    }
+  }
+
+  struct RenderSummary: Decodable {
+    var status: String?
+    var routeCount: Int?
+    var markdownTwinCount: Int?
+
+    enum CodingKeys: String, CodingKey {
+      case status
+      case routeCount = "route_count"
+      case markdownTwinCount = "markdown_twin_count"
     }
   }
 
   enum CodingKeys: String, CodingKey {
     case schemaVersion = "schema_version"
     case releaseVersion = "release_version"
+    case sourceControl = "source_control"
     case hashes
+    case renderSummary = "render_summary"
+    case renderResult = "render_result"
   }
 }
 
@@ -272,7 +330,15 @@ public final class WikiRuntimeDefaultsInstaller: @unchecked Sendable {
       releaseVersion: manifest.releaseVersion,
       runtimeDefaultsSourceHash: manifest.hashes.runtimeDefaultsSource,
       runtimeDefaultsSiteHash: manifest.hashes.runtimeDefaultsSite,
-      wikiEngineHash: manifest.hashes.wikiEngine
+      wikiEngineHash: manifest.hashes.wikiEngine,
+      materializerHash: manifest.hashes.materializer,
+      rendererHash: manifest.hashes.renderer,
+      manifestWriterHash: manifest.hashes.manifestWriter,
+      gitCommit: manifest.sourceControl?.gitCommit,
+      gitDirty: manifest.sourceControl?.gitDirty,
+      renderStatus: (manifest.renderSummary ?? manifest.renderResult)?.status,
+      renderRouteCount: (manifest.renderSummary ?? manifest.renderResult)?.routeCount,
+      renderMarkdownTwinCount: (manifest.renderSummary ?? manifest.renderResult)?.markdownTwinCount
     )
   }
 

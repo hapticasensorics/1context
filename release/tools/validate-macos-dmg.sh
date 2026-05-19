@@ -39,12 +39,26 @@ if [[ "${ALLOW_UNNOTARIZED:-0}" != "1" ]]; then
 fi
 
 TMPDIR="$(mktemp -d /tmp/1ctx-dmg-validate-XXXXXX)"
+TMPDIR="$(cd "$TMPDIR" && pwd -P)"
 MOUNT="$TMPDIR/mount"
 mkdir -p "$MOUNT"
 
 cleanup() {
-  hdiutil detach "$MOUNT" -quiet >/dev/null 2>&1 || true
-  rm -rf "$TMPDIR"
+  set +e
+  if mount | grep -F " on $MOUNT " >/dev/null 2>&1; then
+    for _ in 1 2 3 4 5; do
+      hdiutil detach "$MOUNT" -quiet >/dev/null 2>&1 && break
+      sleep 0.2
+    done
+  fi
+  if mount | grep -F " on $MOUNT " >/dev/null 2>&1; then
+    hdiutil detach "$MOUNT" -force -quiet >/dev/null 2>&1 || true
+  fi
+  if ! mount | grep -F " on $MOUNT " >/dev/null 2>&1; then
+    rm -rf "$TMPDIR"
+  else
+    echo "Warning: leaving mounted DMG validation directory for inspection: $TMPDIR" >&2
+  fi
 }
 trap cleanup EXIT
 

@@ -498,9 +498,10 @@ materialized into `~/1Context`, the user owns it.
 The shipped defaults live in the app bundle under
 `Contents/Resources/RuntimeDefaults/1Context`. The build also writes
 `Contents/Resources/RuntimeDefaults/1Context/.1context/runtime-defaults-manifest.json`
-with the release version, defaults source hash, pre-rendered site hash, renderer
-hash, and sanitized render counts. This manifest is package evidence and setup
-ledger input; it is not an editable user wiki page.
+with the release version, git commit/dirty bit, defaults source hash,
+pre-rendered site hash, wiki-engine hash, individual materializer/renderer
+hashes, and sanitized render counts. This manifest is package evidence and
+setup ledger input; it is not an editable user wiki page.
 
 Application Support records setup state:
 

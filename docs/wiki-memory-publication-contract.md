@@ -565,7 +565,8 @@ tests is a release blocker.
 - No installed-app path requires source checkout, `uv run`, system Python,
   system Node, `npm install`, or `npm ci`.
 - Packaged defaults include a portable `runtime-defaults-manifest.json` with
-  release version, source hash, site hash, renderer hash, and render counts.
+  release version, git commit/dirty bit, source hash, site hash, wiki-engine
+  hash, materializer hash, renderer hash, and render counts.
 - `runtime-test` and generated state are never packaged as public defaults.
 
 ## V0 Blockers
