@@ -1,7 +1,11 @@
 # Wiki Memory Publication Contract
 
-- Status: draft
-- Last updated: 2026-05-14
+- Status: supporting contract
+- Last updated: 2026-05-19
+
+Canonical API surface:
+[Wiki Publishing System API](wiki-publishing-system-api.md). This document
+keeps the memory-publication behavior model and governance rules.
 
 This document defines the behavior contract for turning memory work into
 published wiki output.
@@ -108,9 +112,8 @@ Target repo shape:
     package.json
     src/
       renderer/
-      manifest/
-      schemas/
     theme/
+    schemas/
     tools/
       render-site.mjs
     tests/
@@ -139,11 +142,13 @@ Installed app bundle shape:
 ```text
 1Context.app/
   Contents/MacOS/1Context
-  Contents/MacOS/OneContextDaemon
+  Contents/MacOS/1contextd
+  Contents/MacOS/1context-cli
   Contents/Resources/WikiEngine/
     tools/render-site.mjs
-    tools/render-to-dir.mjs
+    src/
     theme/
+    node_modules/
   Contents/Resources/RuntimeDefaults/
     1Context/user-wiki/
     1Context/context-engine/

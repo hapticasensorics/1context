@@ -4,8 +4,7 @@ This is the current operating doc for shipping the 1Context macOS app.
 
 ## Current Truth
 
-- Current release candidate: `0.1.86`.
-- Latest public release before this cut: `0.1.85`.
+- Current release candidate: declared by `VERSION` and `release/release.toml`.
 - Release truth: `release/release.toml`; do not copy version, update class, or
   appcast facts into docs or workflow inputs by hand.
 - Normal install channel: signed, notarized, stapled `1Context.dmg` from GitHub

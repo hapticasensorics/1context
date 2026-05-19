@@ -64,8 +64,10 @@ Collapse the wiki runtime into one knowable production shape:
 - [x] Generate a build-time `RuntimeDefaults` manifest with version, git commit,
   source hash, site hash, materializer hash, renderer hash, and render counts. Evidence:
   `wiki-engine/tools/write-runtime-defaults-manifest.py`; rebuilt app manifest reports
-  schema `1context.runtime-defaults-manifest.v1`, version `0.1.86`, 8 routes,
-  8 markdown twins, and renderer hash prefix `adc9d1511403`.
+  schema `1context.runtime-defaults-manifest.v1`, version `0.1.87`, clean
+  commit `4dfe5722c136b36f59f9f68ded26e0efec98ab92`, `git_dirty=false`,
+  8 routes, 8 markdown twins, materializer hash prefix `78ae10f53900`, and
+  renderer hash prefix `0aeac13b4e1e`.
 - [x] Validate that manifest in package and installed-path smoke tests.
   Evidence: `ONECONTEXT_ALLOW_LAUNCH_AGENT_SMOKE=1
   ./scripts/test-launch-agent-package.sh` and
@@ -93,9 +95,10 @@ Collapse the wiki runtime into one knowable production shape:
 - [x] `swift test --package-path macos`
 - [x] `npm test --prefix wiki-engine`
 - [x] `/usr/bin/time -p ./scripts/release-train.sh build --channel dev` completed in
-  93.77 seconds and produced `dist/1Context-0.1.86-macos-arm64.dmg`.
+  73.00 seconds and produced `dist/1Context-0.1.87-macos-arm64.dmg`.
 - [x] `ONECONTEXT_ALLOW_LAUNCH_AGENT_SMOKE=1 ./scripts/test-launch-agent-package.sh`
 - [x] `./scripts/test-wiki.sh`
+- [x] `./scripts/test-wiki-runtime-defaults-scenarios.sh`
 - [x] `git diff --check`
 
 ## Evidence Log
@@ -109,3 +112,9 @@ Collapse the wiki runtime into one knowable production shape:
   bundle with a freshness manifest, and includes a 2.0 MB `WikiEngine` bundle
   with vendored production renderer dependencies and no package lock or npm bin
   shims.
+- 2026-05-19: Strengthened proof for the clean production shape. A clean dev
+  build stamped RuntimeDefaults with commit
+  `4dfe5722c136b36f59f9f68ded26e0efec98ab92`, `git_dirty=false`, app version
+  `0.1.87`, and successful render summary. Runtime-test scenarios now prove
+  fresh backfill, user-edit preservation with conflict proposals, and custom
+  fallback-template pages with talk routes.

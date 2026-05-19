@@ -13,6 +13,7 @@ It answers:
 
 It does not define how agents decide what to write, how renders are scheduled,
 or how accepted changes are published. Those behaviors live in
+[Wiki Publishing System API](wiki-publishing-system-api.md) and
 [Wiki Memory Publication Contract](wiki-memory-publication-contract.md).
 
 ## Core Rule

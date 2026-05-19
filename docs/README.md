@@ -6,15 +6,22 @@ that operators and contributors should use.
 
 ## Start Here
 
+- [Wiki Publishing System API](wiki-publishing-system-api.md): canonical V0
+  contract for user data, RuntimeDefaults, the JS renderer, Swift publication,
+  daemon refresh, Local Web serving, package evidence, and freeze boundaries.
+- [Wiki Publishing System Runbook](wiki-publishing-system-runbook.md):
+  operating guide for local fixtures, custom pages, RuntimeDefaults proofs,
+  browser validation, memory agents, Swift startup, and release packaging.
 - [Wiki Memory Runtime V0 Goal](goals/1context-wiki-memory-runtime-v0-goal.md):
-  active close-loop checklist for the user-owned wiki runtime, Swift publisher,
-  bundled renderer, local web proof, and future memory-core authoring surfaces.
+  historical close-loop checklist for the user-owned wiki runtime, Swift
+  publisher, bundled renderer, local web proof, and future memory-core
+  authoring surfaces.
 - [Wiki Runtime Production Shape Goal](goals/1context-wiki-runtime-production-shape-goal.md):
-  active cleanup checklist for retiring duplicate shipped wiki runtime
+  historical cleanup checklist for retiring duplicate shipped wiki runtime
   artifacts and proving the `RuntimeDefaults` plus `WikiEngine` app shape.
-- [Delete Bloat Goal](goals/1context-delete-bloat-goal.md): active priority for
-  deleting old release paths, compatibility shims, stale docs, generated state,
-  and product test hooks before adding more release machinery.
+- [Archived Delete Bloat Goal](goals/archive/1context-delete-bloat-goal.md):
+  historical cleanup evidence for deleting old release paths, compatibility
+  shims, stale docs, generated state, and product test hooks.
 - [Release Factory Goal](goals/1context-release-factory-goal.md): active
   priority for channel-aware dev, prototype, private, and official release
   builds with no backwards-compatible shims, no Homebrew dependency for
@@ -34,6 +41,8 @@ that operators and contributors should use.
 - [Wiki Productionization Plan](wiki-productionization.html): where wiki source,
   default templates, generated files, and served local-web artifacts live in the
   repo and on an installed Mac.
+- [Wiki Publishing System API](wiki-publishing-system-api.md): canonical API and
+  freeze boundary for the full wiki publishing subsystem.
 - [User Data Spec](user-data-spec.md): filesystem and persisted-data contract
   for `~/1Context`, Application Support, first-run defaults, runtime mirrors,
   templates, source families, talk files, ledgers, indexes, and static export.
@@ -51,9 +60,6 @@ that operators and contributors should use.
   updater proof for release hops that need installed-app evidence.
 - [Archived Release Lockdown Goal](goals/archive/1context-release-lockdown-goal.md):
   historical Sparkle-transition evidence.
-- [Archived Delete Bloat Goal](goals/archive/1context-delete-bloat-goal.md):
-  historical cleanup evidence. Current release work belongs in the release
-  factory goal and the manifest-driven runbook.
 - [Goals Folder](goals/README.md): policy for keeping operator goals out of the
   installed user wiki.
 
