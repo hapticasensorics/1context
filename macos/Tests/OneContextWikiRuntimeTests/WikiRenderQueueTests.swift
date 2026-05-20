@@ -66,6 +66,40 @@ final class WikiRenderQueueTests: XCTestCase {
     XCTAssertEqual(snapshot.history.last?.dirtyPages, 2)
   }
 
+  func testAutomaticCadenceDelaysAutomaticButManualRunsImmediately() throws {
+    let counters = RenderCounters()
+    let queue = WikiRenderQueue(
+      debounceInterval: 0,
+      failureBackoffInterval: 0.1,
+      automaticMinimumInterval: { 0.4 }
+    ) { request in
+      let run = counters.incrementRuns()
+      return WikiRenderQueueOutcome(
+        status: .published,
+        dirtyPages: request.priority == .manual ? 2 : run,
+        rendererDurationMilliseconds: 1
+      )
+    }
+
+    queue.request(trigger: "wiki.prepare", priority: .automatic)
+    XCTAssertTrue(queue.waitUntilIdle(timeout: 2))
+    XCTAssertEqual(queue.snapshot().completedCount, 1)
+
+    queue.request(trigger: "wiki.prepare", priority: .automatic)
+    Thread.sleep(forTimeInterval: 0.05)
+    let throttled = queue.snapshot()
+    XCTAssertEqual(throttled.completedCount, 1)
+    XCTAssertGreaterThan(throttled.automaticCadenceRemainingMilliseconds, 0)
+
+    queue.request(trigger: "wiki.refresh", priority: .manual)
+    XCTAssertTrue(queue.waitUntilIdle(timeout: 2))
+
+    let snapshot = queue.snapshot()
+    XCTAssertEqual(snapshot.completedCount, 2)
+    XCTAssertEqual(snapshot.history.last?.priority, .manual)
+    XCTAssertEqual(snapshot.history.last?.dirtyPages, 2)
+  }
+
   func testRecordsDurationsDirtyPagesAndSkipReason() throws {
     let queue = WikiRenderQueue(debounceInterval: 0, failureBackoffInterval: 0.1) { _ in
       WikiRenderQueueOutcome(

@@ -223,6 +223,30 @@ class WikiCoreClient:
     def page_delete(self, page: str, *, mode: str = "tombstone") -> dict[str, Any]:
         return self.call("page-delete", page, "--mode", mode)
 
+    def asset_add(
+        self,
+        page: str,
+        *,
+        file: Path | str,
+        filename: str | None = None,
+        purpose: str | None = None,
+        caption: str | None = None,
+        alt_text: str | None = None,
+    ) -> dict[str, Any]:
+        args = ["asset-add", page, "--file", str(file)]
+        for flag, value in [
+            ("--filename", filename),
+            ("--purpose", purpose),
+            ("--caption", caption),
+            ("--alt-text", alt_text),
+        ]:
+            if value is not None:
+                args.extend([flag, value])
+        return self.call(*args)
+
+    def asset_list(self, page: str) -> dict[str, Any]:
+        return self.call("asset-list", page)
+
     def page_restore(self, page: str) -> dict[str, Any]:
         return self.call("page-restore", page)
 
@@ -705,6 +729,31 @@ def wiki_page_patch_body(
         replace_file=replace_file,
         expected_source_sha256=expected_source_sha256,
     )
+
+
+def wiki_asset_add(
+    runtime_home: Path,
+    page: str,
+    *,
+    file: Path | str,
+    filename: str | None = None,
+    purpose: str | None = None,
+    caption: str | None = None,
+    alt_text: str | None = None,
+    binary: Path | str | None = None,
+) -> dict[str, Any]:
+    return WikiCoreClient(runtime_home=runtime_home, binary=binary).asset_add(
+        page,
+        file=file,
+        filename=filename,
+        purpose=purpose,
+        caption=caption,
+        alt_text=alt_text,
+    )
+
+
+def wiki_asset_list(runtime_home: Path, page: str, *, binary: Path | str | None = None) -> dict[str, Any]:
+    return WikiCoreClient(runtime_home=runtime_home, binary=binary).asset_list(page)
 
 
 def wiki_page_delete(runtime_home: Path, page: str, *, mode: str = "tombstone", binary: Path | str | None = None) -> dict[str, Any]:

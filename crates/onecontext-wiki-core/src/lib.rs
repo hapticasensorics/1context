@@ -260,6 +260,56 @@ pub struct PageOpenResource {
 }
 
 #[derive(Clone, Debug, Serialize)]
+pub struct PageAssetAddResult {
+    pub schema_version: u32,
+    pub status: String,
+    pub operation: String,
+    pub page: PageAssetPage,
+    pub asset: PageAssetRecord,
+    pub render_required: bool,
+    pub next_action: String,
+    pub repair_hints: Vec<String>,
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub struct PageAssetListResult {
+    pub schema_version: u32,
+    pub status: String,
+    pub operation: String,
+    pub page: PageAssetPage,
+    pub asset_count: usize,
+    pub assets: Vec<PageAssetRecord>,
+    pub next_action: String,
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub struct PageAssetPage {
+    pub id: String,
+    pub route: String,
+    pub title: String,
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub struct PageAssetRecord {
+    pub id: String,
+    pub filename: String,
+    pub media_type: String,
+    pub sha256: String,
+    pub bytes: u64,
+    pub handle: String,
+    pub source_path: String,
+    pub absolute_path: String,
+    pub source_relative_href: String,
+    pub published_href: String,
+    pub markdown: String,
+    pub purpose: String,
+    pub caption: Option<String>,
+    pub alt_text: Option<String>,
+    pub referenced: bool,
+    pub published: bool,
+}
+
+#[derive(Clone, Debug, Serialize)]
 pub struct EditPreconditions {
     pub expected_source_sha256: Option<String>,
     pub expected_talk_sha256: Option<String>,
@@ -1600,6 +1650,177 @@ impl WikiCore {
             },
             allowed_actions: page_allowed_actions(&status.state, status.flags.rendered),
             next_action: status.next_action,
+        })
+    }
+
+    pub fn add_page_asset(
+        &self,
+        reference: &str,
+        input: &Path,
+        filename: Option<&str>,
+        purpose: Option<&str>,
+        caption: Option<&str>,
+        alt_text: Option<&str>,
+    ) -> Result<PageAssetAddResult> {
+        self.ensure_runtime_dirs()?;
+        let _lifecycle_lock = self.lock_lifecycle_writes()?;
+        let record = self.find_page(reference)?;
+        let status = self.page_status(reference)?;
+        if status.state == "source_missing" {
+            return Err(anyhow!(
+                "page asset target source is missing for {}; create or publish the page before adding assets",
+                record.id
+            ));
+        }
+        if status.state == "tombstoned" || status.state == "disabled" {
+            return Err(anyhow!(
+                "page asset target {} is {}; restore the page before adding assets",
+                record.id,
+                status.state
+            ));
+        }
+        if !input.is_file() {
+            return Err(anyhow!("asset file not found: {}", input.display()));
+        }
+
+        let requested_name = filename
+            .filter(|value| !value.trim().is_empty())
+            .map(str::to_string)
+            .or_else(|| {
+                input
+                    .file_name()
+                    .and_then(|name| name.to_str())
+                    .map(str::to_string)
+            })
+            .ok_or_else(|| anyhow!("asset filename missing for {}", input.display()))?;
+        let asset_dir = self.asset_dir(&record);
+        let mut used = BTreeSet::new();
+        if asset_dir.is_dir() {
+            for entry in fs::read_dir(&asset_dir)? {
+                let entry = entry?;
+                if entry.file_type()?.is_file() {
+                    if let Some(name) = entry.file_name().to_str() {
+                        used.insert(name.to_string());
+                    }
+                }
+            }
+        }
+        let safe_name =
+            unique_attachment_filename(safe_attachment_filename(&requested_name)?, &mut used);
+        let destination = asset_dir.join(&safe_name);
+        let media_type = infer_media_type(&safe_name);
+        let normalized_purpose = purpose
+            .filter(|value| !value.trim().is_empty())
+            .map(|value| value.trim().to_string())
+            .unwrap_or_else(|| {
+                if media_type.starts_with("image/") {
+                    "inline_image".to_string()
+                } else {
+                    "download".to_string()
+                }
+            });
+        let caption = caption
+            .filter(|value| !value.trim().is_empty())
+            .map(|value| value.trim().to_string());
+        let alt_text = alt_text
+            .filter(|value| !value.trim().is_empty())
+            .map(|value| value.trim().to_string());
+        if media_type.starts_with("image/")
+            && normalized_purpose != "decorative"
+            && alt_text.is_none()
+        {
+            return Err(anyhow!(
+                "image asset requires --alt-text unless --purpose decorative is used"
+            ));
+        }
+        if !media_type.starts_with("image/") && caption.is_none() {
+            return Err(anyhow!(
+                "file asset requires --caption so the reader link has a label"
+            ));
+        }
+
+        fs::create_dir_all(&asset_dir)
+            .with_context(|| format!("create page asset directory {}", asset_dir.display()))?;
+        fs::copy(input, &destination).with_context(|| {
+            format!(
+                "copy page asset {} to {}",
+                input.display(),
+                destination.display()
+            )
+        })?;
+        let asset_sha256 = sha256_file(&destination).ok();
+        self.append_page_event(PageLedgerEvent {
+            schema_version: 1,
+            event: "page.asset_added".to_string(),
+            page: record.id.clone(),
+            at: now_rfc3339(),
+            actor: None,
+            origin: Some(safe_name.clone()),
+            source_sha256: asset_sha256,
+            template_sha256: None,
+            publish_fingerprint: None,
+        })?;
+
+        let asset = self.page_asset_record(
+            &record,
+            &destination,
+            &normalized_purpose,
+            caption.as_deref(),
+            alt_text.as_deref(),
+        )?;
+        Ok(PageAssetAddResult {
+            schema_version: 1,
+            status: "ok".to_string(),
+            operation: "wiki.asset.add".to_string(),
+            page: PageAssetPage {
+                id: record.id,
+                route: status.route,
+                title: status.title,
+            },
+            asset,
+            render_required: true,
+            next_action: "insert_markdown".to_string(),
+            repair_hints: vec![],
+        })
+    }
+
+    pub fn list_page_assets(&self, reference: &str) -> Result<PageAssetListResult> {
+        self.ensure_runtime_dirs()?;
+        let record = self.find_page(reference)?;
+        let status = self.page_status(reference)?;
+        let asset_dir = self.asset_dir(&record);
+        let mut assets = Vec::new();
+        if asset_dir.is_dir() {
+            let mut files = Vec::new();
+            collect_files(&asset_dir, &mut files)?;
+            files.sort();
+            for file in files {
+                if file.is_file() {
+                    assets.push(self.page_asset_record(&record, &file, "unknown", None, None)?);
+                }
+            }
+        }
+        let next_action = if assets.is_empty() {
+            "asset_add"
+        } else if assets.iter().any(|asset| !asset.referenced) {
+            "insert_markdown"
+        } else if assets.iter().any(|asset| !asset.published) {
+            "publish"
+        } else {
+            "none"
+        };
+        Ok(PageAssetListResult {
+            schema_version: 1,
+            status: "ok".to_string(),
+            operation: "wiki.asset.list".to_string(),
+            page: PageAssetPage {
+                id: record.id,
+                route: status.route,
+                title: status.title,
+            },
+            asset_count: assets.len(),
+            next_action: next_action.to_string(),
+            assets,
         })
     }
 
@@ -5431,6 +5652,74 @@ impl WikiCore {
             .join(format!("{}.md", record.slug))
     }
 
+    fn asset_dir(&self, record: &PageRecord) -> PathBuf {
+        self.paths
+            .source
+            .join("families")
+            .join(&record.family_group)
+            .join(&record.family_id)
+            .join("source")
+            .join(format!("{}.assets", record.slug))
+    }
+
+    fn page_asset_record(
+        &self,
+        record: &PageRecord,
+        path: &Path,
+        purpose: &str,
+        caption: Option<&str>,
+        alt_text: Option<&str>,
+    ) -> Result<PageAssetRecord> {
+        let filename = path
+            .file_name()
+            .and_then(|name| name.to_str())
+            .ok_or_else(|| anyhow!("invalid page asset path: {}", path.display()))?
+            .to_string();
+        let media_type = infer_media_type(&filename).to_string();
+        let sha256 = sha256_file(path)?;
+        let bytes = path.metadata()?.len();
+        let source_relative_href = format!("./{}.assets/{}", record.slug, filename);
+        let published_href = page_asset_published_href(&record.route, &filename);
+        let source_text = fs::read_to_string(self.source_path(record)).unwrap_or_default();
+        let referenced = source_text.contains(&source_relative_href)
+            || source_text.contains(source_relative_href.trim_start_matches("./"))
+            || source_text.contains(&published_href);
+        let published = self
+            .paths
+            .site
+            .join(published_href.trim_start_matches('/'))
+            .is_file();
+        let markdown = if media_type.starts_with("image/") {
+            let alt = alt_text.or(caption).unwrap_or(&filename);
+            format!("![{}]({})", alt, source_relative_href)
+        } else {
+            let label = caption.unwrap_or(&filename);
+            format!("[{}]({})", label, source_relative_href)
+        };
+        Ok(PageAssetRecord {
+            id: format!("asset_{}_{}", record.id, slug_token(&filename)),
+            filename,
+            media_type,
+            sha256,
+            bytes,
+            handle: format!(
+                "user-wiki://page/{}/assets/{}",
+                record.id,
+                path.file_name().unwrap().to_string_lossy()
+            ),
+            source_path: display_under_root(path, &self.paths.root),
+            absolute_path: path.display().to_string(),
+            source_relative_href,
+            published_href,
+            markdown,
+            purpose: purpose.to_string(),
+            caption: caption.map(str::to_string),
+            alt_text: alt_text.map(str::to_string),
+            referenced,
+            published,
+        })
+    }
+
     fn talk_dir(&self, record: &PageRecord) -> PathBuf {
         self.paths
             .source
@@ -6113,6 +6402,7 @@ impl WikiCore {
         hasher.update([0]);
         hash_optional_file(&mut hasher, "source", &source)?;
         hash_optional_file(&mut hasher, "tombstone", &tombstone)?;
+        hash_optional_tree(&mut hasher, "assets", &self.asset_dir(record))?;
         Ok(format!("{:x}", hasher.finalize()))
     }
 
@@ -7257,6 +7547,8 @@ fn page_allowed_actions(state: &str, rendered: bool) -> Vec<String> {
             "wiki.page.open",
             "wiki.page.patch_body",
             "wiki.page.write_body",
+            "wiki.asset.add",
+            "wiki.asset.list",
             "wiki.talk.append",
             "wiki.validate",
             "wiki.publish",
@@ -8213,6 +8505,13 @@ fn is_publish_input_file(path: &Path) -> bool {
     let Some(parent) = path.parent().and_then(|parent| parent.file_name()) else {
         return false;
     };
+    if parent
+        .to_str()
+        .map(|name| name.ends_with(".assets"))
+        .unwrap_or(false)
+    {
+        return true;
+    }
     if parent != "source" {
         return false;
     }
@@ -8238,6 +8537,28 @@ fn hash_optional_file(hasher: &mut Sha256, label: &str, path: &Path) -> Result<(
         hasher.update(b"present");
         hasher.update([0]);
         hasher.update(fs::read(path)?);
+    } else {
+        hasher.update(b"missing");
+    }
+    hasher.update([0]);
+    Ok(())
+}
+
+fn hash_optional_tree(hasher: &mut Sha256, label: &str, path: &Path) -> Result<()> {
+    hasher.update(label.as_bytes());
+    hasher.update([0]);
+    if path.is_dir() {
+        hasher.update(b"present");
+        hasher.update([0]);
+        let mut files = Vec::new();
+        collect_files(path, &mut files)?;
+        files.sort();
+        for file in files {
+            hasher.update(display_under_root(&file, path).as_bytes());
+            hasher.update([0]);
+            hasher.update(fs::read(file)?);
+            hasher.update([0]);
+        }
     } else {
         hasher.update(b"missing");
     }
@@ -8769,6 +9090,31 @@ fn markdown_url_for_route(route: &str) -> String {
     } else {
         format!("{trimmed}.md")
     }
+}
+
+fn page_asset_published_href(route: &str, filename: &str) -> String {
+    let route = route_conflict_key(route);
+    let stem = route.trim_start_matches('/').trim_end_matches('/');
+    if stem.is_empty() {
+        format!("/index.assets/{filename}")
+    } else {
+        format!("/{stem}.assets/{filename}")
+    }
+}
+
+fn slug_token(value: &str) -> String {
+    let mut token = String::new();
+    let mut previous_was_underscore = false;
+    for ch in value.chars() {
+        if ch.is_ascii_alphanumeric() {
+            token.push(ch.to_ascii_lowercase());
+            previous_was_underscore = false;
+        } else if !previous_was_underscore {
+            token.push('_');
+            previous_was_underscore = true;
+        }
+    }
+    token.trim_matches('_').to_string()
 }
 
 fn title_case(value: &str) -> String {
@@ -9547,6 +9893,64 @@ mod tests {
             restore.edit.as_ref().unwrap().expected_source_sha256,
             Some(patch_hash)
         );
+    }
+
+    #[test]
+    fn page_assets_are_agent_addable_listable_and_embed_ready() {
+        let temp = TempDir::new().unwrap();
+        let root = temp.path().join("1Context");
+        seed_fixture(&root);
+        let core = WikiCore::new(&root);
+        core.create_page("topics", None).unwrap();
+
+        let input = temp.path().join("topic map.png");
+        fs::write(&input, b"fake png bytes").unwrap();
+
+        let added = core
+            .add_page_asset(
+                "topics",
+                &input,
+                None,
+                None,
+                None,
+                Some("Current topic taxonomy sketch"),
+            )
+            .unwrap();
+        assert_eq!(added.operation, "wiki.asset.add");
+        assert_eq!(added.next_action, "insert_markdown");
+        assert!(added.render_required);
+        assert_eq!(added.asset.filename, "topic-map.png");
+        assert_eq!(added.asset.media_type, "image/png");
+        assert_eq!(added.asset.purpose, "inline_image");
+        assert_eq!(
+            added.asset.source_relative_href,
+            "./topics.assets/topic-map.png"
+        );
+        assert_eq!(added.asset.published_href, "/topics.assets/topic-map.png");
+        assert_eq!(
+            added.asset.markdown,
+            "![Current topic taxonomy sketch](./topics.assets/topic-map.png)"
+        );
+        assert!(!added.asset.referenced);
+        assert!(!added.asset.published);
+        assert!(root
+            .join("user-wiki/source/families/reference/topics/source/topics.assets/topic-map.png")
+            .is_file());
+
+        core.write_page_body(
+            "topics",
+            &format!("# Topics\n\n{}\n", added.asset.markdown),
+            None,
+        )
+        .unwrap();
+
+        let listed = core.list_page_assets("topics").unwrap();
+        assert_eq!(listed.operation, "wiki.asset.list");
+        assert_eq!(listed.asset_count, 1);
+        assert_eq!(listed.next_action, "publish");
+        assert_eq!(listed.assets[0].filename, "topic-map.png");
+        assert!(listed.assets[0].referenced);
+        assert!(!listed.assets[0].published);
     }
 
     #[test]

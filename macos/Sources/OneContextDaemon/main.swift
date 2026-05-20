@@ -93,6 +93,12 @@ final class OneContextDaemon: @unchecked Sendable {
   private lazy var wikiRenderQueue = WikiRenderQueue(
     debounceInterval: 0.5,
     failureBackoffInterval: 5,
+    automaticMinimumInterval: { [weak self] in
+      guard let self else { return WikiAutomaticPublishCadence.defaultValue.minimumAutomaticInterval }
+      return OneContextAppSettings
+        .wikiAutomaticPublishCadence(preferencesPath: self.paths.preferencesPath)
+        .minimumAutomaticInterval
+    },
     render: { [weak self] request in
       self?.performWikiRender(request) ?? WikiRenderQueueOutcome(
         status: .failed,
@@ -607,6 +613,7 @@ final class OneContextDaemon: @unchecked Sendable {
   }
 
   private func wikiRenderPayload(_ snapshot: WikiRenderQueueSnapshot) -> [String: Any] {
+    let cadence = OneContextAppSettings.wikiAutomaticPublishCadence(preferencesPath: paths.preferencesPath)
     var payload: [String: Any] = [
       "surface": "wiki_publish_queue_status",
       "state": wikiRenderState,
@@ -620,8 +627,17 @@ final class OneContextDaemon: @unchecked Sendable {
       "skipped_count": snapshot.skippedCount,
       "max_concurrent_renders": snapshot.maxConcurrentRenders,
       "backing_off": snapshot.backingOff,
-      "backoff_remaining_ms": snapshot.backoffRemainingMilliseconds
+      "backoff_remaining_ms": snapshot.backoffRemainingMilliseconds,
+      "automatic_cadence": cadence.rawValue,
+      "automatic_cadence_label": cadence.title,
+      "automatic_cadence_limited": snapshot.automaticCadenceRemainingMilliseconds > 0,
+      "automatic_cadence_remaining_ms": snapshot.automaticCadenceRemainingMilliseconds
     ]
+    if snapshot.automaticCadenceRemainingMilliseconds > 0 {
+      payload["earliest_next_automatic_publish_at"] = ISO8601DateFormatter().string(
+        from: Date().addingTimeInterval(Double(snapshot.automaticCadenceRemainingMilliseconds) / 1_000)
+      )
+    }
     if let activeTrigger = snapshot.activeTrigger {
       payload["active_trigger"] = activeTrigger
     }

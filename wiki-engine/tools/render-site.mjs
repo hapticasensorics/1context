@@ -105,6 +105,22 @@ function copyThemeAssets(output) {
   return files.map(([, dest]) => `assets/${dest}`);
 }
 
+function collectPublishedAssets(output, seededAssets = []) {
+  const assets = new Set(seededAssets);
+  for (const file of walkFiles(output)) {
+    const rel = posixRelative(output, file);
+    if (rel.startsWith('.1context/')) continue;
+    if (
+      rel.startsWith('assets/')
+      || rel.includes('.assets/')
+      || rel.includes('/assets/')
+    ) {
+      assets.add(rel);
+    }
+  }
+  return [...assets].sort();
+}
+
 function posixRelative(root, path) {
   return relative(root, path).split(/[\\/]/).join('/');
 }
@@ -198,7 +214,7 @@ function parseWikiConfig(text) {
   const config = {
     title: null,
     defaults: {},
-    site: {},
+    site: { home_feed: {} },
     navigation: [],
     primary_navigation: [],
     utility_navigation: [],
@@ -215,6 +231,11 @@ function parseWikiConfig(text) {
     }
     if (line === '[site]') {
       currentTarget = config.site;
+      continue;
+    }
+    if (line === '[site.home_feed]') {
+      config.site.home_feed ||= {};
+      currentTarget = config.site.home_feed;
       continue;
     }
     if (line === '[[site_pages]]') {
@@ -254,7 +275,7 @@ function readWikiConfig(sourceRoot) {
     return {
       title: null,
       defaults: {},
-      site: {},
+      site: { home_feed: {} },
       navigation: [],
       primary_navigation: [],
       utility_navigation: [],
@@ -377,10 +398,121 @@ function markGeneratedSitePageInput(text) {
   return `${text.slice(0, frontmatterEnd)}\nsource_kind: generated_site_page${text.slice(frontmatterEnd)}`;
 }
 
+function readJsonLines(path) {
+  if (!existsSync(path)) return [];
+  return readFileSync(path, 'utf8')
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => {
+      try {
+        return JSON.parse(line);
+      } catch {
+        return null;
+      }
+    })
+    .filter(Boolean);
+}
+
+function pageRouteMap(config) {
+  const routes = new Map();
+  for (const page of config.pages || []) {
+    if (!page.id) continue;
+    routes.set(page.id, page.route || `/${page.slug || page.id}`);
+  }
+  for (const page of config.site_pages || []) {
+    if (!page.id || routes.has(page.id)) continue;
+    routes.set(page.id, page.route || `/${page.slug || page.id}`);
+  }
+  return routes;
+}
+
+function humanEvent(value) {
+  return String(value || 'changed')
+    .replace(/^page\./, '')
+    .replace(/\./g, ' ')
+    .replace(/_/g, ' ');
+}
+
+function activityLine({ at, label, href, detail }) {
+  const when = at ? `**${String(at).slice(0, 19).replace('T', ' ')}** - ` : '';
+  const target = href ? `[${label}](${href})` : label;
+  return `- ${when}${target}${detail ? ` - ${detail}` : ''}`;
+}
+
+function collectPageLedgerActivity(userWikiRoot, config) {
+  const routes = pageRouteMap(config);
+  return readJsonLines(join(userWikiRoot, '.1context', 'page-ledger.jsonl')).map((event) => ({
+    at: event.at,
+    label: event.page || 'wiki',
+    href: routes.get(event.page),
+    detail: humanEvent(event.event),
+  }));
+}
+
+function collectRenderActivity(userWikiRoot) {
+  return readJsonLines(join(userWikiRoot, 'site', '.1context', 'render-events.jsonl')).map((event) => ({
+    at: event.published_at || event.rendered_at || event.at,
+    label: 'render',
+    href: '/',
+    detail: [event.status, event.trigger].filter(Boolean).join(' via '),
+  }));
+}
+
+function collectLinkDiagnosticActivity(userWikiRoot) {
+  const path = join(userWikiRoot, 'site', '.1context', 'link-diagnostics.json');
+  if (!existsSync(path)) return [];
+  let diagnostics;
+  try {
+    diagnostics = JSON.parse(readFileSync(path, 'utf8'));
+  } catch {
+    return [];
+  }
+  const issueCount = diagnostics.issue_count || diagnostics.issues?.length || 0;
+  if (!issueCount) return [];
+  return [{
+    at: diagnostics.generated_at || diagnostics.checked_at,
+    label: 'link diagnostics',
+    href: '/',
+    detail: `${issueCount} issue${issueCount === 1 ? '' : 's'} need repair`,
+  }];
+}
+
+function buildActivityFeed(sourceRoot, config) {
+  const homeFeed = config.site?.home_feed || {};
+  if (homeFeed.enabled === false) {
+    return '- Feed disabled by site configuration.';
+  }
+  const userWikiRoot = resolve(sourceRoot, '..');
+  const sources = Array.isArray(homeFeed.sources)
+    ? homeFeed.sources
+    : ['page_ledger', 'render_events', 'link_diagnostics'];
+  const maxItems = Number.isFinite(homeFeed.max_items) ? homeFeed.max_items : 12;
+  let items = [];
+  if (sources.includes('page_ledger')) {
+    items.push(...collectPageLedgerActivity(userWikiRoot, config));
+  }
+  if (sources.includes('render_events')) {
+    items.push(...collectRenderActivity(userWikiRoot));
+  }
+  if (sources.includes('link_diagnostics')) {
+    items.push(...collectLinkDiagnosticActivity(userWikiRoot));
+  }
+  items = items
+    .filter((item) => item.label || item.detail)
+    .sort((left, right) => String(right.at || '').localeCompare(String(left.at || '')))
+    .slice(0, Math.max(1, maxItems));
+  if (!items.length) {
+    return '- No recorded wiki changes yet.';
+  }
+  return items.map(activityLine).join('\n');
+}
+
 function generateSitePageInputs(output, sourceRoot, config, generatedAt) {
   const templatesRoot = resolve(sourceRoot, '..', 'templates');
   const generatedDir = join(output, '.1context', 'generated-site-inputs');
   const defaults = config.defaults || {};
+  const activityFeed = buildActivityFeed(sourceRoot, config);
   const inputs = [];
   for (const page of config.site_pages || []) {
     if (page.enabled === false || !page.template) continue;
@@ -401,6 +533,7 @@ function generateSitePageInputs(output, sourceRoot, config, generatedAt) {
       wiki_title: config.title || defaults.wiki_title || page.title || '1Context',
       wiki_summary: page.summary || defaults.wiki_summary || '',
       wiki_tagline: defaults.wiki_tagline || page.summary || '',
+      activity_feed: activityFeed,
       created_date: generatedAt.slice(0, 10),
       access_tier: defaults.access_tier || 'private',
       asset_base: defaults.asset_base || '.',
@@ -540,6 +673,8 @@ function buildSiteMetadata(output, generatedAt, assets) {
       '*.md',
       '*/index.html',
       'assets/*',
+      '*.assets/*',
+      '*/*.assets/*',
       '.1context/current-render.json',
       '.1context/render-events.jsonl',
       '.1context/route-manifest.json',
@@ -1041,7 +1176,8 @@ function main() {
         summary: renderInput(input, output, siteNavigation, routeOverride),
       });
     }
-    const assets = copyThemeAssets(output);
+    const themeAssets = copyThemeAssets(output);
+    const assets = collectPublishedAssets(output, themeAssets);
     const metadata = buildSiteMetadata(output, startedAt, assets);
     const linkDiagnostics = annotateRenderedLinks(output);
     const result = {

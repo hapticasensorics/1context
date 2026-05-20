@@ -547,6 +547,27 @@ function copyTalkAttachments(inputPath, outDir, outputStem, routeIndexStem = nul
   copyDirectoryContents(attachmentsDir, resolve(outDir, talkStem, 'attachments'));
 }
 
+function pageAssetInfo(inputPath, outDir, outputStem, routeIndexStem = null) {
+  const sourceStem = basename(inputPath, extname(inputPath));
+  const sourceAssetDir = resolve(dirname(inputPath), `${sourceStem}.assets`);
+  if (!existsSync(sourceAssetDir)) return null;
+  const publishedStem = routeIndexStem || outputStem || sourceStem;
+  return {
+    sourceFolder: `${sourceStem}.assets`,
+    sourceAssetDir,
+    publishedHrefBase: `/${publishedStem}.assets`,
+    publishedDir: resolve(outDir, `${publishedStem}.assets`),
+  };
+}
+
+function rewritePageAssetReferences(text, info) {
+  if (!info || !text) return text;
+  const sourceFolder = info.sourceFolder.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return text
+    .replace(new RegExp(`(["'])\\./${sourceFolder}/`, 'g'), `$1${info.publishedHrefBase}/`)
+    .replace(new RegExp(`(["'])${sourceFolder}/`, 'g'), `$1${info.publishedHrefBase}/`);
+}
+
 function main() {
   const [,, inputPath, outDir] = process.argv;
   if (!inputPath || !outDir) {
@@ -694,6 +715,15 @@ function main() {
   }
   const outputStem = outputStemForRender(result.frontmatter, parentSlug, isTalkFolder, routeOverride);
   const routeIndexStem = routeIndexStemForRender(result.frontmatter, outputStem, isTalkFolder);
+  const assetInfo = isTalkFolder ? null : pageAssetInfo(inputPath, outDir, outputStem, routeIndexStem);
+  if (assetInfo) {
+    result.html = rewritePageAssetReferences(result.html, assetInfo);
+    if (renderedStreams) {
+      for (const stream of Object.values(renderedStreams)) {
+        stream.html = rewritePageAssetReferences(stream.html, assetInfo);
+      }
+    }
+  }
   const { htmlPath } = writeCanonicalOutputs(
     outDir,
     outputStem,
@@ -703,6 +733,8 @@ function main() {
   );
   if (isTalkFolder) {
     copyTalkAttachments(inputPath, outDir, outputStem, routeIndexStem);
+  } else if (assetInfo) {
+    copyDirectoryContents(assetInfo.sourceAssetDir, assetInfo.publishedDir);
   }
 
   let summary = `✓ ${slug}: ${result.html.length} bytes → ${htmlPath}`;

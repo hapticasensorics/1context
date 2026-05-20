@@ -56,6 +56,10 @@ public final class WikiCoreRPCBridge: @unchecked Sendable {
       return try callCore(pageWriteBodyArguments(params))
     case .pagePatchBody:
       return try callCore(pagePatchBodyArguments(params))
+    case .assetAdd:
+      return try callCore(assetAddArguments(params))
+    case .assetList:
+      return try callCore(["asset-list", try pageReference(params)])
     case .pageDelete:
       return try callCore(pageDeleteArguments(params))
     case .pageRestore:
@@ -188,6 +192,15 @@ public final class WikiCoreRPCBridge: @unchecked Sendable {
       "--expected-source-sha256",
       string(params, keys: ["expected_source_sha256", "expectedSourceSha256"])
     )
+    return arguments
+  }
+
+  private func assetAddArguments(_ params: [String: Any]) throws -> [String] {
+    var arguments = ["asset-add", try pageReference(params), "--file", try requiredString(params, keys: ["file", "file_path", "filePath", "path"])]
+    appendOption(&arguments, "--filename", string(params, keys: ["filename", "name"]))
+    appendOption(&arguments, "--purpose", string(params, keys: ["purpose"]))
+    appendOption(&arguments, "--caption", string(params, keys: ["caption", "label"]))
+    appendOption(&arguments, "--alt-text", string(params, keys: ["alt_text", "altText"]))
     return arguments
   }
 
@@ -722,6 +735,8 @@ private enum WikiCoreRPCMethod {
   case pageCreate
   case pageWriteBody
   case pagePatchBody
+  case assetAdd
+  case assetList
   case pageDelete
   case pageRestore
   case pageWatch
@@ -770,6 +785,10 @@ private enum WikiCoreRPCMethod {
       self = .pageWriteBody
     case "wiki.page.patch_body", "wiki.page.patch-body", "wiki.page-patch-body", "wiki.page_patch_body":
       self = .pagePatchBody
+    case "wiki.asset.add", "wiki.asset-add", "wiki.asset_add", "wiki.page.asset_add", "wiki.page.asset-add":
+      self = .assetAdd
+    case "wiki.asset.list", "wiki.asset-list", "wiki.asset_list", "wiki.page.asset_list", "wiki.page.asset-list":
+      self = .assetList
     case "wiki.page.delete", "wiki.page-delete", "wiki.page_delete":
       self = .pageDelete
     case "wiki.page.restore", "wiki.page-restore", "wiki.page_restore":

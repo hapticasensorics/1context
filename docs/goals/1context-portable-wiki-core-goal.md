@@ -4856,3 +4856,28 @@ wiki rules.
   build cache and no useful report; the cache was removed and
   `test-results/worker-ha-tombstone-mail-20260520T2019Z` is marked
   inconclusive setup-only evidence.
+- Latest asset/feed/cadence integration, 2026-05-20T23:11Z:
+  main lane addressed the next wiki ergonomics slice. Automatic publish cadence
+  is now a real shared app setting (`WikiAutomaticPublishCadence` in
+  `~/Library/Preferences/com.haptica.1context.plist`) with `no_limit`,
+  `1_minute`, and `30_minute`; the Swift queue enforces the cadence only for
+  automatic publishes and manual refresh/publish bypasses it. The home page
+  generated site input now receives a rolling activity feed from
+  `page-ledger.jsonl`, render events, and link diagnostics. Page-local assets
+  are now first-class wiki inputs: `wiki.asset.add` / `wiki.asset.list` are
+  exposed through Rust CLI/core, Swift RPC/CLI, and the Python adapter; assets
+  live in `<page-slug>.assets/`, affect publish fingerprints, append
+  page-ledger events, copy to route-sibling published asset folders, and appear
+  in the render asset manifest. Verification passed:
+  `cargo test -q -p onecontext-wiki-core`,
+  `cargo test -q -p onecontext-wiki-daemon`,
+  `npm test --prefix wiki-engine -- page-assets.test.mjs`,
+  `swift test --package-path macos --filter 'WikiRenderQueueTests|PathAndPermissionTests|WikiCoreRPCBridgeTests'`,
+  `node --check wiki-engine/tools/render-to-dir.mjs`,
+  `node --check wiki-engine/tools/render-site.mjs`,
+  `PYTHONPATH=memory-core/src python3 -m compileall -q memory-core/src/onectx/wiki_interface`,
+  and `git diff --check`. Closed-loop CLI/render dogfood copied
+  `runtime/1Context` into a disposable runtime, created `topics`, added
+  `topic-map.png`, inserted the returned markdown, rendered with
+  `render-site.mjs`, and proved `/topics.assets/topic-map.png` exists in the
+  published site and render manifest with `route_count=5`.

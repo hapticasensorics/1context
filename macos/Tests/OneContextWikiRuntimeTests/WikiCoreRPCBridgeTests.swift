@@ -10,6 +10,8 @@ final class WikiCoreRPCBridgeTests: XCTestCase {
       "wiki.page-open",
       "wiki.page.write-body",
       "wiki.page-write-body",
+      "wiki.asset.add",
+      "wiki.asset-list",
       "wiki.page_watch",
       "wiki.page-assign-role",
       "wiki.talk-append",
@@ -45,6 +47,11 @@ final class WikiCoreRPCBridgeTests: XCTestCase {
     _ = try bridge.call(method: "wiki.page-status", params: ["route": "/topics"])
     _ = try bridge.call(method: "wiki.page_open", params: ["page": "topics"])
     _ = try bridge.call(method: "wiki.page-create", params: ["id": "rpc-proof"])
+    _ = try bridge.call(
+      method: "wiki.asset.add",
+      params: ["page": "rpc-proof", "file": "/tmp/diagram.png", "caption": "Diagram", "altText": "A diagram"]
+    )
+    _ = try bridge.call(method: "wiki.asset-list", params: ["page": "rpc-proof"])
     _ = try bridge.call(method: "wiki.page-delete", params: ["page": "rpc-proof"])
     _ = try bridge.call(method: "wiki.page_restore", params: ["page": "rpc-proof"])
     _ = try bridge.call(
@@ -60,6 +67,8 @@ final class WikiCoreRPCBridgeTests: XCTestCase {
       ["page-status", "/topics"],
       ["page-open", "topics"],
       ["page-create", "rpc-proof"],
+      ["asset-add", "rpc-proof", "--file", "/tmp/diagram.png", "--caption", "Diagram", "--alt-text", "A diagram"],
+      ["asset-list", "rpc-proof"],
       ["page-delete", "rpc-proof"],
       ["page-restore", "rpc-proof"],
       ["page-assign-role", "topics", "--agent-id", "agent-1", "--role", "curator"]

@@ -423,6 +423,11 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
   private let settingsItem = NSMenuItem(title: "Settings", action: nil, keyEquivalent: "")
   private let settingsMenu = NSMenu()
   private let versionItem = NSMenuItem(title: "", action: nil, keyEquivalent: "")
+  private let autoPublishCadenceItem = NSMenuItem(title: "Auto-Publish", action: nil, keyEquivalent: "")
+  private let autoPublishCadenceMenu = NSMenu()
+  private let autoPublishNoLimitItem = NSMenuItem(title: "No Limit", action: #selector(setWikiAutoPublishCadence), keyEquivalent: "")
+  private let autoPublishOneMinuteItem = NSMenuItem(title: "1 Min", action: #selector(setWikiAutoPublishCadence), keyEquivalent: "")
+  private let autoPublishThirtyMinutesItem = NSMenuItem(title: "30 Min", action: #selector(setWikiAutoPublishCadence), keyEquivalent: "")
   private let aboutItem = NSMenuItem(title: "About 1Context", action: #selector(showAbout), keyEquivalent: "")
   private let setupItem = NSMenuItem(title: "Setup...", action: #selector(showSetup), keyEquivalent: "")
   private let updateItem = NSMenuItem(title: "", action: nil, keyEquivalent: "")
@@ -705,6 +710,14 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
 
     versionItem.isEnabled = false
     settingsMenu.addItem(versionItem)
+    autoPublishNoLimitItem.representedObject = WikiAutomaticPublishCadence.noLimit.rawValue
+    autoPublishOneMinuteItem.representedObject = WikiAutomaticPublishCadence.oneMinute.rawValue
+    autoPublishThirtyMinutesItem.representedObject = WikiAutomaticPublishCadence.thirtyMinutes.rawValue
+    autoPublishCadenceMenu.addItem(autoPublishNoLimitItem)
+    autoPublishCadenceMenu.addItem(autoPublishOneMinuteItem)
+    autoPublishCadenceMenu.addItem(autoPublishThirtyMinutesItem)
+    autoPublishCadenceItem.submenu = autoPublishCadenceMenu
+    settingsMenu.addItem(autoPublishCadenceItem)
     settingsMenu.addItem(setupItem)
     settingsMenu.addItem(aboutItem)
     settingsMenu.addItem(uninstallItem)
@@ -714,7 +727,22 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
     menu.addItem(quitItem)
     menu.delegate = self
 
-    for item in [stateItem, openWikiItem, refreshWikiItem, settingsItem, versionItem, setupItem, aboutItem, uninstallItem, updateItem, quitItem] {
+    for item in [
+      stateItem,
+      openWikiItem,
+      refreshWikiItem,
+      settingsItem,
+      versionItem,
+      autoPublishCadenceItem,
+      autoPublishNoLimitItem,
+      autoPublishOneMinuteItem,
+      autoPublishThirtyMinutesItem,
+      setupItem,
+      aboutItem,
+      uninstallItem,
+      updateItem,
+      quitItem
+    ] {
       item.target = self
       item.isEnabled = true
     }
@@ -746,6 +774,13 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
     let setupReady = cachedRequiredSetupReady
     setupItem.title = isLocalWebSetupInFlight ? "Granting Setup..." : setupReady ? "Setup..." : "Finish Setup..."
     setupItem.isEnabled = true
+    let cadence = OneContextAppSettings.wikiAutomaticPublishCadence(
+      preferencesPath: RuntimePaths.current().preferencesPath
+    )
+    autoPublishCadenceItem.title = "Auto-Publish: \(cadence.title)"
+    autoPublishNoLimitItem.state = cadence == .noLimit ? .on : .off
+    autoPublishOneMinuteItem.state = cadence == .oneMinute ? .on : .off
+    autoPublishThirtyMinutesItem.state = cadence == .thirtyMinutes ? .on : .off
     uninstallItem.title = isUninstallInFlight ? "Uninstalling 1Context..." : "Uninstall 1Context..."
     uninstallItem.isEnabled = !isUninstallInFlight
 
@@ -988,6 +1023,23 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
 
   @objc private func showSetup() {
     showSetupWindow(message: nil)
+  }
+
+  @objc private func setWikiAutoPublishCadence(_ sender: NSMenuItem) {
+    guard let rawValue = sender.representedObject as? String,
+      let cadence = WikiAutomaticPublishCadence.parse(rawValue)
+    else {
+      return
+    }
+    do {
+      try OneContextAppSettings.setWikiAutomaticPublishCadence(
+        cadence,
+        preferencesPath: RuntimePaths.current().preferencesPath
+      )
+      refreshMenuItems()
+    } catch {
+      presentMenuAlert("Could not save wiki auto-publish setting.")
+    }
   }
 
   private func showSetupWindow(message: String?) {

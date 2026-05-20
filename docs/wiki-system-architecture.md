@@ -96,6 +96,7 @@ Swift owns:
 - launchd/service lifecycle
 - Apple-specific path discovery and bundle resource lookup
 - Caddy/local-web process supervision
+- app Settings, including automatic wiki publish cadence
 - calling the Rust core through FFI, subprocess JSON, or a local daemon socket
 
 The Rust core must not depend on a source checkout, system Node, system Python,
@@ -142,6 +143,7 @@ Inputs:
 ~/1Context/user-wiki/templates/
 ~/1Context/user-wiki/assets/
 ~/1Context/user-wiki/source/
+~/1Context/user-wiki/source/**/source/*.assets/
 ~/1Context/user-wiki/source/**/talk/**/attachments/
 ~/1Context/user-wiki/site/.1context/
 ~/1Context/user-wiki/.1context/page-ledger.jsonl
@@ -161,6 +163,7 @@ WikiInventory
   page_types[]
   aliases[]
   generated_pages[]
+  site_activity_feed[]
   tombstones[]
   agents_summary
   mail_summary
@@ -548,6 +551,8 @@ Responsibilities:
 
 - compile inventory
 - validate
+- respect the configured automatic publish cadence for daemon-initiated source
+  changes
 - decide skip vs render from publish fingerprints
 - render to staging
 - validate staged output
@@ -576,6 +581,46 @@ The target is one Rust publisher path with Swift acting as host/supervisor.
 Talk-message, mailbox, and notification writes are collaboration state; they do
 not force a page-content publish. Page source, source tombstones, and
 `wiki.toml` navigation changes do.
+
+Automatic publish policy is a host setting, not source truth. Swift/App Settings
+owns the user's cadence choice in
+`~/Library/Preferences/com.haptica.1context.plist` under
+`WikiAutomaticPublishCadence`, and the daemon enforces it:
+
+```text
+no_limit  -> publish as soon as source changes are accepted and the queue is free
+1_minute  -> coalesce automatic publishes to at most one start per minute
+30_minute -> coalesce automatic publishes to at most one start per thirty minutes
+```
+
+Manual `wiki.publish` always remains available and bypasses the automatic
+cadence. The publisher still serializes work, skips unchanged inputs, and
+preserves last-good output on failure. `wiki.status` reports the active cadence,
+queue state, and earliest next automatic publish time so agents can choose
+whether to wait or issue an explicit publish.
+
+### Site Activity Feed
+
+The home page should be a generated site page with a rolling "what changed"
+feed. The feed is a projection, not memory truth.
+
+Inputs:
+
+- page ledger events: created, observed edit, tombstoned, restored, published
+- render events and link diagnostics
+- accepted decisions and curator apply receipts
+- optional talk summaries or decisions, never raw every-message inbox churn by
+  default
+
+Rules:
+
+- The feed is configured in `wiki.toml` as part of the site map.
+- The feed renders into the home page and optional markdown twin.
+- The feed is safe to rebuild from ledgers and manifests.
+- The feed must not leak absolute local paths, private run transcripts, or raw
+  inbox state.
+- Talk/mail-only changes may appear in the feed only when the configured source
+  says they should, such as `include_talk = "decisions_only"`.
 
 ## API Mapping
 
@@ -621,6 +666,8 @@ All API calls should be thin wrappers over the services above.
 | `wiki.notify.poll` | Notification dispatcher | Reads pending wakeups for a live agent. |
 | `wiki.notify.ack` | Notification dispatcher | Records delivered/seen wakeups. |
 | `wiki.curator.apply` | Curator apply service | Bounded source patch from an accepted decision. |
+| `wiki.asset.add` | Asset service | Copies an image/file into a page-local asset folder and returns markdown/link handles. |
+| `wiki.asset.list` | Asset service | Lists page-local embedded assets and publication status. |
 
 List addresses are explicit collaboration objects. Agents may subscribe to role
 and page mailboxes by address, but `list://` addresses must exist in the list
@@ -792,6 +839,9 @@ Current V0 proof:
 - Talk/mail/notification-only work is inbox state and does not make page source
   dirty. A forced publish may refresh rendered talk reader output, but it is not
   a page-content freshness requirement.
+- Source page images and files should use page-local asset folders. The target
+  API is `wiki.asset.add` plus `wiki.page.patch_body`, not hand-copying files and
+  guessing published URLs.
 
 ### Phase 2: macOS Host Integration
 

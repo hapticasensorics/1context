@@ -42,6 +42,9 @@ Files are truth. JSONL is history. Derived indexes are rebuildable.
   app machinery: setup state, staging, local web mirrors, sockets, and
   derived indexes
 
+~/Library/Preferences/com.haptica.1context.plist
+  per-device app settings such as automatic wiki publish cadence
+
 ~/Library/Logs/1Context/
   app and process logs for diagnostics
 
@@ -55,6 +58,18 @@ flows may remove it only after explicit user intent.
 Application Support is private app machinery. It may contain mirrors, staging
 directories, and derived indexes, but it is not the canonical editable wiki or
 memory archive.
+
+Preferences are per-device app settings. They may control how aggressively the
+daemon publishes source changes, for example `no_limit`, `1_minute`, or
+`30_minute`, but they are not user-wiki source and should not be required to
+copy or export the wiki.
+
+Current wiki publish cadence setting:
+
+```text
+~/Library/Preferences/com.haptica.1context.plist
+WikiAutomaticPublishCadence = no_limit | 1_minute | 30_minute
+```
 
 ## Copy And Backup
 
@@ -101,6 +116,9 @@ or copy this folder without knowing about daemon internals.
           source/
             <page-slug>.md
             <page-slug>.tombstone.toml
+            <page-slug>.assets/
+              image.png
+              notes.pdf
           talk/
             <page-slug>.talk/
               _meta.yaml
@@ -136,6 +154,11 @@ or copy this folder without knowing about daemon internals.
 `source/` is canonical editable truth. `site/` is the last successful static
 render. Source may be newer than site. Site must never be half-rendered.
 
+Page-local embedded files live beside the source page under
+`source/<page-slug>.assets/`. Use this for images, PDFs, screenshots, CSVs, and
+other files that are part of the readable article body. Talk-only supporting
+evidence belongs in the talk folder's `attachments/` subtree instead.
+
 ## Wiki Registry
 
 `wiki.toml` is the user-owned page registry and site map. It names routes,
@@ -164,6 +187,12 @@ missing_route_behavior = "diagnose"
 navigation = ["your-context", "projects", "topics"]
 primary_navigation = ["for-you", "your-context", "projects", "topics"]
 utility_navigation = ["this-week", "open-questions"]
+
+[site.home_feed]
+enabled = true
+max_items = 30
+sources = ["page_ledger", "render_events", "decisions", "link_diagnostics"]
+include_talk = "decisions_only"
 
 [defaults]
 operator_name = "Operator"
@@ -239,6 +268,44 @@ source/families/reference/search-indexes/
 
 `family.toml` binds the family to logical page ids and route ids. It is not a
 second site map.
+
+## Page Assets And Embedded Files
+
+Global theme or shared wiki assets may live under `user-wiki/assets/`. Files that
+belong to one article should live beside that article:
+
+```text
+source/families/<group>/<family>/source/<page-slug>.assets/
+  hero.png
+  diagram.svg
+  evidence.pdf
+```
+
+The intended authoring API is:
+
+```text
+wiki.asset.add(page, file, purpose, caption, alt_text)
+wiki.asset.list(page)
+wiki.page.patch_body(page, find, replace_with_markdown)
+```
+
+The asset add operation copies the file into the page-local asset folder, applies
+safe filename rules, records hash/media metadata, appends a page-ledger event,
+and returns the markdown or
+download link the agent should insert. The renderer publishes page-local assets
+as route-sibling assets, for example `/topics.assets/hero.png`, and records them
+in the content index. Agents should not guess these paths from filesystem
+layout.
+
+Rules:
+
+- Asset filenames are sanitized; path separators and `..` are invalid.
+- Browser-visible output must not expose local absolute paths.
+- Images require useful alt text unless explicitly marked decorative.
+- Downloadable files should have a caption or label.
+- Page assets are reader content and can affect publish freshness.
+- Talk attachments are workflow/evidence content and do not make page source
+  dirty unless a source page links to them intentionally.
 
 ## Talk Files, Mailboxes, And Notifications
 

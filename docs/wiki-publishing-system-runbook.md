@@ -396,6 +396,15 @@ show newly appended talk entries immediately, it may call
 `wiki.publish --force`, but that is a reader-surface refresh rather than a
 page-content dirty-state requirement.
 
+Automatic source publishing is a Settings-controlled daemon behavior. The
+shared preference key is `WikiAutomaticPublishCadence` in
+`~/Library/Preferences/com.haptica.1context.plist`. Supported values are
+`no_limit`, `1_minute`, and `30_minute`; they limit automatic publish starts
+after source, tombstone, asset, or `wiki.toml` changes. Explicit `wiki.publish`
+bypasses that cadence because the caller is asking for immediate proof.
+`wiki.status` reports the active cadence and earliest next automatic publish
+time.
+
 Interpretation:
 
 - `render.state = refreshing` means a manual refresh is queued or running.
@@ -552,6 +561,21 @@ later agents do not have to infer placement only from navigation arrays.
 `wiki.list` and `wiki.page.status` both return `nav_section` so callers can
 tell whether a page is primary, utility, hidden, or default-positioned without
 re-reading `wiki.toml`.
+
+For embedded page files and images, use the page asset API target instead of
+guessing source-relative URLs:
+
+```text
+wiki.asset.add(page, file, purpose, caption, alt_text)
+wiki.page.patch_body(page, find, replace_with_returned_markdown)
+wiki.publish(page, wait: "completed")
+```
+
+Current V0 already supports talk attachments through `wiki.talk.append`. Page
+assets are the next wiki-content surface: they should copy into
+`source/<page-slug>.assets/`, publish as route-sibling assets such as
+`/topics.assets/diagram.png`, and appear in the content index. Talk attachments
+remain workflow/evidence files; page assets are reader content.
 
 For talk and curator work:
 
@@ -787,8 +811,10 @@ For a normal memory agent today:
 9. If a tombstoned page should return, call `wiki.page.restore` and publish.
    Restore removes the tombstone, re-enables the page, and restores navigation
    according to the saved `nav_section`; it does not recreate deleted source.
-10. Request `wiki.publish` when source, tombstones, or `wiki.toml` changed.
-   Talk/mail/notification-only changes should not require a publish.
+10. Request `wiki.publish` when source, tombstones, or `wiki.toml` changed and
+   you need immediate reader-visible proof. Otherwise, rely on the configured
+   automatic publish cadence. Talk/mail/notification-only changes should not
+   require a page-content publish.
 11. Read operation receipts, publish evidence, and `wiki.page.status` instead
    of assuming publication succeeded.
 12. If publish returns `link_diagnostics.status = "warning"`, repair the

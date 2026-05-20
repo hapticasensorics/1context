@@ -14,6 +14,12 @@ navigation = ["for-you", "your-context", "projects", "topics"]
 primary_navigation = ["for-you", "your-context", "projects", "topics"]
 utility_navigation = ["this-week", "open-questions"]
 
+[site.home_feed]
+enabled = true
+max_items = 30
+sources = ["page_ledger", "render_events", "decisions", "link_diagnostics"]
+include_talk = "decisions_only"
+
 [defaults]
 operator_name = "Operator"
 access_tier = "private"

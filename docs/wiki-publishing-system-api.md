@@ -12,8 +12,9 @@ wiki memory from user-owned files into app-served static output. It covers
 authoring inputs, page lifecycle, talk folders, mailboxes, agent directory,
 notifications, template fallback, rendering, validation, last-good publication,
 local web serving, RuntimeDefaults backfill, package evidence, and the freeze
-boundary. It also distinguishes the current shipped trigger from the cleaner
-consumer API the wiki system should grow into.
+boundary. "Public API" here means the product/agent API used by agents, the
+CLI, the app, and Local Web. It does not mean a public internet API, and it
+does not mean the reader-facing generated HTML surface.
 
 Architecture spine:
 [Wiki System Architecture](wiki-system-architecture.md). The API below assumes
@@ -702,6 +703,42 @@ notification churn. The transitional Swift `wiki.refresh` queue still exists
 for startup/support behavior and should be retired once every host path calls
 the Rust publisher directly.
 
+Automatic publishing is allowed, but it must be configurable app behavior. The
+daemon may watch for source, tombstone, and `wiki.toml` changes, then request
+`wiki.publish` through the same publisher path. It must not auto-publish on
+talk/mail/notification-only changes unless the user explicitly chooses to
+refresh the reader-visible talk surface.
+
+Render cadence setting:
+
+```text
+no_limit  -> automatic source publishes run as soon as the queue is free
+1_minute  -> at most one automatic source publish starts per minute
+30_minute -> at most one automatic source publish starts per thirty minutes
+```
+
+Manual `wiki.publish` bypasses this automatic cadence limit because it is an
+explicit caller request. The daemon still runs at most one publish at a time,
+coalesces pending requests, preserves last-good output on failure, and applies
+failure backoff independently of the user's cadence setting.
+
+`wiki.status` includes the active cadence, whether the next automatic
+publish is waiting on a minimum interval, and the earliest next automatic
+publish time. This keeps agents from repeatedly asking "why has my edit not
+appeared yet?" when the answer is simply the configured throttle.
+
+Implemented setting:
+
+```text
+~/Library/Preferences/com.haptica.1context.plist
+WikiAutomaticPublishCadence = no_limit | 1_minute | 30_minute
+```
+
+The menu-bar Settings submenu writes that preference. The daemon reads it when
+queuing automatic publishes and returns `automatic_cadence`,
+`automatic_cadence_limited`, `automatic_cadence_remaining_ms`, and, when
+limited, `earliest_next_automatic_publish_at` inside `wiki.status.render`.
+
 Failure behavior:
 
 - renderer failure removes the failed staging directory
@@ -765,6 +802,8 @@ Current methods:
 - `wiki.page.create`
 - `wiki.page.write_body`
 - `wiki.page.patch_body`
+- `wiki.asset.add`
+- `wiki.asset.list`
 - `wiki.page.delete`
 - `wiki.page.restore`
 - `wiki.validate`
@@ -855,7 +894,7 @@ Current status result shape includes:
 }
 ```
 
-The render queue:
+The transitional Swift render queue:
 
 - runs at most one render at a time
 - runs manual `wiki.refresh` immediately when idle
@@ -864,6 +903,16 @@ The render queue:
 - keeps the manual request when manual and automatic requests collide
 - records up to 50 history entries
 - backs off automatic retries after failures
+
+Target queue policy:
+
+- explicit `wiki.publish` runs synchronously through the Rust publisher
+- automatic source publishes use the configured cadence: `no_limit`,
+  `1_minute`, or `30_minute`
+- talk/mail/notification-only changes update inbox state and notification
+  pressure, not page-content freshness
+- the app Settings UI owns the user's cadence choice; the agent API reports it
+  but does not hide the setting in source markdown
 
 Current limitation: daemon JSON-RPC now covers inventory, page lifecycle,
 explicit whole-site publish, page watch/unwatch, page role assignment, list
@@ -906,6 +955,13 @@ which helper script is safe to run. I should be able to ask three questions:
 - "Can you publish this and prove what happened?"
 
 Everything else is implementation detail.
+
+The API should also be configurable without becoming shapeless. Page types,
+template packs, navigation sections, allowed access tiers, generated site pages,
+home feed policy, and automatic publish cadence are all runtime configuration.
+The operation names and receipt shapes stay stable; the configured choices are
+returned by `wiki.list`, `wiki.status`, and page-status metadata so agents can
+adapt without hard-coding the default site.
 
 The best version is boring in daily use:
 
@@ -966,6 +1022,12 @@ web, and a future UI can all sit on top of the same contract.
 - Every mutating call is idempotent enough for agents: retrying after a crash
   should produce `already_current`, `skipped_existing`, `tombstoned`, or a
   typed validation failure rather than duplicate files.
+- Configurability is explicit: `wiki.page.create` accepts route, page type,
+  family placement, navigation section, template pack, access tier, and summary;
+  `wiki.list` returns the configured createable options and sitemap sections.
+- The home page is a generated site page by default. It should carry a rolling
+  feed of wiki changes derived from ledgers and render manifests, not from a
+  fragile scan of rendered HTML.
 
 ### Preferred Agent Loop
 
@@ -984,20 +1046,23 @@ This is the loop I would actually use:
    only when the structured operation is too blunt.
 6. For new pages, call `wiki.page.create` before writing content beyond the
    returned source/talk files.
-7. For removed pages, call `wiki.page.delete` and let tombstones protect the
+7. For embedded images or files, call `wiki.asset.add`, then insert the returned
+   markdown with `wiki.page.patch_body` or a guarded source edit.
+8. For removed pages, call `wiki.page.delete` and let tombstones protect the
    user history.
-8. Use `wiki.talk.append` for proposals, concerns, questions, replies,
+9. Use `wiki.talk.append` for proposals, concerns, questions, replies,
    decisions, and attachments so recipients get deliveries. For replies, pass
    `reply_to` or an explicit `thread_id` instead of relying on subject matching.
-9. Use `wiki.agent.claim` when I am acting from `wiki.agent.inbox` and want
+10. Use `wiki.agent.claim` when I am acting from `wiki.agent.inbox` and want
    the core to choose the best matching delivery for this agent. Use
    `wiki.mail.claim` only when I already know the exact recipient mailbox.
-10. Use `wiki.mail.mark` to complete, snooze, or archive work without changing
+11. Use `wiki.mail.mark` to complete, snooze, or archive work without changing
    message truth.
-11. Call `wiki.validate` when I need detailed diagnostics before publishing.
-12. Call `wiki.publish` with `wait: "completed"` when I want the app-visible
-   site updated.
-13. Read the publish evidence or `wiki.page.status`. On failure, repair the
+12. Call `wiki.validate` when I need detailed diagnostics before publishing.
+13. Call `wiki.publish` with `wait: "completed"` when I want the app-visible
+   site updated, or rely on the daemon's configured automatic publish cadence
+   when the work does not need immediate reader visibility.
+14. Read the publish evidence or `wiki.page.status`. On failure, repair the
    source or write a talk proposal; do not blindly retry.
 
 ### Operation Set
@@ -1247,6 +1312,76 @@ wiki_page_patch_body(runtime_home, "topics", find=find, replace=replace, expecte
 Result shape is the same `OperationReceipt` as `wiki.page.write_body`, with
 `operation="wiki.page.patch_body"`. The caller should publish only when the
 receipt says `render_required=true`.
+
+### `wiki.asset.add`
+
+Asset add is the operation I would want for embedding images and files without
+thinking about source-tree paths.
+
+Request:
+
+```json
+{
+  "action": "wiki.asset.add",
+  "page": {"id": "topics"},
+  "file": "/tmp/topic-map.png",
+  "purpose": "inline_image",
+  "caption": "Current topic taxonomy sketch",
+  "alt_text": "Diagram of topics grouped by engineering, infrastructure, process, tools, domain, people, organizations, and see also.",
+  "actor": {"kind": "agent", "name": "memory-agent"}
+}
+```
+
+Result:
+
+```json
+{
+  "schema_version": 1,
+  "status": "ok",
+  "operation": "wiki.asset.add",
+  "page": {"id": "topics", "route": "/topics"},
+  "asset": {
+    "id": "asset_topics_topic-map_png",
+    "filename": "topic-map.png",
+    "media_type": "image/png",
+    "sha256": "...",
+    "handle": "user-wiki://page/topics/assets/topic-map.png",
+    "source_path": "user-wiki/source/families/reference/topics/source/topics.assets/topic-map.png",
+    "published_href": "/topics.assets/topic-map.png",
+    "markdown": "![Current topic taxonomy sketch](./topics.assets/topic-map.png)"
+  },
+  "render_required": true,
+  "next_action": "insert_markdown"
+}
+```
+
+Rules:
+
+- Page assets live beside the source file under `<page-slug>.assets/`.
+- `wiki.asset.add` sanitizes filenames, detects media type, records hashes, and
+  returns the exact markdown/link string to insert.
+- Images require alt text unless marked decorative.
+- Downloadable files require a label or caption.
+- Adding an asset can require publish because the reader surface needs the file,
+  but it does not edit the article body until the caller inserts the returned
+  markdown.
+- Talk evidence attachments still belong to `wiki.talk.append`; page assets are
+  for files intentionally embedded in the readable article.
+
+### `wiki.asset.list`
+
+Asset list returns the page-local embedded assets and whether they are currently
+published. It is the operation an agent uses before replacing a diagram or
+repairing a broken image link.
+
+Request:
+
+```json
+{"action": "wiki.asset.list", "page": {"id": "topics"}}
+```
+
+Result rows include asset id, handle, source-relative path, media type, hash,
+published href, referenced/unreferenced status, and publication freshness.
 
 ### `wiki.page.status`
 

@@ -175,6 +175,38 @@ fn run(mut args: Vec<String>) -> Result<()> {
             reject_extra_args("page-patch-body", &args)?;
             print_json(&core.patch_page_body(&page, &find, &replace, expected.as_deref())?)
         }
+        "asset-add" => {
+            let page = args
+                .first()
+                .cloned()
+                .ok_or_else(|| anyhow!("asset-add requires <page>"))?;
+            args.remove(0);
+            let file = take_flag_value(&mut args, "asset-add", "--file")?
+                .map(PathBuf::from)
+                .ok_or_else(|| anyhow!("asset-add requires --file"))?;
+            let filename = take_flag_value(&mut args, "asset-add", "--filename")?;
+            let purpose = take_flag_value(&mut args, "asset-add", "--purpose")?;
+            let caption = take_flag_value(&mut args, "asset-add", "--caption")?;
+            let alt_text = take_flag_value(&mut args, "asset-add", "--alt-text")?;
+            reject_extra_args("asset-add", &args)?;
+            print_json(&core.add_page_asset(
+                &page,
+                &file,
+                filename.as_deref(),
+                purpose.as_deref(),
+                caption.as_deref(),
+                alt_text.as_deref(),
+            )?)
+        }
+        "asset-list" => {
+            let page = args
+                .first()
+                .cloned()
+                .ok_or_else(|| anyhow!("asset-list requires <page>"))?;
+            args.remove(0);
+            reject_extra_args("asset-list", &args)?;
+            print_json(&core.list_page_assets(&page)?)
+        }
         "page-delete" => {
             let page = args
                 .first()
@@ -725,6 +757,8 @@ fn operation_for_command(command: &str) -> &'static str {
         "page-create-all" => "wiki.page.create_all",
         "page-write-body" => "wiki.page.write_body",
         "page-patch-body" => "wiki.page.patch_body",
+        "asset-add" => "wiki.asset.add",
+        "asset-list" => "wiki.asset.list",
         "page-delete" => "wiki.page.delete",
         "page-restore" => "wiki.page.restore",
         "publish-status" => "wiki.publish.status",
@@ -767,6 +801,8 @@ fn canonical_command(command: &str) -> &str {
         "agents" => "agent-list",
         "claim" => "agent-claim",
         "mail-thread" | "talk-thread" => "mail-read",
+        "page-asset-add" => "asset-add",
+        "page-asset-list" => "asset-list",
         other => other,
     }
 }
@@ -808,6 +844,12 @@ fn error_code(message: &str) -> &'static str {
         "invalid_notification_state"
     } else if message.contains("user-wiki/wiki.toml") && message.contains("TOML parse error") {
         "invalid_wiki_config"
+    } else if message.contains("asset file not found")
+        || message.contains("asset filename missing")
+        || message.contains("image asset requires")
+        || message.contains("file asset requires")
+    {
+        "invalid_asset"
     } else if message.contains("attachment not found")
         || message.contains("attachment filename missing")
         || message.contains("invalid attachment filename")
@@ -2077,6 +2119,8 @@ Usage:
   onecontext-wiki --root <1Context-root> page-create-all
   onecontext-wiki --root <1Context-root> page-write-body <page-id-or-route> (--body <markdown> | --body-file <path>) [--expected-source-sha256 <hash>]
   onecontext-wiki --root <1Context-root> page-patch-body <page-id-or-route> (--find <markdown> | --find-file <path>) (--replace <markdown> | --replace-file <path>) [--expected-source-sha256 <hash>]
+  onecontext-wiki --root <1Context-root> asset-add <page-id-or-route> --file <path> [--filename <name>] [--purpose inline_image|download|decorative] [--caption <text>] [--alt-text <text>]
+  onecontext-wiki --root <1Context-root> asset-list <page-id-or-route>
   onecontext-wiki --root <1Context-root> page-delete <page-id-or-route> [--mode tombstone]
   onecontext-wiki --root <1Context-root> page-restore <page-id-or-route>
   onecontext-wiki --root <1Context-root> publish-status

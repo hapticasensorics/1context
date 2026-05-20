@@ -152,6 +152,25 @@ final class PathAndPermissionTests: XCTestCase {
     )
   }
 
+  func testWikiAutomaticPublishCadencePersistsToSharedPreferencesPlist() throws {
+    let root = FileManager.default.temporaryDirectory
+      .appendingPathComponent("1ctx-settings-\(UUID().uuidString)", isDirectory: true)
+    defer { try? FileManager.default.removeItem(at: root) }
+    let preferencesPath = root.appendingPathComponent("com.haptica.1context.plist").path
+
+    XCTAssertEqual(
+      OneContextAppSettings.wikiAutomaticPublishCadence(preferencesPath: preferencesPath),
+      .defaultValue
+    )
+    try OneContextAppSettings.setWikiAutomaticPublishCadence(.thirtyMinutes, preferencesPath: preferencesPath)
+
+    XCTAssertEqual(
+      OneContextAppSettings.wikiAutomaticPublishCadence(preferencesPath: preferencesPath),
+      .thirtyMinutes
+    )
+    XCTAssertEqual(try mode(URL(fileURLWithPath: preferencesPath)), 0o600)
+  }
+
   private func mode(_ url: URL) throws -> Int {
     let attrs = try FileManager.default.attributesOfItem(atPath: url.path)
     return (attrs[.posixPermissions] as? NSNumber)?.intValue ?? -1

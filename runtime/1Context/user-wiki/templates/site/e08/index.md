@@ -36,6 +36,10 @@ _{{ wiki_tagline }}_
 
 <!-- empty: renderer-populated. Add counts for pages, topics, projects, open questions, and recent changes. -->
 
+## Recent Changes
+
+{{ activity_feed }}
+
 ## Most-Cited Topics
 
 <!-- empty: renderer-populated. Add links to topics with the highest inbound reference counts. -->

@@ -72,6 +72,8 @@ struct OneContextCLI {
       1context wiki page-create <page-id> [--title <title>] [--route <route>] [--summary <summary>] [--template <template>]
       1context wiki page-write-body <page-id-or-route> (--body <markdown> | --body-file <path>) [--expected-source-sha256 <hash>]
       1context wiki page-patch-body <page-id-or-route> (--find <text> | --find-file <path>) (--replace <text> | --replace-file <path>) [--expected-source-sha256 <hash>]
+      1context wiki asset-add <page-id-or-route> --file <path> [--filename <name>] [--purpose inline_image|download|decorative] [--caption <text>] [--alt-text <text>]
+      1context wiki asset-list <page-id-or-route>
       1context wiki page-delete <page-id-or-route> [--mode tombstone]
       1context wiki page-restore <page-id-or-route>
       1context wiki page-watch <page-id-or-route> --agent-id <agent-id> [--list <list://address>] [--kind <kind>]... [--ttl-seconds <seconds>]
@@ -119,6 +121,8 @@ struct OneContextCLI {
       1context wiki page-create <page-id> [--title <title>] [--route <route>] [--summary <summary>] [--template <template>]
       1context wiki page-write-body <page-id-or-route> (--body <markdown> | --body-file <path>) [--expected-source-sha256 <hash>]
       1context wiki page-patch-body <page-id-or-route> (--find <text> | --find-file <path>) (--replace <text> | --replace-file <path>) [--expected-source-sha256 <hash>]
+      1context wiki asset-add <page-id-or-route> --file <path> [--filename <name>] [--purpose inline_image|download|decorative] [--caption <text>] [--alt-text <text>]
+      1context wiki asset-list <page-id-or-route>
       1context wiki page-delete <page-id-or-route> [--mode tombstone]
       1context wiki page-restore <page-id-or-route>
       1context wiki page-watch <page-id-or-route> --agent-id <agent-id> [--list <list://address>] [--kind <kind>]... [--ttl-seconds <seconds>]
@@ -371,6 +375,11 @@ struct OneContextCLI {
       try printJSON(UnixJSONRPCClient().call(method: "wiki.page.write_body", params: try wikiPageWriteBodyParams()))
     case "page-patch-body":
       try printJSON(UnixJSONRPCClient().call(method: "wiki.page.patch_body", params: try wikiPagePatchBodyParams()))
+    case "asset-add":
+      try printJSON(UnixJSONRPCClient().call(method: "wiki.asset.add", params: try wikiAssetAddParams()))
+    case "asset-list":
+      try requireWikiArgumentCount(3)
+      try printJSON(UnixJSONRPCClient().call(method: "wiki.asset.list", params: ["page": args[2]]))
     case "page-delete":
       try printJSON(UnixJSONRPCClient().call(method: "wiki.page.delete", params: try wikiPageDeleteParams()))
     case "page-restore":
@@ -525,6 +534,27 @@ struct OneContextCLI {
       "--replace-file",
       "replace_file"
     )
+    params["page"] = args[2]
+    return params
+  }
+
+  static func wikiAssetAddParams() throws -> [String: Any] {
+    guard args.count >= 3 else {
+      throw CLIError.commandFailed("wiki asset-add requires a page id or route")
+    }
+    var params = try wikiParams(
+      startIndex: 3,
+      valueFlags: [
+        "--file": "file",
+        "--filename": "filename",
+        "--purpose": "purpose",
+        "--caption": "caption",
+        "--alt-text": "alt_text"
+      ]
+    )
+    guard params["file"] != nil else {
+      throw CLIError.commandFailed("wiki asset-add requires --file")
+    }
     params["page"] = args[2]
     return params
   }
@@ -1102,6 +1132,8 @@ struct OneContextCLI {
     "page-create": "wiki.page.create",
     "page-write-body": "wiki.page.write_body",
     "page-patch-body": "wiki.page.patch_body",
+    "asset-add": "wiki.asset.add",
+    "asset-list": "wiki.asset.list",
     "page-delete": "wiki.page.delete",
     "page-restore": "wiki.page.restore",
     "page-watch": "wiki.page.watch",

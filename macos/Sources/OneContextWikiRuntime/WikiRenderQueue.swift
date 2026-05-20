@@ -73,6 +73,7 @@ public struct WikiRenderQueueSnapshot: Equatable, Sendable {
   public var maxConcurrentRenders: Int
   public var backingOff: Bool
   public var backoffRemainingMilliseconds: Int
+  public var automaticCadenceRemainingMilliseconds: Int
   public var history: [WikiRenderQueueRecord]
 }
 
@@ -83,6 +84,7 @@ public final class WikiRenderQueue: @unchecked Sendable {
   private let workerQueue: DispatchQueue
   private let debounceInterval: TimeInterval
   private let failureBackoffInterval: TimeInterval
+  private let automaticMinimumInterval: @Sendable () -> TimeInterval?
   private let now: @Sendable () -> Date
   private let render: Render
   private let historyLimit: Int
@@ -92,6 +94,7 @@ public final class WikiRenderQueue: @unchecked Sendable {
   private var pendingRequest: WikiRenderQueueRequest?
   private var runningRequest: WikiRenderQueueRequest?
   private var backoffUntil: Date?
+  private var lastAutomaticStartedAt: Date?
   private var acceptedCount = 0
   private var coalescedCount = 0
   private var completedCount = 0
@@ -104,6 +107,7 @@ public final class WikiRenderQueue: @unchecked Sendable {
   public init(
     debounceInterval: TimeInterval = 0.5,
     failureBackoffInterval: TimeInterval = 5,
+    automaticMinimumInterval: @escaping @Sendable () -> TimeInterval? = { nil },
     workerQueue: DispatchQueue = DispatchQueue.global(qos: .utility),
     now: @escaping @Sendable () -> Date = Date.init,
     historyLimit: Int = 50,
@@ -111,6 +115,7 @@ public final class WikiRenderQueue: @unchecked Sendable {
   ) {
     self.debounceInterval = debounceInterval
     self.failureBackoffInterval = failureBackoffInterval
+    self.automaticMinimumInterval = automaticMinimumInterval
     self.workerQueue = workerQueue
     self.now = now
     self.historyLimit = historyLimit
@@ -141,6 +146,7 @@ public final class WikiRenderQueue: @unchecked Sendable {
   public func snapshot() -> WikiRenderQueueSnapshot {
     stateQueue.sync {
       let remaining = max(0, backoffUntil?.timeIntervalSince(now()) ?? 0)
+      let cadenceRemaining = automaticCadenceRemaining(at: now())
       return WikiRenderQueueSnapshot(
         running: runningRequest != nil,
         scheduled: scheduledRequest != nil,
@@ -154,6 +160,7 @@ public final class WikiRenderQueue: @unchecked Sendable {
         maxConcurrentRenders: maxConcurrentRenders,
         backingOff: remaining > 0,
         backoffRemainingMilliseconds: Int((remaining * 1_000).rounded()),
+        automaticCadenceRemainingMilliseconds: Int((cadenceRemaining * 1_000).rounded()),
         history: history
       )
     }
@@ -193,7 +200,17 @@ public final class WikiRenderQueue: @unchecked Sendable {
   private func delay(for request: WikiRenderQueueRequest) -> TimeInterval {
     guard request.priority != .manual else { return 0 }
     let backoffRemaining = max(0, backoffUntil?.timeIntervalSince(now()) ?? 0)
-    return max(debounceInterval, backoffRemaining)
+    return max(debounceInterval, backoffRemaining, automaticCadenceRemaining(at: now()))
+  }
+
+  private func automaticCadenceRemaining(at date: Date) -> TimeInterval {
+    guard let interval = automaticMinimumInterval(),
+      interval > 0,
+      let lastAutomaticStartedAt
+    else {
+      return 0
+    }
+    return max(0, lastAutomaticStartedAt.addingTimeInterval(interval).timeIntervalSince(date))
   }
 
   private func startScheduledRequest(token: Int) {
@@ -205,6 +222,9 @@ public final class WikiRenderQueue: @unchecked Sendable {
     activeRenders += 1
     maxConcurrentRenders = max(maxConcurrentRenders, activeRenders)
     let startedAt = now()
+    if request.priority == .automatic {
+      lastAutomaticStartedAt = startedAt
+    }
     signalStateChanged()
 
     workerQueue.async { [weak self] in
