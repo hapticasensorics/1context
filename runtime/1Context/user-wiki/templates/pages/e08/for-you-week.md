@@ -6,13 +6,14 @@ template_id: e08/for-you-week
 template_version: template-0.1.0
 title: "For You - {{ operator_name }} - Week of {{ era_anchor_label }}"
 slug: "for-you-{{ era_anchor }}"
+route: "{{ route }}"
 section: "for-you"
 access: "{{ access_tier }}"
 summary: "A rolling weekly orientation page for {{ operator_name }}."
 status: draft
 asset_base: "{{ asset_base }}"
 home_href: "{{ home_href }}"
-md_url: "/{{ slug }}.md"
+md_url: "{{ md_url }}"
 toc_enabled: true
 talk_enabled: true
 agent_view_enabled: true
@@ -26,7 +27,7 @@ era_anchor_label: "{{ era_anchor_label }}"
 window_start: "{{ window_start }}"
 window_end: "{{ window_end }}"
 window_kind: rolling-14d
-talk_url: "/for-you-{{ era_anchor }}/talk"
+talk_url: "{{ talk_route }}"
 audiences:
   internal: true
   public: true

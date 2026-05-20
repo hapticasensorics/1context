@@ -129,6 +129,7 @@ final class AppSetupTests: XCTestCase {
       caddyExecutableExists: caddyExecutableExists,
       caddyExecutableIsExecutable: caddyExecutableIsExecutable,
       caddyExecutableIsBundled: caddyExecutableExists,
+      runningCaddyExecutable: nil,
       bundledCaddyPath: "/Applications/1Context.app/Contents/Resources/caddy",
       bundledCaddyVersionPath: "/Applications/1Context.app/Contents/Resources/caddy.version",
       bundledCaddyVersion: "test",

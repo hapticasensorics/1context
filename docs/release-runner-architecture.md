@@ -58,7 +58,7 @@ macos/
   Product build and platform behavior.
 
 wiki-engine/
-  Wiki rendering and runtime-defaults materialization tooling.
+  Wiki rendering and runtime-defaults page lifecycle tooling.
 ```
 
 ## Runner Module Shape

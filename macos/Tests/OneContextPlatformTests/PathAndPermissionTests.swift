@@ -23,7 +23,6 @@ final class PathAndPermissionTests: XCTestCase {
     XCTAssertEqual(paths.contextEngineIndexesDirectory.path, "/tmp/1ctx-platform-test/user/context-engine/indexes")
     XCTAssertEqual(paths.appSupportDirectory.path, "/tmp/1ctx-platform-test/support")
     XCTAssertEqual(paths.appSupportIndexesDirectory.path, "/tmp/1ctx-platform-test/support/indexes")
-    XCTAssertEqual(paths.lanceDBIndexDirectory.path, "/tmp/1ctx-platform-test/support/indexes/lancedb")
     XCTAssertEqual(paths.appSupportSetupDirectory.path, "/tmp/1ctx-platform-test/support/setup")
     XCTAssertEqual(paths.runDirectory.path, "/tmp/1ctx-platform-test/support/run")
     XCTAssertEqual(paths.logPath, "/tmp/1ctx-platform-test/logs/custom.log")
@@ -46,17 +45,25 @@ final class PathAndPermissionTests: XCTestCase {
 
   func testDebugRuntimeHomeOverrideUsesProductionShapeUnderFixtureRoot() {
     #if DEBUG
-    let key = "ONECONTEXT_DEV_RUNTIME_HOME"
-    let oldValue = getenv(key).map { String(cString: $0) }
+    let runtimeHomeKey = "ONECONTEXT_DEV_RUNTIME_HOME"
+    let socketKey = "ONECONTEXT_DEV_SOCKET_PATH"
+    let oldRuntimeHome = getenv(runtimeHomeKey).map { String(cString: $0) }
+    let oldSocketPath = getenv(socketKey).map { String(cString: $0) }
     defer {
-      if let oldValue {
-        setenv(key, oldValue, 1)
+      if let oldRuntimeHome {
+        setenv(runtimeHomeKey, oldRuntimeHome, 1)
       } else {
-        unsetenv(key)
+        unsetenv(runtimeHomeKey)
+      }
+      if let oldSocketPath {
+        setenv(socketKey, oldSocketPath, 1)
+      } else {
+        unsetenv(socketKey)
       }
     }
 
-    setenv(key, "/tmp/1ctx-dev-runtime-home", 1)
+    setenv(runtimeHomeKey, "/tmp/1ctx-dev-runtime-home", 1)
+    unsetenv(socketKey)
     let paths = RuntimePaths.current()
 
     XCTAssertEqual(paths.userContentDirectory.path, "/tmp/1ctx-dev-runtime-home/1Context")
@@ -69,19 +76,59 @@ final class PathAndPermissionTests: XCTestCase {
     #endif
   }
 
-  func testProductionRuntimePathsDoNotRequireDebugRuntimeHomeOverride() {
+  func testDebugRuntimeHomeCanUseShortSocketOverride() {
     #if DEBUG
-    let key = "ONECONTEXT_DEV_RUNTIME_HOME"
-    let oldValue = getenv(key).map { String(cString: $0) }
+    let runtimeHomeKey = "ONECONTEXT_DEV_RUNTIME_HOME"
+    let socketKey = "ONECONTEXT_DEV_SOCKET_PATH"
+    let oldRuntimeHome = getenv(runtimeHomeKey).map { String(cString: $0) }
+    let oldSocketPath = getenv(socketKey).map { String(cString: $0) }
     defer {
-      if let oldValue {
-        setenv(key, oldValue, 1)
+      if let oldRuntimeHome {
+        setenv(runtimeHomeKey, oldRuntimeHome, 1)
       } else {
-        unsetenv(key)
+        unsetenv(runtimeHomeKey)
+      }
+      if let oldSocketPath {
+        setenv(socketKey, oldSocketPath, 1)
+      } else {
+        unsetenv(socketKey)
       }
     }
 
-    unsetenv(key)
+    setenv(runtimeHomeKey, "/tmp/1ctx-dev-runtime-home-with-long-name", 1)
+    setenv(socketKey, "/tmp/1ctx-dev-short.sock", 1)
+    let paths = RuntimePaths.current()
+
+    XCTAssertEqual(paths.userContentDirectory.path, "/tmp/1ctx-dev-runtime-home-with-long-name/1Context")
+    XCTAssertEqual(paths.socketPath, "/tmp/1ctx-dev-short.sock")
+    XCTAssertEqual(
+      paths.pidPath,
+      "/tmp/1ctx-dev-runtime-home-with-long-name/Library/Application Support/1Context/run/1contextd.pid"
+    )
+    #endif
+  }
+
+  func testProductionRuntimePathsDoNotRequireDebugRuntimeHomeOverride() {
+    #if DEBUG
+    let runtimeHomeKey = "ONECONTEXT_DEV_RUNTIME_HOME"
+    let socketKey = "ONECONTEXT_DEV_SOCKET_PATH"
+    let oldRuntimeHome = getenv(runtimeHomeKey).map { String(cString: $0) }
+    let oldSocketPath = getenv(socketKey).map { String(cString: $0) }
+    defer {
+      if let oldRuntimeHome {
+        setenv(runtimeHomeKey, oldRuntimeHome, 1)
+      } else {
+        unsetenv(runtimeHomeKey)
+      }
+      if let oldSocketPath {
+        setenv(socketKey, oldSocketPath, 1)
+      } else {
+        unsetenv(socketKey)
+      }
+    }
+
+    unsetenv(runtimeHomeKey)
+    unsetenv(socketKey)
     #endif
 
     let home = FileManager.default.homeDirectoryForCurrentUser

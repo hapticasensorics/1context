@@ -1,0 +1,19 @@
+[package]
+name = "onecontext-wiki-daemon"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[[bin]]
+name = "onecontext-wiki"
+path = "src/main.rs"
+
+[dependencies]
+anyhow = "1.0"
+onecontext-wiki-core = { path = "../onecontext-wiki-core" }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+[dev-dependencies]
+tempfile = "3.10"

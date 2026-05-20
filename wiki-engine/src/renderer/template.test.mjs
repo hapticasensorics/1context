@@ -3,6 +3,49 @@ import assert from 'node:assert/strict';
 
 import { renderShell } from './template.mjs';
 
+test('article width defaults to medium unless a page opts into another width', () => {
+  const defaultHtml = renderShell({
+    frontmatter: {
+      title: 'Dogfood Operations',
+      slug: 'dogfood-operations',
+      summary: 'Operational wiki page',
+      access: 'private',
+    },
+    bodyHtml: '<p>hello</p>',
+    tocHtml: '<nav class="opctx-toc" aria-label="Contents"></nav>',
+  });
+  const narrowHtml = renderShell({
+    frontmatter: {
+      title: 'Narrow Note',
+      slug: 'narrow-note',
+      summary: 'Short note',
+      access: 'private',
+      article_width: 's',
+    },
+    bodyHtml: '<p>hello</p>',
+    tocHtml: '<nav class="opctx-toc" aria-label="Contents"></nav>',
+  });
+
+  assert.match(defaultHtml, /data-article-width="m"/);
+  assert.match(narrowHtml, /data-article-width="s"/);
+});
+
+test('pages without a table of contents use the one-column article layout', () => {
+  const html = renderShell({
+    frontmatter: {
+      title: 'Short Project',
+      slug: 'short-project',
+      summary: 'No headings yet',
+      access: 'private',
+    },
+    bodyHtml: '<p>hello</p>',
+    tocHtml: '',
+  });
+
+  assert.match(html, /class="opctx-layout opctx-layout--no-toc"/);
+  assert.doesNotMatch(html, /<nav class="opctx-toc"/);
+});
+
 test('family pages render the Era selector as a custom pill menu', () => {
   const html = renderShell({
     frontmatter: {

@@ -6,6 +6,7 @@ template_id: context-page
 template_version: template-0.1.0
 title: "{{ title }}"
 slug: "{{ slug }}"
+route: "{{ route }}"
 section: context
 access: "{{ access_tier }}"
 summary: "{{ summary }}"

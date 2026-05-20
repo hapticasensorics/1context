@@ -110,7 +110,7 @@ Measurement:
 - Command: `scripts/measure-shipped-app-lines.sh`
 - Scope: `macos/Sources` plus source-equivalent code/config files currently
   bundled by the app's `memory-core` runtime copy, excluding build caches,
-  virtualenvs, node modules, runtime lake data, and generated markdown that the
+  virtualenvs, node modules, generated index data, and generated markdown that the
   current package script already deletes.
 - Baseline captured on 2026-05-13: 218 files and 61,309 nonblank lines.
 - 60% reduction target: final measurement must be 24,523 nonblank lines or

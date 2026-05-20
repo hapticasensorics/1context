@@ -33,7 +33,7 @@ V0 uses a Swift-supervised, bundled-JS renderer.
 
 ```text
 Swift daemon
-  -> owns paths, permissions, setup, page registry, materialization, staging,
+  -> owns paths, permissions, setup, page registry, page lifecycle, staging,
      atomic promotion, local-web status, and diagnostics
   -> invokes a bundled renderer helper
 
@@ -72,7 +72,7 @@ Excluded:
 - agent hiring
 - broad memory jobs
 - embeddings
-- LanceDB indexing
+- vector/search indexing
 - hidden context-engine hot patches in canonical renders
 - bundled `memory-core` source checkout
 - bundled Python memory-core runtime loop
@@ -81,9 +81,9 @@ Excluded:
 - long-running Python web server
 - broad runtime path override environment hooks
 
-LanceDB is intentionally out of the first slice. When it returns, it must be a
-derived Application Support index rebuilt from `user-wiki` and `context-engine`,
-not canonical context-engine truth.
+Vector/search indexes are intentionally out of the first slice. When they
+return, they must be derived Application Support machinery rebuilt from
+`user-wiki` and `context-engine`, not canonical context-engine truth.
 
 ## Done When
 
@@ -104,7 +104,7 @@ not canonical context-engine truth.
   ledger without replacing `last_success` or serving a partial site.
 - Canonical render/export uses accepted `user-wiki/source` only. Proposal or
   patch previews may exist under `context-engine/artifacts`, but they do not
-  update `user-wiki/site` until accepted changes are materialized into source.
+  update `user-wiki/site` until accepted changes are promoted into source.
 - `user-wiki/site/` can be copied as a standalone static website export.
 - Open Wiki opens the last successful rendered site.
 - Tests or smoke scripts prove the repo-local path and the installed-path
@@ -148,7 +148,7 @@ Explicitly excluded from tracked V0 files:
 - private experiment scripts, run outputs, and generated site artifacts
 - `memory-core/memory/runtime/**`
 - `wiki-engine/node_modules/**`
-- raw observations, run transcripts, private previews, and lakestore data
+- raw observations, run transcripts, private previews, and generated index data
 
 The only agent prompt copied in Chunk 2 is the page-local `_curator.md`, because
 that file is part of the user-editable talk/page policy surface.
@@ -195,8 +195,8 @@ Review implementation:
 
 ### Chunk 2: Local User-Wiki Fixture Import (Review Slice)
 
-When a review fixture is needed, materialize the smallest neutral sample wiki
-into `user-wiki/source`:
+When a review fixture is needed, create the smallest neutral sample wiki through
+the page lifecycle into `user-wiki/source`:
 
 ```text
 user-wiki/source/families/<family-group>/<family-id>/
@@ -261,7 +261,7 @@ Acceptance:
 - talk conventions and curator files remain part of `user-wiki`
 - global agent prompts stay under `context-engine`, not `user-wiki`
 
-### Chunk 3.5: Page Registry And First-Run Materialization
+### Chunk 3.5: Page Registry And First-Run Defaults
 
 Make `user-wiki/wiki.toml` the user-owned site map.
 
@@ -277,7 +277,7 @@ Acceptance:
 - tombstoned pages are not silently recreated
 - unconfigured routes diagnose missing pages instead of falling back to
   `/your-context`
-- materialization state is recorded under Application Support setup
+- page lifecycle state is recorded under Application Support setup
 
 ### Chunk 4: Render To Last-Good Static Site
 
@@ -310,11 +310,11 @@ developer-local Node or run package installation on the user's machine.
 Swift render coordinator responsibilities:
 
 - read `user-wiki/wiki.toml`
-- materialize configured missing source and talk files before rendering
+- create configured missing source and talk files through page lifecycle before rendering
 - create a unique staging directory under Application Support
 - invoke the renderer once per configured source page and talk folder
 - collect renderer JSON output, stdout, stderr, exit status, and file hashes
-- synthesize `site-manifest.json`, `content-index.json`, and minimal
+- synthesize `.1context/route-manifest.json`, `.1context/content-index.json`, and minimal
   `api/wiki/pages.json`
 - validate the staged site before promotion
 - write render events and current-render state
@@ -351,7 +351,7 @@ Acceptance:
 - diagnostics can explain current, stale, failed, or uninitialized render state
 - `LocalWebDefaults` does not hardcode `/your-context` as a hidden fallback for
   arbitrary missing routes
-- missing configured pages trigger materialization or a repair diagnostic
+- missing configured pages trigger page creation or a repair diagnostic
 - missing unconfigured routes show a missing-page diagnostic rather than
   redirecting to another page
 - `wiki.refresh` runs the Swift render coordinator and returns render status
@@ -386,11 +386,11 @@ missing route.
 
 Only after V0 is solid:
 
-- add LanceDB as an Application Support derived index
+- add vector/search indexes as Application Support derived indexes
 - add `context-engine/indexes` manifests and rebuild ledgers
 - add curator/librarian jobs
 - add proposal preview renders
-- allow accepted proposals to materialize source edits
+- allow accepted proposals to promote source edits
 - reintroduce Python memory-core orchestration as a development and memory-layer
   subsystem once the app-native wiki loop is stable
 

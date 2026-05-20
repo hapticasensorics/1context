@@ -1,4 +1,5 @@
 import XCTest
+import Darwin
 @testable import OneContextLocalWeb
 import OneContextPlatform
 
@@ -95,6 +96,7 @@ final class LocalWebTests: XCTestCase {
     XCTAssertTrue(diagnostics.caddyExecutableExists)
     XCTAssertTrue(diagnostics.caddyExecutableIsExecutable)
     XCTAssertFalse(diagnostics.caddyExecutableIsBundled)
+    XCTAssertNil(diagnostics.runningCaddyExecutable)
     XCTAssertTrue(diagnostics.currentSitePath.hasSuffix("Application Support/1Context/wiki-site/current"))
     XCTAssertTrue(diagnostics.caddyfilePath.hasSuffix("Application Support/1Context/local-web/caddy/Caddyfile"))
     XCTAssertEqual(diagnostics.apiPort, LocalWebDefaults.wikiAPIPort)
@@ -105,6 +107,25 @@ final class LocalWebTests: XCTestCase {
     XCTAssertEqual(diagnostics.privilegedProxyProbeHealth, "setup required")
     XCTAssertEqual(diagnostics.brandedProbeURL, "https://wiki.1context.localhost/__1context/health")
     XCTAssertEqual(diagnostics.brandedProbeHealth, "setup required")
+  }
+
+  func testDiagnosticsDoesNotTreatExecutableDirectoryAsCaddy() throws {
+    let root = URL(fileURLWithPath: NSTemporaryDirectory())
+      .appendingPathComponent("1context-local-web-caddy-dir-\(UUID().uuidString)", isDirectory: true)
+    let caddyDirectory = root.appendingPathComponent("bin/caddy", isDirectory: true)
+    try FileManager.default.createDirectory(at: caddyDirectory, withIntermediateDirectories: true)
+    chmod(caddyDirectory.path, 0o755)
+
+    let manager = CaddyManager(
+      runtimePaths: testRuntimePaths(root: root),
+      setupSystemPaths: testSetupSystemPaths(root: root),
+      caddyExecutable: caddyDirectory
+    )
+    let diagnostics = manager.diagnostics()
+
+    XCTAssertEqual(diagnostics.caddyExecutable, "")
+    XCTAssertFalse(diagnostics.caddyExecutableExists)
+    XCTAssertFalse(diagnostics.caddyExecutableIsExecutable)
   }
 
   func testDiagnosticsReportsLocalHTTPSURLMode() throws {
@@ -387,6 +408,33 @@ final class LocalWebTests: XCTestCase {
     XCTAssertFalse(visibleAPIText.contains(NSHomeDirectory()))
   }
 
+  func testWikiLocalAPIHealthReadsCurrentRenderStateFromAppMirror() throws {
+    let root = temporaryRoot()
+    let web = LocalWebPaths(runtimePaths: testRuntimePaths(root: root))
+    let renderState = web.wikiCurrent
+      .appendingPathComponent(".1context", isDirectory: true)
+      .appendingPathComponent("current-render.json")
+    try writeString("<!doctype html><title>1Context</title>", to: web.wikiCurrent.appendingPathComponent("index.html"))
+    try writeJSON([
+      "schemaVersion": 1,
+      "status": "published",
+      "trigger": "unit-test",
+      "publishedAt": "2026-05-20T13:36:00Z",
+      "sourceSite": "user-wiki://site",
+      "publishedSite": "app-support://wiki-site/current",
+      "message": "Published from unit test."
+    ], to: renderState)
+
+    let handler = WikiLocalAPIHandler(paths: web)
+    let response = handler.handle(WikiLocalAPIRequest(method: "GET", path: "/api/wiki/health"))
+    let payload = try XCTUnwrap(json(response))
+
+    XCTAssertEqual(response.statusCode, 200)
+    XCTAssertEqual(payload["current_site"] as? String, "app-support://wiki-site/current")
+    XCTAssertEqual(payload["current_site_exists"] as? Bool, true)
+    XCTAssertEqual(payload["published_at"] as? String, "2026-05-20T13:36:00Z")
+  }
+
   func testWikiLocalAPIDoesNotExposeUnshippedChatRoutes() throws {
     let web = LocalWebPaths(runtimePaths: testRuntimePaths(root: temporaryRoot()))
     let handler = WikiLocalAPIHandler(paths: web)
@@ -401,6 +449,34 @@ final class LocalWebTests: XCTestCase {
     XCTAssertEqual(provider.statusCode, 404)
     XCTAssertEqual(reset.statusCode, 404)
     XCTAssertEqual(chat.statusCode, 404)
+  }
+
+  func testWikiLocalAPIDefaultPortCollisionFallsBackToAvailableLoopbackPort() throws {
+    WikiLocalAPIConfig.resetPreferredPortForTesting()
+    defer { WikiLocalAPIConfig.resetPreferredPortForTesting() }
+    let occupiedFD = try bindLoopbackPortIfAvailable(LocalWebDefaults.wikiAPIPort)
+    defer {
+      if let occupiedFD {
+        close(occupiedFD)
+      }
+    }
+    let web = LocalWebPaths(runtimePaths: testRuntimePaths(root: temporaryRoot()))
+    let server = WikiLocalAPIServer(config: WikiLocalAPIConfig(), handler: WikiLocalAPIHandler(paths: web))
+
+    let snapshot = try server.start()
+    defer { server.stop() }
+
+    XCTAssertTrue(snapshot.running)
+    XCTAssertNotEqual(snapshot.port, LocalWebDefaults.wikiAPIPort)
+    XCTAssertEqual(snapshot.health, "OK")
+    XCTAssertTrue(snapshot.lastError?.contains("Default 1Context wiki API port") == true)
+    XCTAssertTrue(snapshot.url.contains(":\(snapshot.port)/api/wiki/health"))
+    XCTAssertEqual(WikiLocalAPIProbe.health(config: WikiLocalAPIConfig(port: snapshot.port)), "OK")
+
+    let diagnostics = CaddyManager(runtimePaths: testRuntimePaths(root: temporaryRoot())).diagnostics()
+    XCTAssertEqual(diagnostics.apiPort, snapshot.port)
+    XCTAssertEqual(diagnostics.apiHealth, "OK")
+    XCTAssertTrue(diagnostics.apiURL.contains(":\(snapshot.port)/api/wiki/health"))
   }
 
   private func temporaryRoot() -> URL {
@@ -472,5 +548,42 @@ final class LocalWebTests: XCTestCase {
 
   private func json(_ response: WikiLocalAPIResponse) throws -> [String: Any]? {
     try JSONSerialization.jsonObject(with: response.body) as? [String: Any]
+  }
+
+  private func bindLoopbackPortIfAvailable(_ port: Int) throws -> Int32? {
+    let fd = socket(AF_INET, SOCK_STREAM, 0)
+    XCTAssertGreaterThanOrEqual(fd, 0)
+    guard fd >= 0 else {
+      throw WikiLocalAPIError.socketFailed(String(cString: strerror(errno)))
+    }
+    var reuse: Int32 = 1
+    setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &reuse, socklen_t(MemoryLayout<Int32>.size))
+
+    var address = sockaddr_in()
+    address.sin_len = UInt8(MemoryLayout<sockaddr_in>.size)
+    address.sin_family = sa_family_t(AF_INET)
+    address.sin_port = UInt16(port).bigEndian
+    address.sin_addr = in_addr(s_addr: inet_addr(LocalWebDefaults.bindHost))
+
+    let bindResult = withUnsafePointer(to: &address) {
+      $0.withMemoryRebound(to: sockaddr.self, capacity: 1) {
+        Darwin.bind(fd, $0, socklen_t(MemoryLayout<sockaddr_in>.size))
+      }
+    }
+    guard bindResult == 0 else {
+      let code = errno
+      let message = String(cString: strerror(code))
+      close(fd)
+      if code == EADDRINUSE {
+        return nil
+      }
+      throw WikiLocalAPIError.bindFailed(LocalWebDefaults.bindHost, port, message)
+    }
+    guard listen(fd, 1) == 0 else {
+      let message = String(cString: strerror(errno))
+      close(fd)
+      throw WikiLocalAPIError.socketFailed(message)
+    }
+    return fd
   }
 }

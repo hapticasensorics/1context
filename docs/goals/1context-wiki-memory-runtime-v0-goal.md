@@ -18,7 +18,8 @@ footer_enabled: true
 ## Goal
 
 Ship the first production-shaped wiki memory runtime: the installed app can
-initialize user-owned wiki data, materialize configured pages, publish a
+initialize user-owned wiki data, create configured pages through the page
+lifecycle service, publish a
 last-good static wiki through Open Wiki, and expose enough governed authoring
 surfaces for the future Python memory core to create talk, proposals, decisions,
 source edits, and render requests safely.
@@ -37,8 +38,9 @@ renderer slice. This goal is the close-loop product milestone around it.
 
 - A clean installed app creates the production-shaped `~/1Context` and
   Application Support trees without requiring a source checkout.
-- A clean dev runtime initializes from `runtime/`, materializes configured wiki
-  pages, preserves edited files, respects tombstones, and records setup state.
+- A clean dev runtime initializes from `runtime/`, creates configured wiki
+  pages through page lifecycle, preserves edited files, respects tombstones,
+  and records setup state.
 - `wiki.toml` is the single installed-runtime site map for source-backed pages,
   generated pages, aliases, navigation, templates, and missing-route behavior.
 - The bundled renderer runs outside `memory-core`, accepts explicit paths,
@@ -94,9 +96,9 @@ renderer slice. This goal is the close-loop product milestone around it.
   `PathAndPermissionTests.testProductionRuntimePathsDoNotRequireDebugRuntimeHomeOverride`
   asserts production-shaped `~/1Context` and `~/Library/...` roots without
   writing to them.
-- [x] Add setup-state schema validation for default install and page
-  materialization ledgers. Evidence: `./scripts/test-wiki.sh`
-  validates setup TOML for default materialization and dev fixture imports.
+- [x] Add setup-state schema validation for default install and page lifecycle
+  ledgers. Evidence: `./scripts/test-wiki.sh` validates setup TOML for default
+  install and dev fixture imports.
 
 ### 3. Site Map And Source Families
 
@@ -105,7 +107,7 @@ renderer slice. This goal is the close-loop product milestone around it.
   `[[site_pages]]`.
 - [x] Use semantic family groups instead of menu-order folders. Evidence:
   specs define `context`, `work`, `reference`, `for-you`, and `system`.
-- [x] Materialize V0 source families for `for-you`, `your-context`,
+- [x] Create V0 source families for `for-you`, `your-context`,
   `projects`, and `topics`. Evidence: `./scripts/test-wiki.sh` and
   `./scripts/test-wiki.sh`.
 - [x] Validate `wiki.toml` for duplicate routes, duplicate ids, invalid
@@ -117,15 +119,15 @@ renderer slice. This goal is the close-loop product milestone around it.
   generated root, and `this-week`/`open-questions` remain disabled in
   `runtime/1Context/user-wiki/wiki.toml`.
 
-### 4. Templates And Materialization
+### 4. Templates And Page Lifecycle
 
-- [x] Materializer creates missing configured pages and talk folders from
-  templates. Evidence: `./scripts/test-wiki.sh`.
+- [x] Page lifecycle and publish preflight create missing configured pages and
+  talk folders from templates. Evidence: `./scripts/test-wiki.sh`.
 - [x] Prove user-configured custom pages can use generic fallback templates
   without adding blessed public content. Evidence:
   `./scripts/test-wiki.sh`.
-- [x] Materializer preserves edited files and tombstones. Evidence:
-  `./scripts/test-wiki.sh`.
+- [x] Page lifecycle and publish preflight preserve edited files and tombstones.
+  Evidence: `./scripts/test-wiki.sh`.
 - [x] Align runtime template frontmatter with renderer validation. Evidence:
   `./scripts/test-wiki.sh` and
   `npm test` in `wiki-engine`.
@@ -217,9 +219,9 @@ renderer slice. This goal is the close-loop product milestone around it.
   `testStaticSupportFilesDoNotPublishPlaceholderPages`; failed renders preserve
   `Application Support/1Context/wiki-site/current` in
   `OneContextWikiRuntimeTests`.
-- [x] Missing configured source materializes or shows repair diagnostics.
-  Evidence: `./scripts/test-wiki.sh` materializes configured source,
-  and `./scripts/test-wiki.sh` materializes a dummy custom
+- [x] Missing configured source is created or shows repair diagnostics.
+  Evidence: `./scripts/test-wiki.sh` creates configured source,
+  and `./scripts/test-wiki.sh` creates a dummy custom
   page from the generic fallback template.
 - [x] Unconfigured routes show diagnostics and never redirect to
   `/your-context`. Evidence: `./scripts/test-wiki.sh` checks
@@ -227,7 +229,7 @@ renderer slice. This goal is the close-loop product milestone around it.
   `./scripts/test-wiki.sh` checks `/not-configured`.
 - [x] Tombstoned pages are not recreated and show tombstone diagnostics.
   Evidence: `./scripts/test-wiki.sh` writes a configured
-  tombstone, verifies materialization state reports `status = "tombstoned"`,
+  tombstone, verifies page lifecycle state reports `status = "tombstoned"`,
   verifies source/talk files and rendered routes are absent, and confirms the
   route 404s without redirecting.
 - [x] Browser-visible `/api/wiki/*` responses expose logical ids or redacted
@@ -302,7 +304,7 @@ renderer slice. This goal is the close-loop product milestone around it.
   refreshed `docs/goals/README.md` around the current wiki-runtime closure.
 - [x] Delete old renderer/package scripts that require host Node, runtime
   `npm install`, or source-tree assumptions in the installed app path. Evidence:
-  `scripts/build-macos-app.sh` pre-materializes and pre-renders
+  `scripts/build-macos-app.sh` creates configured pages and pre-renders
   `RuntimeDefaults/1Context/user-wiki/site` at build time; production-shape
   cleanup vendors the small `WikiEngine` production dependencies while package
   smoke still forbids package locks, executable npm shims, runtime package
@@ -365,8 +367,8 @@ renderer slice. This goal is the close-loop product milestone around it.
 
 ### 12. End-To-End Proof Bundle
 
-- [x] Clean dev runtime proof: initialize, materialize, render, serve, refresh,
-  fail render, recover last-good. Evidence:
+- [x] Clean dev runtime proof: initialize, page-create/publish, render, serve,
+  refresh, fail render, recover last-good. Evidence:
   `./scripts/test-wiki.sh`.
 - [x] Installed-path proof: same workflow against production-shaped paths
   without source-tree fallbacks. Evidence:
@@ -391,7 +393,7 @@ renderer slice. This goal is the close-loop product milestone around it.
 ## Notes
 
 - Current baseline: storage/behavior specs, runtime layout, typed Swift paths,
-  tracked defaults, materializer, materializer validation, render-contract
+  tracked defaults, Rust core page lifecycle validation, render-contract
   smoke, browser-contract smoke, custom-page fallback smoke, setup-state schema
   smoke, local API redaction tests, wiki-engine unit tests, package smoke,
   installed-path smoke, reinstall preservation, agent authoring, and render

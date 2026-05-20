@@ -1,33 +1,39 @@
 # 1Context Wiki Web Contract
 
-This contract keeps the public Swift shell small while still letting the wiki
+This contract keeps the public macOS shell small while still letting the wiki
 improve quickly. It is intentionally a local-first version of the cloud web
 contract: the browser sees portable static artifacts and stable `/api/wiki/*`
-routes, while the host adapter can be local Swift/Caddy today or cloud CDN/API
-infrastructure later.
+routes, while the host adapter can be local Swift/Caddy plus the portable wiki
+core today or cloud CDN/API infrastructure later.
 
 ## Ownership
 
-Swift owns local web infrastructure and served-site uptime:
+The macOS host owns local web infrastructure and served-site uptime:
 
 - starts and stops the packaged Caddy process
 - chooses and reports the canonical local URL
 - writes Caddy config, pid, state, and logs under 1Context app paths
 - prepares the private local wiki shell in `wiki-site/current`
-- mechanically gates candidate static bundles before swapping them into
-  `wiki-site/current`
-- publishes the last-good rendered wiki artifacts in `wiki-site/current`
+- delegates wiki lifecycle, talk/mail, notification, validation, and
+  publication semantics to the portable wiki core
 - installs or repairs the required local HTTPS setup through an explicit admin
   authorization flow
 - does not decide whether wiki prose, frontmatter, routes, or agent edits are
   semantically correct
+
+The portable wiki core owns mechanical safe-to-serve publication:
+
+- validates candidate static bundles before promotion
+- publishes the last-good rendered wiki artifacts in `wiki-site/current`
+- exposes redacted dynamic `/api/wiki/*` behavior through the daemon adapter
+- preserves last-good output on failure
 
 Caddy owns serving:
 
 - binds only to `127.0.0.1`
 - serves the wiki on a high local TLS backend port owned by the user process
 - serves static wiki files directly
-- reverse-proxies dynamic `/api/wiki/*` routes to the Swift daemon adapter
+- reverse-proxies dynamic `/api/wiki/*` routes to the wiki daemon adapter
 - does not know about memory jobs, imports, screen capture, or agent state
 
 The bundled 1Context ServiceManagement helper owns only `127.0.0.1:443`. It
@@ -60,12 +66,13 @@ That keeps app readiness off local DNS entirely. Diagnose additionally probes
 `https://localhost/__1context/health` through the privileged proxy and the
 branded host health URL, but those probes are classified separately.
 
-The Swift daemon owns the local dynamic wiki API:
+The wiki daemon owns the local dynamic wiki API:
 
 - `GET /api/wiki/health`
 - `GET /api/wiki/search?q=...`
 - `GET /api/wiki/bookmarks`
 - `GET`, `PATCH`, and `POST /api/wiki/state`
+- future inbox/status routes backed by `wiki.mail.*` and `wiki.notify.*`
 
 These routes are product contract, not Caddy contract. Browser code should only
 call relative `/api/wiki/*` paths so the same static site can run behind local
@@ -96,10 +103,11 @@ The browser always sees the last successful published render from
 report an uninitialized or failed wiki state instead of hiding it behind a
 placeholder page.
 
-Published static artifacts remain portable. `site-manifest.json`,
-`content-index.json`, `wiki-stats.json`, and static `api/wiki/*.json` files are
-kept in the site root for cloud export, static fallback, and inspection. Local
-dynamic behavior comes from the Swift daemon API adapter.
+Published static artifacts remain portable. `.1context/route-manifest.json`,
+`.1context/content-index.json`, markdown twins, and any static
+`api/wiki/*.json` files are kept with the site for cloud export, static
+fallback, and inspection. Local dynamic behavior comes from the wiki daemon API
+adapter, currently hosted by Swift and targeted to move into the portable core.
 
 Refresh does not blank the site. It publishes existing rendered artifacts when
 they are still valid, and rerenders only when there is no servable render or
@@ -107,15 +115,16 @@ the render manifest no longer matches its inputs.
 
 Agents and memory jobs do not publish. They may read the wiki, propose or apply
 authorized source edits, leave reasoning in talk folders, and cite evidence.
-Memory core owns semantic validation and publish candidate creation. Swift owns
-only mechanical safe-to-serve checks and the atomic swap. If source edits fail
-semantic validation or a candidate bundle fails mechanical checks, the browser
-continues serving the last good `wiki-site/current`.
+Memory agents own semantic proposals and accepted source changes. The portable
+wiki core owns mechanical safe-to-serve checks and the atomic swap. Swift hosts
+that core on macOS. If source edits fail semantic validation or a candidate
+bundle fails mechanical checks, the browser continues serving the last good
+`wiki-site/current`.
 
 Agent-facing status should be concise. Startup context may say that the current
-site is healthy, that source has unpublished edits, or that a targeted semantic
-repair is needed. Agents should not receive renderer logs or Swift bundle-gate
-internals as ordinary work.
+site is healthy, that source has unpublished edits, that inbox mail is waiting,
+or that a targeted semantic repair is needed. Agents should not receive renderer
+logs or publisher internals as ordinary work.
 
 ## Lifecycle
 
@@ -126,11 +135,12 @@ should report the missing requirement instead of starting a fallback web edge.
 Quitting 1Context stops Caddy; uninstall removes the ServiceManagement helper and
 trusted local CA.
 
-The daemon owns runtime state, the local wiki API adapter, and the
-`wiki.refresh` publication entrypoint. Memory publication extends the same
-static site and `/api/wiki/*` contract without changing the local HTTPS edge.
-Stopping the daemon must not tear down Caddy; already-published static pages
-should still load, with dynamic API calls degrading cleanly.
+The daemon owns runtime state, the local wiki API adapter, inbox/notification
+API state, and the `wiki.publish` publication entrypoint. Memory publication
+extends the same static site and `/api/wiki/*` contract without changing the
+local HTTPS edge. Stopping the daemon must not tear down Caddy;
+already-published static pages should still load, with dynamic API calls
+degrading cleanly.
 
 ## Cloud Compatibility
 
@@ -149,7 +159,7 @@ The local adapter must not leak into the web contract:
 - No bundled memory-core source checkout in the app release.
 - No direct serving from generated source directories.
 - No development/operator goal pages in the installed user wiki.
-- No semantic wiki validation in Swift.
+- No semantic wiki validation in the macOS host.
 - No agent or hired job directly publishes the served wiki.
 - No user-installed Caddy dependency; release artifacts bundle Caddy.
 - No port fallback for the canonical product URL.

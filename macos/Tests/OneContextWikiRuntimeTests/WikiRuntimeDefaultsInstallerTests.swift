@@ -65,7 +65,7 @@ struct WikiRuntimeDefaultsInstallerTests {
         "runtime_defaults_source": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
         "runtime_defaults_site": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
         "wiki_engine": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
-        "materializer": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "wiki_core": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
         "renderer": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
         "manifest_writer": "1111111111111111111111111111111111111111111111111111111111111111"
       },
@@ -109,7 +109,7 @@ struct WikiRuntimeDefaultsInstallerTests {
     #expect(result.copied.contains("context-engine/prompts/agent.md"))
     #expect(result.packagedManifest?.releaseVersion == "0.1.test")
     #expect(result.packagedManifest?.runtimeDefaultsSourceHash == "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
-    #expect(result.packagedManifest?.materializerHash == "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee")
+    #expect(result.packagedManifest?.wikiCoreHash == "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee")
     #expect(result.packagedManifest?.rendererHash == "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")
     #expect(result.packagedManifest?.gitCommit == "dddddddddddddddddddddddddddddddddddddddd")
     #expect(result.packagedManifest?.gitDirty == false)

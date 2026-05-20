@@ -44,13 +44,13 @@
       <div class="decision">
         <h3>Use one boring wiki pipeline</h3>
         <p>
-          The durable source lives as user-owned Markdown under
-          <code>~/1Context/wiki</code>. The renderer writes rebuildable outputs
-          into a staging directory. Memory core validates wiki semantics. The
-          app mechanically gates and atomically publishes a safe static bundle into
-          <code>~/Library/Application Support/1Context/wiki-site/current</code>.
-          Caddy serves only the current bundle. The Swift API serves only small
-          dynamic state and search over the published content index.
+          The durable source lives as user-owned Markdown, talk, mail, and
+          ledgers under <code>~/1Context/user-wiki</code> and
+          <code>~/1Context/context-engine</code>. The renderer writes
+          rebuildable outputs into a staging directory. The portable wiki core
+          owns lifecycle, inbox routing, notification wakeups, validation, and
+          publication. The macOS app hosts that core and Caddy serves only the
+          current last-good bundle.
         </p>
       </div>
 
@@ -101,7 +101,7 @@
           <tr>
             <td>Renderer</td>
             <td>The first-class <code>wiki-engine/</code> renders Markdown, talk folders, routes, and indexes.</td>
-            <td>Swift calls the bundled renderer and preserves the last good site on render failure.</td>
+            <td>The portable publisher calls the bundled renderer and preserves the last good site on render failure.</td>
           </tr>
           <tr>
             <td>Routes and indexes</td>
@@ -110,8 +110,8 @@
           </tr>
           <tr>
             <td>Installed local web</td>
-            <td>Swift/Caddy serves <code>wiki-site/current</code> and dynamic <code>/api/wiki/*</code>.</td>
-            <td>The daemon installs runtime defaults, renders, gates, and atomically publishes.</td>
+            <td>The macOS host and Caddy serve <code>wiki-site/current</code> and dynamic <code>/api/wiki/*</code>.</td>
+            <td>The wiki core installs runtime defaults, routes talk/mail, renders, gates, and atomically publishes.</td>
           </tr>
           <tr>
             <td>User wiki source</td>
@@ -125,15 +125,15 @@
     <section id="target-model">
       <h2>Target Model</h2>
       <pre class="mermaid">flowchart LR
-  UserSource["User Markdown source\n~/1Context/wiki"]
-  Ensure["Ensure scaffolding\nfamilies, source, talk, templates"]
+  UserSource["User wiki + engine data\n~/1Context/user-wiki\n~/1Context/context-engine"]
+  Ensure["Ensure scaffolding\nfamilies, source, talk, mail, templates"]
   Render["Deterministic render\nHTML, md twins, manifests"]
   Validate["Semantic validation\nroutes, privacy, links, checksums"]
   Gate["Mechanical bundle gate\nsafe paths, required files, atomic swap"]
-  Bundle["Static publish bundle\nsite-manifest, content-index, stats"]
+  Bundle["Static publish bundle\nroute-manifest, content-index, markdown twins"]
   Swap["Atomic swap\nnext -> current, current -> previous"]
   Browser["Browser\nhttps://wiki.1context.localhost"]
-  API["Swift /api/wiki/*\nhealth, search, state, bookmarks"]
+  API["Wiki API\nhealth, search, state, inbox"]
 
   UserSource --> Ensure --> Render --> Validate --> Bundle --> Gate --> Swap --> Browser
   Browser --> API
@@ -141,9 +141,9 @@
       </pre>
 
       <p>
-        The renderer and memory jobs may be Python/Node internally. The browser
-        never depends on those processes. It only sees static files and the small
-        Swift API surface.
+        The renderer and memory jobs may use their own implementation details.
+        The browser never depends on those processes. It only sees static files
+        and the small wiki API surface.
       </p>
     </section>
 
@@ -205,9 +205,9 @@
             tool-or-idea.talk/
           generated/
     generated/
-      site-manifest.json
-      content-index.json
-      wiki-stats.json
+      .1context/
+        route-manifest.json
+        content-index.json
   imports/
     sessions/
     files/
@@ -238,9 +238,9 @@
       for-you/
       projects/
       topics/
-      site-manifest.json
-      content-index.json
-      wiki-stats.json
+      .1context/
+        route-manifest.json
+        content-index.json
       api/
         wiki/
           pages.json
@@ -299,22 +299,22 @@ memory-core/src/onectx/wiki_interface/
         <tbody>
           <tr>
             <td><code>GET /api/wiki/health</code></td>
-            <td>Swift daemon</td>
+            <td>Wiki daemon</td>
             <td>Reports API status, render state, current site path, and last published time.</td>
           </tr>
           <tr>
             <td><code>GET /api/wiki/search?q=...</code></td>
-            <td>Swift daemon</td>
+            <td>Wiki daemon</td>
             <td>Searches the published <code>content-index.json</code>; no source reads.</td>
           </tr>
           <tr>
             <td><code>GET /api/wiki/bookmarks</code></td>
-            <td>Swift daemon</td>
+            <td>Wiki daemon</td>
             <td>Reads browser/user state from app support.</td>
           </tr>
           <tr>
             <td><code>GET/PATCH/POST /api/wiki/state</code></td>
-            <td>Swift daemon</td>
+            <td>Wiki daemon</td>
             <td>Small UI state, capped body size, no wiki source mutation.</td>
           </tr>
           <tr>
@@ -427,9 +427,10 @@ Durable facts go here only when they are explicit or evidence-backed.
     <section id="validation-boundary">
       <h2>Validation Boundary</h2>
       <p>
-        Swift has no semantic understanding of whether agents wrote a good page,
-        finished a thought, or made the right curation decision. That is
-        intentional. Swift's job is to keep the wiki up.
+        The macOS host has no semantic understanding of whether agents wrote a
+        good page, finished a thought, or made the right curation decision.
+        That is intentional. Its job is to host the wiki core and keep local
+        serving healthy.
       </p>
 
       <table>
@@ -447,13 +448,13 @@ Durable facts go here only when they are explicit or evidence-backed.
             <td>Assume their output is automatically safe to publish.</td>
           </tr>
           <tr>
-            <td>Python memory core</td>
-            <td>Semantic wiki validation: family manifests, frontmatter, routes, links, privacy tiers, render manifests, content indexes, and stats.</td>
-            <td>Serve browser traffic in the public app or mutate app-owned current output in place.</td>
+            <td>Portable wiki core</td>
+            <td>Page lifecycle, talk/mail routing, notification wakeups, validation, render orchestration, publish promotion, manifests, indexes, and stats.</td>
+            <td>Decide open-ended memory truth or run agent reasoning.</td>
           </tr>
           <tr>
-            <td>Swift static bundle gate</td>
-            <td>Mechanical uptime checks: required files exist, JSON parses, paths stay inside the bundle, symlinks are rejected, private/internal/talk/source artifacts are excluded, and atomic swap can complete.</td>
+            <td>macOS host</td>
+            <td>App UI, permissions, bundle resource lookup, service lifecycle, Caddy supervision, and opening the local wiki.</td>
             <td>Read source Markdown, judge page meaning, repair agent prose, or duplicate family/frontmatter logic.</td>
           </tr>
           <tr>
@@ -478,15 +479,18 @@ Durable facts go here only when they are explicit or evidence-backed.
       <h2>Agent Contract</h2>
       <p>
         Agents should not think about publishing. Their contract is to read the
-        wiki, propose or apply source edits when authorized, leave reasoning in
-        talk folders, and cite evidence. Memory core renders and validates.
-        Swift keeps the served wiki up.
+        wiki, register, read inbox headers, propose or apply source edits when
+        authorized, leave reasoning in talk folders, mark mail, and cite
+        evidence. The wiki core renders, validates, routes mail, and publishes.
+        The macOS host keeps the served wiki reachable.
       </p>
 
       <pre><code>Agent verbs:
   read wiki
+  register and read inbox
   propose or update source
   leave reasoning in talk
+  mark mail and respond to notifications
   cite evidence
   stop
 
@@ -525,7 +529,7 @@ Agent non-goals:
           <tr>
             <td>Mechanical publish gate failed</td>
             <td><code>Current site stayed on last good publish.</code></td>
-            <td>Usually no action. The runtime or app maintainer handles bundle-gate failures.</td>
+            <td>Usually no action. The runtime or app maintainer handles publisher failures.</td>
           </tr>
         </tbody>
       </table>
@@ -547,29 +551,29 @@ Agent non-goals:
       <h2>Publish Flow</h2>
       <pre class="mermaid">sequenceDiagram
   participant D as Daemon
-  participant M as Memory core
+  participant W as Wiki core
   participant S as Source wiki
+  participant T as Talk/mail
   participant R as Renderer
-  participant V as Semantic Validator
-  participant P as Python Publisher
-  participant G as Swift Bundle Gate
+  participant V as Validator
+  participant P as Publisher
   participant C as Caddy
 
-  D->>M: request publish or refresh
-  M->>S: ensure scaffolding
-  M->>R: render families into staging
-  R-->>M: render manifests and outputs
-  M->>V: validate routes, links, privacy, checksums
-  V-->>M: pass or fail report
+  D->>W: register, inbox, publish
+  W->>S: ensure pages and source
+  W->>T: route talk deliveries and notifications
+  W->>R: render families into staging
+  R-->>W: render manifests and outputs
+  W->>V: validate routes, links, privacy, checksums
+  V-->>W: pass or fail report
   alt pass
-    M->>P: build static bundle
+    W->>P: build static bundle
     P->>P: write publish-manifest.json
-    P->>G: hand off candidate bundle
-    G->>G: mechanical safe-to-serve checks
-    G->>G: atomic swap next to current
+    P->>P: mechanical safe-to-serve checks
+    P->>P: atomic swap next to current
     C-->>D: serves new current site
   else fail
-    M->>P: record last-failure.json
+    W->>P: record last-failure.json
     C-->>D: keep last good current site
   end
       </pre>
@@ -577,9 +581,9 @@ Agent non-goals:
       <h3>Publication invariants</h3>
       <ul>
         <li><code>wiki-site/current</code> is always servable if any successful publish has ever happened.</li>
-        <li>Refresh never deletes <code>current</code> before <code>next</code> has passed semantic validation and mechanical bundle checks.</li>
-        <li>Swift performs only mechanical bundle checks; Python owns semantic wiki validation.</li>
-        <li>Agents never publish; they repair source when given a targeted semantic validation failure.</li>
+        <li>Refresh never deletes <code>current</code> before <code>next</code> has passed validation and mechanical bundle checks.</li>
+        <li>The wiki core owns validation, talk/mail routing, notification wakeups, and publish promotion.</li>
+        <li>Agents request publication through the wiki API; they do not mutate served output directly.</li>
         <li>Failure records are machine-readable and visible through diagnostics.</li>
         <li>Caddy never reads source Markdown or staging directories.</li>
         <li>The app can fall back to the bundled shell only when there is no last successful render.</li>
@@ -598,7 +602,7 @@ Agent non-goals:
 
       <h3>2. Create user wiki bootstrap</h3>
       <ul>
-        <li>Add a command that initializes <code>~/1Context/wiki</code> from seed family templates.</li>
+        <li>Add a command that initializes <code>~/1Context/user-wiki</code> and <code>~/1Context/context-engine</code> from seed family templates.</li>
         <li>Copy only source, family manifests, group manifests, and templates. Do not copy generated files.</li>
         <li>Make <code>wiki ensure</code> idempotent against the user wiki root.</li>
       </ul>
@@ -622,7 +626,7 @@ Agent non-goals:
       <ul>
         <li>Point agent startup context at the local wiki URL and published <code>content-index.json</code>.</li>
         <li>Summarize publish state into one or two lines from <code>last-success.json</code>, <code>last-failure.json</code>, and <code>current-source-state.json</code>.</li>
-        <li>Give agents targeted repair tasks for semantic validation failures; do not expose mechanical bundle-gate work as normal agent work.</li>
+        <li>Give agents targeted repair tasks and inbox headers for semantic validation failures; do not expose mechanical publish internals as normal agent work.</li>
         <li>Use <code>Your Context</code> as the primary human profile page.</li>
         <li>Use typed topic pages for people, organizations, tools, and agent profiles.</li>
         <li>Keep publishing out of agent prompts: agents read, edit or propose source, write talk notes, cite evidence, and stop.</li>
@@ -653,10 +657,10 @@ Agent non-goals:
           </tr>
           <tr>
             <td>Agent startup context</td>
-            <td>Tests that agents receive concise wiki status and targeted semantic repair messages, not renderer logs or Swift bundle-gate internals.</td>
+            <td>Tests that agents receive concise wiki status, inbox headers, and targeted semantic repair messages, not renderer logs or publisher internals.</td>
           </tr>
           <tr>
-            <td>Swift local web</td>
+            <td>macOS local web</td>
             <td>Tests for static bundle gate checks, Caddy root, API search over <code>content-index.json</code>, and refresh not blanking <code>current</code>.</td>
           </tr>
           <tr>
@@ -676,8 +680,9 @@ Agent non-goals:
         </li>
         <li>
           <span class="status">Bootstrap works:</span> a fresh user install can
-          create <code>~/1Context/wiki</code> with the four seed families and no
-          generated content committed as source.
+          create <code>~/1Context/user-wiki</code> and <code>~/1Context/context-engine</code>
+          with the seed families, talk/mail directories, and no generated
+          content committed as source.
         </li>
         <li>
           <span class="status">Publish works:</span> one command renders,
@@ -691,8 +696,9 @@ Agent non-goals:
         </li>
         <li>
           <span class="status">Agent context works:</span> agents can read the
-          wiki URL, content index, Your Context, Projects, Topics, and concise
-          wiki status without learning how publication works.
+          wiki URL, content index, inbox headers, Your Context, Projects,
+          Topics, and concise wiki status without learning how publication
+          works.
         </li>
       </ol>
     </section>
@@ -703,8 +709,10 @@ Agent non-goals:
         <article class="risk">
           <h3>Too many roots</h3>
           <p>
-            Keep durable source under <code>~/1Context/wiki</code> and served
-            output under app support. Do not add another canonical wiki location.
+            Keep durable source under <code>~/1Context/user-wiki</code>,
+            collaboration state under <code>~/1Context/context-engine</code>,
+            and served output under app support. Do not add another canonical
+            wiki location.
           </p>
         </article>
         <article class="risk">

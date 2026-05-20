@@ -135,6 +135,7 @@ export function renderPage(source, { slug, shellOptions = {} } = {}) {
       frontmatter: subFm,
       bodyHtml: strippedBodyHtml,
       tocHtml: subTocHtml,
+      siteNavigation: shellOptions.siteNavigation || null,
     });
     const subMdBody = stripLeadingH2Md(sec.body);
     const subMd = stringifyFrontmatter(subFm) + '\n' + subMdBody;

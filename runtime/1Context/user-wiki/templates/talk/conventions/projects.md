@@ -39,9 +39,11 @@ created: "{{ created_at }}"
 target_section: "{{ section_name }}"
 project_id: "{{ project_id }}"
 talk_for: "page://projects"
-status: proposed
+state: open
 evidence:
   - "{{ evidence_uri }}"
+attachments:
+  - "{{ attachment_uri }}"
 ---
 ```
 
@@ -61,6 +63,6 @@ Evidence:
 
 ## Decision Shape
 
-Decision entries use `kind: decided`, point `parent:` at the proposal stem, and
+Decision entries use `kind: decision`, point `parent:` at the proposal stem, and
 state whether the project index changed. State changes should be dated rather
 than silently rewritten.

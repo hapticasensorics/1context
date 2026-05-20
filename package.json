@@ -1,0 +1,13 @@
+{
+  "name": "1context-public-launch",
+  "private": true,
+  "description": "Dev-only browser harness dependencies for 1Context public launch.",
+  "scripts": {
+    "test:wiki:browser": "playwright test"
+  },
+  "license": "Apache-2.0",
+  "type": "commonjs",
+  "devDependencies": {
+    "@playwright/test": "^1.60.0"
+  }
+}

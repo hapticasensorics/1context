@@ -123,6 +123,8 @@ resolve_caddy_source() {
 
 swift build --package-path "$MACOS_DIR" -c release --arch "$ARCH"
 BIN_DIR="$(swift build --package-path "$MACOS_DIR" -c release --arch "$ARCH" --show-bin-path)"
+cargo build --release --package onecontext-wiki-daemon
+WIKI_CORE_BIN="$ROOT/target/release/onecontext-wiki"
 
 rm -rf "$APP_DIR"
 mkdir -p "$MACOS_APP_DIR" "$RESOURCES_DIR" "$FRAMEWORKS_DIR" "$LAUNCH_DAEMONS_DIR"
@@ -130,6 +132,7 @@ mkdir -p "$MACOS_APP_DIR" "$RESOURCES_DIR" "$FRAMEWORKS_DIR" "$LAUNCH_DAEMONS_DI
 cp "$BIN_DIR/OneContextMenuBar" "$MACOS_APP_DIR/1Context"
 cp "$BIN_DIR/1context" "$MACOS_APP_DIR/1context-cli"
 cp "$BIN_DIR/1contextd" "$MACOS_APP_DIR/1contextd"
+cp "$WIKI_CORE_BIN" "$MACOS_APP_DIR/onecontext-wiki"
 cp "$BIN_DIR/1context-local-web-proxy" "$RESOURCES_DIR/1context-local-web-proxy"
 cp "$MENU_ICON_SOURCE" "$RESOURCES_DIR/MenuBarIcon.png"
 if [[ ! -d "$BIN_DIR/Sparkle.framework" ]]; then
@@ -171,27 +174,18 @@ rsync -a \
   --exclude 'README.md' \
   "$ROOT/runtime/1Context/" \
   "$RUNTIME_DEFAULTS_WORK_DIR/1Context/"
-python3 "$ROOT/wiki-engine/tools/materialize-wiki-pages.py" "$RUNTIME_DEFAULTS_WORK_DIR" >/dev/null
-node "$ROOT/wiki-engine/tools/render-site.mjs" \
-  --source-root "$RUNTIME_DEFAULTS_WORK_DIR/1Context/user-wiki/source" \
-  --output "$RUNTIME_DEFAULTS_WORK_DIR/1Context/user-wiki/site" \
-  --result-json "$RUNTIME_DEFAULTS_WORK_DIR/render-site-result.json" >/dev/null
-GIT_COMMIT="$(git -C "$ROOT" rev-parse HEAD 2>/dev/null || printf 'unknown')"
-RUNTIME_DEFAULTS_MANIFEST_ARGS=(
-  --runtime-defaults-root "$RUNTIME_DEFAULTS_WORK_DIR/1Context"
-  --wiki-engine-root "$ROOT/wiki-engine"
-  --render-result "$RUNTIME_DEFAULTS_WORK_DIR/render-site-result.json"
-  --version "$VERSION"
-  --git-commit "$GIT_COMMIT"
-)
-if ! git -C "$ROOT" diff --quiet --ignore-submodules -- 2>/dev/null \
-  || ! git -C "$ROOT" diff --cached --quiet --ignore-submodules -- 2>/dev/null; then
-  RUNTIME_DEFAULTS_MANIFEST_ARGS+=(--git-dirty)
-fi
-RUNTIME_DEFAULTS_MANIFEST_ARGS+=(
-  --output "$RUNTIME_DEFAULTS_WORK_DIR/1Context/.1context/runtime-defaults-manifest.json"
-)
-python3 "$ROOT/wiki-engine/tools/write-runtime-defaults-manifest.py" "${RUNTIME_DEFAULTS_MANIFEST_ARGS[@]}"
+"$WIKI_CORE_BIN" --root "$RUNTIME_DEFAULTS_WORK_DIR/1Context" page-create-all >/dev/null
+rm -rf "$RUNTIME_DEFAULTS_WORK_DIR/1Context/context-engine/runs"
+mkdir -p "$RUNTIME_DEFAULTS_WORK_DIR/1Context/context-engine/runs"
+"$WIKI_CORE_BIN" --root "$RUNTIME_DEFAULTS_WORK_DIR/1Context" publish \
+  --wiki-engine "$ROOT/wiki-engine" \
+  --node node \
+  --trigger runtime-defaults \
+  --force >/dev/null
+cp "$RUNTIME_DEFAULTS_WORK_DIR/1Context/context-engine/runs/wiki-publish-result.json" \
+  "$RUNTIME_DEFAULTS_WORK_DIR/render-site-result.json"
+rm -rf "$RUNTIME_DEFAULTS_WORK_DIR/1Context/context-engine/runs"
+mkdir -p "$RUNTIME_DEFAULTS_WORK_DIR/1Context/context-engine/runs"
 ditto "$RUNTIME_DEFAULTS_WORK_DIR/1Context" "$RUNTIME_DEFAULTS_RESOURCE_DIR/1Context"
 rsync -a \
   --exclude 'package-lock.json' \
@@ -200,12 +194,37 @@ rsync -a \
   --exclude 'node_modules/.bin' \
   --exclude 'node_modules/.package-lock.json' \
   --exclude 'node_modules/*/bin' \
-  --exclude 'tools/materialize-wiki-pages.py' \
   --exclude 'tools/serve-site.mjs' \
   --exclude 'tools/write-runtime-defaults-manifest.py' \
   --exclude 'README.md' \
   "$ROOT/wiki-engine/" \
   "$WIKI_ENGINE_RESOURCE_DIR/"
+
+MANIFEST_WRITTEN=0
+write_runtime_defaults_manifest() {
+  local git_commit
+  git_commit="$(git -C "$ROOT" rev-parse HEAD 2>/dev/null || printf 'unknown')"
+
+  local args=(
+    --runtime-defaults-root "$RUNTIME_DEFAULTS_RESOURCE_DIR/1Context"
+    --wiki-engine-root "$WIKI_ENGINE_RESOURCE_DIR"
+    --wiki-core-bin "$MACOS_APP_DIR/onecontext-wiki"
+    --manifest-writer "$ROOT/wiki-engine/tools/write-runtime-defaults-manifest.py"
+    --manifest-writer-display-path "wiki-engine/tools/write-runtime-defaults-manifest.py"
+    --render-result "$RUNTIME_DEFAULTS_WORK_DIR/render-site-result.json"
+    --version "$VERSION"
+    --git-commit "$git_commit"
+  )
+  if ! git -C "$ROOT" diff --quiet --ignore-submodules -- 2>/dev/null \
+    || ! git -C "$ROOT" diff --cached --quiet --ignore-submodules -- 2>/dev/null; then
+    args+=(--git-dirty)
+  fi
+  args+=(
+    --output "$RUNTIME_DEFAULTS_RESOURCE_DIR/1Context/.1context/runtime-defaults-manifest.json"
+  )
+  python3 "$ROOT/wiki-engine/tools/write-runtime-defaults-manifest.py" "${args[@]}"
+  MANIFEST_WRITTEN=1
+}
 
 ICONSET="$ROOT/dist/AppIcon.iconset"
 rm -rf "$ICONSET"
@@ -377,11 +396,16 @@ if [[ "$SIGNING_MODE" == "developer-id" ]]; then
   codesign_release \
     --entitlements "$MACOS_DIR/entitlements.plist" \
     --sign "$IDENTITY" \
+    "$MACOS_APP_DIR/onecontext-wiki" >/dev/null
+  codesign_release \
+    --entitlements "$MACOS_DIR/entitlements.plist" \
+    --sign "$IDENTITY" \
     "$RESOURCES_DIR/1context-local-web-proxy" >/dev/null
   codesign_release \
     --entitlements "$MACOS_DIR/entitlements.plist" \
     --sign "$IDENTITY" \
     "$MACOS_APP_DIR/1Context" >/dev/null
+  write_runtime_defaults_manifest
   codesign_release \
     --entitlements "$MACOS_DIR/entitlements.plist" \
     --sign "$IDENTITY" \
@@ -391,9 +415,14 @@ elif command -v codesign >/dev/null 2>&1; then
   codesign --force --sign - "$CADDY_BUNDLE_DIR/caddy" >/dev/null
   codesign --force --sign - "$MACOS_APP_DIR/1context-cli" >/dev/null
   codesign --force --sign - "$MACOS_APP_DIR/1contextd" >/dev/null
+  codesign --force --sign - "$MACOS_APP_DIR/onecontext-wiki" >/dev/null
   codesign --force --sign - "$RESOURCES_DIR/1context-local-web-proxy" >/dev/null
   codesign --force --sign - "$MACOS_APP_DIR/1Context" >/dev/null
+  write_runtime_defaults_manifest
   codesign --force --sign - "$APP_DIR" >/dev/null
+fi
+if [[ "$MANIFEST_WRITTEN" != "1" ]]; then
+  write_runtime_defaults_manifest
 fi
 
 if [[ "$ONECONTEXT_RELEASE_CHANNEL" != "dev" ]]; then

@@ -6,6 +6,7 @@ template_id: topic-index
 template_version: template-0.1.0
 title: "{{ title }}"
 slug: "{{ slug }}"
+route: "{{ route }}"
 section: reference
 access: "{{ access_tier }}"
 summary: "{{ summary }}"

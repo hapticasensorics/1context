@@ -39,7 +39,7 @@ public struct WikiRuntimeDefaultsManifestIdentity: Codable, Equatable, Sendable 
   public var runtimeDefaultsSourceHash: String
   public var runtimeDefaultsSiteHash: String
   public var wikiEngineHash: String
-  public var materializerHash: String?
+  public var wikiCoreHash: String?
   public var rendererHash: String?
   public var manifestWriterHash: String?
   public var gitCommit: String?
@@ -54,7 +54,7 @@ public struct WikiRuntimeDefaultsManifestIdentity: Codable, Equatable, Sendable 
     runtimeDefaultsSourceHash: String,
     runtimeDefaultsSiteHash: String,
     wikiEngineHash: String,
-    materializerHash: String? = nil,
+    wikiCoreHash: String? = nil,
     rendererHash: String? = nil,
     manifestWriterHash: String? = nil,
     gitCommit: String? = nil,
@@ -68,7 +68,7 @@ public struct WikiRuntimeDefaultsManifestIdentity: Codable, Equatable, Sendable 
     self.runtimeDefaultsSourceHash = runtimeDefaultsSourceHash
     self.runtimeDefaultsSiteHash = runtimeDefaultsSiteHash
     self.wikiEngineHash = wikiEngineHash
-    self.materializerHash = materializerHash
+    self.wikiCoreHash = wikiCoreHash
     self.rendererHash = rendererHash
     self.manifestWriterHash = manifestWriterHash
     self.gitCommit = gitCommit
@@ -113,7 +113,7 @@ private struct RuntimeDefaultsManifestDocument: Decodable {
     var runtimeDefaultsSource: String
     var runtimeDefaultsSite: String
     var wikiEngine: String
-    var materializer: String?
+    var wikiCore: String?
     var renderer: String?
     var manifestWriter: String?
 
@@ -121,7 +121,7 @@ private struct RuntimeDefaultsManifestDocument: Decodable {
       case runtimeDefaultsSource = "runtime_defaults_source"
       case runtimeDefaultsSite = "runtime_defaults_site"
       case wikiEngine = "wiki_engine"
-      case materializer
+      case wikiCore = "wiki_core"
       case renderer
       case manifestWriter = "manifest_writer"
     }
@@ -331,7 +331,7 @@ public final class WikiRuntimeDefaultsInstaller: @unchecked Sendable {
       runtimeDefaultsSourceHash: manifest.hashes.runtimeDefaultsSource,
       runtimeDefaultsSiteHash: manifest.hashes.runtimeDefaultsSite,
       wikiEngineHash: manifest.hashes.wikiEngine,
-      materializerHash: manifest.hashes.materializer,
+      wikiCoreHash: manifest.hashes.wikiCore,
       rendererHash: manifest.hashes.renderer,
       manifestWriterHash: manifest.hashes.manifestWriter,
       gitCommit: manifest.sourceControl?.gitCommit,

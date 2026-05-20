@@ -49,7 +49,6 @@ runtime/
           next/
           previous/
         indexes/
-          lancedb/
         local-web/
           caddy/
         setup/
@@ -87,13 +86,7 @@ workspace: prompts, roles, jobs, inbox tasks, proposals, decisions, runs,
 artifacts, observations, ledgers, and index manifests.
 
 `runtime/Library/Application Support/1Context/` is app machinery: local web
-mirrors, sockets, staging, setup state, and derived indexes.
-
-LanceDB belongs under Application Support because it is rebuildable machinery:
-
-```text
-runtime/Library/Application Support/1Context/indexes/lancedb/
-```
+mirrors, sockets, staging, setup state, and rebuildable derived indexes.
 
 The user-owned rebuild contract belongs under the context engine:
 
@@ -132,7 +125,7 @@ scripts/init-dev-wiki-runtime.sh
   copies the runtime tree into runtime-test and optionally imports a local fixture
 
 scripts/test-wiki.sh
-  materializes the configured wiki, renders the site, serves it locally, and
+  creates the configured wiki source/talk files, renders the site, serves it locally, and
   checks source, talk, custom, menu, markdown-twin, and 404 routes in a browser
 ```
 
@@ -154,13 +147,14 @@ The helper expects fixture imports to be shaped like `runtime-test/`, with
 files only when the destination is missing. Existing edited files are left in
 place and reported as `skipped_modified` in setup state.
 
-After copying defaults and fixture files, the initializer materializes configured
-pages from `runtime-test/1Context/user-wiki/wiki.toml`. The registry is user
-data: it defines the available routes, family paths, templates, and talk
-defaults. Materialization creates only missing files, writes state to:
+After copying defaults and fixture files, the initializer creates configured
+source-backed pages from `runtime-test/1Context/user-wiki/wiki.toml`. The
+registry is user data: it defines the available routes, family paths, templates,
+and talk defaults. Page creation creates only missing files, writes lifecycle
+evidence to:
 
 ```text
-runtime-test/Library/Application Support/1Context/setup/wiki-page-materialize.toml
+runtime-test/1Context/user-wiki/.1context/page-ledger.jsonl
 ```
 
 and respects per-page tombstones such as:

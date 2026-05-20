@@ -39,7 +39,10 @@
 
   const STORE_PREFIX = 'opctx-';
   const HOST_STATE_API = '/api/wiki/state';
+  const HOST_STATE_UNAVAILABLE_KEY = 'opctx-host-state-unavailable-until';
+  const HOST_STATE_RETRY_MS = 60_000;
   let hostStateExists = false;
+  let hostStateWritable = true;
   let hostStateSyncTimer = null;
 
   function loadSetting(s) {
@@ -104,19 +107,53 @@
     };
   }
 
+  function markHostStateUnavailable() {
+    try {
+      sessionStorage.setItem(HOST_STATE_UNAVAILABLE_KEY, String(Date.now() + HOST_STATE_RETRY_MS));
+    } catch (_) {}
+  }
+
+  function clearHostStateUnavailable() {
+    try {
+      sessionStorage.removeItem(HOST_STATE_UNAVAILABLE_KEY);
+    } catch (_) {}
+  }
+
+  function hostStateUnavailable() {
+    try {
+      const unavailableUntil = Number(sessionStorage.getItem(HOST_STATE_UNAVAILABLE_KEY) || 0);
+      if (unavailableUntil > Date.now()) return true;
+      if (unavailableUntil) sessionStorage.removeItem(HOST_STATE_UNAVAILABLE_KEY);
+    } catch (_) {}
+    return false;
+  }
+
   async function hydrateHostState() {
+    if (hostStateUnavailable()) return;
+
     let data = null;
     try {
       const res = await fetch(HOST_STATE_API, { credentials: 'same-origin' });
-      if (!res.ok) return;
+      if (!res.ok) {
+        markHostStateUnavailable();
+        return;
+      }
+      clearHostStateUnavailable();
       data = await res.json();
     } catch (_) {
+      markHostStateUnavailable();
       return;
     }
 
-    hostStateExists = !!(data && data._storage && data._storage.exists);
+    const storage = (data && data._storage) || {};
+    hostStateExists = !!storage.exists;
+    hostStateWritable = storage.writable !== false;
+    if (!hostStateWritable) {
+      clearTimeout(hostStateSyncTimer);
+      hostStateSyncTimer = null;
+    }
     if (!hostStateExists) {
-      if (Object.keys(collectStoredSettings()).length || loadBookmarks().length) {
+      if (hostStateWritable && (Object.keys(collectStoredSettings()).length || loadBookmarks().length)) {
         scheduleHostStateSync();
       }
       return;
@@ -128,6 +165,8 @@
   }
 
   function scheduleHostStateSync() {
+    if (hostStateUnavailable()) return;
+    if (!hostStateWritable) return;
     clearTimeout(hostStateSyncTimer);
     hostStateSyncTimer = setTimeout(syncHostState, 180);
   }
@@ -135,6 +174,7 @@
   async function syncHostState() {
     clearTimeout(hostStateSyncTimer);
     hostStateSyncTimer = null;
+    if (!hostStateWritable) return;
     try {
       const res = await fetch(HOST_STATE_API, {
         method: 'PATCH',
@@ -142,8 +182,14 @@
         credentials: 'same-origin',
         body: JSON.stringify(collectHostState()),
       });
-      if (res.ok) hostStateExists = true;
+      if (res.ok) {
+        clearHostStateUnavailable();
+        hostStateExists = true;
+      } else {
+        markHostStateUnavailable();
+      }
     } catch (_) {
+      markHostStateUnavailable();
       // Static-file mode or daemon down: localStorage remains the cache.
     }
   }
@@ -446,6 +492,7 @@
   let searchDebounceTimer = null;
   let searchToken = 0;
   let searchResultsByRoute = new Map();
+  let suppressHeaderSearchOpen = false;
   const SEARCH_DEBOUNCE_MS = 280;
 
   function renderSearchModal() {
@@ -464,6 +511,11 @@
                    autocomplete="off" spellcheck="false">
           </label>
           <span class="opctx-modal-shortcut" aria-hidden="true">⌘K</span>
+          <button type="button"
+                  class="opctx-share-modal-close opctx-search-modal-close"
+                  data-search-close
+                  aria-label="Close search"
+                  title="Close search">${ICON.close}</button>
         </div>
         <div class="opctx-modal-body">
           <ul class="opctx-search-results" role="listbox"
@@ -501,7 +553,14 @@
     if (initialQuery.trim()) runSearch(initialQuery);
   }
 
-  function closeSearchModal() { closeModal(); }
+  function closeSearchModal() {
+    const returningToHeaderSearch = !!modalLastFocus?.closest?.('.opctx-header-search');
+    if (returningToHeaderSearch) suppressHeaderSearchOpen = true;
+    closeModal();
+    if (returningToHeaderSearch) {
+      setTimeout(() => { suppressHeaderSearchOpen = false; }, 0);
+    }
+  }
 
   function showSearchEmpty(empty) {
     const empt = document.getElementById('opctx-search-empty');
@@ -638,6 +697,9 @@
     if (!searchModal) return;
     // Tap/click on scrim (but not card) closes — touch-aware.
     addScrimDismiss(searchModal, closeSearchModal, /* onlyOnScrim */ true);
+    searchModal
+      .querySelector('[data-search-close]')
+      ?.addEventListener('click', closeSearchModal);
     // Click on a result row → navigate
     searchList.addEventListener('click', (ev) => {
       const btn = ev.target.closest('.opctx-search-result');
@@ -684,6 +746,7 @@
     const headerInput = document.querySelector('.opctx-header-search input');
     if (!headerInput) return;
     const openFromHeader = () => {
+      if (suppressHeaderSearchOpen) return;
       const value = headerInput.value || '';
       openSearchModal(value);
       if (value) searchInput.select();
@@ -1725,8 +1788,8 @@
   }
 
   /* =============================================================
-   * Agent UI — Reader / Agent toggle + informational note +
-   * content swap to raw markdown when in agent view.
+   * Agent UI — Reader / Agent toggle + content swap to raw markdown
+   * when in agent view.
    *
    * See agent-ui.md for the full design rationale. The short
    * version: humans get the rendered HTML view (default); a one-
@@ -1734,10 +1797,6 @@
    * fetched from the <link rel="alternate" type="text/markdown">
    * — making the agent-friendly thesis visible and demonstrable.
    *
-   * The informational note (layer E) is injected after the lead
-   * paragraph in reader view as a factual statement of where the
-   * markdown source lives. It's framed informationally, not
-   * imperatively, so it doesn't trip prompt-injection defenses.
    * ============================================================= */
 
   // Cache the original article body the first time we swap to agent
@@ -1787,6 +1846,21 @@
     return alt ? alt.getAttribute('href') : null;
   }
 
+  function _encodeRoutePath(route) {
+    return String(route || '')
+      .split('/')
+      .filter(Boolean)
+      .map(encodeURIComponent)
+      .join('/');
+  }
+
+  function _routeWithAudience(route, audienceSuffix) {
+    const parts = String(route || '').split('/').filter(Boolean);
+    if (!parts.length) return audienceSuffix ? `index${audienceSuffix}` : 'index';
+    if (audienceSuffix) parts[parts.length - 1] = `${parts[parts.length - 1]}${audienceSuffix}`;
+    return parts.join('/');
+  }
+
   // Pages that don't have a meaningful "talk" surface. Skip the
   // Talk toggle on these (theme demos, not articles).
   const _NON_ARTICLE_SLUGS = new Set([
@@ -1799,15 +1873,17 @@
     }
     const path = location.pathname.replace(/\.html$/, '').replace(/\/$/, '');
     const parts = path.split('/').filter(Boolean);
-    let last = parts[parts.length - 1] || 'index';
-    if (last === 'talk' && parts.length > 1) {
-      last = parts[parts.length - 2];
+    if (!parts.length) return 'index';
+    if (parts.length === 1 && parts[0] === 'talk') return 'index';
+    if (parts[parts.length - 1] === 'talk' && parts.length > 1) {
+      parts.pop();
     }
     // Strip suffixes to get the BASE slug. Order matters: `.talk`
     // first (it's the outermost suffix in `.internal.talk`), then
     // any audience suffix. Result: `for-you-2026-04-20.internal.talk`
     // → `for-you-2026-04-20`. The Talk button + audience switcher
     // use the base to compose audience-specific article + talk URLs.
+    let last = parts[parts.length - 1] || 'index';
     if (last.endsWith('.talk')) last = last.slice(0, -'.talk'.length);
     for (const aud of ['.internal', '.private', '.public']) {
       if (last.endsWith(aud)) {
@@ -1815,7 +1891,8 @@
         break;
       }
     }
-    return last;
+    parts[parts.length - 1] = last;
+    return parts.join('/');
   }
 
   function _onTalkPage() {
@@ -1977,10 +2054,22 @@
         const rawSlug = frontmatter?.slug || frontmatter?.doc_id || _currentArticleSlug() || '';
         const baseSlug = String(frontmatter?.page_id || rawSlug).replace(/\.talk$/, '');
         const slug = isTalk ? baseSlug : rawSlug;
+        const normalizeSurfaceUrl = (value) => {
+          const text = String(value || '').trim();
+          if (!text) return null;
+          return text.startsWith('/') ? text : `/${text.replace(/^\/+/, '')}`;
+        };
+        const articleRoute = normalizeSurfaceUrl(frontmatter?.route);
+        const talkRoute = normalizeSurfaceUrl(
+          frontmatter?.talk_route || (articleRoute ? `${articleRoute.replace(/\/+$/, '')}/talk` : null)
+        );
         const canonicalHtml = isTalk
-          ? `/${encodeURIComponent(slug)}/talk`
-          : `/${encodeURIComponent(slug)}`;
+          ? (talkRoute || `/${encodeURIComponent(slug)}/talk`)
+          : (articleRoute || `/${encodeURIComponent(slug)}`);
         const mdUrl = mdHref;
+        const talkMdUrl = !isTalk && talkRoute && mdHref.endsWith('.md')
+          ? mdHref.replace(/\.md$/, '.talk.md')
+          : null;
         const llmsSection = `/llms-full.txt#section=${section}`;
         const indexEntry = `/docs-index.json#${slug}`;
         const mcpHandle = `1context://${slug}`;
@@ -1989,6 +2078,12 @@
         const surfaces = [
           { label: 'HTML',       url: canonicalHtml, status: 'live',    note: 'Themed, human-rendered' },
           { label: 'Markdown',   url: mdUrl,         status: 'live',    note: 'Clean, frontmatter + body — what you fetched' },
+          ...(!isTalk && talkRoute ? [
+            { label: 'Talk HTML', url: talkRoute, status: 'live', note: 'Rendered discussion, proposals, and curator context' },
+          ] : []),
+          ...(!isTalk && talkMdUrl ? [
+            { label: 'Talk Markdown', url: talkMdUrl, status: 'live', note: 'Talk inbox source as markdown' },
+          ] : []),
           { label: 'JSON entry', url: '/docs-index.json', status: 'planned', note: `Page metadata in the manifest (find by slug "${slug}")` },
           { label: 'Section corpus', url: '/llms-full.txt', status: 'planned', note: `Bundled with sibling authored pages` },
           { label: 'MCP handle', url: mcpHandle,     status: 'planned', note: 'Lossless typed read via the MCP server (AX Layer J)' },
@@ -2127,44 +2222,6 @@ const md = await fetch(${JSON.stringify(mdUrl)}).then(r =&gt; r.text());
     _restoreTocForReaderView();
   }
 
-  function injectAgentNote() {
-    const article = document.querySelector('.opctx-article');
-    if (!article || article.querySelector('.opctx-agent-note')) return;
-
-    // Find the lead paragraph — first substantive <p> after the H1.
-    // Per agent-ui.md (principle 4), insert AFTER the lead so a
-    // summarizer doesn't over-weight the note as the page topic.
-    // Skip the subtitle and Wikipedia-style "Main article:" hatnotes
-    // (always one-liners that follow an H2, never the lead).
-    const paragraphs = article.querySelectorAll('p');
-    let leadPara = null;
-    for (const p of paragraphs) {
-      if (p.classList.contains('opctx-subtitle')) continue;
-      if (p.classList.contains('opctx-main-article')) continue;
-      const txt = p.textContent.trim();
-      if (txt.length < 100) continue;
-      leadPara = p;
-      break;
-    }
-    if (!leadPara) return;
-
-    const mdHref = findAlternateMdHref();
-
-    const note = document.createElement('aside');
-    note.className = 'opctx-agent-note';
-    note.setAttribute('role', 'note');
-    const linkHTML = mdHref
-      ? `<a href="${mdHref}" class="opctx-agent-note-link">Markdown source ↗</a>`
-      : '';
-    note.innerHTML = `
-      <span class="opctx-agent-note-mark">⌬</span>
-      <span class="opctx-agent-note-brand">1Context</span>
-      <span class="opctx-agent-note-sep">·</span>
-      <span class="opctx-agent-note-body">A wiki for humans and AI agents. ${linkHTML}</span>
-    `;
-    leadPara.after(note);
-  }
-
   function wireViewToggle() {
     document.addEventListener('click', (ev) => {
       const btn = ev.target.closest('[data-view-set]');
@@ -2180,6 +2237,11 @@ const md = await fetch(${JSON.stringify(mdUrl)}).then(r =&gt; r.text());
         const slug = talkBtn.dataset.talkSlug;
         if (!slug) return;
         const onTalk = talkBtn.getAttribute('aria-pressed') === 'true';
+        // Crossing between article and talk is a content-surface switch,
+        // not just another page load. Land in Reader so the Talk button
+        // opens the readable discussion thread; Agent view still exposes
+        // direct markdown links for raw talk access.
+        try { sessionStorage.setItem('opctx-view', 'reader'); } catch (_) {}
         // Audience-aware talk navigation. Each era × audience has
         // its own isolated talk page so a private debugging note
         // can't leak into the public talk discussion. Read the
@@ -2200,9 +2262,13 @@ const md = await fetch(${JSON.stringify(mdUrl)}).then(r =&gt; r.text());
           // Going FROM talk page back to article. The slug we received
           // is the BASE (without `.talk` and without audience) — see
           // `_currentArticleSlug()` which strips both suffixes.
-          location.href = `/${encodeURIComponent(slug + aud)}`;
+          location.href = slug === 'index' && !aud
+            ? '/'
+            : `/${_encodeRoutePath(_routeWithAudience(slug, aud))}`;
         } else {
-          location.href = `/${encodeURIComponent(slug + aud)}/talk`;
+          location.href = slug === 'index' && !aud
+            ? '/talk'
+            : `/${_encodeRoutePath(_routeWithAudience(slug, aud))}/talk`;
         }
         return;
       }
@@ -2599,8 +2665,7 @@ const md = await fetch(${JSON.stringify(mdUrl)}).then(r =&gt; r.text());
    *   2. injectTocHead() prepends hamburger + page label.
    *   3. setupScrollSpy() observes section ids.
    *   4. renderRail/renderCustomizer add fixed UI.
-   *   5. injectAgentNote() runs after wrapAppendices so the lead-
-   *      paragraph search sees the final article DOM.
+   *   5. renderViewToggle() wires the Reader / Agent / Talk controls.
    * ============================================================= */
 
   function boot() {
@@ -2618,7 +2683,6 @@ const md = await fetch(${JSON.stringify(mdUrl)}).then(r =&gt; r.text());
     renderSearchModal();
     renderBookmarksModal();
     renderViewToggle();
-    injectAgentNote();
     injectSectionCopyButtons();
     // (injectTalkBadge no longer needed — Talk surfaces as a toggle
     //  button next to Reader/Agent via renderViewToggle.)

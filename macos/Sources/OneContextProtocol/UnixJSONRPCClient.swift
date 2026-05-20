@@ -114,7 +114,7 @@ public func withUnixSocketAddress<T>(
 public final class UnixJSONRPCClient {
   private let socketPath: String
   private let timeoutMilliseconds: Int32
-  private let maxResponseBytes = 64 * 1024
+  private let maxResponseBytes = 2 * 1024 * 1024
 
   public init(socketPath: String = RuntimePaths.current().socketPath, timeoutMilliseconds: Int32 = 2_000) {
     self.socketPath = socketPath

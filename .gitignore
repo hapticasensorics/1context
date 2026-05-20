@@ -3,8 +3,13 @@
 tmp/
 runtime-test/
 dist/
+target/
+node_modules/
+.playwright-cli/
 .playwright-mcp/
+.playwright-artifacts/
 .tmp-wiki-browser-*/
+test-results/
 scripts/__pycache__/
 .vscode/
 macos/.build/

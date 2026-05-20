@@ -129,6 +129,7 @@ grep -q '"case": "real_uninstall_reinstall"' "$ROOT/release/tools/proof/self-hos
 grep -q "env -u SUDO_USER -u SUDO_UID -u SUDO_GID -u SUDO_COMMAND" "$ROOT/release/tools/proof/self-hosted-update-proof.sh"
 grep -q "repin_old_baseline_after_setup_restore" "$ROOT/release/tools/proof/self-hosted-update-proof.sh"
 grep -q "baseline-repin-after-setup" "$ROOT/release/tools/proof/self-hosted-update-proof.sh"
+grep -q "ONECONTEXT_UPDATE_RUNNER_I_UNDERSTAND_DESTRUCTIVE" "$ROOT/release/tools/proof/prove-remote-sparkle-update.sh"
 "$ROOT/scripts/release-train.sh" manifest write-fixture-proof-results --output-dir "$TMP_DIR/fixture-proof-results" > "$TMP_DIR/fixture-proof-results.out"
 test "$(find "$TMP_DIR/fixture-proof-results" -name '*.json' | wc -l | tr -d '[:space:]')" = "7"
 grep -q "^optional_prompt$" "$TMP_DIR/fixture-proof-results.out"

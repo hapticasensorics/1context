@@ -107,6 +107,69 @@ function parseEntryFilename(name) {
   return { kind: after.slice(0, secondDot), slug: after.slice(secondDot + 1) };
 }
 
+function normalizeMetaString(value) {
+  if (value == null) return null;
+  if (value instanceof Date) return value.toISOString();
+  const text = String(value).trim();
+  return text ? text : null;
+}
+
+function normalizeStringList(value) {
+  if (value == null) return [];
+  if (Array.isArray(value)) {
+    return value.map(normalizeMetaString).filter(Boolean);
+  }
+  const single = normalizeMetaString(value);
+  return single ? [single] : [];
+}
+
+function normalizeAttachments(value) {
+  if (!Array.isArray(value)) return [];
+  return value
+    .filter((item) => item && typeof item === 'object')
+    .map((item) => ({
+      filename: normalizeMetaString(item.filename),
+      media_type: normalizeMetaString(item.media_type),
+      path: normalizeMetaString(item.path),
+      handle: normalizeMetaString(item.handle),
+      caption: normalizeMetaString(item.caption),
+      alt_text: normalizeMetaString(item.alt_text),
+    }))
+    .filter((item) => item.filename && item.path);
+}
+
+function normalizeTalkRoute(value) {
+  const route = normalizeMetaString(value);
+  if (!route) return null;
+  if (route === '/') return '/';
+  return `/${route.replace(/^\/+/, '').replace(/\/+$/, '')}`;
+}
+
+function talkAttachmentHref(path, talkRoute) {
+  const value = normalizeMetaString(path) || '';
+  if (!talkRoute || value.startsWith('/') || /^[a-z][a-z0-9+.-]*:/i.test(value)) {
+    return value;
+  }
+  return `${talkRoute.replace(/\/+$/, '')}/${value.replace(/^\/+/, '')}`;
+}
+
+function stripGeneratedAttachmentSection(body, attachments) {
+  if (!body || !attachments || attachments.length === 0) return body;
+  const lines = String(body).trimEnd().split('\n');
+  let headingIndex = -1;
+  for (let index = lines.length - 1; index >= 0; index -= 1) {
+    if (/^##\s+Attachments\s*$/i.test(lines[index].trim())) {
+      headingIndex = index;
+      break;
+    }
+  }
+  if (headingIndex < 0) return body;
+  const trailing = lines.slice(headingIndex + 1).filter((line) => line.trim());
+  if (!trailing.length) return body;
+  if (!trailing.every((line) => line.trim().startsWith('- ['))) return body;
+  return lines.slice(0, headingIndex).join('\n').trimEnd();
+}
+
 // Read all entry files. Returns an array of entry objects sorted by
 // filename (which is timestamp-prefixed → chronological).
 function readEntries(folderPath) {
@@ -122,18 +185,26 @@ function readEntries(folderPath) {
     const filenameMeta = parseEntryFilename(name);
     // YAML auto-parses ISO timestamps as Date objects. Normalize to
     // an ISO-8601 string so downstream rendering and the .md twin
-    // produce stable text.
-    let ts = data.ts;
-    if (ts instanceof Date) ts = ts.toISOString();
-    if (ts != null && typeof ts !== 'string') ts = String(ts);
+    // produce stable text. Mail-backed talk entries use `created`;
+    // older handwritten entries often use `ts`.
+    const created = normalizeMetaString(data.created_at ?? data.created ?? data.ts);
+    const ts = normalizeMetaString(data.ts ?? data.created_at ?? data.created);
     entries.push({
       filename: name,
       stem: name.endsWith('.md') ? name.slice(0, -3) : name,
+      id: normalizeMetaString(data.id),
       kind: data.kind || filenameMeta.kind,
       slug: filenameMeta.slug,
+      subject: normalizeMetaString(data.subject),
       author: data.author || 'unknown',
       ts: ts || null,
-      parent: data.parent || null,
+      created,
+      thread: normalizeMetaString(data.thread ?? data.thread_id),
+      reply_to: normalizeMetaString(data.reply_to),
+      state: normalizeMetaString(data.state),
+      recipients: normalizeStringList(data.recipients),
+      attachments: normalizeAttachments(data.attachments),
+      parent: data.parent || data.reply_to || null,
       trailers: pickTrailers(data),
       body: content.trim(),
     });
@@ -175,7 +246,7 @@ function buildReplyMap(entries) {
 
 // Render one entry to HTML (heading + body + signature + trailers +
 // nested replies recursively). `depth` controls blockquote nesting.
-function renderEntry(entry, replyMap, marked, depth = 0) {
+function renderEntry(entry, replyMap, marked, talkRoute, depth = 0) {
   const headingId = slugify(entry.stem);
   let heading;
   if (entry.kind === 'conversation') {
@@ -183,23 +254,56 @@ function renderEntry(entry, replyMap, marked, depth = 0) {
     heading = `<h2 id="${escape(headingId)}">${escape(formatTimestamp(entry.ts))}</h2>`;
   } else {
     // Topic-driven: bracketed kind + descriptive subject.
-    const subject = entry.slug
-      ? entry.slug.replace(/-/g, ' ').replace(/^./, (c) => c.toUpperCase())
-      : entry.kind;
+    const subject = entry.subject || (
+      entry.slug
+        ? entry.slug.replace(/-/g, ' ').replace(/^./, (c) => c.toUpperCase())
+        : entry.kind
+    );
     heading = `<h2 id="${escape(headingId)}">[${escape(entry.kind.toUpperCase())}] ${escape(subject)}</h2>`;
   }
 
-  const bodyHtml = marked.parse(entry.body);
-  const sigHtml = `<p class="opctx-talk-entry-sig"><em>— ${escape(entry.author)} · ${escape(entry.ts || '')}</em></p>`;
+  const bodyHtml = marked.parse(stripGeneratedAttachmentSection(entry.body, entry.attachments));
+  const metaHtml = renderEntryMeta(entry);
+  const attachmentHtml = renderEntryAttachments(entry.attachments, talkRoute);
+  const sigHtml = `<p class="opctx-talk-entry-sig"><em>— ${escape(entry.author)} · ${escape(entry.ts || entry.created || '')}</em></p>`;
   const trailersHtml = renderTrailers(entry.trailers);
 
   // Replies — render under this entry, blockquote-nested.
-  const replies = (replyMap.get(entry.filename) || replyMap.get(entry.stem) || []);
+  const replies = (replyMap.get(entry.filename) || replyMap.get(entry.stem) || (entry.id ? replyMap.get(entry.id) : null) || []);
   const repliesHtml = replies
-    .map((r) => `<blockquote class="opctx-talk-reply">${renderEntry(r, replyMap, marked, depth + 1)}</blockquote>`)
+    .map((r) => `<blockquote class="opctx-talk-reply">${renderEntry(r, replyMap, marked, talkRoute, depth + 1)}</blockquote>`)
     .join('\n');
 
-  return `<article class="opctx-talk-entry" data-kind="${escape(entry.kind)}">${heading}\n${bodyHtml}\n${sigHtml}${trailersHtml}${repliesHtml}</article>`;
+  return `<article class="opctx-talk-entry" data-kind="${escape(entry.kind)}">${heading}\n${metaHtml}${bodyHtml}\n${attachmentHtml}${sigHtml}${trailersHtml}${repliesHtml}</article>`;
+}
+
+function renderEntryMeta(entry) {
+  const rows = [
+    ['Message', entry.id],
+    ['Thread', entry.thread],
+    ['State', entry.state],
+    ['From', entry.author],
+    ['To', entry.recipients.join(', ')],
+    ['Created', entry.created || entry.ts],
+  ].filter(([, value]) => value);
+  if (!rows.length) return '';
+  const items = rows
+    .map(([label, value]) => `<dt>${escape(label)}:</dt><dd>${escape(value)}</dd>`)
+    .join('');
+  return `<dl class="opctx-talk-message-meta">${items}</dl>\n`;
+}
+
+function renderEntryAttachments(attachments, talkRoute) {
+  if (!attachments || attachments.length === 0) return '';
+  const items = attachments.map((attachment) => {
+    const media = attachment.media_type ? ` <span>${escape(attachment.media_type)}</span>` : '';
+    const caption = attachment.caption ? `<p>${escape(attachment.caption)}</p>` : '';
+    const altText = attachment.alt_text
+      ? `<p class="opctx-talk-attachment-alt"><span>Alt:</span> ${escape(attachment.alt_text)}</p>`
+      : '';
+    return `<li><a href="${escape(talkAttachmentHref(attachment.path, talkRoute))}">${escape(attachment.filename)}</a>${media}${caption}${altText}</li>`;
+  }).join('');
+  return `<aside class="opctx-talk-attachments"><strong>Attachments</strong><ul>${items}</ul></aside>\n`;
 }
 
 function renderTrailers(trailers) {
@@ -224,10 +328,17 @@ function slugify(s) {
   return s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
 }
 
+function demoteHtmlHeadings(html, offset = 2) {
+  return html.replace(/<(\/?)h([1-6])([^>]*)>/gi, (_match, slash, level, attrs) => {
+    const nextLevel = Math.min(6, Number(level) + offset);
+    return `<${slash}h${nextLevel}${slash ? '' : attrs}>`;
+  });
+}
+
 // Compose the full body HTML by section. Replies are nested under
 // their parents (recursively); top-level entries are grouped by kind
 // in SECTION_ORDER.
-function composeBody(entries, replyMap, marked, lede, seeAlso, curatorMd) {
+function composeBody(entries, replyMap, marked, lede, seeAlso, curatorMd, talkRoute) {
   const topLevel = entries.filter((e) => !e.parent);
   const byKind = new Map();
   for (const e of topLevel) {
@@ -246,7 +357,7 @@ function composeBody(entries, replyMap, marked, lede, seeAlso, curatorMd) {
   // edit `_curator.md` directly to change how the curator agent
   // behaves; the rendered banner makes it discoverable.
   if (curatorMd) {
-    const curatorHtml = marked.parse(curatorMd);
+    const curatorHtml = demoteHtmlHeadings(marked.parse(curatorMd));
     parts.push(`<details class="opctx-talk-curator-prompt"><summary><strong>Curator prompt for this page</strong> <span class="opctx-talk-curator-hint">click to expand · edit <code>_curator.md</code> in this talk folder to change how the curator agent for this page behaves</span></summary><div class="opctx-talk-curator-prompt-body">${curatorHtml}</div></details>`);
   }
 
@@ -255,7 +366,7 @@ function composeBody(entries, replyMap, marked, lede, seeAlso, curatorMd) {
     if (!list || list.length === 0) continue;
     parts.push(`<section class="opctx-talk-section" data-kind="${escape(kind)}"><h2 id="${escape(slugify(kind))}">${escape(heading)}</h2>`);
     for (const e of list) {
-      parts.push(renderEntry(e, replyMap, marked));
+      parts.push(renderEntry(e, replyMap, marked, talkRoute));
     }
     parts.push(`</section>`);
     byKind.delete(kind);
@@ -265,7 +376,7 @@ function composeBody(entries, replyMap, marked, lede, seeAlso, curatorMd) {
   if (byKind.size > 0) {
     parts.push(`<section class="opctx-talk-section" data-kind="other"><h2 id="other">Other</h2>`);
     for (const [, list] of byKind) {
-      for (const e of list) parts.push(renderEntry(e, replyMap, marked));
+      for (const e of list) parts.push(renderEntry(e, replyMap, marked, talkRoute));
     }
     parts.push(`</section>`);
   }
@@ -298,6 +409,7 @@ export function renderTalkFolder(folderPath) {
   const frontmatter = yaml.load(metaRaw) || {};
   const lede = frontmatter.lede || null;
   const seeAlso = Array.isArray(frontmatter.see_also) ? frontmatter.see_also : null;
+  const talkRoute = normalizeTalkRoute(frontmatter.talk_route);
 
   // Curator prompt — if a `_curator.md` file lives in the talk
   // folder, surface it on the rendered page as a collapsed block.
@@ -317,7 +429,7 @@ export function renderTalkFolder(folderPath) {
   const entries = readEntries(folderPath);
   const replyMap = buildReplyMap(entries);
   const marked = makeSafeMarked();
-  const bodyHtml = composeBody(entries, replyMap, marked, lede, seeAlso, curatorMd);
+  const bodyHtml = composeBody(entries, replyMap, marked, lede, seeAlso, curatorMd, talkRoute);
 
   // Markdown twin — the assembled .md a reader/agent gets when they
   // request the URL with a trailing .md. We re-emit the entries in
@@ -337,8 +449,30 @@ export function renderTalkFolder(folderPath) {
         : e.kind;
       mdLines.push(`## [${e.kind.toUpperCase()}] ${subject}\n`);
     }
-    mdLines.push(e.body + '\n');
-    mdLines.push(`— *${e.author} · ${e.ts || ''}*\n`);
+    const metaLines = [
+      ['Message', e.id],
+      ['Thread', e.thread],
+      ['State', e.state],
+      ['From', e.author],
+      ['To', e.recipients.join(', ')],
+      ['Created', e.created || e.ts],
+    ].filter(([, value]) => value);
+    if (metaLines.length) {
+      for (const [label, value] of metaLines) mdLines.push(`- ${label}: ${value}`);
+      mdLines.push('');
+    }
+    mdLines.push(stripGeneratedAttachmentSection(e.body, e.attachments) + '\n');
+    if (e.attachments.length) {
+      mdLines.push('Attachments:');
+      for (const attachment of e.attachments) {
+        const media = attachment.media_type ? ` (${attachment.media_type})` : '';
+        const caption = attachment.caption ? ` — ${attachment.caption}` : '';
+        const altText = attachment.alt_text ? `; alt: ${attachment.alt_text}` : '';
+        mdLines.push(`- [${attachment.filename}](${talkAttachmentHref(attachment.path, talkRoute)})${media}${caption}${altText}`);
+      }
+      mdLines.push('');
+    }
+    mdLines.push(`— *${e.author} · ${e.ts || e.created || ''}*\n`);
     const trailerKeys = Object.keys(e.trailers);
     if (trailerKeys.length) {
       for (const k of trailerKeys) {

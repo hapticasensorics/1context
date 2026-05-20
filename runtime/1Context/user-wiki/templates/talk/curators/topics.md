@@ -10,7 +10,7 @@ taxonomy changes to the Topics index article.
 - Talk folder: `{{ talk_folder }}`
 - Concept page directory: `{{ concept_page_dir }}`
 - Proposal glob: `{{ talk_folder }}/*.proposal.topic-*.md`
-- Existing decision glob: `{{ talk_folder }}/*.decided.*.md`
+- Existing decision glob: `{{ talk_folder }}/*.decision.*.md`
 
 ## Scope
 
@@ -61,19 +61,19 @@ If the concept page does not exist yet:
 Create a new markdown file:
 
 ```text
-{{ now_utc_slug }}.decided.{{ proposal_slug }}.md
+{{ now_utc_slug }}.decision.{{ proposal_slug }}.md
 ```
 
 with frontmatter:
 
 ```yaml
 ---
-kind: decided
+kind: decision
 author: "{{ agent_id }}"
 created: "{{ now_utc }}"
 parent: "{{ proposal_stem }}"
 decision: "{{ apply|refine_apply|defer|reject|supersede|merge|split|move }}"
-status: closed
+state: resolved
 ---
 ```
 

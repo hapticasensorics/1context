@@ -210,17 +210,50 @@ public final class WikiEngineRenderer: @unchecked Sendable {
     process.standardOutput = stdout
     process.standardError = stderr
     try process.run()
+    let stdoutBuffer = RendererPipeBuffer()
+    let stderrBuffer = RendererPipeBuffer()
+    let pipeDrainGroup = DispatchGroup()
+    drain(stdout, into: stdoutBuffer, group: pipeDrainGroup)
+    drain(stderr, into: stderrBuffer, group: pipeDrainGroup)
     process.waitUntilExit()
+    pipeDrainGroup.wait()
 
     guard process.terminationStatus == 0 else {
       let detail = [
-        String(data: stderr.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? "",
-        String(data: stdout.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
+        stderrBuffer.string(),
+        stdoutBuffer.string()
       ]
       .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
       .filter { !$0.isEmpty }
       .joined(separator: "\n")
       throw WikiEngineRendererError.renderFailed(input: sourceRoot.path, detail: detail)
     }
+  }
+
+  private func drain(_ pipe: Pipe, into buffer: RendererPipeBuffer, group: DispatchGroup) {
+    group.enter()
+    DispatchQueue.global(qos: .utility).async {
+      buffer.append(pipe.fileHandleForReading.readDataToEndOfFile())
+      group.leave()
+    }
+  }
+}
+
+private final class RendererPipeBuffer: @unchecked Sendable {
+  private let lock = NSLock()
+  private var chunks = Data()
+
+  func append(_ data: Data) {
+    guard !data.isEmpty else { return }
+    lock.lock()
+    chunks.append(data)
+    lock.unlock()
+  }
+
+  func string() -> String {
+    lock.lock()
+    let snapshot = chunks
+    lock.unlock()
+    return String(decoding: snapshot, as: UTF8.self)
   }
 }

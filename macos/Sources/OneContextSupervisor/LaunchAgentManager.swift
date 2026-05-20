@@ -106,6 +106,7 @@ public final class LaunchAgentManager {
   }
 
   public func stop() async {
+    guard launchAgentLifecycleIsSafe() else { return }
     let path = launchAgentPath
     let byTarget = await launchctl(["bootout", agentTarget()])
     if byTarget.status != 0 {
@@ -115,6 +116,7 @@ public final class LaunchAgentManager {
   }
 
   public func stopMenu() async {
+    guard launchAgentLifecycleIsSafe() else { return }
     await quitMenuApp()
     let path = launchAgentPath(label: Self.menuLabel)
     _ = await launchctl(["bootout", "\(guiDomain())/\(Self.menuLabel)"])
@@ -123,6 +125,7 @@ public final class LaunchAgentManager {
   }
 
   public func uninstallManagedLaunchAgents() async {
+    guard launchAgentLifecycleIsSafe() else { return }
     await quitMenuApp()
     for label in [Self.menuLabel, Self.runtimeLabel] {
       let path = launchAgentPath(label: label)
@@ -228,6 +231,43 @@ public final class LaunchAgentManager {
     if isRootLifecycleRejected() {
       throw RuntimeControlError.rootUserUnsupported
     }
+    try ensureStandardRuntimePathsForLaunchAgentLifecycle()
+  }
+
+  private func launchAgentLifecycleIsSafe() -> Bool {
+    (try? ensureNormalUserLifecycle()) != nil
+  }
+
+  private func ensureStandardRuntimePathsForLaunchAgentLifecycle() throws {
+    let home = homeDirectory.standardizedFileURL
+    let expected = RuntimePaths(
+      userContentDirectory: home.appendingPathComponent("1Context", isDirectory: true),
+      appSupportDirectory: home.appendingPathComponent("Library/Application Support/1Context", isDirectory: true),
+      logDirectory: home.appendingPathComponent("Library/Logs/1Context", isDirectory: true),
+      cacheDirectory: home.appendingPathComponent("Library/Caches/1Context", isDirectory: true),
+      preferencesPath: home.appendingPathComponent("Library/Preferences/com.haptica.1context.plist").path
+    )
+    let checks: [(label: String, actual: String, expected: String)] = [
+      ("userContentDirectory", runtimePaths.userContentDirectory.path, expected.userContentDirectory.path),
+      ("appSupportDirectory", runtimePaths.appSupportDirectory.path, expected.appSupportDirectory.path),
+      ("runDirectory", runtimePaths.runDirectory.path, expected.runDirectory.path),
+      ("socketPath", runtimePaths.socketPath, expected.socketPath),
+      ("pidPath", runtimePaths.pidPath, expected.pidPath),
+      ("logDirectory", runtimePaths.logDirectory.path, expected.logDirectory.path),
+      ("logPath", runtimePaths.logPath, expected.logPath),
+      ("cacheDirectory", runtimePaths.cacheDirectory.path, expected.cacheDirectory.path),
+      ("preferencesPath", runtimePaths.preferencesPath, expected.preferencesPath)
+    ]
+
+    for check in checks where standardizedPath(check.actual) != standardizedPath(check.expected) {
+      throw RuntimeControlError.unsafeLaunchAgentRuntimePaths(
+        "\(check.label)=\(check.actual) expected=\(check.expected)"
+      )
+    }
+  }
+
+  private func standardizedPath(_ path: String) -> String {
+    URL(fileURLWithPath: path).standardizedFileURL.path
   }
 
   private func guiDomain() -> String {

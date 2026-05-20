@@ -10,7 +10,6 @@ public struct RuntimePaths {
   public let contextEngineIndexesDirectory: URL
   public let appSupportDirectory: URL
   public let appSupportIndexesDirectory: URL
-  public let lanceDBIndexDirectory: URL
   public let appSupportSetupDirectory: URL
   public let configPath: String
   public let runDirectory: URL
@@ -41,7 +40,6 @@ public struct RuntimePaths {
     self.contextEngineIndexesDirectory = self.contextEngineDirectory.appendingPathComponent("indexes", isDirectory: true)
     self.appSupportDirectory = appSupportDirectory
     self.appSupportIndexesDirectory = appSupportDirectory.appendingPathComponent("indexes", isDirectory: true)
-    self.lanceDBIndexDirectory = self.appSupportIndexesDirectory.appendingPathComponent("lancedb", isDirectory: true)
     self.appSupportSetupDirectory = appSupportDirectory.appendingPathComponent("setup", isDirectory: true)
     self.configPath = appSupportDirectory.appendingPathComponent("config.json").path
     self.runDirectory = runDirectory
@@ -62,11 +60,14 @@ public struct RuntimePaths {
     if let runtimeHome = ProcessInfo.processInfo.environment["ONECONTEXT_DEV_RUNTIME_HOME"],
        !runtimeHome.isEmpty {
       let root = URL(fileURLWithPath: runtimeHome, isDirectory: true)
+      let socketPath = ProcessInfo.processInfo.environment["ONECONTEXT_DEV_SOCKET_PATH"]
+        .flatMap { $0.isEmpty ? nil : $0 }
       return RuntimePaths(
         userContentDirectory: root.appendingPathComponent("1Context", isDirectory: true),
         appSupportDirectory: root.appendingPathComponent("Library/Application Support/1Context", isDirectory: true),
         logDirectory: root.appendingPathComponent("Library/Logs/1Context", isDirectory: true),
-        cacheDirectory: root.appendingPathComponent("Library/Caches/1Context", isDirectory: true)
+        cacheDirectory: root.appendingPathComponent("Library/Caches/1Context", isDirectory: true),
+        socketPath: socketPath
       )
     }
     #endif
@@ -116,7 +117,6 @@ public enum RuntimePermissions {
       paths.contextEngineIndexesDirectory,
       paths.appSupportDirectory,
       paths.appSupportIndexesDirectory,
-      paths.lanceDBIndexDirectory,
       paths.appSupportSetupDirectory,
       paths.runDirectory,
       paths.logDirectory,

@@ -229,7 +229,7 @@ def run_memory_tick(
         {
             "id": "wiki_interface",
             "status": "ready",
-            "reason": "Python wiki interface is limited to authoring records and Swift wiki.refresh requests",
+            "reason": "Wiki semantics are delegated to the portable Rust core; Python keeps transitional authoring receipts and Swift wiki.refresh requests",
         }
     )
 

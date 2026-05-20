@@ -81,7 +81,10 @@ function renderBrandMenu(opts) {
   const owner = opts.owner === undefined ? '' : opts.owner;
   const homeHref = opts.homeHref || (owner ? `/${owner}/` : '/');
   const ownerPrefix = owner ? `/${owner}` : '';
-  const groups = [
+  const configuredGroups = opts.siteNavigation && Array.isArray(opts.siteNavigation.groups)
+    ? opts.siteNavigation.groups
+    : null;
+  const groups = configuredGroups || [
     {
       label: 'For You',
       items: [
@@ -110,8 +113,9 @@ function renderBrandMenu(opts) {
 
   const groupHtml = groups.map((g) => {
     const items = g.items.map((it) => {
-      const sub = it.sub ? `<span class="opctx-brand-menu-sub">${escape(it.sub)}</span>` : '';
-      return `<li><a href="${escape(it.href)}" role="menuitem"><span class="opctx-brand-menu-label">${escape(it.label)}</span>${sub}</a></li>`;
+      const href = it.href && it.href.startsWith('/') ? `${ownerPrefix}${it.href}` : it.href;
+      const sub = it.sub ? ` <span class="opctx-brand-menu-sub">${escape(it.sub)}</span>` : '';
+      return `<li><a href="${escape(href)}" role="menuitem"><span class="opctx-brand-menu-label">${escape(it.label)}</span>${sub}</a></li>`;
     }).join('\n            ');
     return `<div class="opctx-brand-menu-group" role="group" aria-label="${escape(g.label)}">
           <div class="opctx-brand-menu-heading">${escape(g.label)}</div>
@@ -427,6 +431,7 @@ export function renderShell({
   activeAudienceStream = 'public',
   talkConventionsHtml = null,
   talkConventionsLabel = null,
+  siteNavigation = null,
 }) {
   const {
     title,
@@ -447,7 +452,7 @@ export function renderShell({
     // Display defaults — page-level recommended values for the
     // customizer settings. Reader's localStorage wins if set.
     theme_default = 'auto',
-    article_width = 's',
+    article_width = 'm',
     font_size = 'm',
     border_radius = 'rounded',
     links_style = 'color',
@@ -1128,6 +1133,10 @@ export function renderShell({
     statusBanner,
   ].filter(Boolean).join('');
   const headingExtrasHtml = headingExtras ? `\n        ${headingExtras}` : '';
+  const renderedTocHtml = injectVersionIntoToc(tocHtml, familyTocBlock);
+  const layoutClass = renderedTocHtml.trim()
+    ? 'opctx-layout'
+    : 'opctx-layout opctx-layout--no-toc';
 
   return `<!doctype html>
 <html lang="${escape(language)}" ${dataAttrs}>
@@ -1173,7 +1182,7 @@ export function renderShell({
   <div class="opctx-progress-bar" aria-hidden="true"></div>
 
   <header class="opctx-header">
-    ${renderBrandMenu({ owner, homeHref: home_href })}
+    ${renderBrandMenu({ owner, homeHref: home_href, siteNavigation })}
     <div class="opctx-header-search">
       <input type="search" placeholder="Search pages, books, tags…" aria-label="Search">
     </div>
@@ -1182,8 +1191,8 @@ export function renderShell({
     </div>
   </header>${familyDataScript}${audienceDataScript}
 
-  <div class="opctx-layout">
-    ${injectVersionIntoToc(tocHtml, familyTocBlock)}
+  <div class="${layoutClass}">
+    ${renderedTocHtml}
 
     <main class="opctx-main">
       <article class="opctx-article">

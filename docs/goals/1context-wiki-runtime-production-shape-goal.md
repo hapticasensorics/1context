@@ -34,7 +34,7 @@ Collapse the wiki runtime into one knowable production shape:
 - The tracked `release/memory-runtime` source tree and builder script are gone.
 - The build writes a `RuntimeDefaults` freshness manifest that ties the shipped
   defaults to the release version, git commit/dirty bit, source hash,
-  materializer hash, renderer hash, and render proof.
+  wiki-core hash, renderer hash, and render proof.
 - The RuntimeDefaults installer ledger records the packaged manifest/hash while
   preserving user-owned files and writing proposals for conflicts.
 - Local Web no longer seeds `wiki-site/current` from a bundled static fallback;
@@ -62,11 +62,11 @@ Collapse the wiki runtime into one knowable production shape:
 ### 2. Prove Default Freshness
 
 - [x] Generate a build-time `RuntimeDefaults` manifest with version, git commit,
-  source hash, site hash, materializer hash, renderer hash, and render counts. Evidence:
+  source hash, site hash, wiki-core hash, renderer hash, and render counts. Evidence:
   `wiki-engine/tools/write-runtime-defaults-manifest.py`; rebuilt app manifest reports
   schema `1context.runtime-defaults-manifest.v1`, version `0.1.87`, clean
   commit `4dfe5722c136b36f59f9f68ded26e0efec98ab92`, `git_dirty=false`,
-  8 routes, 8 markdown twins, materializer hash prefix `78ae10f53900`, and
+  8 routes, 8 markdown twins, wiki-core hash prefix `78ae10f53900`, and
   renderer hash prefix `0aeac13b4e1e`.
 - [x] Validate that manifest in package and installed-path smoke tests.
   Evidence: `ONECONTEXT_ALLOW_LAUNCH_AGENT_SMOKE=1

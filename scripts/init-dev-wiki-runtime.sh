@@ -12,6 +12,18 @@ IMPORT_STATE="$APP_SUPPORT/setup/dev-user-data-import.toml"
 LOGS="$RUNTIME_TEST/Library/Logs/1Context"
 CACHES="$RUNTIME_TEST/Library/Caches/1Context"
 
+resolve_wiki_core_bin() {
+  if [[ -n "${ONECONTEXT_WIKI_CORE_BIN:-}" ]]; then
+    printf '%s\n' "$ONECONTEXT_WIKI_CORE_BIN"
+    return
+  fi
+  local debug_bin="$ROOT/target/debug/onecontext-wiki"
+  if [[ ! -x "$debug_bin" ]] || find "$ROOT/crates" -name '*.rs' -newer "$debug_bin" -print -quit | grep -q .; then
+    cargo build --package onecontext-wiki-daemon >/dev/null
+  fi
+  printf '%s\n' "$debug_bin"
+}
+
 if [[ -n "$LOCAL_USER_DATA_SOURCE" && ! -d "$LOCAL_USER_DATA_SOURCE" ]]; then
   echo "Missing local user-data source: $LOCAL_USER_DATA_SOURCE" >&2
   exit 1
@@ -57,7 +69,7 @@ ensure_dirs() {
     "$APP_SUPPORT/wiki-site/current" \
     "$APP_SUPPORT/wiki-site/next" \
     "$APP_SUPPORT/wiki-site/previous" \
-    "$APP_SUPPORT/indexes/lancedb" \
+    "$APP_SUPPORT/indexes" \
     "$APP_SUPPORT/local-web/caddy" \
     "$APP_SUPPORT/setup" \
     "$APP_SUPPORT/sockets" \
@@ -159,7 +171,8 @@ fi
 copy_runtime_defaults
 
 if [[ "${ONECONTEXT_SKIP_WIKI_MATERIALIZE:-0}" != "1" ]]; then
-  python3 "$ROOT/wiki-engine/tools/materialize-wiki-pages.py" "$RUNTIME_TEST"
+  WIKI_CORE_BIN="$(resolve_wiki_core_bin)"
+  "$WIKI_CORE_BIN" --root "$RUNTIME_TEST/1Context" page-create-all
 fi
 
 printf 'runtime_test=%s\n' "$RUNTIME_TEST"

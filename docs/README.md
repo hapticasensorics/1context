@@ -6,16 +6,20 @@ that operators and contributors should use.
 
 ## Start Here
 
+- [Wiki System Architecture](wiki-system-architecture.md): greenfield
+  implementation target for the wiki inventory compiler, page ledger, lifecycle
+  service, renderer, publisher, handles, RuntimeDefaults behavior, and phased
+  implementation plan.
 - [Wiki Publishing System API](wiki-publishing-system-api.md): canonical V0
-  contract for user data, RuntimeDefaults, the JS renderer, Swift publication,
-  daemon refresh, Local Web serving, package evidence, and freeze boundaries.
+  contract for user data, RuntimeDefaults, page lifecycle, talk/mail,
+  notifications, the renderer boundary, portable publication, Local Web
+  serving, package evidence, and freeze boundaries.
 - [Wiki Publishing System Runbook](wiki-publishing-system-runbook.md):
   operating guide for local fixtures, custom pages, RuntimeDefaults proofs,
-  browser validation, memory agents, Swift startup, and release packaging.
+  browser validation, memory agents, macOS startup, and release packaging.
 - [Wiki Memory Runtime V0 Goal](goals/1context-wiki-memory-runtime-v0-goal.md):
-  historical close-loop checklist for the user-owned wiki runtime, Swift
-  publisher, bundled renderer, local web proof, and future memory-core
-  authoring surfaces.
+  historical close-loop checklist for the user-owned wiki runtime, publisher,
+  bundled renderer, local web proof, and future memory authoring surfaces.
 - [Wiki Runtime Production Shape Goal](goals/1context-wiki-runtime-production-shape-goal.md):
   historical cleanup checklist for retiring duplicate shipped wiki runtime
   artifacts and proving the `RuntimeDefaults` plus `WikiEngine` app shape.
@@ -41,14 +45,19 @@ that operators and contributors should use.
 - [Wiki Productionization Plan](wiki-productionization.html): where wiki source,
   default templates, generated files, and served local-web artifacts live in the
   repo and on an installed Mac.
+- [Wiki System Architecture](wiki-system-architecture.md): target internal
+  shape for `WikiInventory`, page provenance ledger, consumer handles,
+  lifecycle services, agent directory, talk/mail, notifications, and
+  render/publish boundaries.
 - [Wiki Publishing System API](wiki-publishing-system-api.md): canonical API and
   freeze boundary for the full wiki publishing subsystem.
 - [User Data Spec](user-data-spec.md): filesystem and persisted-data contract
   for `~/1Context`, Application Support, first-run defaults, runtime mirrors,
   templates, source families, talk files, ledgers, indexes, and static export.
 - [Wiki Memory Publication Contract](wiki-memory-publication-contract.md):
-  behavior contract for Python memory authoring, Swift publication, render
-  scheduling, proposal promotion, local APIs, and the bundled JS renderer.
+  behavior contract for memory authoring, portable publication, render
+  scheduling, proposal promotion, local APIs, talk/mail, notifications, and the
+  bundled renderer.
 - [Repo Runtime Layout](../runtime/README.md): repo-local development mirror for
   the production user-data and Application Support paths.
 - [Permissions](../PERMISSIONS.md): ownership, consent, storage, privacy, and

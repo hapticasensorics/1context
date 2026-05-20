@@ -6,13 +6,14 @@ template_id: e08/for-you
 template_version: template-0.1.0
 title: "For You"
 slug: for-you
+route: "{{ route }}"
 section: for-you
 access: "{{ access_tier }}"
 summary: "Current orientation, recent signals, and open loops."
 status: draft
 asset_base: "{{ asset_base }}"
 home_href: "{{ home_href }}"
-md_url: "/{{ slug }}.md"
+md_url: "{{ md_url }}"
 toc_enabled: true
 talk_enabled: true
 agent_view_enabled: true
@@ -20,7 +21,7 @@ copy_buttons_enabled: true
 footer_enabled: true
 tags: [for-you, orientation]
 last_updated: "{{ created_date }}"
-talk_url: "/for-you/talk"
+talk_url: "{{ talk_route }}"
 ---
 
 # For You

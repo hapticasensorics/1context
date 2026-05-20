@@ -14,7 +14,7 @@ closures accumulate before accepted changes appear in the article.
   {{ timestamp }}.conversation.md
   {{ timestamp }}.proposal.editor-day-{{ date }}.md
   {{ timestamp }}.reply.{{ thread_slug }}.md
-  {{ timestamp }}.decided.{{ thread_slug }}.md
+  {{ timestamp }}.decision.{{ thread_slug }}.md
   archive/
 ```
 
@@ -48,9 +48,11 @@ author: "{{ author_id }}"
 created: "{{ created_at }}"
 parent: "{{ parent_entry_id_or_stem }}"
 talk_for: "page://{{ page_slug }}"
-status: "{{ open|closed|proposed|accepted|deferred|rejected }}"
+state: "{{ open|accepted|rejected|resolved|withdrawn|superseded|blocked|archived }}"
 evidence:
   - "{{ evidence_uri }}"
+attachments:
+  - "{{ attachment_uri }}"
 ---
 ```
 

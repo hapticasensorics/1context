@@ -15,7 +15,7 @@ Current goals:
     shape.
 - [1Context Wiki Memory Runtime V0 Goal](1context-wiki-memory-runtime-v0-goal.md)
   - Status: superseded for final cleanup by the production-shape goal. Swift render coordination, runtime
-    materialization, browser route proof, package smoke, wiki-interface cleanup,
+    page lifecycle, browser route proof, package smoke, wiki-interface cleanup,
     and custom-page fallback proof are in place.
 - [1Context Wiki Engine V0 Goal](1context-wiki-engine-v0-goal.md)
   - Status: renderer slice extracted into `wiki-engine/`; current closure work

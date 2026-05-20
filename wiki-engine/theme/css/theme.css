@@ -525,6 +525,15 @@ body {
   align-items: start;
 }
 
+.opctx-layout--no-toc {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.opctx-layout--no-toc .opctx-article {
+  margin-inline: auto;
+  width: 100%;
+}
+
 .opctx-toc {
   position: sticky;
   top: calc(var(--header-height) + var(--size-24) + 5px);
@@ -3088,41 +3097,6 @@ body {
 }
 .opctx-view-btn svg { width: 14px; height: 14px; }
 
-/* --- Informational note (layer E) — placed after the lead
- * paragraph in reader view. Subtle, branded, factual. --- */
-.opctx-agent-note {
-  display: flex;
-  align-items: center;
-  gap: var(--size-8);
-  padding: var(--size-10) var(--size-12);
-  margin: var(--size-20) 0;
-  background: var(--color-surface-alt);
-  border-left: 3px solid var(--color-link);
-  border-radius: var(--radius-s);
-  font-size: var(--text-body-xs);
-  color: var(--color-mid);
-  line-height: var(--lh-snug);
-}
-.opctx-agent-note-mark {
-  font-size: 1rem;
-  color: var(--color-link);
-  flex: 0 0 auto;
-}
-.opctx-agent-note-brand {
-  font-weight: 600;
-  color: var(--color-foreground);
-  font-family: var(--font-heading);
-}
-.opctx-agent-note-sep { color: var(--color-light); }
-.opctx-agent-note-body { flex: 1; }
-.opctx-agent-note-link {
-  color: var(--color-link);
-  text-decoration: none;
-  margin-left: var(--size-6);
-  font-weight: 500;
-}
-.opctx-agent-note-link:hover { text-decoration: underline; }
-
 /* --- Agent view (data-view="agent") --- */
 
 /* Hide all chrome — TOC drawer, rail, mobile bar, customizer,
@@ -3140,8 +3114,7 @@ body {
  * .opctx-toc nav (JS swaps its contents to point at the agent
  * view's section ids — see applyAgentView in enhance.js). */
 :root[data-view="agent"] .opctx-mobile-bar,
-:root[data-view="agent"] .opctx-ai-fab,
-:root[data-view="agent"] .opctx-agent-note {
+:root[data-view="agent"] .opctx-ai-fab {
   display: none !important;
 }
 
@@ -3693,6 +3666,55 @@ body {
 .opctx-talk-sig strong { color: var(--color-foreground); font-weight: 600; }
 .opctx-talk-sig time { font-family: var(--font-mono); }
 
+.opctx-talk-message-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--size-4) var(--size-12);
+  margin: 0 0 var(--size-12);
+  padding: var(--size-8) var(--size-10);
+  border: 1px solid var(--color-border-soft);
+  border-radius: var(--radius-s);
+  background: var(--color-surface-alt);
+  color: var(--color-mid);
+  font-family: var(--font-mono);
+  font-size: var(--text-body-xs);
+}
+.opctx-talk-message-meta dt {
+  margin: 0;
+  color: var(--color-foreground);
+  font-weight: 600;
+}
+.opctx-talk-message-meta dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.opctx-talk-attachments {
+  margin: var(--size-12) 0;
+  padding: var(--size-10) var(--size-12);
+  border-left: 3px solid var(--color-border);
+  background: var(--color-surface-alt);
+  border-radius: 0 var(--radius-s) var(--radius-s) 0;
+  font-size: var(--text-body-sm);
+}
+.opctx-talk-attachments strong {
+  display: block;
+  margin-bottom: var(--size-6);
+}
+.opctx-talk-attachments ul {
+  margin: 0;
+  padding-left: var(--size-20);
+}
+.opctx-talk-attachments span {
+  color: var(--color-mid);
+  font-family: var(--font-mono);
+  font-size: var(--text-body-xs);
+}
+.opctx-talk-attachments p {
+  margin: var(--size-4) 0 0;
+  color: var(--color-mid);
+}
+
 /* Replies — visually nest with a left rail and reduced margin. */
 .opctx-talk-replies {
   margin-top: var(--size-16);
@@ -3779,6 +3801,44 @@ body {
 .opctx-status-banner a {
   color: var(--color-link);
   text-decoration: underline;
+}
+
+.opctx-link-warning {
+  display: block;
+  margin: 0 0 var(--size-24);
+  padding: var(--size-12) var(--size-16);
+  border-left: 3px solid var(--color-error);
+  background: var(--color-pink-light);
+  color: var(--color-foreground);
+  font-size: var(--text-body-sm);
+  font-family: var(--font-body);
+  border-radius: 0 var(--radius-s) var(--radius-s) 0;
+}
+
+.opctx-link-warning p {
+  margin: var(--size-4) 0 0;
+}
+
+.opctx-link-warning ul {
+  margin: var(--size-8) 0 0;
+  padding-left: var(--size-20);
+}
+
+.opctx-broken-link {
+  color: var(--color-error);
+  text-decoration-line: underline;
+  text-decoration-style: wavy;
+  text-decoration-thickness: 1px;
+}
+
+.opctx-broken-link::after {
+  content: " missing";
+  font-family: var(--font-body);
+  font-size: 0.72em;
+  font-weight: 700;
+  text-transform: uppercase;
+  margin-left: var(--size-4);
+  color: var(--color-error);
 }
 
 /* ============================================================
@@ -4114,6 +4174,9 @@ body {
 
 .opctx-brand-menu {
   min-width: 280px;
+  max-height: calc(100vh - var(--header-height, 56px) - var(--size-16) * 2);
+  overflow-y: auto;
+  overscroll-behavior: contain;
   padding: var(--size-12);
   display: grid;
   gap: var(--size-12);

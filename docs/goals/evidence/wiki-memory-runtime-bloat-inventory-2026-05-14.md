@@ -111,8 +111,9 @@ support JSON/health files, and `wiki.prepare` enters
   - Ignored dev/personal runtime state only.
 - `wiki-engine/**`
   - First-class renderer package.
-- `wiki-engine/tools/materialize-wiki-pages.py`
-  - Current materializer for configured user-owned pages.
+- `crates/onecontext-wiki-core/**`
+  - Current page lifecycle, inventory, talk/mail, agent directory, and
+    notification core.
 - `wiki-engine/tools/serve-site.mjs`
   - Test/dev Caddy-style static route harness.
 

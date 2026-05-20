@@ -276,23 +276,39 @@ export function extractSections(body, frontmatter = {}) {
  */
 export function deriveSectionFrontmatter(parentFm, section, parentSlug) {
   const fm = { ...parentFm };
+  const parentRoute = routeForParent(parentFm, parentSlug);
+  const sectionRoute = `${parentRoute === '/' ? '' : parentRoute}/${section.slug}`;
   fm.title = section.title;
   fm.slug = section.slug;
   fm.parent_slug = parentSlug;
   fm.parent_anchor = section.anchor;
-  // The section's own md_url points to its own .md sibling.
-  fm.md_url = `./${section.slug}.md`;
+  fm.route = sectionRoute;
+  fm.parent_route = parentRoute;
+  // The section's own md_url points to its own .md sibling at the
+  // canonical route path, which keeps manifests from inheriting the
+  // parent route and collapsing section sub-pages into their parent.
+  fm.md_url = `${sectionRoute}.md`;
   if (section.date) fm.section_date = section.date;
   if (section.talk) {
     fm.talk_enabled = true;
-    fm.talk_url = `./${section.slug}.talk.md`;
+    fm.talk_route = `${sectionRoute}/talk`;
+    fm.talk_url = `${sectionRoute}.talk.md`;
   } else {
     fm.talk_enabled = false;
+    delete fm.talk_route;
     delete fm.talk_url;
   }
   // Sub-pages don't carry the parent's `sections` list (avoid recursion).
   delete fm.sections;
   return fm;
+}
+
+function routeForParent(parentFm, parentSlug) {
+  const declared = typeof parentFm.route === 'string' && parentFm.route.trim()
+    ? parentFm.route.trim()
+    : `/${parentSlug}`;
+  const pathOnly = declared.split(/[?#]/)[0].replace(/^\/+/, '').replace(/\/+$/, '');
+  return pathOnly ? `/${pathOnly}` : '/';
 }
 
 /**
@@ -306,7 +322,7 @@ export function stringifyFrontmatter(fm) {
   for (const [k, v] of Object.entries(fm)) {
     if (v === undefined || v === null) continue;
     if (Array.isArray(v)) {
-      const inner = v.map((x) => (typeof x === 'string' ? x : String(x))).join(', ');
+      const inner = v.map((x) => (typeof x === 'string' ? x : JSON.stringify(x))).join(', ');
       lines.push(`${k}: [${inner}]`);
     } else if (typeof v === 'boolean' || typeof v === 'number') {
       lines.push(`${k}: ${v}`);
@@ -331,13 +347,20 @@ export function stringifyFrontmatter(fm) {
  * enough so the agent endpoint exists and downstream tools can find it.
  */
 export function buildTalkStub(parentFm, section, parentSlug) {
+  const parentRoute = routeForParent(parentFm, parentSlug);
+  const sectionRoute = `${parentRoute === '/' ? '' : parentRoute}/${section.slug}`;
+  const talkRoute = `${sectionRoute}/talk`;
   const talkFm = {
     title: `Talk · ${section.title}`,
-    slug: `${section.slug}-talk`,
+    slug: section.slug,
     section: parentFm.section || 'product',
     access: parentFm.access || 'public',
     summary: `Talk page for ${section.title}.`,
+    route: sectionRoute,
+    talk_route: talkRoute,
+    md_url: `${sectionRoute}.talk.md`,
     parent_slug: parentSlug,
+    parent_route: parentRoute,
     parent_anchor: section.anchor,
     status: 'draft',
     talk_enabled: false,
@@ -348,9 +371,11 @@ export function buildTalkStub(parentFm, section, parentSlug) {
     '',
     `# Talk · ${section.title}`,
     '',
-    `> Talk-page sibling for the [${section.title}](./${section.slug}.md)`,
+    `> Talk-page sibling for the [${section.title}](${sectionRoute})`,
     `> section. Hourly conversations and revision proposals will`,
     `> arrive here once the daemon publishes them.`,
+    '',
+    '## Discussion',
     '',
     '*No discussion yet. Add a timestamped entry when this section has a proposal, question, decision, or memory note worth preserving.*',
     '',

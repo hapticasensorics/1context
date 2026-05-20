@@ -34,7 +34,13 @@ final class WikiRuntimeDefaultsScenarioTests: XCTestCase {
 
     try proveFreshRuntimeInstall(lab: lab, defaultsRoot: defaultsRoot, engine: engine)
     try proveUserEditPreservedWithProposal(lab: lab, defaultsRoot: defaultsRoot, engine: engine)
-    try proveCustomPageMaterializesAndRenders(lab: lab, defaultsRoot: defaultsRoot, engine: engine, repo: repo)
+    try proveCustomPageBackfillsAndRenders(lab: lab, defaultsRoot: defaultsRoot, engine: engine, repo: repo)
+    try proveAppUpgradeBackfillsAndPreservesUserAuthoredFiles(
+      lab: lab,
+      defaultsRoot: defaultsRoot,
+      engine: engine,
+      repo: repo
+    )
   }
 
   private func proveFreshRuntimeInstall(lab: URL, defaultsRoot: URL, engine: URL) throws {
@@ -47,7 +53,7 @@ final class WikiRuntimeDefaultsScenarioTests: XCTestCase {
     XCTAssertNotNil(install.packagedManifest?.releaseVersion)
     XCTAssertNotNil(install.packagedManifest?.gitCommit)
     XCTAssertNotNil(install.packagedManifest?.runtimeDefaultsSourceHash)
-    XCTAssertNotNil(install.packagedManifest?.materializerHash)
+    XCTAssertNotNil(install.packagedManifest?.wikiCoreHash)
     XCTAssertNotNil(install.packagedManifest?.rendererHash)
     XCTAssertEqual(install.packagedManifest?.renderStatus, "published")
 
@@ -80,7 +86,7 @@ final class WikiRuntimeDefaultsScenarioTests: XCTestCase {
       home_href = "/"
       template_pack = "runtime-test"
 
-      [materialization]
+      [page_creation]
       enabled = true
       create_talk = true
       overwrite_user_files = false
@@ -104,7 +110,7 @@ final class WikiRuntimeDefaultsScenarioTests: XCTestCase {
     assertLedger(paths: paths, expectedStatus: "installed_with_conflicts")
   }
 
-  private func proveCustomPageMaterializesAndRenders(lab: URL, defaultsRoot: URL, engine: URL, repo: URL) throws {
+  private func proveCustomPageBackfillsAndRenders(lab: URL, defaultsRoot: URL, engine: URL, repo: URL) throws {
     let home = lab.appendingPathComponent("custom-page", isDirectory: true)
     let paths = runtimePaths(home: home)
 
@@ -133,10 +139,10 @@ final class WikiRuntimeDefaultsScenarioTests: XCTestCase {
       """
     try writeString(wikiConfig, to: wikiConfigURL)
 
-    let materializer = repo.appendingPathComponent("wiki-engine/tools/materialize-wiki-pages.py")
+    let wikiCore = try wikiCoreBinary(repo: repo)
     _ = try run(
-      executable: "/usr/bin/env",
-      arguments: ["python3", materializer.path, home.path],
+      executable: wikiCore.path,
+      arguments: ["--root", paths.userContentDirectory.path, "page-create", "dummy-custom"],
       currentDirectory: repo
     )
 
@@ -153,6 +159,104 @@ final class WikiRuntimeDefaultsScenarioTests: XCTestCase {
     XCTAssertEqual(render.status, .published)
     assertRoutes(paths: paths, include: ["/dummy-custom", "/dummy-custom/talk"])
     assertLedger(paths: paths, expectedStatus: "installed")
+  }
+
+  private func proveAppUpgradeBackfillsAndPreservesUserAuthoredFiles(
+    lab: URL,
+    defaultsRoot: URL,
+    engine: URL,
+    repo: URL
+  ) throws {
+    let home = lab.appendingPathComponent("app-upgrade-user", isDirectory: true)
+    let paths = runtimePaths(home: home)
+    let defaultsV1 = lab.appendingPathComponent("defaults-v1", isDirectory: true)
+    let defaultsV2 = lab.appendingPathComponent("defaults-v2", isDirectory: true)
+
+    try copyDirectory(from: defaultsRoot, to: defaultsV1)
+    try copyDirectory(from: defaultsRoot, to: defaultsV2)
+
+    let backfilledRelative = "context-engine/prompts/e08-for-you/hourly-answerer.md"
+    let backfilledDestination = paths.userContentDirectory.appendingPathComponent(backfilledRelative)
+    try FileManager.default.removeItem(
+      at: defaultsV1.appendingPathComponent("1Context/\(backfilledRelative)")
+    )
+
+    let changedTemplateRelative = "user-wiki/templates/pages/context-page.md"
+    let changedTemplateDestination = paths.userContentDirectory.appendingPathComponent(changedTemplateRelative)
+    let changedTemplateV2 = defaultsV2.appendingPathComponent("1Context/\(changedTemplateRelative)")
+    try appendString("\n<!-- runtime-test bundled update -->\n", to: changedTemplateV2)
+
+    let installV1 = try installDefaults(paths: paths, defaultsRoot: defaultsV1)
+    XCTAssertEqual(installV1.status, "installed")
+    XCTAssertFalse(FileManager.default.fileExists(atPath: backfilledDestination.path))
+    let v1Template = try String(contentsOf: changedTemplateDestination, encoding: .utf8)
+
+    let wikiConfigURL = paths.userWikiDirectory.appendingPathComponent("wiki.toml")
+    let userWikiConfig = try String(contentsOf: wikiConfigURL, encoding: .utf8)
+      + "\n# runtime-test user edit survives app update\n"
+      + dummyCustomPageConfig
+    try writeString(userWikiConfig, to: wikiConfigURL)
+
+    let wikiCore = try wikiCoreBinary(repo: repo)
+    _ = try run(
+      executable: wikiCore.path,
+      arguments: ["--root", paths.userContentDirectory.path, "page-create", "dummy-custom"],
+      currentDirectory: repo
+    )
+
+    let customSource = paths.userWikiSourceDirectory
+      .appendingPathComponent("families/custom/dummy-custom/source/dummy-custom.md")
+    let customCurator = paths.userWikiSourceDirectory
+      .appendingPathComponent("families/custom/dummy-custom/talk/dummy-custom.talk/_curator.md")
+    try appendString("\n<!-- runtime-test user-authored source sentinel -->\n", to: customSource)
+    try appendString("\n<!-- runtime-test user-authored talk sentinel -->\n", to: customCurator)
+    let userSource = try String(contentsOf: customSource, encoding: .utf8)
+    let userTalk = try String(contentsOf: customCurator, encoding: .utf8)
+
+    let installV2 = try installDefaults(paths: paths, defaultsRoot: defaultsV2)
+    XCTAssertEqual(installV2.status, "installed_with_conflicts")
+    XCTAssertTrue(installV2.copied.contains(backfilledRelative))
+    XCTAssertTrue(installV2.preserved.contains("user-wiki/wiki.toml"))
+    XCTAssertTrue(installV2.preserved.contains(changedTemplateRelative))
+    XCTAssertTrue(
+      installV2.proposals.contains("1Context/context-engine/proposals/wiki/runtime-defaults/user-wiki__wiki.toml.proposal.json")
+    )
+    XCTAssertTrue(
+      installV2.proposals.contains(
+        "1Context/context-engine/proposals/wiki/runtime-defaults/user-wiki__templates__pages__context-page.md.proposal.json"
+      )
+    )
+    XCTAssertEqual(try String(contentsOf: wikiConfigURL, encoding: .utf8), userWikiConfig)
+    XCTAssertEqual(try String(contentsOf: changedTemplateDestination, encoding: .utf8), v1Template)
+    XCTAssertEqual(try String(contentsOf: customSource, encoding: .utf8), userSource)
+    XCTAssertEqual(try String(contentsOf: customCurator, encoding: .utf8), userTalk)
+
+    let render = render(paths: paths, engine: engine, trigger: "runtime-test.app-upgrade")
+    XCTAssertEqual(render.status, .published)
+    assertRoutes(paths: paths, include: ["/dummy-custom", "/dummy-custom/talk", "/for-you", "/topics"])
+    assertLedger(paths: paths, expectedStatus: "installed_with_conflicts")
+    assertPublishedStatus(paths: paths, expectedTrigger: "runtime-test.app-upgrade")
+  }
+
+  private var dummyCustomPageConfig: String {
+    """
+
+      [[pages]]
+      id = "dummy-custom"
+      enabled = true
+      title = "Dummy Custom"
+      slug = "dummy-custom"
+      route = "/dummy-custom"
+      family_group = "custom"
+      family_group_title = "Custom"
+      family_id = "dummy-custom"
+      family_title = "Dummy Custom"
+      type = "context-page"
+      template = "pages/context-page.md"
+      talk_conventions_template = "talk/conventions.md"
+      summary = "Runtime-test custom page generated from the fallback template."
+      nav_order = 900
+      """
   }
 
   private func installDefaults(paths: RuntimePaths, defaultsRoot: URL) throws -> WikiRuntimeDefaultsInstallResult {
@@ -207,6 +311,19 @@ final class WikiRuntimeDefaultsScenarioTests: XCTestCase {
     XCTAssertNotNil(ledger.packagedManifest?.gitCommit)
   }
 
+  private func assertPublishedStatus(paths: RuntimePaths, expectedTrigger: String) {
+    let renderStateURL = paths.appSupportDirectory
+      .appendingPathComponent("wiki-site/current/.1context/current-render.json")
+    guard
+      let data = try? Data(contentsOf: renderStateURL),
+      let state = try? JSONDecoder().decode(WikiRenderResult.self, from: data)
+    else {
+      return XCTFail("Missing or invalid published render state at \(renderStateURL.path)")
+    }
+    XCTAssertEqual(state.status, .published)
+    XCTAssertEqual(state.trigger, expectedTrigger)
+  }
+
   private func runtimePaths(home: URL) -> RuntimePaths {
     RuntimePaths(
       userContentDirectory: home.appendingPathComponent("1Context", isDirectory: true),
@@ -241,6 +358,26 @@ final class WikiRuntimeDefaultsScenarioTests: XCTestCase {
     return repo.appendingPathComponent("wiki-engine", isDirectory: true)
   }
 
+  private func wikiCoreBinary(repo: URL) throws -> URL {
+    if let path = ProcessInfo.processInfo.environment["ONECONTEXT_WIKI_CORE_BIN"], !path.isEmpty {
+      return URL(fileURLWithPath: path)
+    }
+    let debug = repo.appendingPathComponent("target/debug/onecontext-wiki")
+    if FileManager.default.isExecutableFile(atPath: debug.path) {
+      return debug
+    }
+    let release = repo.appendingPathComponent("target/release/onecontext-wiki")
+    if FileManager.default.isExecutableFile(atPath: release.path) {
+      return release
+    }
+    _ = try run(
+      executable: "/usr/bin/env",
+      arguments: ["cargo", "build", "--package", "onecontext-wiki-daemon"],
+      currentDirectory: repo
+    )
+    return debug
+  }
+
   private func scenarioRoot(repo: URL) -> URL {
     if let path = ProcessInfo.processInfo.environment["ONECONTEXT_RUNTIME_DEFAULTS_SCENARIO_ROOT"], !path.isEmpty {
       return URL(fileURLWithPath: path, isDirectory: true)
@@ -253,9 +390,20 @@ final class WikiRuntimeDefaultsScenarioTests: XCTestCase {
     try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
   }
 
+  private func copyDirectory(from source: URL, to destination: URL) throws {
+    try? FileManager.default.removeItem(at: destination)
+    try RuntimePermissions.ensurePrivateDirectory(destination.deletingLastPathComponent())
+    try FileManager.default.copyItem(at: source, to: destination)
+  }
+
   private func writeString(_ value: String, to url: URL) throws {
     try RuntimePermissions.ensurePrivateDirectory(url.deletingLastPathComponent())
     try RuntimePermissions.writePrivateData(Data(value.utf8), to: url)
+  }
+
+  private func appendString(_ value: String, to url: URL) throws {
+    let existing = try String(contentsOf: url, encoding: .utf8)
+    try writeString(existing + value, to: url)
   }
 
   private func run(executable: String, arguments: [String], currentDirectory: URL) throws -> String {

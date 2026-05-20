@@ -51,9 +51,11 @@ author: "{{ author_id }}"
 created: "{{ created_at }}"
 target_section: "{{ section_name }}"
 talk_for: "page://your-context"
-status: proposed
+state: open
 evidence:
   - "{{ evidence_uri }}"
+attachments:
+  - "{{ attachment_uri }}"
 ---
 ```
 
@@ -73,6 +75,6 @@ Evidence:
 
 ## Decision Shape
 
-Decision entries use `kind: decided`, point `parent:` at the proposal stem, and
+Decision entries use `kind: decision`, point `parent:` at the proposal stem, and
 state whether the change was applied, refined and applied, deferred, rejected,
 or superseded.

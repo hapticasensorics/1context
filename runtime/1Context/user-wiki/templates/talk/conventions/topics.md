@@ -49,9 +49,11 @@ created: "{{ created_at }}"
 target_section: "{{ section_name }}"
 topic_slug: "{{ topic_slug }}"
 talk_for: "page://topics"
-status: proposed
+state: open
 evidence:
   - "{{ evidence_uri }}"
+attachments:
+  - "{{ attachment_uri }}"
 ---
 ```
 
@@ -71,6 +73,6 @@ Evidence:
 
 ## Decision Shape
 
-Decision entries use `kind: decided`, point `parent:` at the proposal stem, and
+Decision entries use `kind: decision`, point `parent:` at the proposal stem, and
 state whether the index changed. If the concept page does not exist yet, note
 that it remains pending librarian work.

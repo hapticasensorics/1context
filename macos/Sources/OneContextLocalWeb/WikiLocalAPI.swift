@@ -3,6 +3,8 @@ import Foundation
 import OneContextPlatform
 
 public struct WikiLocalAPIConfig: Equatable, Sendable {
+  private static let defaultPortRegistry = WikiLocalAPIPortRegistry()
+
   public var bindHost: String
   public var port: Int
 
@@ -20,6 +22,40 @@ public struct WikiLocalAPIConfig: Equatable, Sendable {
 
   public var healthURL: URL {
     baseURL.appendingPathComponent("api/wiki/health")
+  }
+
+  static var defaultPortCandidates: [Int] {
+    [LocalWebDefaults.wikiAPIPort] + Array((LocalWebDefaults.wikiAPIPort + 1)...(LocalWebDefaults.wikiAPIPort + 40))
+  }
+
+  static func currentDefaultPort() -> Int {
+    defaultPortRegistry.currentPort ?? LocalWebDefaults.wikiAPIPort
+  }
+
+  static func rememberDefaultPort(_ port: Int) {
+    defaultPortRegistry.currentPort = port
+  }
+
+  static func resetPreferredPortForTesting() {
+    defaultPortRegistry.currentPort = nil
+  }
+}
+
+private final class WikiLocalAPIPortRegistry: @unchecked Sendable {
+  private let lock = NSLock()
+  private var selectedPort: Int?
+
+  var currentPort: Int? {
+    get {
+      lock.lock()
+      defer { lock.unlock() }
+      return selectedPort
+    }
+    set {
+      lock.lock()
+      selectedPort = newValue
+      lock.unlock()
+    }
   }
 }
 
@@ -119,15 +155,26 @@ public final class WikiLocalAPIHandler: @unchecked Sendable {
   }
 
   private func healthPayload() -> [String: Any] {
-    let publishManifest = readJSON(paths.wikiCurrent.appendingPathComponent("publish-manifest.json"))
+    let currentRender = readJSON(
+      paths.wikiCurrent
+        .appendingPathComponent(".1context", isDirectory: true)
+        .appendingPathComponent("current-render.json")
+    )
+    let legacyPublishManifest = readJSON(paths.wikiCurrent.appendingPathComponent("publish-manifest.json"))
+    let publishedAt = publishedAt(from: currentRender)
+      ?? publishedAt(from: legacyPublishManifest)
     return [
       "status": "ok",
       "service": "1context-wiki-api",
       "render_state": renderState(),
       "current_site": "app-support://wiki-site/current",
       "current_site_exists": fileManager.fileExists(atPath: paths.wikiCurrent.appendingPathComponent("index.html").path),
-      "published_at": publishManifest?["published_at"] as? String ?? NSNull()
+      "published_at": publishedAt ?? NSNull()
     ]
+  }
+
+  private func publishedAt(from object: [String: Any]?) -> String? {
+    object?["published_at"] as? String ?? object?["publishedAt"] as? String
   }
 
   private func searchPayload(query: String) -> [String: Any] {
@@ -245,16 +292,24 @@ public final class WikiLocalAPIHandler: @unchecked Sendable {
   }
 }
 
+private enum WikiLocalAPIListenerFailure: Error {
+  case socket(String)
+  case bind(code: Int32, message: String)
+  case listen(String)
+}
+
 public final class WikiLocalAPIServer: @unchecked Sendable {
   private let config: WikiLocalAPIConfig
   private let handler: WikiLocalAPIHandler
   private let queue = DispatchQueue(label: "com.haptica.1context.wiki-api", attributes: .concurrent)
   private let lifecycleLock = NSLock()
   private var listenFD: Int32 = -1
+  private var activeConfig: WikiLocalAPIConfig
   private var lastError: String?
 
   public init(config: WikiLocalAPIConfig, handler: WikiLocalAPIHandler) {
     self.config = config
+    self.activeConfig = config
     self.handler = handler
   }
 
@@ -263,9 +318,9 @@ public final class WikiLocalAPIServer: @unchecked Sendable {
     defer { lifecycleLock.unlock() }
     return WikiLocalAPISnapshot(
       running: listenFD >= 0,
-      url: config.healthURL.absoluteString,
+      url: activeConfig.healthURL.absoluteString,
       health: listenFD >= 0 ? "OK" : "not running",
-      port: config.port,
+      port: activeConfig.port,
       lastError: lastError
     )
   }
@@ -274,51 +329,25 @@ public final class WikiLocalAPIServer: @unchecked Sendable {
     lifecycleLock.lock()
     defer { lifecycleLock.unlock() }
     if listenFD >= 0 {
-      return WikiLocalAPISnapshot(running: true, url: config.healthURL.absoluteString, health: "OK", port: config.port, lastError: lastError)
+      return WikiLocalAPISnapshot(running: true, url: activeConfig.healthURL.absoluteString, health: "OK", port: activeConfig.port, lastError: lastError)
     }
 
-    let fd = socket(AF_INET, SOCK_STREAM, 0)
-    guard fd >= 0 else {
-      let error = WikiLocalAPIError.socketFailed(String(cString: strerror(errno)))
-      lastError = error.localizedDescription
-      throw error
+    let listener = try openListener()
+
+    listenFD = listener.fd
+    activeConfig = listener.config
+    lastError = listener.warning
+    if config.bindHost == LocalWebDefaults.bindHost, config.port == LocalWebDefaults.wikiAPIPort {
+      WikiLocalAPIConfig.rememberDefaultPort(listener.config.port)
     }
-
-    var reuse: Int32 = 1
-    setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &reuse, socklen_t(MemoryLayout<Int32>.size))
-    setNoSigPipe(fd)
-
-    var address = sockaddr_in()
-    address.sin_len = UInt8(MemoryLayout<sockaddr_in>.size)
-    address.sin_family = sa_family_t(AF_INET)
-    address.sin_port = UInt16(config.port).bigEndian
-    address.sin_addr = in_addr(s_addr: inet_addr(config.bindHost))
-
-    let bindResult = withUnsafePointer(to: &address) {
-      $0.withMemoryRebound(to: sockaddr.self, capacity: 1) {
-        Darwin.bind(fd, $0, socklen_t(MemoryLayout<sockaddr_in>.size))
-      }
-    }
-    guard bindResult == 0 else {
-      let message = String(cString: strerror(errno))
-      close(fd)
-      let error = WikiLocalAPIError.bindFailed(config.bindHost, config.port, message)
-      lastError = error.localizedDescription
-      throw error
-    }
-
-    guard listen(fd, 16) == 0 else {
-      let message = String(cString: strerror(errno))
-      close(fd)
-      let error = WikiLocalAPIError.socketFailed(message)
-      lastError = error.localizedDescription
-      throw error
-    }
-
-    listenFD = fd
-    lastError = nil
-    queue.async { [self] in acceptLoop(fd) }
-    return WikiLocalAPISnapshot(running: true, url: config.healthURL.absoluteString, health: "OK", port: config.port, lastError: lastError)
+    queue.async { [self] in acceptLoop(listener.fd) }
+    return WikiLocalAPISnapshot(
+      running: true,
+      url: listener.config.healthURL.absoluteString,
+      health: "OK",
+      port: listener.config.port,
+      lastError: lastError
+    )
   }
 
   public func stop() {
@@ -341,6 +370,85 @@ public final class WikiLocalAPIServer: @unchecked Sendable {
         close(client)
       }
     }
+  }
+
+  private func openListener() throws -> (fd: Int32, config: WikiLocalAPIConfig, warning: String?) {
+    var lastBindError: WikiLocalAPIError?
+    for candidatePort in candidatePorts() {
+      switch bindListener(port: candidatePort) {
+      case .success(let fd):
+        let selectedConfig = WikiLocalAPIConfig(bindHost: config.bindHost, port: candidatePort)
+        let warning = candidatePort == config.port
+          ? nil
+          : "Default 1Context wiki API port \(config.port) is busy; using \(candidatePort)."
+        return (fd, selectedConfig, warning)
+      case .failure(.bind(let code, let message)):
+        let error = WikiLocalAPIError.bindFailed(config.bindHost, candidatePort, message)
+        if code == EADDRINUSE, shouldTryFallback(after: candidatePort) {
+          lastBindError = error
+          continue
+        }
+        lastError = error.localizedDescription
+        throw error
+      case .failure(.socket(let message)), .failure(.listen(let message)):
+        let error = WikiLocalAPIError.socketFailed(message)
+        lastError = error.localizedDescription
+        throw error
+      }
+    }
+    let error = lastBindError ?? WikiLocalAPIError.bindFailed(config.bindHost, config.port, "no available loopback port")
+    lastError = error.localizedDescription
+    throw error
+  }
+
+  private func bindListener(port: Int) -> Result<Int32, WikiLocalAPIListenerFailure> {
+    let fd = socket(AF_INET, SOCK_STREAM, 0)
+    guard fd >= 0 else {
+      return .failure(.socket(String(cString: strerror(errno))))
+    }
+
+    var reuse: Int32 = 1
+    setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &reuse, socklen_t(MemoryLayout<Int32>.size))
+    setNoSigPipe(fd)
+
+    var address = sockaddr_in()
+    address.sin_len = UInt8(MemoryLayout<sockaddr_in>.size)
+    address.sin_family = sa_family_t(AF_INET)
+    address.sin_port = UInt16(port).bigEndian
+    address.sin_addr = in_addr(s_addr: inet_addr(config.bindHost))
+
+    let bindResult = withUnsafePointer(to: &address) {
+      $0.withMemoryRebound(to: sockaddr.self, capacity: 1) {
+        Darwin.bind(fd, $0, socklen_t(MemoryLayout<sockaddr_in>.size))
+      }
+    }
+    guard bindResult == 0 else {
+      let code = errno
+      let message = String(cString: strerror(code))
+      close(fd)
+      return .failure(.bind(code: code, message: message))
+    }
+
+    guard listen(fd, 16) == 0 else {
+      let code = errno
+      let message = String(cString: strerror(code))
+      close(fd)
+      return .failure(.listen(message))
+    }
+    return .success(fd)
+  }
+
+  private func candidatePorts() -> [Int] {
+    guard config.bindHost == LocalWebDefaults.bindHost, config.port == LocalWebDefaults.wikiAPIPort else {
+      return [config.port]
+    }
+    return WikiLocalAPIConfig.defaultPortCandidates
+  }
+
+  private func shouldTryFallback(after port: Int) -> Bool {
+    config.bindHost == LocalWebDefaults.bindHost
+      && config.port == LocalWebDefaults.wikiAPIPort
+      && port != WikiLocalAPIConfig.defaultPortCandidates.last
   }
 
   private func handle(_ fd: Int32) {

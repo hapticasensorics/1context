@@ -1,0 +1,11 @@
+[workspace]
+members = [
+  "crates/onecontext-wiki-core",
+  "crates/onecontext-wiki-daemon",
+]
+resolver = "2"
+
+[workspace.package]
+edition = "2021"
+license = "Apache-2.0"
+repository = "https://github.com/hapticasensorics/1context"

@@ -16,11 +16,16 @@ public enum WikiRenderFingerprint {
       return sha256Hex(Data())
     }
 
-    let rootPath = root.standardizedFileURL.path
+    let userWikiRoot = root.deletingLastPathComponent()
+    let rootPath = userWikiRoot.standardizedFileURL.path
     var files: [URL] = []
+    let wikiConfig = userWikiRoot.appendingPathComponent("wiki.toml")
+    if fileManager.fileExists(atPath: wikiConfig.path) {
+      files.append(wikiConfig)
+    }
     for case let url as URL in enumerator {
       let values = try? url.resourceValues(forKeys: [.isRegularFileKey])
-      if values?.isRegularFile == true {
+      if values?.isRegularFile == true, isPublishInput(url) {
         files.append(url)
       }
     }
@@ -44,5 +49,11 @@ public enum WikiRenderFingerprint {
 
   private static func sha256Hex(_ data: Data) -> String {
     SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
+  }
+
+  private static func isPublishInput(_ url: URL) -> Bool {
+    guard url.deletingLastPathComponent().lastPathComponent == "source" else { return false }
+    if url.pathExtension == "md" { return true }
+    return url.lastPathComponent.hasSuffix(".tombstone.toml")
   }
 }

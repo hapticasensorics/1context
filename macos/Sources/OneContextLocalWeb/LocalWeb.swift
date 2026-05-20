@@ -47,6 +47,7 @@ public struct LocalWebDiagnostics: Codable, Equatable, Sendable {
   public var caddyExecutableExists: Bool
   public var caddyExecutableIsExecutable: Bool
   public var caddyExecutableIsBundled: Bool
+  public var runningCaddyExecutable: String?
   public var bundledCaddyPath: String
   public var bundledCaddyVersionPath: String
   public var bundledCaddyVersion: String
@@ -80,6 +81,7 @@ public struct LocalWebDiagnostics: Codable, Equatable, Sendable {
     caddyExecutableExists: Bool,
     caddyExecutableIsExecutable: Bool,
     caddyExecutableIsBundled: Bool,
+    runningCaddyExecutable: String? = nil,
     bundledCaddyPath: String,
     bundledCaddyVersionPath: String,
     bundledCaddyVersion: String,
@@ -112,6 +114,7 @@ public struct LocalWebDiagnostics: Codable, Equatable, Sendable {
     self.caddyExecutableExists = caddyExecutableExists
     self.caddyExecutableIsExecutable = caddyExecutableIsExecutable
     self.caddyExecutableIsBundled = caddyExecutableIsBundled
+    self.runningCaddyExecutable = runningCaddyExecutable
     self.bundledCaddyPath = bundledCaddyPath
     self.bundledCaddyVersionPath = bundledCaddyVersionPath
     self.bundledCaddyVersion = bundledCaddyVersion
@@ -420,7 +423,7 @@ public final class CaddyManager: @unchecked Sendable {
   private let host: String
   private let port: Int
   private let apiBindHost: String
-  private let apiPort: Int
+  private let apiPortOverride: Int?
   private let caddyExecutableOverride: URL?
   private let proxyExecutableOverride: URL?
   private let lifecycleLock = NSLock()
@@ -434,7 +437,7 @@ public final class CaddyManager: @unchecked Sendable {
     host: String = LocalWebDefaults.wikiHost,
     port: Int = LocalWebDefaults.wikiPort,
     apiBindHost: String = LocalWebDefaults.bindHost,
-    apiPort: Int = LocalWebDefaults.wikiAPIPort
+    apiPort: Int? = nil
   ) {
     self.runtimePaths = runtimePaths
     self.paths = LocalWebPaths(runtimePaths: runtimePaths)
@@ -444,7 +447,7 @@ public final class CaddyManager: @unchecked Sendable {
     self.host = host
     self.port = port
     self.apiBindHost = apiBindHost
-    self.apiPort = apiPort
+    self.apiPortOverride = apiPort
     self.caddyExecutableOverride = caddyExecutable
     self.proxyExecutableOverride = proxyExecutable
   }
@@ -488,7 +491,7 @@ public final class CaddyManager: @unchecked Sendable {
       host: host,
       port: port,
       apiBindHost: apiBindHost,
-      apiPort: apiPort
+      apiPort: resolvedAPIPort()
     )
     try prepareCaddyDirectories()
     try RuntimePermissions.writePrivateString(config.caddyfileText() + "\n", toFile: paths.caddyfile.path)
@@ -512,10 +515,12 @@ public final class CaddyManager: @unchecked Sendable {
   }
 
   public func diagnostics() -> LocalWebDiagnostics {
-    let caddy = (try? caddyExecutable()) ?? URL(fileURLWithPath: "")
+    let caddy = try? caddyExecutable()
     let bundled = bundledCaddyURL()
     let config = caddyConfig()
     let setup = localWebSetupSnapshot()
+    let state = readState()
+    let runningCaddyExecutable = state.flatMap { processMatchesManagedCaddy($0.pid) ? $0.caddyExecutable : nil }
     let readinessProbeHealth = setup.ready ? probeHealth(config.healthURL) : "setup required"
     let privilegedProxyProbeHealth = setup.ready ? probeHealth(config.privilegedProxyHealthURL) : "setup required"
     let brandedProbeHealth = setup.ready ? probeHealth(config.brandedHealthURL) : "setup required"
@@ -535,10 +540,11 @@ public final class CaddyManager: @unchecked Sendable {
       apiHealth: WikiLocalAPIProbe.health(config: apiConfig()),
       apiPort: apiConfig().port,
       apiStatePath: paths.wikiBrowserStateFile.path,
-      caddyExecutable: caddy.path,
-      caddyExecutableExists: !caddy.path.isEmpty && fileManager.fileExists(atPath: caddy.path),
-      caddyExecutableIsExecutable: !caddy.path.isEmpty && fileManager.isExecutableFile(atPath: caddy.path),
-      caddyExecutableIsBundled: !caddy.path.isEmpty && caddy.standardizedFileURL == bundled.standardizedFileURL,
+      caddyExecutable: caddy?.path ?? "",
+      caddyExecutableExists: caddy.map { fileManager.fileExists(atPath: $0.path) } ?? false,
+      caddyExecutableIsExecutable: caddy.map { isExecutableRegularFile($0) } ?? false,
+      caddyExecutableIsBundled: caddy.map { $0.standardizedFileURL == bundled.standardizedFileURL } ?? false,
+      runningCaddyExecutable: runningCaddyExecutable,
       bundledCaddyPath: bundled.path,
       bundledCaddyVersionPath: bundledCaddyVersionURL().path,
       bundledCaddyVersion: readTrimmed(bundledCaddyVersionURL()) ?? "missing",
@@ -669,7 +675,7 @@ public final class CaddyManager: @unchecked Sendable {
   }
 
   private func caddyExecutable() throws -> URL {
-    for candidate in caddyCandidates() where fileManager.isExecutableFile(atPath: candidate.path) {
+    for candidate in caddyCandidates() where isExecutableRegularFile(candidate) {
       return candidate
     }
     throw LocalWebError.caddyMissing
@@ -683,7 +689,7 @@ public final class CaddyManager: @unchecked Sendable {
       host: host,
       port: port,
       apiBindHost: apiBindHost,
-      apiPort: apiPort
+      apiPort: resolvedAPIPort()
     )
   }
 
@@ -735,7 +741,7 @@ public final class CaddyManager: @unchecked Sendable {
   }
 
   private func localWebProxyExecutable() throws -> URL {
-    for candidate in localWebProxyCandidates() where fileManager.isExecutableFile(atPath: candidate.path) {
+    for candidate in localWebProxyCandidates() where isExecutableRegularFile(candidate) {
       return candidate
     }
     throw LocalWebSetupInstallerError.proxyExecutableMissing
@@ -770,6 +776,16 @@ public final class CaddyManager: @unchecked Sendable {
     return candidates
   }
 
+  private func isExecutableRegularFile(_ url: URL) -> Bool {
+    var isDirectory = ObjCBool(false)
+    guard fileManager.fileExists(atPath: url.path, isDirectory: &isDirectory),
+      !isDirectory.boolValue
+    else {
+      return false
+    }
+    return fileManager.isExecutableFile(atPath: url.path)
+  }
+
   private func bundledCaddyURL(executableDirectory: URL? = nil) -> URL {
     let directory = executableDirectory ?? currentExecutableURL()?.deletingLastPathComponent()
     return (directory ?? URL(fileURLWithPath: ""))
@@ -790,7 +806,11 @@ public final class CaddyManager: @unchecked Sendable {
   }
 
   private func apiConfig() -> WikiLocalAPIConfig {
-    WikiLocalAPIConfig(bindHost: apiBindHost, port: apiPort)
+    WikiLocalAPIConfig(bindHost: apiBindHost, port: resolvedAPIPort())
+  }
+
+  private func resolvedAPIPort() -> Int {
+    apiPortOverride ?? WikiLocalAPIConfig.currentDefaultPort()
   }
 
   private func healthOK(_ url: URL) -> Bool {

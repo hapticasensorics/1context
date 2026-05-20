@@ -10,7 +10,7 @@ changes to the Your Context article.
 - Talk folder: `{{ talk_folder }}`
 - Talk metadata: `{{ talk_folder }}/_meta.yaml`
 - Proposal glob: `{{ talk_folder }}/*.proposal.ycx-*.md`
-- Existing decision glob: `{{ talk_folder }}/*.decided.*.md`
+- Existing decision glob: `{{ talk_folder }}/*.decision.*.md`
 
 ## Scope
 
@@ -68,19 +68,19 @@ or evidence ids over long quotations.
 Create a new markdown file:
 
 ```text
-{{ now_utc_slug }}.decided.{{ proposal_slug }}.md
+{{ now_utc_slug }}.decision.{{ proposal_slug }}.md
 ```
 
 with frontmatter:
 
 ```yaml
 ---
-kind: decided
+kind: decision
 author: "{{ agent_id }}"
 created: "{{ now_utc }}"
 parent: "{{ proposal_stem }}"
 decision: "{{ apply|refine_apply|defer|reject|supersede }}"
-status: closed
+state: resolved
 ---
 ```
 

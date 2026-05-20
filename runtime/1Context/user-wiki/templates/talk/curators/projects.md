@@ -9,7 +9,7 @@ changes to the Projects index article.
 - Article: `{{ article_path }}`
 - Talk folder: `{{ talk_folder }}`
 - Proposal glob: `{{ talk_folder }}/*.proposal.proj-*.md`
-- Existing decision glob: `{{ talk_folder }}/*.decided.*.md`
+- Existing decision glob: `{{ talk_folder }}/*.decision.*.md`
 
 ## Scope
 
@@ -55,19 +55,19 @@ operator explicitly says the pattern should be preserved.
 Create a new markdown file:
 
 ```text
-{{ now_utc_slug }}.decided.{{ proposal_slug }}.md
+{{ now_utc_slug }}.decision.{{ proposal_slug }}.md
 ```
 
 with frontmatter:
 
 ```yaml
 ---
-kind: decided
+kind: decision
 author: "{{ agent_id }}"
 created: "{{ now_utc }}"
 parent: "{{ proposal_stem }}"
 decision: "{{ apply|refine_apply|defer|reject|supersede }}"
-status: closed
+state: resolved
 ---
 ```
 

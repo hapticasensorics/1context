@@ -35,7 +35,8 @@ Files are truth. JSONL is history. Derived indexes are rebuildable.
 
   context-engine/
     memory-system workspace: prompts, agents, jobs, proposals, decisions,
-    runs, artifacts, observations, ledgers, and index manifests
+    runs, artifacts, observations, talk-derived mail, notifications, ledgers,
+    and index manifests
 
 ~/Library/Application Support/1Context/
   app machinery: setup state, staging, local web mirrors, sockets, and
@@ -81,6 +82,8 @@ or copy this folder without knowing about daemon internals.
 ~/1Context/user-wiki/
   README.md
   wiki.toml
+  .1context/
+    page-ledger.jsonl
 
   templates/
     pages/
@@ -106,6 +109,10 @@ or copy this folder without knowing about daemon internals.
               <timestamp>.proposal.<short-title>.md
               <timestamp>.reply.<short-title>.md
               <timestamp>.close.<resolution>-<short-title>.md
+              attachments/
+                <message-id>/
+                  screenshot.png
+                  context.json
           templates/
             page.template.md
             talk/
@@ -122,7 +129,7 @@ or copy this folder without knowing about daemon internals.
     .1context/
       current-render.json
       render-events.jsonl
-      site-manifest.json
+      route-manifest.json
       content-index.json
 ```
 
@@ -133,9 +140,9 @@ render. Source may be newer than site. Site must never be half-rendered.
 
 `wiki.toml` is the user-owned page registry and site map. It names routes,
 navigation, source-backed pages, generated pages, aliases, templates, access,
-and materialization policy.
+and page lifecycle policy.
 
-Use `[[pages]]` for pages that materialize editable source under
+Use `[[pages]]` for pages that create editable source under
 `source/families/**`.
 
 Use `[[site_pages]]` for generated pages, aliases, and diagnostics that can
@@ -163,7 +170,7 @@ operator_name = "Operator"
 access_tier = "private"
 template_pack = "e08"
 
-[materialization]
+[page_lifecycle]
 enabled = true
 create_talk = true
 overwrite_user_files = false
@@ -227,18 +234,18 @@ source/families/context/your-context/
 source/families/work/projects/
 source/families/reference/topics/
 source/families/work/guardian-app/
-source/families/reference/lancedb/
+source/families/reference/search-indexes/
 ```
 
 `family.toml` binds the family to logical page ids and route ids. It is not a
 second site map.
 
-## Talk Files
+## Talk Files, Mailboxes, And Notifications
 
 Talk belongs beside the page it discusses. It is part of the user's wiki, not
-hidden engine state.
+hidden engine state. It is also the durable source for the inbox system.
 
-Talk folders are durable page history:
+Talk folders are durable page-local mailing-list history:
 
 ```text
 source/families/<group>/<family>/talk/<page-slug>.talk/
@@ -248,6 +255,10 @@ source/families/<group>/<family>/talk/<page-slug>.talk/
   2026-05-14T18-10Z.proposal.short-title.md
   2026-05-14T18-22Z.reply.short-title.md
   2026-05-14T18-40Z.close.accepted-short-title.md
+  attachments/
+    <message-id>/
+      screenshot.png
+      context.json
   archive/
 ```
 
@@ -256,12 +267,53 @@ version. `_conventions.md` stores page-local discussion rules.
 `_curator.md` stores page-local curator instructions.
 
 Talk entries should carry stable logical ids, timestamps, authorship,
-provenance, and references to evidence or artifacts. Use logical ids such as
-`page://your-context`, `family://context/your-context`, and
-`evidence://observation/event_123` instead of raw local paths.
+provenance, and references to evidence, artifacts, or attachments. Use
+logical ids such as `page://your-context`, `family://context/your-context`,
+`artifact://run_123/screenshot`, and `evidence://observation/event_123`
+instead of raw local paths.
 
-Talk entry state names should be explicit: `proposed`, `accepted`, `rejected`,
-`resolved`, `withdrawn`, `superseded`, `blocked`, or `archived`.
+Talk attachments are user wiki files. They may include images, screenshots,
+logs, patches, JSON context, PDFs, or other supporting artifacts under the
+talk folder's `attachments/` subtree. Rendered talk pages may link to or
+thumbnail safe attachments, but must never expose local absolute paths.
+
+Talk entry `kind` names should describe the message type: `conversation`,
+`proposal`, `question`, `concern`, `reply`, `decision`, `deferral`,
+`contradiction`, or `redaction`.
+
+Talk entry `state` names should describe lifecycle: `open`, `accepted`,
+`rejected`, `resolved`, `withdrawn`, `superseded`, `blocked`, or `archived`.
+
+Inbox and notification state lives in `context-engine`, not beside every page:
+
+```text
+context-engine/agents/directory/
+  agents.jsonl
+  current.json
+  leases.jsonl
+
+context-engine/mail/
+  subscriptions.toml
+  deliveries.jsonl
+  mailboxes/<address-key>/inbox.jsonl
+  claims.jsonl
+
+context-engine/notifications/
+  outbox.jsonl
+  attempts.jsonl
+  cursors/<agent-id>.json
+```
+
+The split is intentional:
+
+- talk folders are the source archive
+- delivery ledgers say which recipient needs which message
+- mailbox files are fast recipient views
+- notification files are live wakeup attempts
+
+Mailboxes and notifications may be regenerated or repaired from talk entries,
+subscriptions, and delivery ledgers. Talk entry files and delivery ledgers are
+the durable facts.
 
 ## Templates
 
@@ -291,8 +343,8 @@ templates/
       open-questions.md
 ```
 
-Templates initialize pages and talk. They do not own those files after
-materialization. Once a template has created a user file, the user file wins.
+Templates initialize pages and talk. They do not own those files after page
+creation. Once a template has created a user file, the user file wins.
 
 Global agent prompts belong in `context-engine/prompts`, not
 `user-wiki/templates`. Page-local talk conventions and curator instructions
@@ -330,6 +382,16 @@ site/.1context/render-events.jsonl
 
 The event schema and render lifecycle are defined by the publication contract.
 
+The canonical page provenance ledger lives with editable user wiki source:
+
+```text
+user-wiki/.1context/page-ledger.jsonl
+```
+
+It records append-only page lifecycle facts such as creation, template
+baselines, observed edits, tombstones, restores, and publishes. It is user data,
+not Application Support state.
+
 ## Context Engine
 
 `context-engine` is the user-owned memory-system workplace. It is inspectable
@@ -338,9 +400,11 @@ and backup-worthy, but it is not the clean static wiki export.
 ```text
 ~/1Context/context-engine/
   agents/
+    directory/
     roles/
     tools/
     policies/
+    subscriptions/
 
   jobs/
 
@@ -349,6 +413,15 @@ and backup-worthy, but it is not the clean static wiki export.
     e08-for-you/
 
   inbox/
+  mail/
+    subscriptions.toml
+    deliveries.jsonl
+    mailboxes/
+    claims.jsonl
+  notifications/
+    outbox.jsonl
+    attempts.jsonl
+    cursors/
   proposals/
   decisions/
   runs/
@@ -362,12 +435,16 @@ Directory meanings:
 
 | Directory | Stores |
 | --- | --- |
+| `agents/directory` | live and recently-live agent registrations, transport pointers, leases, and retirement events |
 | `agents/roles` | reusable role definitions |
 | `agents/tools` | tool contracts and allowlists |
 | `agents/policies` | operator-touched rules, safety policy, edit rules |
+| `agents/subscriptions` | durable role/list/page subscription policy when it is not page-local |
 | `jobs/` | reusable job definitions |
 | `prompts/` | global prompt files and prompt packs |
-| `inbox/` | machine-readable work requests |
+| `inbox/` | legacy/simple machine-readable work requests and operator-created tasks |
+| `mail/` | talk-derived delivery records, recipient mailbox views, claims, and subscription indexes |
+| `notifications/` | wakeup outbox, push attempts, and cursors for live agents |
 | `proposals/` | immutable proposed changes and patch series |
 | `decisions/` | accepted, rejected, deferred, withdrawn, or superseded outcomes |
 | `runs/` | replay/debug records for agent work |
@@ -376,13 +453,30 @@ Directory meanings:
 | `ledgers/` | append-only operational JSONL |
 | `indexes/` | user-owned manifests and rebuild state for derived indexes |
 
-The context engine can reference wiki objects with logical ids. Canonical wiki
-publication happens only after accepted changes materialize into `user-wiki`.
+The context engine can reference wiki pages and artifacts with logical ids.
+Canonical wiki publication happens only after accepted changes land in
+`user-wiki`.
 
 ## Context Engine File Classes
 
 Inbox task files are queued work requests. Claims should be lease-based and
 include target, input hash, expected outputs, and allowed paths.
+
+Agent directory records are append-friendly. An agent registers when it is
+born, heartbeats while active, and retires when done. A registration may include
+transport pointers such as a Codex `thread_id`, but durable routing should
+prefer addresses such as `role://topics.curator`, `list://topics.watchers`,
+`page://topics`, or `thread://topics/infrastructure-taxonomy`.
+
+Mail records are recipient views over talk entries. The talk entry file is the
+message truth; delivery ledgers and mailbox files decide who needs to see it,
+who claimed it, and what state that recipient's copy is in. A missing mailbox
+view must be rebuildable from talk entries, subscriptions, and delivery
+ledgers.
+
+Notifications are wakeups, not memory. A notification tells a live transport
+that inbox state changed. Failed notification delivery must not lose mail,
+because the recipient can still call `wiki.mail.inbox`.
 
 Proposals are immutable suggested changes. New versions create new files rather
 than overwriting old versions. Decisions record whether a proposal is accepted,
@@ -394,11 +488,11 @@ Observations are source material for memory work. Ledgers are append-only JSONL.
 Detailed write protocol, proposal promotion, route plans, and render requests
 belong to the publication contract.
 
-## Indexes And LanceDB
+## Indexes And Search
 
-LanceDB is a derived retrieval index, not canonical memory.
+Indexes are rebuildable acceleration surfaces, not canonical memory.
 
-Canonical records remain ordinary files:
+Canonical records remain ordinary files and append-only ledgers:
 
 ```text
 user-wiki/source/**/*.md
@@ -412,10 +506,14 @@ context-engine/**/*.json
 context-engine/**/*.jsonl
 ```
 
+Every important source file, talk entry, attachment, proposal, decision,
+render result, and operational event should be readable from `user-wiki` or
+`context-engine` without a hidden database.
+
 Heavy derived indexes belong under Application Support:
 
 ```text
-~/Library/Application Support/1Context/indexes/lancedb/
+~/Library/Application Support/1Context/indexes/
 ```
 
 User-owned index manifests and rebuild state live under:
@@ -423,13 +521,13 @@ User-owned index manifests and rebuild state live under:
 ```text
 ~/1Context/context-engine/indexes/
   index-manifest.toml
-  lancedb.state.json
   rebuilds.jsonl
 ```
 
 The app must be able to delete and rebuild Application Support indexes from
 `user-wiki`, `context-engine`, and index manifests. A missing or corrupt index
-may degrade retrieval, but it must not erase memory or block Open Wiki.
+may degrade retrieval, routing, inbox speed, or semantic search, but it must
+not erase memory or block Open Wiki.
 
 ## Application Support
 
@@ -442,10 +540,11 @@ Application Support is app-owned machinery.
   wiki-site/
     current/
     previous/
+    next/
   indexes/
-    lancedb/
   local-web/
     caddy/
+  notifications/
   sockets/
   run/
   state/
@@ -457,6 +556,8 @@ Rules:
 - `wiki-site/current/` is a mirror of the last-good export for local serving.
 - `wiki-site/current/` is not the canonical export.
 - `indexes/` are rebuildable.
+- `notifications/` may hold transient transport state, but durable mail and
+  notification evidence lives under `~/1Context/context-engine/`.
 - `setup/` records default installation and migration state.
 - App Support must not become the only copy of user memory.
 
@@ -494,22 +595,27 @@ another ignored fixture path. Promote files into `runtime/` only after they are
 scrubbed and intended to ship.
 
 First-run defaults are copied only into missing destinations. After a file is
-materialized into `~/1Context`, the user owns it.
+created or copied into `~/1Context`, the user owns it.
 
 The shipped defaults live in the app bundle under
 `Contents/Resources/RuntimeDefaults/1Context`. The build also writes
 `Contents/Resources/RuntimeDefaults/1Context/.1context/runtime-defaults-manifest.json`
 with the release version, git commit/dirty bit, defaults source hash,
-pre-rendered site hash, wiki-engine hash, individual materializer/renderer
-hashes, and sanitized render counts. This manifest is package evidence and
-setup ledger input; it is not an editable user wiki page.
+pre-rendered site hash, bundled wiki-engine hash, signed wiki-core helper hash,
+renderer hash, manifest-writer hash, and sanitized render counts. This manifest
+is package evidence and setup ledger input; it is not an editable user wiki
+page.
 
 Application Support records setup state:
 
 ```text
 ~/Library/Application Support/1Context/setup/runtime-defaults-install.json
-~/Library/Application Support/1Context/setup/wiki-page-materialize.toml
+~/Library/Application Support/1Context/setup/page-lifecycle.jsonl
 ```
+
+Historical dev fixtures may still contain the older setup receipt name. The
+target architecture records page lifecycle evidence through the page ledger and
+setup receipts, not through a consumer-facing helper API.
 
 Update matrix:
 
@@ -565,6 +671,10 @@ These persisted files need explicit schemas and tests:
 - page frontmatter
 - talk `_meta.yaml`
 - talk entry frontmatter
+- agent directory records
+- mail delivery records
+- mailbox view records
+- notification outbox and attempt records
 - proposal records
 - decision records
 - run manifests
@@ -573,20 +683,24 @@ These persisted files need explicit schemas and tests:
 - append-only ledgers
 - index manifests
 - setup state TOML
+- `page-ledger.jsonl`
 - `current-render.json`
 - `render-events.jsonl`
-- `site-manifest.json`
+- `route-manifest.json`
 - `content-index.json`
 
-Schema drift between defaults, materializers, renderers, Swift validators, and
-tests is a release blocker.
+Schema drift between defaults, page lifecycle helpers, talk/mail helpers,
+renderers, core validators, Swift host adapters, and tests is a release
+blocker.
 
 ## Minimal V0 Data Contract
 
 The first wiki integration only needs to prove the data shape:
 
 - initialize `user-wiki` and `context-engine`
-- materialize configured source-backed pages from templates
+- create configured source-backed pages from templates through page lifecycle
+- register agents, route talk entries to mailboxes, and record notification
+  wakeups
 - preserve edited user files
 - respect tombstones
 - render accepted source into `user-wiki/site`
@@ -596,7 +710,7 @@ The first wiki integration only needs to prove the data shape:
 - prove `runtime/` is public-safe and `runtime-test/` is ignored
 
 The first slice should not require a bundled `memory-core` source checkout,
-long-running Python web server, LanceDB, embeddings, broad memory jobs, runtime
+long-running Python web server, vector indexes, embeddings, broad memory jobs, runtime
 `npm install`, runtime `uv run`, or host Python/Node to open the wiki.
 
 Those are implementation constraints for V0, but they exist to protect the data

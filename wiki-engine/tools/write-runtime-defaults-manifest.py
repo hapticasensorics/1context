@@ -20,6 +20,12 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--runtime-defaults-root", required=True, type=Path)
     parser.add_argument("--wiki-engine-root", required=True, type=Path)
+    parser.add_argument("--wiki-core-bin", required=True, type=Path)
+    parser.add_argument("--manifest-writer", type=Path)
+    parser.add_argument(
+        "--manifest-writer-display-path",
+        default="tools/write-runtime-defaults-manifest.py",
+    )
     parser.add_argument("--render-result", required=True, type=Path)
     parser.add_argument("--version", required=True)
     parser.add_argument("--git-commit", default="unknown")
@@ -88,6 +94,15 @@ def file_identity(root: Path, path: Path) -> dict[str, object]:
     }
 
 
+def file_identity_with_path(path: Path, display_path: str) -> dict[str, object]:
+    data = path.read_bytes()
+    return {
+        "path": display_path,
+        "sha256": hashlib.sha256(data).hexdigest(),
+        "bytes": len(data),
+    }
+
+
 def sanitized_render_result(path: Path) -> dict[str, object]:
     payload = json.loads(path.read_text(encoding="utf-8"))
     return {
@@ -111,9 +126,14 @@ def main() -> None:
     source_hash, source_files, source_bytes = tree_hash(defaults_root, should_skip_runtime_defaults)
     site_hash, site_files, site_bytes = tree_hash(site_root, lambda _rel: False)
     renderer_hash, renderer_files, renderer_bytes = tree_hash(wiki_engine_root, should_skip_wiki_engine)
-    materializer = file_identity(wiki_engine_root, wiki_engine_root / "tools" / "materialize-wiki-pages.py")
+    wiki_core = file_identity_with_path(args.wiki_core_bin.resolve(), "Contents/MacOS/onecontext-wiki")
     renderer = file_identity(wiki_engine_root, wiki_engine_root / "tools" / "render-site.mjs")
-    manifest_writer = file_identity(wiki_engine_root, Path(__file__).resolve())
+    if args.manifest_writer:
+        manifest_writer = file_identity_with_path(
+            args.manifest_writer.resolve(), args.manifest_writer_display_path
+        )
+    else:
+        manifest_writer = file_identity(wiki_engine_root, Path(__file__).resolve())
     render_result = sanitized_render_result(args.render_result)
 
     manifest = {
@@ -130,7 +150,7 @@ def main() -> None:
             "runtime_defaults_source": source_hash,
             "runtime_defaults_site": site_hash,
             "wiki_engine": renderer_hash,
-            "materializer": materializer["sha256"],
+            "wiki_core": wiki_core["sha256"],
             "renderer": renderer["sha256"],
             "manifest_writer": manifest_writer["sha256"],
         },
@@ -145,7 +165,7 @@ def main() -> None:
             "wiki_engine": renderer_bytes,
         },
         "tools": {
-            "materializer": materializer,
+            "wiki_core": wiki_core,
             "renderer": renderer,
             "manifest_writer": manifest_writer,
         },

@@ -37,5 +37,6 @@ def test_wiki_interface_replaces_memory_wiki_compat_modules() -> None:
         assert not (memory_root / filename).exists()
 
     readme = (interface_root / "README.md").read_text(encoding="utf-8")
-    assert "Python boundary for wiki-facing memory work" in readme
+    assert "memory-side adapter for wiki-facing work" in readme
+    assert "portable Rust wiki" in readme
     assert "This folder does not own" in readme

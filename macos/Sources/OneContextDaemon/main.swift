@@ -69,13 +69,17 @@ final class OneContextDaemon: @unchecked Sendable {
   private let paths = RuntimePaths.current()
   private let startedAt = Date()
   private let clientQueue = DispatchQueue(label: "com.haptica.1contextd.clients", attributes: .concurrent)
+  private let wikiPublicationQueue = DispatchQueue(label: "com.haptica.1contextd.wiki-publication")
   private let activeClients = DispatchSemaphore(value: maxActiveClients)
   private var listenFD: Int32 = -1
   private lazy var logger = Logger(path: paths.logPath)
   private lazy var localWeb = CaddyManager(runtimePaths: paths)
+  private lazy var wikiCore = WikiCoreProcessClient(runtimePaths: paths)
+  private lazy var wikiRendererConfig = WikiEngineRendererConfig.discover()
+  private lazy var wikiCoreRPC = WikiCoreRPCBridge(client: wikiCore, rendererConfig: wikiRendererConfig)
   private lazy var wikiRenderCoordinator = WikiRenderCoordinator(
     runtimePaths: paths,
-    rendererConfig: WikiEngineRendererConfig.discover(),
+    rendererConfig: wikiRendererConfig,
     log: { [weak self] message in
       self?.logger.write(message)
     }
@@ -151,7 +155,6 @@ final class OneContextDaemon: @unchecked Sendable {
     try RuntimePermissions.ensurePrivateDirectory(paths.contextEngineIndexesDirectory)
     try RuntimePermissions.ensurePrivateDirectory(paths.appSupportDirectory)
     try RuntimePermissions.ensurePrivateDirectory(paths.appSupportIndexesDirectory)
-    try RuntimePermissions.ensurePrivateDirectory(paths.lanceDBIndexDirectory)
     try RuntimePermissions.ensurePrivateDirectory(paths.appSupportSetupDirectory)
     try RuntimePermissions.ensurePrivateDirectory(paths.runDirectory)
     try RuntimePermissions.ensurePrivateDirectory(paths.logDirectory)
@@ -309,6 +312,7 @@ final class OneContextDaemon: @unchecked Sendable {
   private func responseData(for requestData: Data) -> Data {
     let id: Any
     let method: String
+    let params: [String: Any]
 
     do {
       let object = try JSONSerialization.jsonObject(with: requestData)
@@ -320,6 +324,7 @@ final class OneContextDaemon: @unchecked Sendable {
 
       id = request["id"] ?? NSNull()
       method = requestMethod
+      params = request["params"] as? [String: Any] ?? [:]
     } catch {
       return encode(error: "Invalid JSON", id: NSNull())
     }
@@ -332,6 +337,14 @@ final class OneContextDaemon: @unchecked Sendable {
     case "wiki.status":
       let snapshot = wikiStatus()
       return encode(result: wikiPayload(snapshot), id: id)
+    case "wiki.publish":
+      do {
+        let receipt = try publishViaCoreAndAppMirror(params: params)
+        return encode(result: receipt, id: id)
+      } catch {
+        logger.write("\(method) failed: \(error.localizedDescription)")
+        return encode(result: wikiPublishFailurePayload(error, params: params), id: id)
+      }
     case "wiki.start":
       logger.write("wiki.start requested")
       let current = wikiStatus()
@@ -351,27 +364,59 @@ final class OneContextDaemon: @unchecked Sendable {
       logger.write("wiki.stop requested")
       return encode(result: wikiPayload(wikiStatus()), id: id)
     default:
-      return encode(error: "Unknown method: \(method)", id: id)
+      guard WikiCoreRPCBridge.supports(method: method) else {
+        return encode(error: "Unknown method: \(method)", id: id)
+      }
+      return wikiCoreResponse(method: method, params: params, id: id)
+    }
+  }
+
+  private func wikiCoreResponse(method: String, params: [String: Any], id: Any) -> Data {
+    do {
+      return encode(result: try wikiCoreRPC.call(method: method, params: params), id: id)
+    } catch {
+      logger.write("\(method) failed: \(error.localizedDescription)")
+      return encode(error: error.localizedDescription, id: id)
     }
   }
 
   private func wikiPayload(_ snapshot: LocalWebSnapshot) -> [String: Any] {
     let renderSnapshot = wikiRenderQueue.snapshot()
+    let appSnapshot = localWeb.status()
+    let publishStatus = wikiRenderPayload(renderSnapshot)
     var payload: [String: Any] = [
+      "surface": "wiki_app_status",
       "running": snapshot.running,
       "url": snapshot.url,
       "route": snapshot.route,
       "health": snapshot.health,
       "api": wikiAPIPayload(),
-      "render": wikiRenderPayload(renderSnapshot)
+      "app_status": localWebPayload(appSnapshot),
+      "publish_status": publishStatus,
+      "render": publishStatus
     ]
     if let pid = snapshot.pid {
       payload["pid"] = Int(pid)
     }
     if let lastError = snapshot.lastError {
       payload["lastError"] = lastError
-    } else if let renderError = renderSnapshot.history.last(where: { $0.status == .failed })?.error {
-      payload["lastError"] = renderError
+    }
+    return payload
+  }
+
+  private func localWebPayload(_ snapshot: LocalWebSnapshot) -> [String: Any] {
+    var payload: [String: Any] = [
+      "surface": "local_web_status",
+      "running": snapshot.running,
+      "url": snapshot.url,
+      "route": snapshot.route,
+      "health": snapshot.health
+    ]
+    if let pid = snapshot.pid {
+      payload["pid"] = Int(pid)
+    }
+    if let lastError = snapshot.lastError {
+      payload["lastError"] = lastError
     }
     return payload
   }
@@ -432,6 +477,12 @@ final class OneContextDaemon: @unchecked Sendable {
   }
 
   private func performWikiRender(_ request: WikiRenderQueueRequest) -> WikiRenderQueueOutcome {
+    wikiPublicationQueue.sync {
+      performWikiRenderLocked(request)
+    }
+  }
+
+  private func performWikiRenderLocked(_ request: WikiRenderQueueRequest) -> WikiRenderQueueOutcome {
     let startedAt = Date()
     do {
       if request.trigger == "wiki.prepare" {
@@ -469,6 +520,78 @@ final class OneContextDaemon: @unchecked Sendable {
     }
   }
 
+  private func publishViaCoreAndAppMirror(params: [String: Any]) throws -> [String: Any] {
+    try wikiPublicationQueue.sync {
+      var receipt = try wikiCoreRPC.call(method: "wiki.publish", params: params)
+      normalizePublishReceipt(&receipt, params: params)
+      guard let status = receipt["status"] as? String, ["published", "skipped"].contains(status) else {
+        return receipt
+      }
+
+      let trigger = publishTrigger(receipt: receipt, params: params)
+      let appPublish = wikiRenderCoordinator.publishExistingSite(
+        trigger: trigger,
+        successMessage: "Validated Rust-published user-wiki://site, then published app-support://wiki-site/current."
+      )
+      receipt["app_publish"] = wikiRenderResultPayload(appPublish)
+      if appPublish.status == .failed {
+        receipt["status"] = "failed"
+        receipt["next_action"] = "repair_publish_mirror"
+        receipt["repair_hints"] = [
+          "Rust publish completed, but the app-visible site mirror failed. Inspect app_publish.message and retry wiki.publish after repairing the rendered site or file permissions."
+        ]
+      }
+      return receipt
+    }
+  }
+
+  private func normalizePublishReceipt(_ receipt: inout [String: Any], params: [String: Any]) {
+    if receipt["schema_version"] == nil {
+      receipt["schema_version"] = 1
+    }
+    if receipt["operation"] == nil {
+      receipt["operation"] = "wiki.publish"
+    }
+    if (receipt["trigger"] as? String)?.isEmpty != false {
+      receipt["trigger"] = publishTrigger(receipt: receipt, params: params)
+    }
+  }
+
+  private func wikiPublishFailurePayload(_ error: Error, params: [String: Any]) -> [String: Any] {
+    let message = error.localizedDescription
+    return [
+      "schema_version": 1,
+      "operation": "wiki.publish",
+      "status": "failed",
+      "trigger": publishTrigger(receipt: nil, params: params),
+      "error": [
+        "message": message
+      ],
+      "next_action": "repair_publish",
+      "repair_hints": [
+        "wiki.publish failed before the app-visible site mirror could be updated. Inspect daemon logs and retry after repairing the reported issue."
+      ]
+    ]
+  }
+
+  private func publishTrigger(receipt: [String: Any]?, params: [String: Any]) -> String {
+    (receipt?["trigger"] as? String).flatMap { $0.isEmpty ? nil : $0 }
+      ?? (params["trigger"] as? String).flatMap { $0.isEmpty ? nil : $0 }
+      ?? "wiki.publish"
+  }
+
+  private func wikiRenderResultPayload(_ result: WikiRenderResult) -> [String: Any] {
+    [
+      "schema_version": result.schemaVersion,
+      "status": result.status.rawValue,
+      "trigger": result.trigger,
+      "published_at": result.publishedAt,
+      "source_site": result.sourceSite,
+      "published_site": result.publishedSite,
+      "message": result.message
+    ]
+  }
+
   private func wikiAPIPayload() -> [String: Any] {
     let snapshot = wikiAPI.snapshot
     var payload: [String: Any] = [
@@ -485,6 +608,7 @@ final class OneContextDaemon: @unchecked Sendable {
 
   private func wikiRenderPayload(_ snapshot: WikiRenderQueueSnapshot) -> [String: Any] {
     var payload: [String: Any] = [
+      "surface": "wiki_publish_queue_status",
       "state": wikiRenderState,
       "running": snapshot.running,
       "scheduled": snapshot.scheduled,
@@ -513,6 +637,9 @@ final class OneContextDaemon: @unchecked Sendable {
         "skip_reason": (last.skipReason ?? NSNull()) as Any,
         "error": (last.error ?? NSNull()) as Any
       ]
+      if let error = last.error {
+        payload["lastError"] = error
+      }
     }
     return payload
   }

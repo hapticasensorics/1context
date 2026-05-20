@@ -7,14 +7,22 @@ Canonical API surface:
 [Wiki Publishing System API](wiki-publishing-system-api.md). This document
 keeps the memory-publication behavior model and governance rules.
 
+Target architecture:
+[Wiki System Architecture](wiki-system-architecture.md). The wiki path should
+converge on one inventory compiler, one page ledger, one lifecycle service, one
+agent directory, one talk/mail router, one notification dispatcher, one
+renderer boundary, and one publisher.
+
 This document defines the behavior contract for turning memory work into
 published wiki output.
 
 It answers:
 
 - who may write which classes of wiki memory
-- how source, talk, proposals, decisions, and renders move through the system
-- how Swift publishes without becoming the memory engine
+- how source, talk, mail, proposals, decisions, notifications, and renders move
+  through the system
+- how the portable wiki core publishes without becoming the memory engine
+- how Swift hosts Apple-specific behavior without owning core wiki semantics
 - how the bundled renderer stays deterministic
 - how render scheduling avoids CPU storms
 - what must be true before the V0 wiki path is shippable
@@ -25,29 +33,33 @@ It does not define every folder in `~/1Context`. That storage contract lives in
 ## Core Rule
 
 ```text
-Python authors and governs memory work.
-Swift publishes accepted user-owned files.
-Bundled JS renders deterministic static output.
+Agents author and govern memory work through files plus the wiki API.
+The portable wiki core owns lifecycle, mail, validation, and publication.
+Swift hosts Apple-specific app behavior.
+The bundled renderer renders deterministic static output.
 ```
 
 The wiki engine displays memory. It is not the memory system.
 
 ## Actors
 
-### Python Memory Authoring
+### Memory Authoring
 
-Python memory code owns memory work:
+Memory agents own memory work:
 
 - observe activity and source material
 - plan routes and ownership
 - write talk entries
+- register in the agent directory
+- read and mark inbox deliveries
+- respond to notification wakeups
 - write proposals and decisions
 - run agents and state machines
 - create artifacts, previews, and validation receipts
 - promote accepted source, template, prompt, and site-map changes
 - request renders through the daemon
 
-Python may write durable user data under `user-wiki` and `context-engine` only
+Agents may write durable user data under `user-wiki` and `context-engine` only
 through governed write classes. It must not write the app-served Application
 Support mirror directly.
 
@@ -63,13 +75,14 @@ Canonical publication can see only accepted files in:
 Proposal overlays may render as previews under `context-engine/artifacts`, but
 they are not canonical wiki output.
 
-### Swift Publication
+### Portable Wiki Core Publication
 
-Swift owns the installed-app boundary:
+The portable wiki core owns wiki publication and collaboration mechanics:
 
-- resolve production and development runtime paths
 - initialize first-run defaults
-- materialize configured missing pages from user-owned templates
+- compile the wiki inventory and call page lifecycle operations for configured
+  missing pages when explicitly requested
+- maintain the agent directory, mail delivery ledgers, and notification outbox
 - validate path confinement and registry shape
 - queue and coalesce render requests
 - invoke the bundled renderer helper
@@ -78,8 +91,24 @@ Swift owns the installed-app boundary:
 - mirror last-good output to Application Support
 - serve local web status and redacted diagnostics
 
-Swift publishes or diagnoses. It does not decide semantic memory truth, rewrite
-page meaning, or run curator logic.
+The core publishes or diagnoses. It does not decide semantic memory truth,
+rewrite page meaning without a curator decision, or run open-ended memory
+agents.
+
+### Swift Host
+
+Swift owns the installed macOS boundary:
+
+- resolve production and development runtime paths
+- locate app bundle resources
+- present menu/UI/status
+- handle Apple permissions and privacy UX
+- launch and supervise the Rust-backed wiki API
+- supervise Caddy/local-web
+- bridge menu commands into the wiki API
+
+Swift should not become the permanent home for wiki lifecycle, inbox routing,
+notification semantics, or render governance.
 
 ### Bundled JS Rendering
 
@@ -88,7 +117,7 @@ The JS wiki engine is a pure render helper:
 - read explicit source, template, asset, and output roots
 - render Markdown/frontmatter and talk folders
 - generate static assets, route manifests, content indexes, and markdown twins
-- write only to the staging directory Swift provides
+- write only to the staging directory the publisher provides
 - return structured JSON results
 
 The renderer must not mutate source, fetch network resources, discover user
@@ -104,9 +133,13 @@ Target repo shape:
   macos/
     Sources/
       OneContextPlatform/       typed paths and permissions
-      OneContextDaemon/         JSON-RPC, lifecycle, render queue entrypoint
+      OneContextDaemon/         macOS host for wiki API process
       OneContextLocalWeb/       static serving and redacted local APIs
-      OneContextWikiRuntime/    Swift render coordinator and validators
+      OneContextWikiRuntime/    transitional Swift render/defaults bridge
+
+  crates/
+    onecontext-wiki-core/       target portable Rust wiki core
+    onecontext-wiki-daemon/     target JSON-RPC/CLI daemon surface
 
   wiki-engine/
     package.json
@@ -130,12 +163,13 @@ Current transition rule:
 - `wiki-engine/` is the first-class renderer package and bundle source.
 - The durable destination is this first-class package or bundled renderer
   helper outside `memory-core`.
-- Memory code may call `onectx.wiki_interface` to write preview artifacts and
-  request `wiki.refresh`; Swift owns renderer invocation.
+- Memory code may call the wiki API to write preview artifacts, append talk,
+  read inboxes, and request `wiki.publish`; the portable core owns renderer
+  invocation.
 - Memory code must not own renderer internals or require renderer imports for
   ordinary memory planning.
-- Swift bundles the renderer artifact from `wiki-engine`, not a `memory-core`
-  source checkout.
+- Swift bundles the Rust core and renderer artifact, not a `memory-core` source
+  checkout.
 
 Installed app bundle shape:
 
@@ -185,10 +219,12 @@ defines how it behaves.
 
 Rules:
 
-- `[[pages]]` materialize source under `source/families/**`.
+- `[[pages]]` declare source-backed pages. Page creation creates source under
+  `source/families/**` through the lifecycle service.
 - `[[site_pages]]` define generated pages, aliases, and diagnostics.
 - Navigation order lives in `wiki.toml`, never in folder-name prefixes.
-- Missing configured source materializes or diagnoses.
+- Missing configured source is a typed inventory problem. It is fixed by
+  `wiki.page.create` or diagnosed by validation.
 - Tombstoned source is not recreated.
 - Unconfigured routes diagnose; they do not fall back to `/your-context` or
   hidden bundled content.
@@ -221,12 +257,12 @@ Different writes have different risk.
 | Source edit | operator or approved promotion | old hash, ownership scope, backup |
 | `wiki.toml` edit | operator or approved promotion | route validation and migration proof |
 | Template/prompt edit | operator or approved promotion | preserve user edits |
-| Static site render | Swift coordinator | accepted source only |
-| App Support mirror | Swift coordinator | last-good export only |
+| Static site render | portable publisher | accepted source only |
+| App Support mirror | portable publisher | last-good export only |
 
-Safe first-run materialization is the exception: Swift may create missing
-configured source and talk from user-owned templates when no tombstone exists
-and no user file would be overwritten.
+Safe first-run page creation is the exception: the page lifecycle service may
+create missing configured source and talk from user-owned templates when no
+tombstone exists and no user file would be overwritten.
 
 ## Route Plan Contract
 
@@ -260,11 +296,11 @@ observe
   -> decide
   -> apply accepted change to sandbox when needed
   -> promote accepted source/registry/template change
-  -> request wiki.refresh
-  -> Swift snapshots and renders
-  -> Swift validates staged site
-  -> Swift promotes last-good site
-  -> Swift records render event
+  -> request wiki.publish
+  -> publisher snapshots and renders
+  -> publisher validates staged site
+  -> publisher promotes last-good site
+  -> publisher records render event
   -> memory system reacts to result
 ```
 
@@ -274,14 +310,14 @@ and schema-valid metadata.
 
 Source, template, prompt, and site-map edits are higher-risk. They require a
 decision artifact or explicit operator action unless the edit is safe
-first-run materialization.
+first-run page creation.
 
 ## Proposal And Promotion
 
 Proposal previews live under `context-engine/artifacts`. They are not the public
 site and are not canonical wiki memory.
 
-Accepted changes must materialize into `user-wiki` before canonical render.
+Accepted changes must land in `user-wiki` before canonical render.
 
 A source promotion records:
 
@@ -302,7 +338,7 @@ Promotion failure is a typed state: `failed`, `blocked`, `needs_approval`,
 ## Talk Behavior
 
 Talk belongs beside the page it discusses. It is durable page history, not
-hidden agent state.
+hidden agent state. It is also the durable message source for inboxes.
 
 Behavior rules:
 
@@ -313,14 +349,20 @@ Behavior rules:
 - Corrections, objections, replies, and closures create new entries.
 - Closures are explicit: accepted, rejected, resolved, withdrawn, or superseded.
 - Rendered talk pages are part of the wiki export unless disabled by policy.
+- Agents register before consuming mail.
+- Mailboxes are recipient views over talk entries; agents should not need to
+  read a whole talk folder to know what needs their attention.
+- Notification pushes are wakeups over mailbox state, not a second copy of the
+  message.
+- Failed notification delivery never loses mail; the inbox remains pollable.
 
 ## Render Request
 
-Python, UI actions, or setup flows request render through the daemon:
+Agents, UI actions, or setup flows request publication through the daemon:
 
 ```json
 {
-  "method": "wiki.refresh",
+  "method": "wiki.publish",
   "params": {
     "reason": "source-promoted",
     "requested_by": "context-engine://runs/...",
@@ -332,7 +374,7 @@ Python, UI actions, or setup flows request render through the daemon:
 }
 ```
 
-Swift responds with typed render state:
+The wiki core responds with typed render state:
 
 ```json
 {
@@ -345,14 +387,15 @@ Swift responds with typed render state:
 }
 ```
 
-If inputs change during snapshot or before promotion, Swift aborts or retries.
+If inputs change during snapshot or before promotion, the publisher aborts or
+retries.
 It must not publish output whose input hashes no longer match the render event.
 
 ## Render Scheduling And Backpressure
 
-Agents may talk frequently. Swift must not render on every file write.
+Agents may talk frequently. The publisher must not render on every file write.
 
-`wiki.refresh` is a queued publication intent. It means "render accepted wiki
+`wiki.publish` is a queued publication intent. It means "render accepted wiki
 changes soon," not "spawn a renderer immediately for every request."
 
 Scheduling rules:
@@ -387,7 +430,8 @@ CPU budget principles:
 - static serving stays cheap and never depends on an active render
 - file watching marks dirty state only
 - hashing is scoped to known render inputs where possible
-- derived indexes, embeddings, and LanceDB updates are separate jobs
+- derived indexes, embeddings, and search updates are separate jobs from static
+  rendering
 - renderer helpers are short-lived and observable
 - long-running agent work may produce many artifacts before one accepted publish
 
@@ -407,13 +451,14 @@ Render events should record scheduling data:
 }
 ```
 
-## Swift Render Coordinator
+## Publish Coordinator
 
-The Swift coordinator performs canonical publication:
+The portable publish coordinator performs canonical publication:
 
-1. Resolve production or dev runtime paths.
+1. Receive production or dev runtime paths from the platform host.
 2. Validate `wiki.toml` and user-wiki path confinement.
-3. Materialize missing configured pages and talk folders when policy allows.
+3. Create missing configured pages and talk folders through page lifecycle when
+   policy allows.
 4. Snapshot or hash render inputs.
 5. Create fresh staging under Application Support.
 6. Invoke the bundled renderer helper with explicit paths.
@@ -488,8 +533,8 @@ Failure result:
 }
 ```
 
-Renderer failures must be structured enough for Swift to diagnose and preserve
-the last-good site.
+Renderer failures must be structured enough for the publisher to diagnose and
+preserve the last-good site.
 
 ## Publication Privacy
 
@@ -522,8 +567,8 @@ Rules:
 - source writes record expected old hashes
 - promotions are atomic per target set
 - render events record input hashes
-- Swift publishes only the snapshot it validated
-- if inputs change before promotion, Swift aborts or retries
+- the publisher promotes only the snapshot it validated
+- if inputs change before promotion, the publisher aborts or retries
 - source may be newer than site
 - site must never be half-rendered
 - served output is last-good or a clear uninitialized diagnostic
@@ -540,6 +585,9 @@ The implementation must define and test schemas for:
 - proposal records
 - decision records
 - promotion receipts
+- agent directory records
+- mail delivery records
+- notification outbox and attempt records
 - render request JSON
 - render result JSON
 - render queue state
@@ -549,20 +597,24 @@ The implementation must define and test schemas for:
 - `/api/wiki/health`
 
 Persisted filesystem schemas are listed in the user-data spec. Schema drift
-between defaults, materializer output, JS validation, Swift validators, and
-tests is a release blocker.
+between defaults, page lifecycle output, talk/mail output, JS validation, core
+validators, Swift host adapters, and tests is a release blocker.
 
 ## Non-Negotiable Invariants
 
 - `wiki.toml` is the available-page registry.
-- Configured missing pages materialize or diagnose.
+- Configured missing pages are created by `wiki.page.create` or diagnose.
 - Unconfigured routes diagnose; they do not fall back to `/your-context`.
 - Tombstoned pages are not recreated.
 - Talk access inherits page access by default.
+- Talk, inboxes, agent directory, and notification wakeups are V0 primitives,
+  not deferred add-ons.
+- Mail delivery state is recipient-specific and does not rewrite message truth.
+- Notification delivery is best-effort; failed pushes never drop inbox mail.
 - Agent-view markdown URLs fetch valid markdown twins.
 - Browser-visible APIs do not leak local absolute paths.
 - Render staging is separate from served output.
-- `wiki.refresh` is queued, debounced, single-flight, and hash-aware.
+- `wiki.publish` is queued, debounced, single-flight, and hash-aware.
 - Failed render preserves last-good site.
 - Proposal previews do not become canonical output.
 - Operator-edited files are not overwritten by defaults.
@@ -571,7 +623,7 @@ tests is a release blocker.
   system Node, `npm install`, or `npm ci`.
 - Packaged defaults include a portable `runtime-defaults-manifest.json` with
   release version, git commit/dirty bit, source hash, site hash, wiki-engine
-  hash, materializer hash, renderer hash, and render counts.
+  hash, lifecycle/helper hash, renderer hash, and render counts.
 - `runtime-test` and generated state are never packaged as public defaults.
 
 ## V0 Blockers
@@ -580,12 +632,15 @@ tests is a release blocker.
 | --- | --- |
 | Runtime template frontmatter rejected by renderer | Align page schemas before package proof |
 | Talk rendered public by default | Talk inherits page access |
+| Agents must scan whole talk folders for work | Provide `wiki.mail.inbox` headers and `wiki.mail.read` hydration |
+| No durable agent address book | Add agent register, heartbeat, retire, lease expiry, and role/list addressing |
+| Notifications duplicate message truth | Keep notifications as wakeups over durable mailboxes |
 | Bad markdown twin URLs | Validate every `md_url` or generated markdown route |
 | Local API exposes absolute paths | Redact browser-visible API state |
-| Swift publishes placeholders | Replace placeholder publishing with render coordinator |
+| Host publishes placeholders | Replace placeholder publishing with publisher-owned render coordinator |
 | `wiki.toml` and legacy `wiki/menu` both act canonical | Use `wiki.toml` for installed runtime |
-| Materializer accepts path escapes | Add confinement validation |
-| Host Node/Python required to open wiki | Bundle renderer helper and invoke from Swift |
+| Page lifecycle accepts path escapes | Add confinement validation |
+| Host Node/Python required to open wiki | Bundle renderer helper and invoke from the portable core |
 | Renderer lives under `memory-core` as architecture | Extract to first-class `wiki-engine/` |
 | Agent write bursts trigger render storms | Queue, debounce, coalesce, and skip no-op renders |
 
@@ -594,7 +649,7 @@ tests is a release blocker.
 V0 is not done until these pass:
 
 - initialize a clean dev runtime and production-shaped runtime
-- materialize every configured `wiki.toml` source page idempotently
+- create every configured `wiki.toml` source page idempotently
 - preserve edited source, talk, templates, prompts, `_curator.md`, and
   `wiki.toml`
 - respect tombstones
@@ -603,7 +658,7 @@ V0 is not done until these pass:
 - prove markdown twins fetch successfully
 - prove private pages produce private talk pages unless explicitly downgraded
 - prove failed render preserves last-good served site
-- prove 100 rapid `wiki.refresh` requests produce no overlapping renderer
+- prove 100 rapid `wiki.publish` requests produce no overlapping renderer
   helpers and a bounded number of canonical renders
 - prove no-op refresh skips renderer when accepted inputs are unchanged
 - prove unconfigured routes return diagnostics, not hidden fallbacks
@@ -618,7 +673,7 @@ V0 is not done until these pass:
 
 Once V0 is stable, this contract can carry larger memory behavior:
 
-- LanceDB as a derived Application Support index
+- derived search indexes as rebuildable Application Support machinery
 - richer route planning and memory queue policy
 - curator/librarian state machines
 - preview renders for proposal review

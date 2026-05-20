@@ -10,8 +10,11 @@
 // And if the source declares any sections (via inline `<!-- section: ... -->`
 // markers or the frontmatter `sections:` list):
 //   <output-dir>/<slug>/<section-slug>.html      — agent-friendly sub-page
+//   <output-dir>/<slug>/<section-slug>/index.html — extensionless route twin
 //   <output-dir>/<slug>/<section-slug>.md         — markdown twin
 //   <output-dir>/<slug>/<section-slug>.talk.md   — talk-page stub (when talk: true)
+//   <output-dir>/<slug>/<section-slug>.talk.html — rendered talk stub
+//   <output-dir>/<slug>/<section-slug>/talk/index.html — talk route twin
 //
 // Time-based URL versioning side-effect: any slug of the form
 // `<family>-<YYYY-MM-DD>` updates `<output-dir>/latest_for_family.json`
@@ -20,7 +23,15 @@
 // (one per .md file) accumulate into one file a redirect step can
 // consume.
 
-import { readFileSync, writeFileSync, mkdirSync, existsSync, statSync } from 'node:fs';
+import {
+  copyFileSync,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  readdirSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs';
 import { dirname, resolve, basename, extname, join, isAbsolute } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import matter from 'gray-matter';
@@ -411,22 +422,129 @@ function cleanGeneratedText(value) {
   return String(value).replace(/[ \t]+$/gm, '');
 }
 
+function readSiteNavigation() {
+  const raw = process.env.ONECONTEXT_WIKI_SITE_NAV_JSON;
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+
+function readRouteOverride() {
+  const raw = process.env.ONECONTEXT_WIKI_ROUTE_JSON;
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+
+function routeToStem(route, fallback) {
+  const value = typeof route === 'string' && route.trim() ? route.trim() : fallback;
+  const clean = String(value || '').split(/[?#]/)[0].replace(/^\/+/, '').replace(/\/+$/, '');
+  return clean || 'index';
+}
+
+function markdownUrlForRoute(route, fallbackSlug) {
+  return `/${routeToStem(route, fallbackSlug)}.md`;
+}
+
+function talkRouteForRoute(route, fallbackSlug) {
+  const stem = routeToStem(route, fallbackSlug);
+  return stem === 'index' ? '/talk' : `/${stem}/talk`;
+}
+
+function talkMarkdownUrlForRoute(route, fallbackSlug) {
+  return `/${routeToStem(route, fallbackSlug)}.talk.md`;
+}
+
+function outputStemForRender(frontmatter, fallbackSlug, isTalkFolder, routeOverride) {
+  if (isTalkFolder) {
+    const talkRoute = routeOverride?.talk_route || frontmatter.talk_route;
+    const pageRoute = routeOverride?.route || frontmatter.route;
+    const articleRoute = talkRoute ? talkRoute.replace(/\/talk\/?$/, '') : pageRoute;
+    const stem = talkRoute
+      ? (articleRoute ? routeToStem(articleRoute, fallbackSlug.replace(/\.talk$/, '')) : 'index')
+      : routeToStem(pageRoute, fallbackSlug.replace(/\.talk$/, ''));
+    return `${stem}.talk`;
+  }
+  return routeToStem(routeOverride?.route || frontmatter.route, fallbackSlug);
+}
+
+function routeIndexBaseHref(slug) {
+  const clean = String(slug || '').replace(/^\/+/, '').replace(/\/+$/, '');
+  if (!clean || clean === 'index') return '/';
+  if (clean === 'talk' || clean.endsWith('/talk')) return `/${clean}/`;
+  return `/${clean}`;
+}
+
+function htmlWithRouteIndexBase(html, slug) {
+  const base = `<base href="${escapeHtml(routeIndexBaseHref(slug))}">`;
+  if (html.includes('<base ')) return html;
+  return html.replace(/<head(\s[^>]*)?>/i, (match) => `${match}\n  ${base}`);
+}
+
 function writeRouteIndex(outDir, slug, html) {
   const routeDir = resolve(outDir, ...String(slug).split('/'));
   mkdirSync(routeDir, { recursive: true });
-  writeFileSync(resolve(routeDir, 'index.html'), cleanGeneratedText(html));
+  writeFileSync(resolve(routeDir, 'index.html'), cleanGeneratedText(htmlWithRouteIndexBase(html, slug)));
 }
 
-function writeCanonicalOutputs(outDir, slug, html, md) {
+function routeIndexStemForRender(frontmatter, outputStem, isTalkFolder) {
+  const route = isTalkFolder ? frontmatter.talk_route : frontmatter.route;
+  if (typeof route !== 'string' || !route.trim()) return outputStem;
+  const clean = route.split(/[?#]/)[0].replace(/^\/+/, '').replace(/\/+$/, '');
+  return clean || outputStem;
+}
+
+function writeCanonicalOutputs(outDir, slug, html, md, { routeIndexStem = null } = {}) {
   const htmlPath = resolve(outDir, `${slug}.html`);
   const mdPath = resolve(outDir, `${slug}.md`);
-  writeFileSync(htmlPath, cleanGeneratedText(html));
+  const isTalkOutput = String(slug).endsWith('.talk');
+  const effectiveRouteIndexStem = routeIndexStem
+    || (isTalkOutput ? `${String(slug).slice(0, -'.talk'.length)}/talk` : slug);
+  const canonicalHtml = isTalkOutput
+    ? htmlWithRouteIndexBase(html, effectiveRouteIndexStem)
+    : html;
+  mkdirSync(dirname(htmlPath), { recursive: true });
+  mkdirSync(dirname(mdPath), { recursive: true });
+  writeFileSync(htmlPath, cleanGeneratedText(canonicalHtml));
   writeFileSync(mdPath, cleanGeneratedText(md));
-  writeRouteIndex(outDir, slug, html);
-  if (String(slug).endsWith('.talk')) {
-    writeRouteIndex(outDir, `${String(slug).slice(0, -'.talk'.length)}/talk`, html);
+  if (!isTalkOutput && String(slug) !== 'index') {
+    writeRouteIndex(outDir, slug, html);
+  }
+  if (isTalkOutput) {
+    writeRouteIndex(outDir, effectiveRouteIndexStem, html);
   }
   return { htmlPath, mdPath };
+}
+
+function copyDirectoryContents(sourceDir, destinationDir) {
+  if (!existsSync(sourceDir)) return;
+  mkdirSync(destinationDir, { recursive: true });
+  for (const entry of readdirSync(sourceDir)) {
+    const sourcePath = join(sourceDir, entry);
+    const destinationPath = join(destinationDir, entry);
+    const stat = statSync(sourcePath);
+    if (stat.isDirectory()) {
+      copyDirectoryContents(sourcePath, destinationPath);
+    } else if (stat.isFile()) {
+      mkdirSync(dirname(destinationPath), { recursive: true });
+      copyFileSync(sourcePath, destinationPath);
+    }
+  }
+}
+
+function copyTalkAttachments(inputPath, outDir, outputStem, routeIndexStem = null) {
+  const attachmentsDir = join(inputPath, 'attachments');
+  if (!existsSync(attachmentsDir)) return;
+  const talkStem = String(outputStem).endsWith('.talk')
+    ? (routeIndexStem || `${String(outputStem).slice(0, -'.talk'.length)}/talk`)
+    : `${String(outputStem).replace(/\/+$/, '')}/talk`;
+  copyDirectoryContents(attachmentsDir, resolve(outDir, talkStem, 'attachments'));
 }
 
 function main() {
@@ -442,6 +560,8 @@ function main() {
   //      files → folder-assembly pipeline (renderTalkFolder).
   // Decided up front so both branches share the output-emit code below.
   const isTalkFolder = inputIsTalkFolder(inputPath);
+  const siteNavigation = readSiteNavigation();
+  const routeOverride = readRouteOverride();
 
   let result;
   let slug;
@@ -456,6 +576,9 @@ function main() {
     const fm = folder.frontmatter;
     if (!fm.slug) fm.slug = slug;
     if (!fm.access && fm.talk_audience) fm.access = fm.talk_audience;
+    if (routeOverride?.route) fm.route = routeOverride.route;
+    if (routeOverride?.talk_route) fm.talk_route = routeOverride.talk_route;
+    fm.md_url = `/${outputStemForRender(fm, slug, true, routeOverride)}.md`;
 
     const talkConventions = loadTalkConventions(fm, inputPath);
     let tocHtml = buildToc(folder.bodyHtml);
@@ -473,14 +596,35 @@ function main() {
       tocHtml,
       talkConventionsHtml: talkConventions ? talkConventions.html : null,
       talkConventionsLabel: talkConventions ? talkConventions.label : null,
+      siteNavigation,
     });
     // Build the .md twin: frontmatter (re-stringified) + assembled body.
     const md = stringifyFrontmatter(fm) + '\n' + folder.mdAssembled;
     result = { html, md, frontmatter: fm, sections: [] };
   } else {
     // Single-file mode — existing pipeline.
-    const source = readFileSync(inputPath, 'utf8');
+    let source = readFileSync(inputPath, 'utf8');
     slug = basename(inputPath, extname(inputPath));
+    {
+      const parsed = matter(source);
+      const effectiveRoute = routeOverride?.route || parsed.data.route;
+      if (effectiveRoute) {
+        const merged = routeOverride?.route ? {
+          ...parsed.data,
+          route: effectiveRoute,
+          md_url: markdownUrlForRoute(effectiveRoute, slug),
+          talk_route: routeOverride.talk_route || talkRouteForRoute(effectiveRoute, slug),
+          talk_url: talkMarkdownUrlForRoute(effectiveRoute, slug),
+        } : {
+          ...parsed.data,
+          route: effectiveRoute,
+          md_url: parsed.data.md_url || markdownUrlForRoute(effectiveRoute, slug),
+          talk_route: parsed.data.talk_route || talkRouteForRoute(effectiveRoute, slug),
+          talk_url: parsed.data.talk_url || talkMarkdownUrlForRoute(effectiveRoute, slug),
+        };
+        source = stringifyFrontmatter(merged) + '\n' + parsed.content;
+      }
+    }
 
     // If this is a talk page declaring `talk_conventions: <name>` in
     // its frontmatter, load the corresponding conventions doc and pass
@@ -491,8 +635,9 @@ function main() {
       ? {
           talkConventionsHtml: talkConventions.html,
           talkConventionsLabel: talkConventions.label,
+          siteNavigation,
         }
-      : {};
+      : { siteNavigation };
 
     try {
       result = renderPage(source, { slug, shellOptions: baseShellOptions });
@@ -511,7 +656,7 @@ function main() {
   let renderedStreams = null;
   if (audienceVariants) {
     renderedStreams = {};
-    const shellOptions = { audienceStreams: audienceVariants };
+    const shellOptions = { audienceStreams: audienceVariants, siteNavigation };
 
     for (const key of AUDIENCE_ORDER) {
       const stream = audienceVariants.streams[key];
@@ -541,23 +686,41 @@ function main() {
 
   mkdirSync(outDir, { recursive: true });
   const parentSlug = result.frontmatter.slug;
-  const { htmlPath } = writeCanonicalOutputs(outDir, parentSlug, result.html, result.md);
+  if (routeOverride?.route && !result.frontmatter.route) {
+    result.frontmatter.route = routeOverride.route;
+  }
+  if (routeOverride?.talk_route && !result.frontmatter.talk_route) {
+    result.frontmatter.talk_route = routeOverride.talk_route;
+  }
+  const outputStem = outputStemForRender(result.frontmatter, parentSlug, isTalkFolder, routeOverride);
+  const routeIndexStem = routeIndexStemForRender(result.frontmatter, outputStem, isTalkFolder);
+  const { htmlPath } = writeCanonicalOutputs(
+    outDir,
+    outputStem,
+    result.html,
+    result.md,
+    { routeIndexStem }
+  );
+  if (isTalkFolder) {
+    copyTalkAttachments(inputPath, outDir, outputStem, routeIndexStem);
+  }
 
   let summary = `✓ ${slug}: ${result.html.length} bytes → ${htmlPath}`;
 
   // Section sub-pages — one HTML + one MD per declared section,
-  // plus a talk-page stub when the section opts into talk: true.
+  // plus a rendered talk-page stub when the section opts into talk: true.
   if (result.sections && result.sections.length) {
-    const subDir = resolve(outDir, parentSlug);
-    mkdirSync(subDir, { recursive: true });
+    const sectionParentStem = outputStem === 'index' ? '' : outputStem;
+    const subDir = sectionParentStem ? resolve(outDir, sectionParentStem) : outDir;
     for (const sec of result.sections) {
-      const subHtml = resolve(subDir, `${sec.slug}.html`);
-      const subMd = resolve(subDir, `${sec.slug}.md`);
-      writeFileSync(subHtml, cleanGeneratedText(sec.html));
-      writeFileSync(subMd, cleanGeneratedText(sec.md));
+      const sectionStem = sectionParentStem ? `${sectionParentStem}/${sec.slug}` : sec.slug;
+      writeCanonicalOutputs(outDir, sectionStem, sec.html, sec.md);
       if (sec.talkMd) {
-        const talkMd = resolve(subDir, `${sec.slug}.talk.md`);
-        writeFileSync(talkMd, cleanGeneratedText(sec.talkMd));
+        const talkRender = renderPage(sec.talkMd, {
+          slug: `${sec.slug}.talk`,
+          shellOptions: { siteNavigation },
+        });
+        writeCanonicalOutputs(outDir, `${sectionStem}.talk`, talkRender.html, talkRender.md);
       }
     }
     summary += `\n  + ${result.sections.length} section sub-page(s) → ${subDir}/`;
@@ -568,8 +731,8 @@ function main() {
       if (key === 'public') continue;
       const stream = renderedStreams[key];
       if (!stream) continue;
-      writeFileSync(resolve(outDir, `${parentSlug}.${key}.html`), cleanGeneratedText(stream.html));
-      writeFileSync(resolve(outDir, `${parentSlug}.${key}.md`), cleanGeneratedText(stream.md));
+      writeFileSync(resolve(outDir, `${outputStem}.${key}.html`), cleanGeneratedText(stream.html));
+      writeFileSync(resolve(outDir, `${outputStem}.${key}.md`), cleanGeneratedText(stream.md));
     }
     summary += `\n  + ${Object.keys(renderedStreams).length} audience stream render(s)`;
   }
