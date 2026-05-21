@@ -6,9 +6,13 @@ import OneContextPlatform
 import ServiceManagement
 
 public enum LocalWebSetupConstants {
-  public static let proxyLabel = "com.haptica.1context.local-web-proxy"
+  public static var proxyLabel: String {
+    OneContextAppIdentity.current().localWebProxyLaunchDaemonLabel
+  }
   public static let proxyExecutableName = "1context-local-web-proxy"
-  public static let proxyPlistName = "\(proxyLabel).plist"
+  public static var proxyPlistName: String {
+    "\(proxyLabel).plist"
+  }
   public static let privilegedHTTPSPort = 443
 }
 
@@ -27,8 +31,8 @@ public struct LocalWebSetupSystemPaths: Codable, Equatable, Sendable {
 
   public init(
     appBundle: URL = Self.appBundleURL(),
-    supportDirectory: String = "\(NSHomeDirectory())/Library/Application Support/1Context/local-web/setup",
-    logDirectory: String = "\(NSHomeDirectory())/Library/Logs/1Context",
+    supportDirectory: String? = nil,
+    logDirectory: String? = nil,
     proxyExecutable: String? = nil,
     launchDaemonPlist: String? = nil,
     trustedRootCertificate: String? = nil,
@@ -37,6 +41,10 @@ public struct LocalWebSetupSystemPaths: Codable, Equatable, Sendable {
     setupMarker: String? = nil,
     proxyLog: String? = nil
   ) {
+    let runtimePaths = RuntimePaths.current()
+    let resolvedSupportDirectory = supportDirectory
+      ?? runtimePaths.appSupportDirectory.appendingPathComponent("local-web/setup", isDirectory: true).path
+    let resolvedLogDirectory = logDirectory ?? runtimePaths.logDirectory.path
     let bundleLaunchDaemon = appBundle
       .appendingPathComponent("Contents/Library/LaunchDaemons/\(LocalWebSetupConstants.proxyPlistName)")
       .path
@@ -44,16 +52,16 @@ public struct LocalWebSetupSystemPaths: Codable, Equatable, Sendable {
       .appendingPathComponent("Contents/Resources/\(LocalWebSetupConstants.proxyExecutableName)")
       .path
     self.appBundle = appBundle.path
-    self.supportDirectory = supportDirectory
-    self.binDirectory = "\(supportDirectory)/bin"
+    self.supportDirectory = resolvedSupportDirectory
+    self.binDirectory = "\(resolvedSupportDirectory)/bin"
     self.proxyExecutable = proxyExecutable ?? bundledProxy
     self.launchDaemonPlist = launchDaemonPlist ?? bundleLaunchDaemon
-    self.trustedRootCertificate = trustedRootCertificate ?? "\(supportDirectory)/local-web-root.crt"
-    self.trustedRootSHA1 = trustedRootSHA1 ?? "\(supportDirectory)/local-web-root.sha1"
-    self.trustedRootSHA256 = trustedRootSHA256 ?? "\(supportDirectory)/local-web-root.sha256"
-    self.setupMarker = setupMarker ?? "\(supportDirectory)/local-web-setup.json"
-    self.logDirectory = logDirectory
-    self.proxyLog = proxyLog ?? "\(logDirectory)/local-web-proxy.log"
+    self.trustedRootCertificate = trustedRootCertificate ?? "\(resolvedSupportDirectory)/local-web-root.crt"
+    self.trustedRootSHA1 = trustedRootSHA1 ?? "\(resolvedSupportDirectory)/local-web-root.sha1"
+    self.trustedRootSHA256 = trustedRootSHA256 ?? "\(resolvedSupportDirectory)/local-web-root.sha256"
+    self.setupMarker = setupMarker ?? "\(resolvedSupportDirectory)/local-web-setup.json"
+    self.logDirectory = resolvedLogDirectory
+    self.proxyLog = proxyLog ?? "\(resolvedLogDirectory)/local-web-proxy.log"
   }
 
   public static func appBundleURL(
@@ -436,6 +444,12 @@ public struct LocalWebSetupInstaller {
 
   public func install() throws -> LocalWebSetupInstallResult {
     try rejectRootInvocation()
+    let currentSetup = manager.diagnostics().setup
+    if currentSetup.ready,
+      !currentSetup.requirements.contains(where: { $0.adminAuthorizationRequired || $0.userConsentRequired })
+    {
+      return LocalWebSetupInstallResult(action: "not_required", setup: currentSetup, localWeb: try manager.start())
+    }
     let assets = try manager.prepareLocalHTTPSAssets()
     try requireInstalledApplication(systemPaths: systemPaths)
     try installUserCertificateTrust(assets: assets, systemPaths: systemPaths)

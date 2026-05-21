@@ -435,6 +435,7 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
   private let quitItem = NSMenuItem(title: "Quit", action: #selector(quit), keyEquivalent: "q")
   private let appVersion = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String
     ?? oneContextVersion
+  private let appIdentity = OneContextAppIdentity.current()
   private let localWeb = CaddyManager()
   private let localWebQueue = DispatchQueue(label: "com.haptica.1context.menu.local-web")
   private lazy var sparkleUpdater = SparkleUpdateController()
@@ -524,7 +525,7 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
 
   private func presentMoveToApplicationsPrompt(_ request: AppInstallRequest) -> Bool {
     let alert = NSAlert()
-    alert.messageText = "Install 1Context?"
+    alert.messageText = "Install \(appIdentity.displayName)?"
     alert.informativeText = movePromptDetail(for: request)
     alert.icon = loadFishAlertIcon()
     alert.addButton(withTitle: "Install and Open")
@@ -537,8 +538,8 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
 
   private func presentOpenInstalledAppPrompt(_ request: AppInstallRequest) -> Bool {
     let alert = NSAlert()
-    alert.messageText = "Open the Installed 1Context?"
-    alert.informativeText = "A newer 1Context is already installed. Open that copy to keep updates intact."
+    alert.messageText = "Open the Installed \(appIdentity.displayName)?"
+    alert.informativeText = "A newer \(appIdentity.displayName) is already installed. Open that copy to keep updates intact."
     alert.icon = loadFishAlertIcon()
     alert.addButton(withTitle: "Open Installed")
     alert.addButton(withTitle: "Quit")
@@ -551,7 +552,7 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
   private func movePromptDetail(for request: AppInstallRequest) -> String {
     switch request.existingRelation {
     case .none:
-      return "1Context needs to run from Applications so local wiki access and updates work reliably."
+      return "\(appIdentity.displayName) needs to run from Applications so local wiki access and updates work reliably."
     case .olderVersion:
       return "This replaces the older installed copy and opens 1Context from Applications."
     case .unknownVersion:
@@ -559,7 +560,7 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
     case .sameVersion:
       return "This refreshes the installed copy and opens 1Context from Applications."
     case .newerVersion:
-      return "A newer 1Context is already installed."
+      return "A newer \(appIdentity.displayName) is already installed."
     }
   }
 
@@ -1186,7 +1187,7 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
         self.isUninstallInFlight = false
         self.refreshMenuItems()
         if result.status == 0 {
-          self.presentMenuAlert("1Context was moved to Trash.")
+          self.presentMenuAlert("\(self.appIdentity.displayName) was moved to Trash.")
           NSApp.terminate(nil)
         } else {
           self.presentMenuAlert(Self.uninstallFailureMessage(result))
@@ -1197,8 +1198,8 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
 
   private func confirmUninstall() -> UninstallChoice? {
     let alert = NSAlert()
-    alert.messageText = "Uninstall 1Context?"
-    alert.informativeText = "This moves 1Context to Trash and removes background services and Local Wiki Access. Your wiki content stays unless you choose Delete Data."
+    alert.messageText = "Uninstall \(appIdentity.displayName)?"
+    alert.informativeText = "This moves \(appIdentity.displayName) to Trash and removes background services and Local Wiki Access. Your wiki content stays unless you choose Delete Data."
     alert.icon = loadFishAlertIcon()
     alert.addButton(withTitle: "Uninstall")
     alert.addButton(withTitle: "Cancel")
@@ -1217,8 +1218,8 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
 
   private func confirmDeleteDataForUninstall() -> Bool {
     let alert = NSAlert()
-    alert.messageText = "Delete 1Context Data?"
-    alert.informativeText = "This removes app support files, logs, caches, and ~/1Context content owned by 1Context."
+    alert.messageText = "Delete \(appIdentity.displayName) Data?"
+    alert.informativeText = "This removes app support files, logs, caches, and \(RuntimePaths.current().userContentDirectory.path) content owned by \(appIdentity.displayName)."
     alert.icon = loadFishAlertIcon()
     alert.addButton(withTitle: "Delete Data")
     alert.addButton(withTitle: "Cancel")

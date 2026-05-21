@@ -240,7 +240,7 @@ public final class RuntimeController {
     let candidates: [String?] = [
       executableDirectory?.appendingPathComponent("OneContextMenuBar").path,
       executableDirectory?.appendingPathComponent("1Context").path,
-      URL(fileURLWithPath: "/Applications/1Context.app/Contents/MacOS/1Context").path
+      RuntimePaths.current().identity.appBundleURL.appendingPathComponent("Contents/MacOS/1Context").path
     ]
     return candidates.compactMap { $0 }.first { fm.isExecutableFile(atPath: $0) }
   }

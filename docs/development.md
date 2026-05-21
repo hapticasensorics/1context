@@ -86,6 +86,34 @@ Local ad-hoc packaging:
 ./scripts/release-train.sh build --channel dev
 ```
 
+The dev channel builds a side-by-side app identity instead of another copy of
+the official app:
+
+```text
+dist/1Context Dev.app
+/Applications/1Context Dev.app
+bundle id: com.haptica.1context.dev
+user data: ~/1Context-Dev
+app support: ~/Library/Application Support/1Context Dev
+logs: ~/Library/Logs/1Context Dev
+preferences: ~/Library/Preferences/com.haptica.1context.dev.plist
+local wiki: http://localhost:39291/your-context
+```
+
+To install the dev app without colliding with the official release:
+
+```bash
+./scripts/release-train.sh build --channel dev
+ditto --norsrc --noqtn "dist/1Context Dev.app" "/Applications/1Context Dev.app"
+open -na "/Applications/1Context Dev.app"
+"/Applications/1Context Dev.app/Contents/MacOS/1context-cli" diagnose
+```
+
+The official app remains `/Applications/1Context.app` with bundle id
+`com.haptica.1context`, `~/1Context`, and the portless local HTTPS helper. The
+dev app uses an unprivileged HTTP localhost port by default, so it does not take
+over the official `443` helper or Sparkle feed.
+
 Maintainer release packaging uses Developer ID signing, notarization, and the
 production Sparkle feed configuration:
 

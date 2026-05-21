@@ -2,6 +2,7 @@ import Foundation
 import Darwin
 
 public struct RuntimePaths {
+  public let identity: OneContextAppIdentity
   public let userContentDirectory: URL
   public let userWikiDirectory: URL
   public let userWikiSourceDirectory: URL
@@ -31,6 +32,29 @@ public struct RuntimePaths {
     logPath: String? = nil,
     preferencesPath: String? = nil
   ) {
+    self.init(
+      userContentDirectory: userContentDirectory,
+      appSupportDirectory: appSupportDirectory,
+      logDirectory: logDirectory,
+      cacheDirectory: cacheDirectory,
+      socketPath: socketPath,
+      logPath: logPath,
+      preferencesPath: preferencesPath,
+      identity: .official
+    )
+  }
+
+  public init(
+    userContentDirectory: URL,
+    appSupportDirectory: URL,
+    logDirectory: URL,
+    cacheDirectory: URL,
+    socketPath: String? = nil,
+    logPath: String? = nil,
+    preferencesPath: String? = nil,
+    identity: OneContextAppIdentity
+  ) {
+    self.identity = identity
     let runDirectory = appSupportDirectory.appendingPathComponent("run", isDirectory: true)
     self.userContentDirectory = userContentDirectory
     self.userWikiDirectory = userContentDirectory.appendingPathComponent("user-wiki", isDirectory: true)
@@ -52,10 +76,11 @@ public struct RuntimePaths {
     self.downloadCacheDirectory = cacheDirectory.appendingPathComponent("download-cache", isDirectory: true)
     self.preferencesPath = preferencesPath
       ?? FileManager.default.homeDirectoryForCurrentUser
-        .appendingPathComponent("Library/Preferences/com.haptica.1context.plist").path
+        .appendingPathComponent("Library/Preferences/\(identity.preferencesFileName)").path
   }
 
   public static func current() -> RuntimePaths {
+    let identity = OneContextAppIdentity.current()
     #if DEBUG
     if let runtimeHome = ProcessInfo.processInfo.environment["ONECONTEXT_DEV_RUNTIME_HOME"],
        !runtimeHome.isEmpty {
@@ -63,22 +88,18 @@ public struct RuntimePaths {
       let socketPath = ProcessInfo.processInfo.environment["ONECONTEXT_DEV_SOCKET_PATH"]
         .flatMap { $0.isEmpty ? nil : $0 }
       return RuntimePaths(
-        userContentDirectory: root.appendingPathComponent("1Context", isDirectory: true),
-        appSupportDirectory: root.appendingPathComponent("Library/Application Support/1Context", isDirectory: true),
-        logDirectory: root.appendingPathComponent("Library/Logs/1Context", isDirectory: true),
-        cacheDirectory: root.appendingPathComponent("Library/Caches/1Context", isDirectory: true),
-        socketPath: socketPath
+        userContentDirectory: root.appendingPathComponent(identity.userContentDirectoryName, isDirectory: true),
+        appSupportDirectory: root.appendingPathComponent("Library/Application Support/\(identity.appSupportDirectoryName)", isDirectory: true),
+        logDirectory: root.appendingPathComponent("Library/Logs/\(identity.logDirectoryName)", isDirectory: true),
+        cacheDirectory: root.appendingPathComponent("Library/Caches/\(identity.cacheDirectoryName)", isDirectory: true),
+        socketPath: socketPath,
+        preferencesPath: root.appendingPathComponent("Library/Preferences/\(identity.preferencesFileName)").path,
+        identity: identity
       )
     }
     #endif
 
-    let home = FileManager.default.homeDirectoryForCurrentUser
-    return RuntimePaths(
-      userContentDirectory: home.appendingPathComponent("1Context", isDirectory: true),
-      appSupportDirectory: home.appendingPathComponent("Library/Application Support/1Context", isDirectory: true),
-      logDirectory: home.appendingPathComponent("Library/Logs/1Context", isDirectory: true),
-      cacheDirectory: home.appendingPathComponent("Library/Caches/1Context", isDirectory: true)
-    )
+    return identity.runtimePaths(homeDirectory: FileManager.default.homeDirectoryForCurrentUser)
   }
 }
 

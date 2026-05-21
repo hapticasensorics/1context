@@ -167,6 +167,7 @@ struct OneContextCLI {
   static func diagnose() async {
     let redact = true
     let paths = RuntimePaths.current()
+    let identity = paths.identity
     let controller = RuntimeController()
     let health = controller.status()
 
@@ -174,7 +175,8 @@ struct OneContextCLI {
     print("CLI:")
     print("  Version: \(oneContextVersion)")
     print("  Executable: \(displayPath(currentExecutablePath() ?? CommandLine.arguments[0], redact: redact))")
-    print("  App Bundle: /Applications/1Context.app")
+    print("  App Bundle: \(displayPath(installedAppBundleURL().path, redact: redact))")
+    print("  App Identity: \(identity.kind.rawValue)")
     print("  App Version: \(appVersion() ?? "not installed")")
 
     let readiness = OneContextAppReadiness.current()
@@ -1351,7 +1353,7 @@ struct OneContextCLI {
   }
 
   static func installedAppBundleURL() -> URL {
-    URL(fileURLWithPath: "/Applications/1Context.app", isDirectory: true)
+    OneContextAppIdentity.current().appBundleURL
   }
 
   static func appVersion() -> String? {
@@ -1382,24 +1384,25 @@ struct OneContextCLI {
   static func deleteApprovedUserData() throws {
     let fileManager = FileManager.default
     let home = try uninstallHomeDirectory()
+    let identity = OneContextAppIdentity.current()
     let relativePaths = [
-      "1Context",
-      "Library/Application Support/1Context",
-      "Library/Logs/1Context",
-      "Library/Caches/1Context",
-      "Library/Caches/com.haptica.1context",
-      "Library/Caches/com.haptica.1context.menu",
-      "Library/HTTPStorages/com.haptica.1context",
-      "Library/HTTPStorages/com.haptica.1context.binarycookies",
+      identity.userContentDirectoryName,
+      "Library/Application Support/\(identity.appSupportDirectoryName)",
+      "Library/Logs/\(identity.logDirectoryName)",
+      "Library/Caches/\(identity.cacheDirectoryName)",
+      "Library/Caches/\(identity.bundleIdentifier)",
+      "Library/Caches/\(identity.menuLaunchAgentLabel)",
+      "Library/HTTPStorages/\(identity.bundleIdentifier)",
+      "Library/HTTPStorages/\(identity.bundleIdentifier).binarycookies",
       "Library/HTTPStorages/1context",
       "Library/HTTPStorages/1context.binarycookies",
-      "Library/HTTPStorages/com.haptica.1context.menu",
-      "Library/HTTPStorages/com.haptica.1context.menu.binarycookies",
-      "Library/Preferences/com.haptica.1context.plist",
-      "Library/Saved Application State/com.haptica.1context.savedState",
-      "Library/Saved Application State/com.haptica.1context.menu.savedState",
-      "Library/WebKit/com.haptica.1context",
-      "Library/WebKit/com.haptica.1context.menu"
+      "Library/HTTPStorages/\(identity.menuLaunchAgentLabel)",
+      "Library/HTTPStorages/\(identity.menuLaunchAgentLabel).binarycookies",
+      "Library/Preferences/\(identity.preferencesFileName)",
+      "Library/Saved Application State/\(identity.bundleIdentifier).savedState",
+      "Library/Saved Application State/\(identity.menuLaunchAgentLabel).savedState",
+      "Library/WebKit/\(identity.bundleIdentifier)",
+      "Library/WebKit/\(identity.menuLaunchAgentLabel)"
     ]
 
     for relativePath in relativePaths {

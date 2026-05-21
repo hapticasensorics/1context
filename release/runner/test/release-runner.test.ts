@@ -43,6 +43,9 @@ test("manifest validates and exports dev channel policy", async () => {
   assert.equal(env.ONECONTEXT_RELEASE_CHANNEL, "dev");
   assert.equal(env.ONECONTEXT_RELEASE_BUDGET_ADVISORY, "1");
   assert.equal(env.ONECONTEXT_RELEASE_CHANNEL_APPCAST, "none");
+  assert.equal(env.ONECONTEXT_APP_IDENTITY, "dev");
+  assert.equal(env.ONECONTEXT_APP_BUNDLE_NAME, "1Context Dev");
+  assert.equal(env.ONECONTEXT_BUNDLE_IDENTIFIER, "com.haptica.1context.dev");
 });
 
 test("appcast policy accepts mandatory official appcast and rejects hidden release notes", () => {

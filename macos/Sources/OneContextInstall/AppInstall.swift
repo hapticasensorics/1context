@@ -1,6 +1,7 @@
 import Foundation
 import CryptoKit
 import OneContextCore
+import OneContextPlatform
 
 public enum ExistingInstallRelation: String, Sendable {
   case none
@@ -69,7 +70,7 @@ public struct AppInstallPlanner {
   public let fileManager: FileManager
 
   public init(
-    destinationBundleURL: URL = AppInstallPlanner.defaultDestinationBundleURL,
+    destinationBundleURL: URL = AppInstallPlanner.currentDestinationBundleURL,
     fileManager: FileManager = .default
   ) {
     self.destinationBundleURL = destinationBundleURL
@@ -137,6 +138,9 @@ public struct AppInstallPlanner {
   }
 
   public static let defaultDestinationBundleURL = URL(fileURLWithPath: "/Applications/1Context.app", isDirectory: true)
+  public static var currentDestinationBundleURL: URL {
+    OneContextAppIdentity.current().appBundleURL
+  }
 
   private func existingRelation(
     currentVersion: String,
@@ -315,7 +319,7 @@ public struct AppBundleTrasher {
     guard bundle.pathExtension == "app" else {
       throw AppBundleTrashError.notAppBundle(bundle.path)
     }
-    guard AppInstallPlanner.bundleIdentifier(at: bundle) == "com.haptica.1context" else {
+    guard AppInstallPlanner.bundleIdentifier(at: bundle) == OneContextAppIdentity.current().bundleIdentifier else {
       throw AppBundleTrashError.wrongBundleIdentifier(AppInstallPlanner.bundleIdentifier(at: bundle))
     }
     guard allowsNonApplicationsBundle || bundle.deletingLastPathComponent().path == "/Applications"

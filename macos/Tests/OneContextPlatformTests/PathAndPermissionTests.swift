@@ -145,6 +145,43 @@ final class PathAndPermissionTests: XCTestCase {
     XCTAssertEqual(paths.cacheDirectory.path, home.appendingPathComponent("Library/Caches/1Context").path)
   }
 
+  func testDevIdentityUsesSideBySideInstalledRuntimePaths() {
+    let identityKey = OneContextAppIdentity.environmentKey
+    let oldIdentity = getenv(identityKey).map { String(cString: $0) }
+    let runtimeHomeKey = "ONECONTEXT_DEV_RUNTIME_HOME"
+    let oldRuntimeHome = getenv(runtimeHomeKey).map { String(cString: $0) }
+    defer {
+      if let oldIdentity {
+        setenv(identityKey, oldIdentity, 1)
+      } else {
+        unsetenv(identityKey)
+      }
+      if let oldRuntimeHome {
+        setenv(runtimeHomeKey, oldRuntimeHome, 1)
+      } else {
+        unsetenv(runtimeHomeKey)
+      }
+    }
+
+    setenv(identityKey, "dev", 1)
+    unsetenv(runtimeHomeKey)
+    let home = FileManager.default.homeDirectoryForCurrentUser
+    let paths = RuntimePaths.current()
+
+    XCTAssertEqual(paths.identity.kind, .dev)
+    XCTAssertEqual(paths.userContentDirectory.path, home.appendingPathComponent("1Context-Dev").path)
+    XCTAssertEqual(
+      paths.appSupportDirectory.path,
+      home.appendingPathComponent("Library/Application Support/1Context Dev").path
+    )
+    XCTAssertEqual(paths.logDirectory.path, home.appendingPathComponent("Library/Logs/1Context Dev").path)
+    XCTAssertEqual(paths.cacheDirectory.path, home.appendingPathComponent("Library/Caches/1Context Dev").path)
+    XCTAssertEqual(
+      paths.preferencesPath,
+      home.appendingPathComponent("Library/Preferences/com.haptica.1context.dev.plist").path
+    )
+  }
+
   func testPlistEscapeEscapesXMLSpecialCharacters() {
     XCTAssertEqual(
       plistEscape("<tag attr=\"one&two\">it's</tag>"),

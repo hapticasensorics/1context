@@ -28,6 +28,30 @@ final class LocalWebTests: XCTestCase {
     XCTAssertEqual(config.brandedHealthURL.absoluteString, "https://wiki.1context.localhost/__1context/health")
   }
 
+  func testCaddyConfigSupportsSideBySideDevHTTPMode() {
+    let config = CaddyConfig(
+      mode: .localHTTPPorted,
+      siteRoot: URL(fileURLWithPath: "/tmp/1Context Dev Wiki/current", isDirectory: true),
+      logFile: URL(fileURLWithPath: "/tmp/1Context Dev Logs/caddy.log"),
+      host: "wiki-dev.1context.localhost",
+      port: 39291,
+      apiPort: 39292
+    )
+
+    let text = config.caddyfileText()
+    XCTAssertTrue(text.contains("admin off"))
+    XCTAssertTrue(text.contains("auto_https off"))
+    XCTAssertTrue(text.contains("http://127.0.0.1:39291"))
+    XCTAssertTrue(text.contains("http://localhost:39291"))
+    XCTAssertTrue(text.contains("http://wiki-dev.1context.localhost:39291"))
+    XCTAssertTrue(text.contains("bind 127.0.0.1"))
+    XCTAssertFalse(text.contains("tls internal"))
+    XCTAssertEqual(config.url, "http://localhost:39291/your-context")
+    XCTAssertEqual(config.healthURL.absoluteString, "http://127.0.0.1:39291/__1context/health")
+    XCTAssertEqual(config.privilegedProxyHealthURL.absoluteString, "http://127.0.0.1:39291/__1context/health")
+    XCTAssertEqual(config.brandedHealthURL.absoluteString, "http://wiki-dev.1context.localhost:39291/__1context/health")
+  }
+
   func testDefaultURLModeRequiresProfessionalLocalHTTPSSetup() {
     let mode = LocalWebURLMode.localHTTPSPortless
     let config = CaddyConfig(

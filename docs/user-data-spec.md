@@ -13,8 +13,9 @@ It answers:
 
 It does not define how agents decide what to write, how renders are scheduled,
 or how accepted changes are published. Those behaviors live in
-[Wiki Publishing System API](wiki-publishing-system-api.md) and
-[Wiki Memory Publication Contract](wiki-memory-publication-contract.md).
+[Wiki Publishing System API](wiki-publishing-system-api.md),
+[Wiki System Architecture](wiki-system-architecture.md), and
+[Wiki Agent Use Story](wiki-agent-use-story.md).
 
 ## Core Rule
 
@@ -722,6 +723,22 @@ local state and may contain personal data.
 
 Debug builds may use `ONECONTEXT_DEV_RUNTIME_HOME` to point at `runtime-test`.
 Release builds must ignore that switch.
+
+Installed dev builds use a separate app identity and do not write into the
+official user-data tree:
+
+```text
+/Applications/1Context Dev.app
+~/1Context-Dev/
+~/Library/Application Support/1Context Dev/
+~/Library/Logs/1Context Dev/
+~/Library/Caches/1Context Dev/
+~/Library/Preferences/com.haptica.1context.dev.plist
+```
+
+The installed dev identity is for side-by-side machine testing. It is not the
+repo `runtime-test/` fixture, and it must not overwrite `~/1Context` or the
+official app support folders.
 
 The repo-local runtime contract is documented in
 [Repo Runtime Layout](../runtime/README.md).

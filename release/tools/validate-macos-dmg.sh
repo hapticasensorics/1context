@@ -68,9 +68,10 @@ hdiutil attach "$DMG" \
   -readonly \
   -quiet
 
-APP="$MOUNT/1Context.app"
+EXPECTED_APP_BASENAME="${ONECONTEXT_EXPECTED_APP_BASENAME:-1Context.app}"
+APP="$MOUNT/$EXPECTED_APP_BASENAME"
 if [[ ! -d "$APP" ]]; then
-  echo "DMG does not contain 1Context.app." >&2
+  echo "DMG does not contain $EXPECTED_APP_BASENAME." >&2
   exit 1
 fi
 
@@ -80,7 +81,7 @@ if [[ "$(readlink "$MOUNT/Applications" 2>/dev/null || true)" != "/Applications"
 fi
 
 if find "$MOUNT" -maxdepth 1 -mindepth 1 \
-  ! -name "1Context.app" \
+  ! -name "$EXPECTED_APP_BASENAME" \
   ! -name "Applications" \
   ! -name ".background" \
   ! -name ".DS_Store" \
@@ -88,6 +89,13 @@ if find "$MOUNT" -maxdepth 1 -mindepth 1 \
   echo "DMG contains unexpected top-level files." >&2
   find "$MOUNT" -maxdepth 1 -mindepth 1 -print >&2
   exit 1
+fi
+
+if [[ -n "${ONECONTEXT_BUNDLE_IDENTIFIER:-}" ]]; then
+  if [[ "$(plutil -extract CFBundleIdentifier raw "$APP/Contents/Info.plist" 2>/dev/null || true)" != "$ONECONTEXT_BUNDLE_IDENTIFIER" ]]; then
+    echo "DMG app Info.plist bundle identifier does not match ONECONTEXT_BUNDLE_IDENTIFIER." >&2
+    exit 1
+  fi
 fi
 
 if [[ "$(plutil -extract CFBundleShortVersionString raw "$APP/Contents/Info.plist" 2>/dev/null || true)" != "$VERSION" ]]; then

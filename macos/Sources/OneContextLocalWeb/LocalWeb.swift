@@ -131,29 +131,78 @@ public struct LocalWebDiagnostics: Codable, Equatable, Sendable {
 }
 
 public enum LocalWebDefaults {
-  public static let wikiHost = "wiki.1context.localhost"
-  public static let browserHost = "localhost"
-  public static let bindHost = "127.0.0.1"
+  public static var wikiHost: String {
+    OneContextAppIdentity.current().kind == .dev
+      ? "wiki-dev.1context.localhost"
+      : "wiki.1context.localhost"
+  }
+  public static var browserHost: String { "localhost" }
+  public static var bindHost: String { "127.0.0.1" }
   // Keep app-internal readiness on literal loopback. The browser URL uses
   // localhost because multi-label .localhost handling varies by macOS client.
-  public static let healthHost = bindHost
-  public static let privilegedProxyHealthHost = browserHost
-  public static let wikiPort = 39191
-  public static let wikiAPIPort = 39192
-  public static let wikiRoute = "/your-context"
-  public static let defaultWikiURL = "https://\(browserHost)\(wikiRoute)"
-  public static let brandedWikiURL = "https://\(wikiHost)\(wikiRoute)"
+  public static var healthHost: String { bindHost }
+  public static var privilegedProxyHealthHost: String { browserHost }
+  public static var wikiPort: Int { OneContextAppIdentity.current().localWebPort }
+  public static var wikiAPIPort: Int { OneContextAppIdentity.current().localWebAPIPort }
+  public static var wikiRoute: String { "/your-context" }
+  public static var urlMode: LocalWebURLMode {
+    LocalWebURLMode(rawValue: OneContextAppIdentity.current().localWebURLModeRawValue) ?? .localHTTPSPortless
+  }
+  public static var defaultWikiURL: String {
+    urlMode.publicWikiURL(route: wikiRoute, port: wikiPort)
+  }
+  public static var brandedWikiURL: String {
+    urlMode.brandedWikiURL(host: wikiHost, route: wikiRoute, port: wikiPort)
+  }
 }
 
 public enum LocalWebURLMode: String, Codable, Sendable {
   case localHTTPSPortless = "local-https-portless"
+  case localHTTPPorted = "local-http-ported"
+
+  public var scheme: String {
+    switch self {
+    case .localHTTPSPortless:
+      return "https"
+    case .localHTTPPorted:
+      return "http"
+    }
+  }
 
   public var trustMode: String {
-    "local-ca-required"
+    switch self {
+    case .localHTTPSPortless:
+      return "local-ca-required"
+    case .localHTTPPorted:
+      return "none"
+    }
   }
 
   public var privilegedBindRequired: Bool {
-    true
+    switch self {
+    case .localHTTPSPortless:
+      return true
+    case .localHTTPPorted:
+      return false
+    }
+  }
+
+  public func publicWikiURL(route: String, port: Int) -> String {
+    switch self {
+    case .localHTTPSPortless:
+      return "https://\(LocalWebDefaults.browserHost)\(route)"
+    case .localHTTPPorted:
+      return "http://\(LocalWebDefaults.browserHost):\(port)\(route)"
+    }
+  }
+
+  public func brandedWikiURL(host: String, route: String, port: Int) -> String {
+    switch self {
+    case .localHTTPSPortless:
+      return "https://\(host)\(route)"
+    case .localHTTPPorted:
+      return "http://\(host):\(port)\(route)"
+    }
   }
 }
 
@@ -216,6 +265,38 @@ public struct LocalWebSetupSnapshot: Codable, Equatable, Sendable {
           reversibleByUninstall: true,
           details: "The setup flow trusts the 1Context local Caddy CA in the user's login keychain for SSL, then records the installed fingerprint at \(state.systemPaths.trustedRootSHA256).",
           nextAction: state.localCATrustReady ? "No action required." : "Open 1Context and choose Settings > Setup..."
+        )
+      ]
+    )
+  }
+
+  public static func notRequired(targetURL: String, urlMode: String) -> LocalWebSetupSnapshot {
+    LocalWebSetupSnapshot(
+      urlMode: urlMode,
+      targetURL: targetURL,
+      ready: true,
+      requirements: [
+        LocalWebSetupRequirement(
+          id: "local-web.privileged-bind",
+          title: "Local HTTPS helper",
+          status: .notRequired,
+          owner: "1Context app",
+          userConsentRequired: false,
+          adminAuthorizationRequired: false,
+          reversibleByUninstall: true,
+          details: "This app identity uses an unprivileged localhost port for local wiki testing.",
+          nextAction: "No action required."
+        ),
+        LocalWebSetupRequirement(
+          id: "local-web.local-ca-trust",
+          title: "Local certificate trust",
+          status: .notRequired,
+          owner: "1Context app",
+          userConsentRequired: false,
+          adminAuthorizationRequired: false,
+          reversibleByUninstall: true,
+          details: "This app identity serves the local wiki over HTTP on an unprivileged localhost port.",
+          nextAction: "No action required."
         )
       ]
     )
@@ -315,23 +396,32 @@ public struct CaddyConfig: Equatable, Sendable {
   }
 
   public var url: String {
-    LocalWebDefaults.defaultWikiURL
+    mode.publicWikiURL(route: LocalWebDefaults.wikiRoute, port: port)
   }
 
   public var healthURL: URL {
-    URL(string: "https://\(LocalWebDefaults.healthHost):\(port)/__1context/health")!
+    URL(string: "\(mode.scheme)://\(LocalWebDefaults.healthHost):\(port)/__1context/health")!
   }
 
   public var privilegedProxyHealthURL: URL {
-    URL(string: "https://\(LocalWebDefaults.privilegedProxyHealthHost)/__1context/health")!
+    if mode.privilegedBindRequired {
+      return URL(string: "https://\(LocalWebDefaults.privilegedProxyHealthHost)/__1context/health")!
+    }
+    return healthURL
   }
 
   public var brandedHealthURL: URL {
-    URL(string: "https://\(host)/__1context/health")!
+    let portPart = mode.privilegedBindRequired ? "" : ":\(port)"
+    return URL(string: "\(mode.scheme)://\(host)\(portPart)/__1context/health")!
   }
 
   public func caddyfileText() -> String {
-    localHTTPSPortlessCaddyfileText()
+    switch mode {
+    case .localHTTPSPortless:
+      localHTTPSPortlessCaddyfileText()
+    case .localHTTPPorted:
+      localHTTPPortedCaddyfileText()
+    }
   }
 
   private func localHTTPSPortlessCaddyfileText() -> String {
@@ -382,6 +472,51 @@ public struct CaddyConfig: Equatable, Sendable {
     """
   }
 
+  private func localHTTPPortedCaddyfileText() -> String {
+    """
+    {
+      admin off
+      auto_https off
+    }
+
+    \(siteAddresses()) {
+      bind \(bindHost)
+      root * "\(escape(siteRoot.path))"
+
+      log {
+        output file "\(escape(logFile.path))" {
+          roll_size 1MiB
+          roll_keep 2
+        }
+      }
+
+      encode zstd gzip
+
+      header {
+        X-Content-Type-Options nosniff
+        Referrer-Policy no-referrer
+        Cache-Control no-store
+      }
+
+      route {
+        @wikiStaticApi path /api/wiki/site /api/wiki/pages /api/wiki/stats
+        handle @wikiStaticApi {
+          rewrite * {path}.json
+          file_server
+        }
+
+        @wikiDynamicApi path /api/wiki/*
+        handle @wikiDynamicApi {
+          reverse_proxy \(apiBindHost):\(apiPort)
+        }
+
+        try_files {path} {path}.html {path}/index.html
+        file_server
+      }
+    }
+    """
+  }
+
   private func escape(_ value: String) -> String {
     value
       .replacingOccurrences(of: "\\", with: "\\\\")
@@ -390,9 +525,9 @@ public struct CaddyConfig: Equatable, Sendable {
 
   private func siteAddresses() -> String {
     let addresses = [
-      "https://\(host):\(port)",
-      "https://\(LocalWebDefaults.healthHost):\(port)",
-      "https://\(LocalWebDefaults.privilegedProxyHealthHost):\(port)"
+      "\(mode.scheme)://\(host):\(port)",
+      "\(mode.scheme)://\(LocalWebDefaults.healthHost):\(port)",
+      "\(mode.scheme)://\(LocalWebDefaults.privilegedProxyHealthHost):\(port)"
     ]
     return Array(Set(addresses)).sorted().joined(separator: ", ")
   }
@@ -434,6 +569,7 @@ public final class CaddyManager: @unchecked Sendable {
     fileManager: FileManager = .default,
     caddyExecutable: URL? = nil,
     proxyExecutable: URL? = nil,
+    mode: LocalWebURLMode = LocalWebDefaults.urlMode,
     host: String = LocalWebDefaults.wikiHost,
     port: Int = LocalWebDefaults.wikiPort,
     apiBindHost: String = LocalWebDefaults.bindHost,
@@ -443,7 +579,7 @@ public final class CaddyManager: @unchecked Sendable {
     self.paths = LocalWebPaths(runtimePaths: runtimePaths)
     self.setupSystemPaths = setupSystemPaths
     self.fileManager = fileManager
-    self.urlMode = .localHTTPSPortless
+    self.urlMode = mode
     self.host = host
     self.port = port
     self.apiBindHost = apiBindHost
@@ -481,6 +617,9 @@ public final class CaddyManager: @unchecked Sendable {
     lifecycleLock.lock()
     defer { lifecycleLock.unlock() }
 
+    guard urlMode.privilegedBindRequired else {
+      throw LocalWebError.setupRequired("Local web setup is not required for \(runtimePaths.identity.displayName).")
+    }
     try ensureStaticSupportFiles()
     let caddy = try caddyExecutable()
     let proxy = try localWebProxyExecutable()
@@ -695,6 +834,9 @@ public final class CaddyManager: @unchecked Sendable {
 
   private func localWebSetupSnapshot() -> LocalWebSetupSnapshot {
     let targetURL = caddyConfig().url
+    if !urlMode.privilegedBindRequired {
+      return .notRequired(targetURL: targetURL, urlMode: urlMode.rawValue)
+    }
     return .localHTTPSPortless(targetURL: targetURL, state: localWebSetupState())
   }
 
@@ -761,7 +903,7 @@ public final class CaddyManager: @unchecked Sendable {
       candidates.append(executableDirectory.appendingPathComponent(LocalWebSetupConstants.proxyExecutableName))
       candidates.append(executableDirectory.appendingPathComponent("OneContextLocalWebProxy"))
     }
-    candidates.append(URL(fileURLWithPath: "/Applications/1Context.app/Contents/Resources/\(LocalWebSetupConstants.proxyExecutableName)"))
+    candidates.append(runtimePaths.identity.appBundleURL.appendingPathComponent("Contents/Resources/\(LocalWebSetupConstants.proxyExecutableName)"))
     return candidates
   }
 

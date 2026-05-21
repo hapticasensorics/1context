@@ -181,8 +181,10 @@ export async function phaseBuild(ctx: ReleaseContext, args: string[]): Promise<v
   }
 
   await timeReleaseStep(ctx, "build", "build_app_bundle", () => runCommand(fromRoot("scripts", "build-macos-app.sh"), [], { env: ctxEnv(ctx, buildEnv) }));
+  const appBundleName = ctx.env.ONECONTEXT_APP_BUNDLE_NAME || "1Context";
+  const appBundlePath = fromRoot("dist", `${appBundleName}.app`);
   if (ctx.channel === "dev") {
-    await timeReleaseStep(ctx, "build", "create_dmg", () => runCommand(fromRoot("release", "tools", "create-macos-dmg.sh"), [fromRoot("dist", "1Context.app"), ctx.dmg], { env: ctxEnv(ctx, buildEnv), stdout: "ignore" }));
+    await timeReleaseStep(ctx, "build", "create_dmg", () => runCommand(fromRoot("release", "tools", "create-macos-dmg.sh"), [appBundlePath, ctx.dmg], { env: ctxEnv(ctx, buildEnv), stdout: "ignore" }));
     await timeReleaseStep(ctx, "build", "validate_dmg", () => runCommand(fromRoot("release", "tools", "validate-macos-dmg.sh"), [ctx.dmg], { env: ctxEnv(ctx, { ...buildEnv, ALLOW_UNNOTARIZED: "1" }) }));
     writeReleaseEvidence(ctx, `build-${ctx.channel}`);
     await timeReleaseStep(ctx, "build", "redact_evidence", () => runCommand(fromRoot("release", "tools", "redact-evidence.sh"), [ctx.evidenceDir], { env: ctxEnv(ctx, buildEnv) }));
@@ -192,9 +194,9 @@ export async function phaseBuild(ctx: ReleaseContext, args: string[]): Promise<v
   }
 
   if (ctx.policy.notarize) {
-    await timeReleaseStep(ctx, "build", "notarize_app_bundle", () => runCommand(fromRoot("release", "tools", "notarize-macos-artifact.sh"), [fromRoot("dist", "1Context.app")], { env: ctxEnv(ctx, buildEnv) }));
+    await timeReleaseStep(ctx, "build", "notarize_app_bundle", () => runCommand(fromRoot("release", "tools", "notarize-macos-artifact.sh"), [appBundlePath], { env: ctxEnv(ctx, buildEnv) }));
   }
-  await timeReleaseStep(ctx, "build", "create_dmg", () => runCommand(fromRoot("release", "tools", "create-macos-dmg.sh"), [fromRoot("dist", "1Context.app"), ctx.dmg], { env: ctxEnv(ctx, buildEnv), stdout: "ignore" }));
+  await timeReleaseStep(ctx, "build", "create_dmg", () => runCommand(fromRoot("release", "tools", "create-macos-dmg.sh"), [appBundlePath, ctx.dmg], { env: ctxEnv(ctx, buildEnv), stdout: "ignore" }));
   if (ctx.policy.signing_mode === "developer-id") {
     const codesignArgs = ["--force", "--timestamp", "--sign", buildEnv.CODESIGN_IDENTITY ?? ""];
     const keychain = process.env.CODESIGN_KEYCHAIN || process.env.ONECONTEXT_RELEASE_KEYCHAIN || "";

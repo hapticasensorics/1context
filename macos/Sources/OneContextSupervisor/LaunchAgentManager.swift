@@ -11,11 +11,16 @@ public struct LaunchAgentState {
 typealias ProcessResult = (status: Int32, stdout: String, stderr: String)
 
 public final class LaunchAgentManager {
-  public static let runtimeLabel = "com.haptica.1context"
-  public static let menuLabel = "com.haptica.1context.menu"
+  public static var runtimeLabel: String {
+    OneContextAppIdentity.current().runtimeLaunchAgentLabel
+  }
+  public static var menuLabel: String {
+    OneContextAppIdentity.current().menuLaunchAgentLabel
+  }
 
   private let homeDirectory: URL
   private let runtimePaths: RuntimePaths
+  private let identity: OneContextAppIdentity
   private let uid: uid_t
   private let isRootLifecycleRejected: @Sendable () -> Bool
   private let processRunner: @Sendable (String, [String], TimeInterval) async -> ProcessResult
@@ -41,6 +46,7 @@ public final class LaunchAgentManager {
   ) {
     self.homeDirectory = homeDirectory
     self.runtimePaths = runtimePaths
+    self.identity = runtimePaths.identity
     self.uid = uid
     self.isRootLifecycleRejected = isRootLifecycleRejected
     self.processRunner = processRunner
@@ -67,8 +73,8 @@ public final class LaunchAgentManager {
   public func startMenu(appPath: String) async throws {
     try ensureNormalUserLifecycle()
     try installMenu(appPath: appPath)
-    let path = launchAgentPath(label: Self.menuLabel)
-    let target = "\(guiDomain())/\(Self.menuLabel)"
+    let path = launchAgentPath(label: identity.menuLaunchAgentLabel)
+    let target = "\(guiDomain())/\(identity.menuLaunchAgentLabel)"
 
     let current = await launchctl(["print", target])
     if current.status == 0 {
@@ -118,8 +124,8 @@ public final class LaunchAgentManager {
   public func stopMenu() async {
     guard launchAgentLifecycleIsSafe() else { return }
     await quitMenuApp()
-    let path = launchAgentPath(label: Self.menuLabel)
-    _ = await launchctl(["bootout", "\(guiDomain())/\(Self.menuLabel)"])
+    let path = launchAgentPath(label: identity.menuLaunchAgentLabel)
+    _ = await launchctl(["bootout", "\(guiDomain())/\(identity.menuLaunchAgentLabel)"])
     _ = await launchctl(["bootout", guiDomain(), path.path])
     try? FileManager.default.removeItem(at: path)
   }
@@ -127,7 +133,7 @@ public final class LaunchAgentManager {
   public func uninstallManagedLaunchAgents() async {
     guard launchAgentLifecycleIsSafe() else { return }
     await quitMenuApp()
-    for label in [Self.menuLabel, Self.runtimeLabel] {
+    for label in [identity.menuLaunchAgentLabel, identity.runtimeLaunchAgentLabel] {
       let path = launchAgentPath(label: label)
       _ = await launchctl(["bootout", "\(guiDomain())/\(label)"])
       _ = await launchctl(["bootout", guiDomain(), path.path])
@@ -136,7 +142,7 @@ public final class LaunchAgentManager {
   }
 
   private var launchAgentPath: URL {
-    launchAgentPath(label: Self.runtimeLabel)
+    launchAgentPath(label: identity.runtimeLaunchAgentLabel)
   }
 
   private func launchAgentPath(label: String) -> URL {
@@ -160,9 +166,9 @@ public final class LaunchAgentManager {
     try RuntimePermissions.ensurePrivateDirectory(paths.logDirectory)
     _ = FileManager.default.createFile(atPath: menuLogPath, contents: nil)
     RuntimePermissions.ensurePrivateFile(menuLogPath)
-    try FileManager.default.createDirectory(at: launchAgentPath(label: Self.menuLabel).deletingLastPathComponent(), withIntermediateDirectories: true)
+    try FileManager.default.createDirectory(at: launchAgentPath(label: identity.menuLaunchAgentLabel).deletingLastPathComponent(), withIntermediateDirectories: true)
     try menuPlist(appPath: appPath, paths: paths).write(
-      to: launchAgentPath(label: Self.menuLabel),
+      to: launchAgentPath(label: identity.menuLaunchAgentLabel),
       atomically: true,
       encoding: .utf8
     )
@@ -175,7 +181,12 @@ public final class LaunchAgentManager {
     <plist version="1.0">
     <dict>
       <key>Label</key>
-      <string>\(Self.runtimeLabel)</string>
+      <string>\(identity.runtimeLaunchAgentLabel)</string>
+      <key>EnvironmentVariables</key>
+      <dict>
+        <key>\(OneContextAppIdentity.environmentKey)</key>
+        <string>\(identity.kind.rawValue)</string>
+      </dict>
       <key>ProgramArguments</key>
       <array>
         <string>\(plistEscape(daemonPath))</string>
@@ -202,7 +213,12 @@ public final class LaunchAgentManager {
     <plist version="1.0">
     <dict>
       <key>Label</key>
-      <string>\(Self.menuLabel)</string>
+      <string>\(identity.menuLaunchAgentLabel)</string>
+      <key>EnvironmentVariables</key>
+      <dict>
+        <key>\(OneContextAppIdentity.environmentKey)</key>
+        <string>\(identity.kind.rawValue)</string>
+      </dict>
       <key>ProgramArguments</key>
       <array>
         <string>\(plistEscape(appPath))</string>
@@ -240,13 +256,7 @@ public final class LaunchAgentManager {
 
   private func ensureStandardRuntimePathsForLaunchAgentLifecycle() throws {
     let home = homeDirectory.standardizedFileURL
-    let expected = RuntimePaths(
-      userContentDirectory: home.appendingPathComponent("1Context", isDirectory: true),
-      appSupportDirectory: home.appendingPathComponent("Library/Application Support/1Context", isDirectory: true),
-      logDirectory: home.appendingPathComponent("Library/Logs/1Context", isDirectory: true),
-      cacheDirectory: home.appendingPathComponent("Library/Caches/1Context", isDirectory: true),
-      preferencesPath: home.appendingPathComponent("Library/Preferences/com.haptica.1context.plist").path
-    )
+    let expected = identity.runtimePaths(homeDirectory: home)
     let checks: [(label: String, actual: String, expected: String)] = [
       ("userContentDirectory", runtimePaths.userContentDirectory.path, expected.userContentDirectory.path),
       ("appSupportDirectory", runtimePaths.appSupportDirectory.path, expected.appSupportDirectory.path),
@@ -275,7 +285,7 @@ public final class LaunchAgentManager {
   }
 
   private func agentTarget() -> String {
-    "\(guiDomain())/\(Self.runtimeLabel)"
+    "\(guiDomain())/\(identity.runtimeLaunchAgentLabel)"
   }
 
   private func launchctl(_ args: [String]) async -> ProcessResult {

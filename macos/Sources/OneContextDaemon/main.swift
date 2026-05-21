@@ -147,7 +147,7 @@ final class OneContextDaemon: @unchecked Sendable {
       .deletingLastPathComponent()
     let candidates = [
       executableDirectory.appendingPathComponent("1Context").path,
-      "/Applications/1Context.app/Contents/MacOS/1Context"
+      paths.identity.appBundleURL.appendingPathComponent("Contents/MacOS/1Context").path
     ]
     return candidates.first { fileManager.isExecutableFile(atPath: $0) }
   }

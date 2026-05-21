@@ -39,7 +39,7 @@ let package = Package(
     ),
     .target(
       name: "OneContextInstall",
-      dependencies: ["OneContextCore"]
+      dependencies: ["OneContextCore", "OneContextPlatform"]
     ),
     .target(
       name: "OneContextSetup",

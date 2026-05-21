@@ -22,6 +22,10 @@ final class LaunchAgentManagerTests: XCTestCase {
     let object = try XCTUnwrap(try PropertyListSerialization.propertyList(from: data, format: nil) as? [String: Any])
 
     XCTAssertEqual(object["Label"] as? String, "com.haptica.1context.menu")
+    XCTAssertEqual(
+      (object["EnvironmentVariables"] as? [String: String])?[OneContextAppIdentity.environmentKey],
+      "official"
+    )
     XCTAssertEqual(object["ProgramArguments"] as? [String], [appPath])
     XCTAssertEqual(object["RunAtLoad"] as? Bool, true)
     let keepAlive = try XCTUnwrap(object["KeepAlive"] as? [String: Bool])
@@ -47,6 +51,10 @@ final class LaunchAgentManagerTests: XCTestCase {
     let object = try XCTUnwrap(try PropertyListSerialization.propertyList(from: data, format: nil) as? [String: Any])
 
     XCTAssertEqual(object["Label"] as? String, "com.haptica.1context")
+    XCTAssertEqual(
+      (object["EnvironmentVariables"] as? [String: String])?[OneContextAppIdentity.environmentKey],
+      "official"
+    )
     XCTAssertEqual(object["ProgramArguments"] as? [String], [daemonPath])
     XCTAssertEqual(object["RunAtLoad"] as? Bool, true)
     XCTAssertEqual(object["KeepAlive"] as? Bool, true)
@@ -83,6 +91,33 @@ final class LaunchAgentManagerTests: XCTestCase {
     )
   }
 
+  func testDevIdentityWritesSeparateLaunchAgentLabelsAndPaths() async throws {
+    let root = temporaryRoot()
+    defer { try? FileManager.default.removeItem(at: root) }
+    let manager = testManager(root: root, identity: .dev) { executable, arguments, _ in
+      if executable == "/bin/launchctl", arguments.first == "bootstrap" {
+        return (0, "", "")
+      }
+      return (1, "", "not loaded")
+    }
+
+    let daemonPath = root.appendingPathComponent("Applications/1Context Dev.app/Contents/MacOS/1contextd").path
+    try await manager.start(daemonPath: daemonPath)
+
+    let plist = root.appendingPathComponent("Library/LaunchAgents/com.haptica.1context.dev.plist")
+    let data = try Data(contentsOf: plist)
+    let object = try XCTUnwrap(try PropertyListSerialization.propertyList(from: data, format: nil) as? [String: Any])
+
+    XCTAssertEqual(object["Label"] as? String, "com.haptica.1context.dev")
+    XCTAssertEqual(
+      (object["EnvironmentVariables"] as? [String: String])?[OneContextAppIdentity.environmentKey],
+      "dev"
+    )
+    XCTAssertEqual(object["ProgramArguments"] as? [String], [daemonPath])
+    XCTAssertTrue(FileManager.default.fileExists(atPath: root.appendingPathComponent("Library/Application Support/1Context Dev/run").path))
+    XCTAssertTrue(FileManager.default.fileExists(atPath: root.appendingPathComponent("Library/Logs/1Context Dev").path))
+  }
+
   func testStopMenuRefusesDisposableRuntimePathsWithoutRemovingRealPlist() async throws {
     let home = temporaryRoot()
     let runtimeRoot = temporaryRoot()
@@ -109,23 +144,19 @@ final class LaunchAgentManagerTests: XCTestCase {
 
   private func testManager(
     root: URL,
+    identity: OneContextAppIdentity = .official,
     processRunner: @escaping @Sendable (String, [String], TimeInterval) async -> ProcessResult
   ) -> LaunchAgentManager {
-    testManager(homeRoot: root, runtimeRoot: root, processRunner: processRunner)
+    testManager(homeRoot: root, runtimeRoot: root, identity: identity, processRunner: processRunner)
   }
 
   private func testManager(
     homeRoot: URL,
     runtimeRoot: URL,
+    identity: OneContextAppIdentity = .official,
     processRunner: @escaping @Sendable (String, [String], TimeInterval) async -> ProcessResult
   ) -> LaunchAgentManager {
-    let paths = RuntimePaths(
-      userContentDirectory: runtimeRoot.appendingPathComponent("1Context", isDirectory: true),
-      appSupportDirectory: runtimeRoot.appendingPathComponent("Library/Application Support/1Context", isDirectory: true),
-      logDirectory: runtimeRoot.appendingPathComponent("Library/Logs/1Context", isDirectory: true),
-      cacheDirectory: runtimeRoot.appendingPathComponent("Library/Caches/1Context", isDirectory: true),
-      preferencesPath: runtimeRoot.appendingPathComponent("Library/Preferences/com.haptica.1context.plist").path
-    )
+    let paths = identity.runtimePaths(homeDirectory: runtimeRoot)
     return LaunchAgentManager(
       homeDirectory: homeRoot,
       runtimePaths: paths,

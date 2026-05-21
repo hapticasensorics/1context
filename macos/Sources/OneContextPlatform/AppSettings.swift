@@ -49,12 +49,14 @@ public enum OneContextAppSettings {
   public static let wikiAutomaticPublishCadenceKey = "WikiAutomaticPublishCadence"
 
   public static func wikiAutomaticPublishCadence(preferencesPath: String? = nil) -> WikiAutomaticPublishCadence {
-    if let preferencesPath,
-      let preferences = NSDictionary(contentsOfFile: preferencesPath) as? [String: Any],
-      let rawValue = preferences[wikiAutomaticPublishCadenceKey] as? String,
-      let cadence = WikiAutomaticPublishCadence.parse(rawValue)
-    {
-      return cadence
+    if let preferencesPath {
+      if let preferences = NSDictionary(contentsOfFile: preferencesPath) as? [String: Any],
+        let rawValue = preferences[wikiAutomaticPublishCadenceKey] as? String,
+        let cadence = WikiAutomaticPublishCadence.parse(rawValue)
+      {
+        return cadence
+      }
+      return .defaultValue
     }
     return WikiAutomaticPublishCadence.parse(UserDefaults.standard.string(forKey: wikiAutomaticPublishCadenceKey))
       ?? .defaultValue

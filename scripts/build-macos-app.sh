@@ -8,7 +8,35 @@ else
   eval "$("$ROOT/scripts/release-train.sh" manifest export-env)"
 fi
 MACOS_DIR="$ROOT/macos"
-APP_DIR="$ROOT/dist/1Context.app"
+APP_IDENTITY="${ONECONTEXT_APP_IDENTITY:-}"
+if [[ -z "$APP_IDENTITY" ]]; then
+  if [[ "${ONECONTEXT_RELEASE_CHANNEL:-}" == "dev" ]]; then
+    APP_IDENTITY="dev"
+  else
+    APP_IDENTITY="official"
+  fi
+fi
+case "$APP_IDENTITY" in
+  official)
+    DEFAULT_APP_BUNDLE_NAME="1Context"
+    DEFAULT_APP_DISPLAY_NAME="1Context"
+    DEFAULT_BUNDLE_IDENTIFIER="com.haptica.1context"
+    DEFAULT_PROXY_LABEL="com.haptica.1context.local-web-proxy"
+    ;;
+  dev)
+    DEFAULT_APP_BUNDLE_NAME="1Context Dev"
+    DEFAULT_APP_DISPLAY_NAME="1Context Dev"
+    DEFAULT_BUNDLE_IDENTIFIER="com.haptica.1context.dev"
+    DEFAULT_PROXY_LABEL="com.haptica.1context.dev.local-web-proxy"
+    ;;
+  *)
+    echo "Unknown ONECONTEXT_APP_IDENTITY: $APP_IDENTITY" >&2
+    exit 1
+    ;;
+esac
+APP_BUNDLE_NAME="${ONECONTEXT_APP_BUNDLE_NAME:-$DEFAULT_APP_BUNDLE_NAME}"
+APP_DISPLAY_NAME="${ONECONTEXT_APP_DISPLAY_NAME:-$DEFAULT_APP_DISPLAY_NAME}"
+APP_DIR="$ROOT/dist/$APP_BUNDLE_NAME.app"
 CONTENTS_DIR="$APP_DIR/Contents"
 MACOS_APP_DIR="$CONTENTS_DIR/MacOS"
 RESOURCES_DIR="$CONTENTS_DIR/Resources"
@@ -19,7 +47,9 @@ IDENTITY="${CODESIGN_IDENTITY:-}"
 CODESIGN_KEYCHAIN="${CODESIGN_KEYCHAIN:-${ONECONTEXT_RELEASE_KEYCHAIN:-}}"
 VERSION="$ONECONTEXT_RELEASE_VERSION"
 ARCH="${ONECONTEXT_ARCH:-arm64}"
-BUNDLE_IDENTIFIER="${ONECONTEXT_BUNDLE_IDENTIFIER:-com.haptica.1context}"
+BUNDLE_IDENTIFIER="${ONECONTEXT_BUNDLE_IDENTIFIER:-$DEFAULT_BUNDLE_IDENTIFIER}"
+LOCAL_WEB_PROXY_LABEL="${ONECONTEXT_LOCAL_WEB_PROXY_LABEL:-$DEFAULT_PROXY_LABEL}"
+LOCAL_WEB_PROXY_PLIST_NAME="$LOCAL_WEB_PROXY_LABEL.plist"
 MENU_ICON_SOURCE="$MACOS_DIR/Sources/OneContextMenuBar/Resources/MenuBarIcon.png"
 CADDY_VERSION="2.11.2"
 CADDY_TOOL_ARCHIVE="$ROOT/release/tools/caddy/darwin-$ARCH/caddy-v$CADDY_VERSION-darwin-$ARCH.tar.gz"
@@ -315,9 +345,11 @@ cat > "$CONTENTS_DIR/Info.plist" <<PLIST
   <key>CFBundleIdentifier</key>
   <string>$BUNDLE_IDENTIFIER</string>
   <key>CFBundleName</key>
-  <string>1Context</string>
+  <string>$(plist_escape "$APP_DISPLAY_NAME")</string>
   <key>CFBundleDisplayName</key>
-  <string>1Context</string>
+  <string>$(plist_escape "$APP_DISPLAY_NAME")</string>
+  <key>OneContextAppIdentity</key>
+  <string>$APP_IDENTITY</string>
   <key>CFBundlePackageType</key>
   <string>APPL</string>
   <key>CFBundleIconFile</key>
@@ -336,13 +368,13 @@ $SPARKLE_PLIST_KEYS
 </plist>
 PLIST
 
-cat > "$LAUNCH_DAEMONS_DIR/com.haptica.1context.local-web-proxy.plist" <<'PLIST'
+cat > "$LAUNCH_DAEMONS_DIR/$LOCAL_WEB_PROXY_PLIST_NAME" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
   <key>Label</key>
-  <string>com.haptica.1context.local-web-proxy</string>
+  <string>$(plist_escape "$LOCAL_WEB_PROXY_LABEL")</string>
   <key>BundleProgram</key>
   <string>Contents/Resources/1context-local-web-proxy</string>
   <key>RunAtLoad</key>

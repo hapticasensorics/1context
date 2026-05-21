@@ -6,7 +6,9 @@ VERSION="${ONECONTEXT_VERSION:-$(tr -d '[:space:]' < "$ROOT/VERSION")}"
 ARCH="${ONECONTEXT_ARCH:-arm64}"
 APP="${1:-$ROOT/dist/1Context.app}"
 DMG="${2:-$ROOT/dist/1Context-$VERSION-macos-$ARCH.dmg}"
-VOLUME_NAME="${ONECONTEXT_DMG_VOLUME_NAME:-1Context}"
+APP_BASENAME="$(basename "$APP")"
+APP_NAME="${APP_BASENAME%.app}"
+VOLUME_NAME="${ONECONTEXT_DMG_VOLUME_NAME:-$APP_NAME}"
 
 if [[ ! -d "$APP" ]]; then
   echo "App not found: $APP" >&2
@@ -29,7 +31,7 @@ COPYFILE_DISABLE=1 ditto \
   --noqtn \
   --noacl \
   "$APP" \
-  "$STAGING/1Context.app"
+  "$STAGING/$APP_BASENAME"
 
 ln -s /Applications "$STAGING/Applications"
 

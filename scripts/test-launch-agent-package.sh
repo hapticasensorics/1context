@@ -4,6 +4,8 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 VERSION="$(tr -d '[:space:]' < "$ROOT/VERSION")"
 APP="${ONECONTEXT_PACKAGE_APP:-$ROOT/dist/1Context.app}"
+EXPECTED_BUNDLE_IDENTIFIER="${ONECONTEXT_BUNDLE_IDENTIFIER:-com.haptica.1context}"
+EXPECTED_PROXY_LABEL="${ONECONTEXT_LOCAL_WEB_PROXY_LABEL:-com.haptica.1context.local-web-proxy}"
 EVIDENCE_DIR="${ONECONTEXT_PACKAGE_SMOKE_EVIDENCE_DIR:-/tmp}"
 
 if [[ ! -d "$APP" ]]; then
@@ -14,7 +16,7 @@ fi
 mkdir -p "$EVIDENCE_DIR"
 
 INFO="$APP/Contents/Info.plist"
-DAEMON_PLIST="$APP/Contents/Library/LaunchDaemons/com.haptica.1context.local-web-proxy.plist"
+DAEMON_PLIST="$APP/Contents/Library/LaunchDaemons/$EXPECTED_PROXY_LABEL.plist"
 MEMORY_CORE="$APP/Contents/Resources/memory-core"
 RUNTIME_DEFAULTS="$APP/Contents/Resources/RuntimeDefaults/1Context"
 RUNTIME_DEFAULTS_MANIFEST="$RUNTIME_DEFAULTS/.1context/runtime-defaults-manifest.json"
@@ -24,11 +26,11 @@ plutil -lint "$INFO" >/dev/null
 plutil -lint "$DAEMON_PLIST" >/dev/null
 
 test "$(plutil -extract CFBundleShortVersionString raw "$INFO")" = "$VERSION"
-test "$(plutil -extract CFBundleIdentifier raw "$INFO")" = "com.haptica.1context"
+test "$(plutil -extract CFBundleIdentifier raw "$INFO")" = "$EXPECTED_BUNDLE_IDENTIFIER"
 if plutil -extract SUFeedURL raw "$INFO" >/dev/null 2>&1; then
   test "$(plutil -extract SUVerifyUpdateBeforeExtraction raw "$INFO")" = "true"
 fi
-test "$(plutil -extract Label raw "$DAEMON_PLIST")" = "com.haptica.1context.local-web-proxy"
+test "$(plutil -extract Label raw "$DAEMON_PLIST")" = "$EXPECTED_PROXY_LABEL"
 test "$(plutil -extract BundleProgram raw "$DAEMON_PLIST")" = "Contents/Resources/1context-local-web-proxy"
 
 for executable in \
