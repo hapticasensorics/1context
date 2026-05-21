@@ -493,7 +493,7 @@ public final class WikiCoreRPCBridge: @unchecked Sendable {
   }
 
   private func optionalPageReference(_ params: [String: Any]) -> String? {
-    if let value = string(params, keys: ["page", "id", "route", "reference"]) {
+    if let value = string(params, keys: ["page", "id", "route", "reference", "page_id", "pageId"]) {
       return value
     }
     if let page = dictionary(params, keys: ["page"]) {

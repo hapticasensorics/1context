@@ -1194,7 +1194,6 @@ impl WikiCore {
             route: status.route.clone(),
             title: status.title.clone(),
         });
-
         if !reference_index_path.is_file() {
             return Ok(ReferenceListResult {
                 schema_version: 1,
@@ -3048,7 +3047,14 @@ impl WikiCore {
             .ok_or_else(|| anyhow!("invalid page asset path: {}", path.display()))?
             .to_string();
         let media_type = infer_media_type(&filename).to_string();
-        let kind = page_asset_kind(&filename, &media_type).to_string();
+        let kind = page_asset_kind(&filename, &media_type);
+        let content_role = if purpose == "source_file" || kind == "code_file" {
+            "source_file"
+        } else if kind == "image" {
+            "image"
+        } else {
+            "download"
+        };
         let sha256 = sha256_file(path)?;
         let bytes = path.metadata()?.len();
         let source_relative_href = format!("./{}.assets/{}", record.slug, filename);
@@ -3069,15 +3075,11 @@ impl WikiCore {
             let label = caption.unwrap_or(&filename);
             format!("[{}]({})", label, source_relative_href)
         };
-        let handle = format!(
-            "user-wiki://page/{}/assets/{}",
-            record.id,
-            path.file_name().unwrap().to_string_lossy()
-        );
+        let handle = format!("user-wiki://page/{}/assets/{}", record.id, filename);
         Ok(PageAssetRecord {
             id: format!("asset_{}_{}", record.id, slug_token(&filename)),
             citation_uri: handle.clone(),
-            kind,
+            kind: kind.to_string(),
             filename,
             media_type,
             sha256,
@@ -3088,7 +3090,7 @@ impl WikiCore {
             source_relative_href,
             published_href,
             markdown,
-            content_role: purpose.to_string(),
+            content_role: content_role.to_string(),
             purpose: purpose.to_string(),
             caption: caption.map(str::to_string),
             alt_text: alt_text.map(str::to_string),
@@ -5372,7 +5374,8 @@ fn infer_media_type(filename: &str) -> &'static str {
         Some("yaml") | Some("yml") => "text/yaml",
         Some("txt") | Some("log") | Some("rs") | Some("swift") | Some("py") | Some("go")
         | Some("java") | Some("kt") | Some("sh") | Some("sql") | Some("c") | Some("h")
-        | Some("cc") | Some("cpp") | Some("hpp") | Some("m") | Some("mm") | Some("rb") => {
+        | Some("cc") | Some("cpp") | Some("hpp") | Some("m") | Some("mm") | Some("rb")
+        | Some("xml") => {
             "text/plain"
         }
         Some("csv") => "text/csv",
@@ -6318,6 +6321,12 @@ mod tests {
         assert_eq!(added.asset.kind, "image");
         assert_eq!(added.asset.content_role, "inline_image");
         assert_eq!(added.asset.media_type, "image/png");
+        assert_eq!(added.asset.kind, "image");
+        assert_eq!(added.asset.content_role, "image");
+        assert_eq!(
+            added.asset.citation_uri,
+            "user-wiki://page/topics/assets/topic-map.png"
+        );
         assert_eq!(added.asset.purpose, "inline_image");
         assert_eq!(
             added.asset.source_relative_href,

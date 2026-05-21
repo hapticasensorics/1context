@@ -188,6 +188,15 @@ def test_body_helpers_support_file_backed_inputs(
             from_address="agent://worker-be",
         )
 
+    client.reference_list()
+    assert calls[-1] == ("reference-list",)
+
+    wiki_reference_list(tmp_path, "worker-bb")
+    assert calls[-1] == ("reference-list", "worker-bb")
+
+    wiki_asset_list(tmp_path, "worker-bb")
+    assert calls[-1] == ("asset-list", "worker-bb")
+
 
 def test_agent_mail_and_notification_helpers_are_thin_cli_wrappers(
     tmp_path: Path,

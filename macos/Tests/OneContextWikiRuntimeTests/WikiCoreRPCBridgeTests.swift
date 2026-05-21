@@ -13,6 +13,7 @@ final class WikiCoreRPCBridgeTests: XCTestCase {
       "wiki.asset.add",
       "wiki.asset-list",
       "wiki.reference.list",
+      "wiki.references",
       "wiki.talk-append",
       "wiki.agent.identify",
       "wiki.agent.heartbeat",

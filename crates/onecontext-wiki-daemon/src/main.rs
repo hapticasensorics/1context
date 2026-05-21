@@ -1416,9 +1416,14 @@ fn canonical_command(command: &str) -> String {
     let normalized = command.replace(['.', '_'], "-");
     let stripped = normalized.strip_prefix("wiki-").unwrap_or(&normalized);
     match stripped {
+        "identify" => "agent-identify".to_string(),
+        "agent-me" => "agent-whoami".to_string(),
+        "agents" => "agent-list".to_string(),
+        "claim" => "agent-claim".to_string(),
+        "mail-thread" | "talk-thread" => "mail-read".to_string(),
         "page-asset-add" => "asset-add".to_string(),
         "page-asset-list" => "asset-list".to_string(),
-        "references" => "reference-list".to_string(),
+        "references" | "page-reference-list" => "reference-list".to_string(),
         "agent-identity" => "agent-whoami".to_string(),
         "agent-status-by-thread-id" => "agent-status-by-thread".to_string(),
         "mail-injection-record" => "mail-record-injection".to_string(),
@@ -3133,6 +3138,7 @@ mod tests {
                 "new body",
                 "unexpected",
             ],
+            vec!["reference-list", "topics", "unexpected"],
             vec!["page-delete", "topics", "unexpected"],
             vec!["page-restore", "topics", "unexpected"],
             vec!["publish-status", "unexpected"],

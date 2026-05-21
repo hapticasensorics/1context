@@ -17,9 +17,22 @@ talk files, sitemap, or publish-status rules.
   parent message. Omitting both keeps the legacy subject-derived thread.
 - `wiki_ensure`, `wiki_list`, `wiki_page_status`, `wiki_page_open`, `wiki_page_create`,
   `wiki_page_write_body`, `wiki_page_patch_body`, `wiki_page_delete`,
-  `wiki_page_restore`, `wiki_asset_add`, `wiki_asset_list`,
-  `wiki_reference_list`, `wiki_publish_status`, `wiki_publish`, and
-  `wiki_talk_append` are convenience wrappers over the same client.
+  `wiki_page_restore`, `wiki_reference_list`, `wiki_publish_status`, `wiki_publish`, `wiki_agent_identify`,
+  `wiki_agent_register`, `wiki_agent_heartbeat`, `wiki_agent_retire`,
+  `wiki_agent_whoami`, `wiki_agent_list`, `wiki_agent_status`,
+  `wiki_agent_inbox`, `wiki_agent_claim`, `wiki_talk_append`, `wiki_mail_inbox`,
+  `wiki_mail_subscribe`, `wiki_mail_unsubscribe`, `wiki_mail_subscriptions`,
+  `wiki_mail_mark`, `wiki_mail_claim`, `wiki_mail_mark_all`, `wiki_page_watch`,
+  `wiki_page_unwatch`, `wiki_page_assign_role`,
+  `wiki_list_create`, `wiki_list_status`, `wiki_list_members`,
+  `wiki_notify_poll`, and `wiki_notify_ack` are convenience wrappers over the
+  same client.
+- The class client also wraps the current V0 collaboration surface: agent
+  register/identify/heartbeat/retire/whoami/list/status/inbox, talk append,
+  agent-level claim, mail inbox/subscribe/unsubscribe/subscriptions/claim/mark/mark-all,
+  page watch/unwatch/role assignment, list create/status/members, and notifications. `list_status`
+  accepts `include_archived` and `include_snoozed` when an agent needs the
+  hidden-message audit view for a list.
 - `authoring.py` is transitional. It still writes route-plan, proposal,
   decision, preview, promotion, and legacy talk-entry records until those
   records are either moved into the Rust core or retired.
@@ -46,14 +59,16 @@ For agent code, the most reliable loop is:
    so chained patches can use the returned `hashes.source_sha256` directly.
 5. Call `wiki_publish_status`, then `wiki_publish` when page content,
    tombstones, or `wiki.toml` changed.
-6. Use `wiki_reference_list` after publish to retrieve citeable image, file,
-   hyperlink, and code-block records from the published reference index.
+6. Use `wiki_reference_list` after publish when an agent needs citeable
+   page resources: inline images, downloadable files, web/wiki links, inline
+   code blocks, and footnote-style citations from the rendered site.
 7. Use `wiki_talk_append` with inline `body_markdown` for short notes or
    `body_file` for prepared markdown. The adapter requires exactly one body
    source, matching page body writes.
-8. Treat talk entries as collaboration metadata. They should return
-   `render_required=false` and keep `wiki_publish_status.next_action` at `none`
-   unless page content, tombstones, or configuration also changed.
+8. Treat talk, inbox, notifications, claims, and mail state changes as
+   collaboration metadata. They should return `render_required=false` and keep
+   `wiki_publish_status.next_action` at `none` unless page content, tombstones,
+   or configuration also changed.
 9. Recheck `wiki_page_status` or `wiki_list` after publish/delete/restore.
 
 Dogfood note: current receipts are usable but still slightly uneven in naming.
