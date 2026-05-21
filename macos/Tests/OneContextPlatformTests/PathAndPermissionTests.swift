@@ -182,6 +182,31 @@ final class PathAndPermissionTests: XCTestCase {
     )
   }
 
+  func testPermissionTestIdentityUsesFreshRuntimeAndTCCSubjectPaths() {
+    let identity = OneContextAppIdentity.from("dev-permission:20260520-225555")
+    let home = URL(fileURLWithPath: "/tmp/1ctx-home", isDirectory: true)
+    let paths = identity?.runtimePaths(homeDirectory: home)
+
+    XCTAssertEqual(identity?.kind, .dev)
+    XCTAssertEqual(identity?.displayName, "1Context Dev - 20260520-225555")
+    XCTAssertEqual(identity?.environmentValue, "dev-permission:20260520-225555")
+    XCTAssertEqual(identity?.bundleIdentifier, "com.haptica.1context.dev.permission.20260520-225555")
+    XCTAssertEqual(identity?.preferencesDomain, "com.haptica.1context.dev.permission.20260520-225555")
+    XCTAssertEqual(paths?.appSupportDirectory.path, "/tmp/1ctx-home/Library/Application Support/1Context Dev - 20260520-225555")
+    XCTAssertEqual(paths?.preferencesPath, "/tmp/1ctx-home/Library/Preferences/com.haptica.1context.dev.permission.20260520-225555.plist")
+    XCTAssertNotEqual(identity?.localWebPort, OneContextAppIdentity.dev.localWebPort)
+  }
+
+  func testPermissionTestIdentityCanBeResolvedFromBundleIdentifier() {
+    let identity = OneContextAppIdentity.current(
+      environment: [:],
+      mainBundle: BundleStub(bundleIdentifier: "com.haptica.1context.dev.permission.abc-123")
+    )
+
+    XCTAssertEqual(identity.displayName, "1Context Dev - abc-123")
+    XCTAssertEqual(identity.menuLaunchAgentLabel, "com.haptica.1context.dev.permission.abc-123.menu")
+  }
+
   func testPlistEscapeEscapesXMLSpecialCharacters() {
     XCTAssertEqual(
       plistEscape("<tag attr=\"one&two\">it's</tag>"),
@@ -211,5 +236,18 @@ final class PathAndPermissionTests: XCTestCase {
   private func mode(_ url: URL) throws -> Int {
     let attrs = try FileManager.default.attributesOfItem(atPath: url.path)
     return (attrs[.posixPermissions] as? NSNumber)?.intValue ?? -1
+  }
+}
+
+private final class BundleStub: Bundle, @unchecked Sendable {
+  private let stubBundleIdentifier: String?
+
+  init(bundleIdentifier: String?) {
+    self.stubBundleIdentifier = bundleIdentifier
+    super.init()
+  }
+
+  override var bundleIdentifier: String? {
+    stubBundleIdentifier
   }
 }

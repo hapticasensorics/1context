@@ -185,7 +185,7 @@ public final class LaunchAgentManager {
       <key>EnvironmentVariables</key>
       <dict>
         <key>\(OneContextAppIdentity.environmentKey)</key>
-        <string>\(identity.kind.rawValue)</string>
+        <string>\(identity.environmentValue)</string>
       </dict>
       <key>ProgramArguments</key>
       <array>
@@ -217,7 +217,7 @@ public final class LaunchAgentManager {
       <key>EnvironmentVariables</key>
       <dict>
         <key>\(OneContextAppIdentity.environmentKey)</key>
-        <string>\(identity.kind.rawValue)</string>
+        <string>\(identity.environmentValue)</string>
       </dict>
       <key>ProgramArguments</key>
       <array>

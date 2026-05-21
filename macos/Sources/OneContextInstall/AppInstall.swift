@@ -139,7 +139,21 @@ public struct AppInstallPlanner {
 
   public static let defaultDestinationBundleURL = URL(fileURLWithPath: "/Applications/1Context.app", isDirectory: true)
   public static var currentDestinationBundleURL: URL {
-    OneContextAppIdentity.current().appBundleURL
+    if let permissionTestBundle = currentPermissionTestBundleURL() {
+      return permissionTestBundle
+    }
+    return OneContextAppIdentity.current().appBundleURL
+  }
+
+  private static func currentPermissionTestBundleURL() -> URL? {
+    guard let appBundle = OneContextAppIdentity.containingAppBundle(),
+      appBundle.deletingLastPathComponent().path == "/Applications",
+      let bundleIdentifier = bundleIdentifier(at: appBundle),
+      bundleIdentifier.hasPrefix("\(OneContextAppIdentity.dev.bundleIdentifier).permission.")
+    else {
+      return nil
+    }
+    return appBundle
   }
 
   private func existingRelation(

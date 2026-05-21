@@ -2,6 +2,12 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+normalize_permission_test_id() {
+  printf '%s' "$1" \
+    | tr '[:upper:]' '[:lower:]' \
+    | sed -E 's/[^a-z0-9]+/-/g; s/^-+//; s/-+$//'
+}
+
 if [[ -n "${ONECONTEXT_RELEASE_CHANNEL:-}" ]]; then
   eval "$("$ROOT/scripts/release-train.sh" manifest export-env --channel "$ONECONTEXT_RELEASE_CHANNEL")"
 else
@@ -16,6 +22,7 @@ if [[ -z "$APP_IDENTITY" ]]; then
     APP_IDENTITY="official"
   fi
 fi
+APP_IDENTITY_PLIST_VALUE="$APP_IDENTITY"
 case "$APP_IDENTITY" in
   official)
     DEFAULT_APP_BUNDLE_NAME="1Context"
@@ -42,13 +49,39 @@ MACOS_APP_DIR="$CONTENTS_DIR/MacOS"
 RESOURCES_DIR="$CONTENTS_DIR/Resources"
 FRAMEWORKS_DIR="$CONTENTS_DIR/Frameworks"
 LAUNCH_DAEMONS_DIR="$CONTENTS_DIR/Library/LaunchDaemons"
-SIGNING_MODE="${ONECONTEXT_SIGNING_MODE:-adhoc}"
+SIGNING_MODE="${ONECONTEXT_SIGNING_MODE:-${ONECONTEXT_RELEASE_CHANNEL_SIGNING_MODE:-adhoc}}"
 IDENTITY="${CODESIGN_IDENTITY:-}"
 CODESIGN_KEYCHAIN="${CODESIGN_KEYCHAIN:-${ONECONTEXT_RELEASE_KEYCHAIN:-}}"
 VERSION="$ONECONTEXT_RELEASE_VERSION"
 ARCH="${ONECONTEXT_ARCH:-arm64}"
 BUNDLE_IDENTIFIER="${ONECONTEXT_BUNDLE_IDENTIFIER:-$DEFAULT_BUNDLE_IDENTIFIER}"
 LOCAL_WEB_PROXY_LABEL="${ONECONTEXT_LOCAL_WEB_PROXY_LABEL:-$DEFAULT_PROXY_LABEL}"
+if [[ -n "${ONECONTEXT_PERMISSION_TEST_ID:-}" ]]; then
+  if [[ "$APP_IDENTITY" != "dev" ]]; then
+    echo "ONECONTEXT_PERMISSION_TEST_ID is only supported for the dev app identity." >&2
+    exit 1
+  fi
+  if [[ "$SIGNING_MODE" != "apple-development" && "$SIGNING_MODE" != "developer-id" ]]; then
+    echo "ONECONTEXT_PERMISSION_TEST_ID requires Apple Development or Developer ID signing so TCC identity can be tested honestly." >&2
+    exit 1
+  fi
+  PERMISSION_TEST_ID="$(normalize_permission_test_id "$ONECONTEXT_PERMISSION_TEST_ID")"
+  if [[ -z "$PERMISSION_TEST_ID" || ${#PERMISSION_TEST_ID} -gt 40 ]]; then
+    echo "ONECONTEXT_PERMISSION_TEST_ID must normalize to 1-40 lowercase letters, digits, or hyphens." >&2
+    exit 1
+  fi
+  APP_BUNDLE_NAME="1Context Dev - $PERMISSION_TEST_ID"
+  APP_DISPLAY_NAME="1Context Dev - $PERMISSION_TEST_ID"
+  APP_DIR="$ROOT/dist/$APP_BUNDLE_NAME.app"
+  CONTENTS_DIR="$APP_DIR/Contents"
+  MACOS_APP_DIR="$CONTENTS_DIR/MacOS"
+  RESOURCES_DIR="$CONTENTS_DIR/Resources"
+  FRAMEWORKS_DIR="$CONTENTS_DIR/Frameworks"
+  LAUNCH_DAEMONS_DIR="$CONTENTS_DIR/Library/LaunchDaemons"
+  BUNDLE_IDENTIFIER="com.haptica.1context.dev.permission.$PERMISSION_TEST_ID"
+  LOCAL_WEB_PROXY_LABEL="com.haptica.1context.dev.permission.$PERMISSION_TEST_ID.local-web-proxy"
+  APP_IDENTITY_PLIST_VALUE="dev-permission:$PERMISSION_TEST_ID"
+fi
 LOCAL_WEB_PROXY_PLIST_NAME="$LOCAL_WEB_PROXY_LABEL.plist"
 MENU_ICON_SOURCE="$MACOS_DIR/Sources/OneContextMenuBar/Resources/MenuBarIcon.png"
 CADDY_VERSION="2.11.2"
@@ -89,13 +122,94 @@ codesign_identity_available() {
   fi
 }
 
+default_codesign_identity() {
+  local pattern="$1"
+  if [[ -n "$CODESIGN_KEYCHAIN" ]]; then
+    security find-identity -v -p codesigning "$CODESIGN_KEYCHAIN"
+  else
+    security find-identity -v -p codesigning
+  fi | awk -F'"' -v pattern="$pattern" '$2 ~ pattern { print $2; exit }'
+}
+
 codesign_release() {
-  local args=(--force --options runtime --timestamp)
+  local args=(--force --options runtime)
+  if [[ "$SIGNING_MODE" == "developer-id" ]]; then
+    args+=(--timestamp)
+  fi
   if [[ -n "$CODESIGN_KEYCHAIN" ]]; then
     args+=(--keychain "$CODESIGN_KEYCHAIN")
   fi
   codesign "${args[@]}" "$@"
 }
+
+codesign_adhoc_runtime() {
+  local entitlements_arg=()
+  if [[ "${1:-}" == "--entitlements" ]]; then
+    entitlements_arg=(--entitlements "$2")
+    shift 2
+  fi
+  codesign --force --options runtime "${entitlements_arg[@]}" --sign - "$@"
+}
+
+validate_permission_codesign() {
+  local app="$1"
+  local entitlements
+  codesign --verify --strict "$app" >/dev/null
+  entitlements="$(codesign -d --entitlements :- "$app" 2>/dev/null || true)"
+  if ! grep -q "com.apple.security.device.audio-input" <<<"$entitlements"; then
+    echo "Signed app is missing com.apple.security.device.audio-input entitlement." >&2
+    exit 1
+  fi
+  if ! grep -q "com.apple.security.automation.apple-events" <<<"$entitlements"; then
+    echo "Signed app is missing com.apple.security.automation.apple-events entitlement." >&2
+    exit 1
+  fi
+  if [[ -z "$(/usr/libexec/PlistBuddy -c 'Print :NSAppleEventsUsageDescription' "$CONTENTS_DIR/Info.plist" 2>/dev/null || true)" ]]; then
+    echo "Info.plist is missing NSAppleEventsUsageDescription." >&2
+    exit 1
+  fi
+  if [[ -z "$(/usr/libexec/PlistBuddy -c 'Print :NSAudioCaptureUsageDescription' "$CONTENTS_DIR/Info.plist" 2>/dev/null || true)" ]]; then
+    echo "Info.plist is missing NSAudioCaptureUsageDescription." >&2
+    exit 1
+  fi
+  if [[ -z "$(/usr/libexec/PlistBuddy -c 'Print :NSMicrophoneUsageDescription' "$CONTENTS_DIR/Info.plist" 2>/dev/null || true)" ]]; then
+    echo "Info.plist is missing NSMicrophoneUsageDescription." >&2
+    exit 1
+  fi
+}
+
+write_permission_identity_evidence() {
+  local app="$1"
+  local evidence_dir="$ROOT/dist/permission-build-evidence"
+  local safe_name
+  safe_name="$(basename "$app" .app | tr '[:upper:] ' '[:lower:]-' | sed -E 's/[^a-z0-9.-]+/-/g')"
+  mkdir -p "$evidence_dir"
+  {
+    echo "app_path=$app"
+    echo "bundle_identifier=$BUNDLE_IDENTIFIER"
+    echo "app_display_name=$APP_DISPLAY_NAME"
+    echo "app_identity=$APP_IDENTITY"
+    echo "signing_mode=$SIGNING_MODE"
+    echo "version=$VERSION"
+    echo
+    echo "[designated_requirement]"
+    codesign -dr - "$app"
+    echo
+    echo "[entitlements]"
+    codesign -d --entitlements :- "$app"
+    echo
+    echo "[usage_strings]"
+    /usr/libexec/PlistBuddy -c 'Print :NSAppleEventsUsageDescription' "$CONTENTS_DIR/Info.plist"
+    /usr/libexec/PlistBuddy -c 'Print :NSAudioCaptureUsageDescription' "$CONTENTS_DIR/Info.plist"
+    /usr/libexec/PlistBuddy -c 'Print :NSMicrophoneUsageDescription' "$CONTENTS_DIR/Info.plist"
+  } >"$evidence_dir/$safe_name.txt" 2>&1
+}
+
+if [[ -z "$IDENTITY" && "$SIGNING_MODE" == "apple-development" ]]; then
+  IDENTITY="$(default_codesign_identity "Apple Development:")"
+elif [[ -z "$IDENTITY" && "$SIGNING_MODE" == "developer-id" ]]; then
+  IDENTITY="$(default_codesign_identity "Developer ID Application:")"
+fi
 
 release_caddy_source() {
   if [[ ! -f "$CADDY_TOOL_ARCHIVE" || ! -f "$CADDY_TOOL_SHA256" ]]; then
@@ -349,7 +463,9 @@ cat > "$CONTENTS_DIR/Info.plist" <<PLIST
   <key>CFBundleDisplayName</key>
   <string>$(plist_escape "$APP_DISPLAY_NAME")</string>
   <key>OneContextAppIdentity</key>
-  <string>$APP_IDENTITY</string>
+  <string>$APP_IDENTITY_PLIST_VALUE</string>
+  <key>OneContextBrowserExtensionID</key>
+  <string>ijkabgddnhgkapedaloabgpcmpdhdhpb</string>
   <key>CFBundlePackageType</key>
   <string>APPL</string>
   <key>CFBundleIconFile</key>
@@ -362,6 +478,12 @@ cat > "$CONTENTS_DIR/Info.plist" <<PLIST
   <string>13.0</string>
   <key>LSUIElement</key>
   <true/>
+  <key>NSAppleEventsUsageDescription</key>
+  <string>1Context uses Automation to gather high-signal app context when you enable app-specific remembering lanes.</string>
+  <key>NSAudioCaptureUsageDescription</key>
+  <string>1Context uses system audio capture to remember audio context from active desktop work when audio remembering is enabled.</string>
+  <key>NSMicrophoneUsageDescription</key>
+  <string>1Context uses the microphone to remember spoken context when audio remembering is enabled.</string>
 $UPDATE_POLICY_PLIST_KEYS
 $SPARKLE_PLIST_KEYS
 </dict>
@@ -385,14 +507,18 @@ cat > "$LAUNCH_DAEMONS_DIR/$LOCAL_WEB_PROXY_PLIST_NAME" <<PLIST
 </plist>
 PLIST
 
-if [[ "$SIGNING_MODE" == "developer-id" ]]; then
+if [[ "$SIGNING_MODE" == "developer-id" || "$SIGNING_MODE" == "apple-development" ]]; then
   if [[ -z "$IDENTITY" ]]; then
-    echo "Set CODESIGN_IDENTITY to the Developer ID Application identity for release signing." >&2
+    if [[ "$SIGNING_MODE" == "apple-development" ]]; then
+      echo "Set CODESIGN_IDENTITY to the Apple Development identity for dev signing." >&2
+    else
+      echo "Set CODESIGN_IDENTITY to the Developer ID Application identity for release signing." >&2
+    fi
     exit 1
   fi
 
   if ! command -v codesign >/dev/null 2>&1 || ! codesign_identity_available; then
-    echo "Developer ID identity not found: $IDENTITY" >&2
+    echo "Code signing identity not found: $IDENTITY" >&2
     if [[ -n "$CODESIGN_KEYCHAIN" ]]; then
       echo "Checked keychain: $CODESIGN_KEYCHAIN" >&2
     fi
@@ -415,22 +541,27 @@ if [[ "$SIGNING_MODE" == "developer-id" ]]; then
     --sign "$IDENTITY" \
     "$FRAMEWORKS_DIR/Sparkle.framework" >/dev/null
   codesign_release \
+    --identifier "$BUNDLE_IDENTIFIER.caddy" \
     --sign "$IDENTITY" \
     "$CADDY_BUNDLE_DIR/caddy" >/dev/null
   codesign_release \
     --entitlements "$MACOS_DIR/entitlements.plist" \
+    --identifier "$BUNDLE_IDENTIFIER.cli" \
     --sign "$IDENTITY" \
     "$MACOS_APP_DIR/1context-cli" >/dev/null
   codesign_release \
     --entitlements "$MACOS_DIR/entitlements.plist" \
+    --identifier "$BUNDLE_IDENTIFIER.daemon" \
     --sign "$IDENTITY" \
     "$MACOS_APP_DIR/1contextd" >/dev/null
   codesign_release \
     --entitlements "$MACOS_DIR/entitlements.plist" \
+    --identifier "$BUNDLE_IDENTIFIER.wiki" \
     --sign "$IDENTITY" \
     "$MACOS_APP_DIR/onecontext-wiki" >/dev/null
   codesign_release \
     --entitlements "$MACOS_DIR/entitlements.plist" \
+    --identifier "$BUNDLE_IDENTIFIER.local-web-proxy" \
     --sign "$IDENTITY" \
     "$RESOURCES_DIR/1context-local-web-proxy" >/dev/null
   codesign_release \
@@ -444,17 +575,21 @@ if [[ "$SIGNING_MODE" == "developer-id" ]]; then
     "$APP_DIR" >/dev/null
 elif command -v codesign >/dev/null 2>&1; then
   codesign --force --deep --sign - "$FRAMEWORKS_DIR/Sparkle.framework" >/dev/null
-  codesign --force --sign - "$CADDY_BUNDLE_DIR/caddy" >/dev/null
-  codesign --force --sign - "$MACOS_APP_DIR/1context-cli" >/dev/null
-  codesign --force --sign - "$MACOS_APP_DIR/1contextd" >/dev/null
-  codesign --force --sign - "$MACOS_APP_DIR/onecontext-wiki" >/dev/null
-  codesign --force --sign - "$RESOURCES_DIR/1context-local-web-proxy" >/dev/null
-  codesign --force --sign - "$MACOS_APP_DIR/1Context" >/dev/null
+  codesign_adhoc_runtime "$CADDY_BUNDLE_DIR/caddy" >/dev/null
+  codesign_adhoc_runtime --entitlements "$MACOS_DIR/entitlements.plist" "$MACOS_APP_DIR/1context-cli" >/dev/null
+  codesign_adhoc_runtime --entitlements "$MACOS_DIR/entitlements.plist" "$MACOS_APP_DIR/1contextd" >/dev/null
+  codesign_adhoc_runtime --entitlements "$MACOS_DIR/entitlements.plist" "$MACOS_APP_DIR/onecontext-wiki" >/dev/null
+  codesign_adhoc_runtime --entitlements "$MACOS_DIR/entitlements.plist" "$RESOURCES_DIR/1context-local-web-proxy" >/dev/null
+  codesign_adhoc_runtime --entitlements "$MACOS_DIR/entitlements.plist" "$MACOS_APP_DIR/1Context" >/dev/null
   write_runtime_defaults_manifest
-  codesign --force --sign - "$APP_DIR" >/dev/null
+  codesign_adhoc_runtime --entitlements "$MACOS_DIR/entitlements.plist" "$APP_DIR" >/dev/null
 fi
 if [[ "$MANIFEST_WRITTEN" != "1" ]]; then
   write_runtime_defaults_manifest
+fi
+if command -v codesign >/dev/null 2>&1; then
+  validate_permission_codesign "$APP_DIR"
+  write_permission_identity_evidence "$APP_DIR"
 fi
 
 if [[ "$ONECONTEXT_RELEASE_CHANNEL" != "dev" ]]; then

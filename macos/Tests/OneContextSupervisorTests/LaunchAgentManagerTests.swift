@@ -118,6 +118,36 @@ final class LaunchAgentManagerTests: XCTestCase {
     XCTAssertTrue(FileManager.default.fileExists(atPath: root.appendingPathComponent("Library/Logs/1Context Dev").path))
   }
 
+  func testPermissionTestIdentityWritesLosslessLaunchAgentEnvironment() async throws {
+    let root = temporaryRoot()
+    defer { try? FileManager.default.removeItem(at: root) }
+    let identity = OneContextAppIdentity.devPermissionTest(suffix: "20260520-230936")
+    let manager = testManager(root: root, identity: identity) { executable, arguments, _ in
+      if executable == "/bin/launchctl", arguments.first == "print" {
+        return (1, "", "not loaded")
+      }
+      return (0, "", "")
+    }
+
+    let appPath = root
+      .appendingPathComponent("Applications/1Context Dev - 20260520-230936.app/Contents/MacOS/1Context")
+      .path
+    try await manager.startMenu(appPath: appPath)
+
+    let plist = root.appendingPathComponent(
+      "Library/LaunchAgents/com.haptica.1context.dev.permission.20260520-230936.menu.plist"
+    )
+    let data = try Data(contentsOf: plist)
+    let object = try XCTUnwrap(try PropertyListSerialization.propertyList(from: data, format: nil) as? [String: Any])
+
+    XCTAssertEqual(object["Label"] as? String, "com.haptica.1context.dev.permission.20260520-230936.menu")
+    XCTAssertEqual(
+      (object["EnvironmentVariables"] as? [String: String])?[OneContextAppIdentity.environmentKey],
+      "dev-permission:20260520-230936"
+    )
+    XCTAssertEqual(object["ProgramArguments"] as? [String], [appPath])
+  }
+
   func testStopMenuRefusesDisposableRuntimePathsWithoutRemovingRealPlist() async throws {
     let home = temporaryRoot()
     let runtimeRoot = temporaryRoot()

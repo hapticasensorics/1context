@@ -114,20 +114,87 @@ private func currentExecutableURL() -> URL? {
   return URL(fileURLWithPath: String(decoding: pathBytes, as: UTF8.self)).resolvingSymlinksInPath()
 }
 
+private func runPermissionCapabilityProbeIfRequested() {
+  guard CommandLine.arguments.contains("--permission-capability-probe") else { return }
+
+  let outputPath = commandLineValue(after: "--json")
+  let timeout = commandLineValue(after: "--timeout").flatMap(TimeInterval.init) ?? 5
+  let skipBrowserExtension = !CommandLine.arguments.contains("--include-browser-extension")
+  let semaphore = DispatchSemaphore(value: 0)
+  nonisolated(unsafe) var report: OneContextPermissionCapabilityProbeReport?
+  nonisolated(unsafe) var failure: Error?
+
+  Task.detached(priority: .userInitiated) {
+    let probeReport = await OneContextPermissionCapabilityProbe.run(
+      options: OneContextPermissionCapabilityProbeOptions(
+        skipBrowserExtension: skipBrowserExtension,
+        timeoutSeconds: timeout
+      )
+    )
+    do {
+      let encoder = JSONEncoder()
+      encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+      let data = try encoder.encode(probeReport)
+      if let outputPath {
+        let url = URL(fileURLWithPath: outputPath)
+        try FileManager.default.createDirectory(
+          at: url.deletingLastPathComponent(),
+          withIntermediateDirectories: true
+        )
+        try data.write(to: url, options: .atomic)
+      } else if let text = String(data: data, encoding: .utf8) {
+        print(text)
+      }
+      report = probeReport
+    } catch {
+      failure = error
+    }
+    semaphore.signal()
+  }
+
+  semaphore.wait()
+  if let failure {
+    FileHandle.standardError.write(Data("permission capability probe failed: \(failure.localizedDescription)\n".utf8))
+    Foundation.exit(1)
+  }
+  Foundation.exit(report?.passed == true ? 0 : 2)
+}
+
+private func commandLineValue(after flag: String) -> String? {
+  guard let index = CommandLine.arguments.firstIndex(of: flag) else { return nil }
+  let valueIndex = CommandLine.arguments.index(after: index)
+  guard valueIndex < CommandLine.arguments.endIndex else { return nil }
+  return CommandLine.arguments[valueIndex]
+}
+
 @MainActor
 private final class AppSetupWindowController: NSWindowController {
   var onGrantLocalWikiAccess: (@MainActor () -> Void)?
+  var onGrantScreenRecording: (@MainActor () -> Void)?
+  var onGrantAccessibility: (@MainActor () -> Void)?
+  var onGrantInputMonitoring: (@MainActor () -> Void)?
+  var onGrantBrowserExtension: (@MainActor () -> Void)?
+  var onGrantMicrophone: (@MainActor () -> Void)?
+  var onGrantAutomation: (@MainActor () -> Void)?
+  var onGrantFullDiskAccess: (@MainActor () -> Void)?
   var onOpenWiki: (@MainActor () -> Void)?
   var onRefresh: (@MainActor () -> Void)?
 
   private let messageLabel = NSTextField(labelWithString: "")
   private let localWikiRow = SetupRequirementRow(title: "Local Wiki Access")
+  private let screenRecordingRow = SetupRequirementRow(title: "Screen & System Audio Recording")
+  private let accessibilityRow = SetupRequirementRow(title: "Accessibility")
+  private let inputMonitoringRow = SetupRequirementRow(title: "Input Monitoring")
+  private let browserExtensionRow = SetupRequirementRow(title: "Browser Extension Permissions")
+  private let microphoneRow = SetupRequirementRow(title: "Microphone")
+  private let automationRow = SetupRequirementRow(title: "Automation")
+  private let fullDiskAccessRow = SetupRequirementRow(title: "Full Disk Access")
   private let footer = NSStackView()
   private let refreshButton = NSButton(title: "Check Again", target: nil, action: nil)
 
   init() {
     let window = NSWindow(
-      contentRect: NSRect(x: 0, y: 0, width: 500, height: 300),
+      contentRect: NSRect(x: 0, y: 0, width: 620, height: 720),
       styleMask: [.titled, .closable, .miniaturizable],
       backing: .buffered,
       defer: false
@@ -164,9 +231,7 @@ private final class AppSetupWindowController: NSWindowController {
       localAction = nil
     } else if snapshot.localWikiAccess.ready {
       localStatus = .granted
-      localAction = SetupRequirementRow.Action(title: "Open Wiki", handler: { [weak self] in
-        self?.onOpenWiki?()
-      })
+      localAction = nil
     } else {
       localStatus = .required
       localAction = SetupRequirementRow.Action(title: "Grant", handler: { [weak self] in
@@ -175,9 +240,47 @@ private final class AppSetupWindowController: NSWindowController {
     }
     localWikiRow.render(
       status: localStatus,
-      action: localAction
+      action: localAction,
+      detail: nil
     )
-    setRefreshButtonVisible(!snapshot.localWikiAccess.ready || isGrantingLocalWikiAccess)
+    renderRequiredPermissionRow(
+      screenRecordingRow,
+      permission: snapshot.rememberingPermissions.screenRecording,
+      grantHandler: onGrantScreenRecording
+    )
+    renderRequiredPermissionRow(
+      accessibilityRow,
+      permission: snapshot.rememberingPermissions.accessibility,
+      grantHandler: onGrantAccessibility
+    )
+    renderRequiredPermissionRow(
+      inputMonitoringRow,
+      permission: snapshot.rememberingPermissions.inputMonitoring,
+      grantHandler: onGrantInputMonitoring
+    )
+    renderRequiredPermissionRow(
+      browserExtensionRow,
+      permission: snapshot.rememberingPermissions.browserExtension,
+      grantHandler: onGrantBrowserExtension,
+      actionTitle: "Install"
+    )
+    renderRequiredPermissionRow(
+      microphoneRow,
+      permission: snapshot.rememberingPermissions.microphone,
+      grantHandler: onGrantMicrophone
+    )
+    renderRequiredPermissionRow(
+      automationRow,
+      permission: snapshot.rememberingPermissions.automation,
+      grantHandler: onGrantAutomation,
+      actionTitle: "Configure"
+    )
+    renderRequiredPermissionRow(
+      fullDiskAccessRow,
+      permission: snapshot.rememberingPermissions.fullDiskAccess,
+      grantHandler: onGrantFullDiskAccess
+    )
+    setRefreshButtonVisible(!snapshot.requiredReady || isGrantingLocalWikiAccess)
   }
 
   private func buildContent() {
@@ -213,6 +316,27 @@ private final class AppSetupWindowController: NSWindowController {
     stack.addArrangedSubview(localWikiRow)
     localWikiRow.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
 
+    stack.addArrangedSubview(screenRecordingRow)
+    screenRecordingRow.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
+
+    stack.addArrangedSubview(accessibilityRow)
+    accessibilityRow.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
+
+    stack.addArrangedSubview(inputMonitoringRow)
+    inputMonitoringRow.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
+
+    stack.addArrangedSubview(browserExtensionRow)
+    browserExtensionRow.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
+
+    stack.addArrangedSubview(microphoneRow)
+    microphoneRow.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
+
+    stack.addArrangedSubview(automationRow)
+    automationRow.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
+
+    stack.addArrangedSubview(fullDiskAccessRow)
+    fullDiskAccessRow.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
+
     footer.orientation = .horizontal
     footer.alignment = .centerY
     footer.spacing = 8
@@ -235,6 +359,39 @@ private final class AppSetupWindowController: NSWindowController {
 
   @objc private func refresh() {
     onRefresh?()
+  }
+
+  private func renderRequiredPermissionRow(
+    _ row: SetupRequirementRow,
+    permission: OneContextRequiredPermissionSnapshot,
+    grantHandler: (@MainActor () -> Void)?,
+    actionTitle: String? = nil
+  ) {
+    let action: SetupRequirementRow.Action?
+    if permission.ready {
+      action = nil
+    } else if let grantHandler {
+      let title = permission.status == .needsRelaunch ? "Relaunch" : (actionTitle ?? "Grant")
+      action = SetupRequirementRow.Action(title: title, handler: grantHandler)
+    } else {
+      action = nil
+    }
+    let status: SetupRequirementRow.Status
+    switch permission.status {
+    case .granted:
+      status = .granted
+    case .required:
+      status = .required
+    case .needsRelaunch:
+      status = .working("Needs Relaunch")
+    case .unavailable:
+      status = .unavailable
+    }
+    row.render(
+      status: status,
+      action: action,
+      detail: permission.ready ? nil : permission.detail
+    )
   }
 
   private func setRefreshButtonVisible(_ visible: Bool) {
@@ -310,6 +467,7 @@ private final class SetupRequirementRow: NSView {
   }
 
   private let titleLabel: NSTextField
+  private let detailLabel = NSTextField(labelWithString: "")
   private let actionButton = NSButton(title: "", target: nil, action: nil)
   private var actionHandler: (@MainActor () -> Void)?
 
@@ -325,7 +483,10 @@ private final class SetupRequirementRow: NSView {
     fatalError("init(coder:) has not been implemented")
   }
 
-  func render(status: Status, action: Action?) {
+  func render(status: Status, action: Action?, detail: String?) {
+    let trimmedDetail = detail?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+    detailLabel.stringValue = trimmedDetail
+    detailLabel.isHidden = trimmedDetail.isEmpty
     if let action {
       actionButton.title = action.title
       actionButton.attributedTitle = NSAttributedString(string: action.title)
@@ -360,6 +521,12 @@ private final class SetupRequirementRow: NSView {
 
     titleLabel.font = .systemFont(ofSize: 15, weight: .semibold)
     textStack.addArrangedSubview(titleLabel)
+    detailLabel.font = .systemFont(ofSize: 11)
+    detailLabel.textColor = .secondaryLabelColor
+    detailLabel.lineBreakMode = .byWordWrapping
+    detailLabel.maximumNumberOfLines = 2
+    detailLabel.isHidden = true
+    textStack.addArrangedSubview(detailLabel)
     textStack.setContentHuggingPriority(.defaultLow, for: .horizontal)
 
     actionButton.target = self
@@ -446,6 +613,27 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
         _ = await self?.runLocalWebSetupFlow()
       }
     }
+    controller.onGrantScreenRecording = { [weak self] in
+      self?.requestScreenRecordingAccess()
+    }
+    controller.onGrantAccessibility = { [weak self] in
+      self?.requestAccessibilityAccess()
+    }
+    controller.onGrantInputMonitoring = { [weak self] in
+      self?.requestInputMonitoringAccess()
+    }
+    controller.onGrantBrowserExtension = { [weak self] in
+      self?.requestBrowserExtensionAccess()
+    }
+    controller.onGrantMicrophone = { [weak self] in
+      self?.requestMicrophoneAccess()
+    }
+    controller.onGrantAutomation = { [weak self] in
+      self?.configureAutomationAccess()
+    }
+    controller.onGrantFullDiskAccess = { [weak self] in
+      self?.requestFullDiskAccess()
+    }
     controller.onOpenWiki = { [weak self] in
       self?.openWiki()
     }
@@ -469,6 +657,7 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
     guard !isReadinessRefreshInFlight || userInitiated else { return }
     isReadinessRefreshInFlight = true
     Task.detached(priority: userInitiated ? .userInitiated : .utility) {
+      await Self.refreshRuntimePermissionProofsIfAuthorized()
       let readiness = Self.computeReadiness()
       await MainActor.run {
         self.isReadinessRefreshInFlight = false
@@ -486,6 +675,10 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
 
   nonisolated private static func computeReadiness() -> OneContextAppReadinessSnapshot {
     OneContextAppReadiness.current(localWeb: CaddyManager())
+  }
+
+  nonisolated private static func refreshRuntimePermissionProofsIfAuthorized() async {
+    await OneContextSystemPermissions.refreshRuntimeProofsIfAuthorized()
   }
 
   private func registerMenuLaunchAgent() {
@@ -863,6 +1056,8 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
   func menuWillOpen(_ menu: NSMenu) {
     isMenuOpen = true
     renderGeneration += 1
+    _ = refreshRequiredSetupCache()
+    refreshMenuItems()
   }
 
   func menuDidClose(_ menu: NSMenu) {
@@ -1065,15 +1260,14 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
   }
 
   private func reconcileSetupFromUserRefresh() {
-    let readiness = currentReadiness()
-    guard readiness.requiredSetupReady else {
-      updateSetupWindow()
-      return
-    }
-    completeLocalWebSetup(readiness: readiness, message: "Local Wiki Access is ready.")
+    startSetupReadinessObservation(message: "Checking permission grants.")
   }
 
   @objc private func openWiki() {
+    guard currentReadiness().requiredSetupReady else {
+      showSetupWindow(forBlockedAction: .openWiki)
+      return
+    }
     openWikiItem.isEnabled = false
     Task {
       do {
@@ -1320,7 +1514,186 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
     guard !didOfferLocalWebSetupAtLaunch else { return }
     guard !currentReadiness().requiredSetupReady else { return }
     didOfferLocalWebSetupAtLaunch = true
-    showSetupWindow(message: "Finish setup to use your local wiki.")
+    showSetupWindow(message: "Finish setup to start 1Context Remembering.")
+  }
+
+  private func requestScreenRecordingAccess() {
+    let readiness = currentReadiness()
+    if readiness.setup.rememberingPermissions.screenRecording.status == .needsRelaunch {
+      relaunchCurrentApp()
+      return
+    }
+
+    startSetupReadinessObservation(message: "Grant Screen & System Audio Recording in System Settings.")
+    let preferencesPath = RuntimePaths.current().preferencesPath
+    let subject = OneContextSystemPermissions.currentPermissionSubject()
+    let request = Task.detached(priority: .userInitiated) {
+      await OneContextSystemPermissions.requestScreenAndSystemAudio(
+        preferencesPath: preferencesPath,
+        subject: subject
+      )
+    }
+    Task { [weak self] in
+      let outcome = await request.value
+      guard let self else { return }
+      switch outcome {
+      case .granted:
+        self.observeRememberingPermissionGrant(message: "Screen & System Audio Recording is ready.")
+      case .needsRelaunch:
+        self.observeRememberingPermissionGrant(message: "Relaunch 1Context to finish Screen & System Audio Recording.")
+      case .required:
+        self.openSystemSettingsPane(OneContextSystemPermissions.screenRecordingSettingsURL)
+        self.observeRememberingPermissionGrant(message: "Grant Screen & System Audio Recording in System Settings.")
+      case .unavailable(let detail):
+        self.openSystemSettingsPane(OneContextSystemPermissions.screenRecordingSettingsURL)
+        self.observeRememberingPermissionGrant(message: "Screen & System Audio Recording could not be proved. \(detail)")
+      }
+    }
+  }
+
+  private func requestAccessibilityAccess() {
+    let granted = OneContextSystemPermissions.requestAccessibility()
+    if !granted {
+      openSystemSettingsPane(OneContextSystemPermissions.accessibilitySettingsURL)
+    }
+    observeRememberingPermissionGrant(message: "Grant Accessibility in System Settings.")
+  }
+
+  private func requestInputMonitoringAccess() {
+    let granted = OneContextSystemPermissions.requestInputMonitoring()
+    openSystemSettingsPane(OneContextSystemPermissions.inputMonitoringSettingsURL)
+    observeRememberingPermissionGrant(
+      message: granted
+        ? "Input Monitoring is ready."
+        : "Add 1Context in Input Monitoring, enable it, then return here."
+    )
+  }
+
+  private func requestBrowserExtensionAccess() {
+    if let url = URL(string: "https://chromewebstore.google.com/search/1context") {
+      try? Self.openURLInDefaultBrowser(url)
+    }
+    observeRememberingPermissionGrant(message: "Install the 1Context browser extension and approve its requested browser permissions.")
+  }
+
+  private func requestMicrophoneAccess() {
+    let preferencesPath = RuntimePaths.current().preferencesPath
+    let subject = OneContextSystemPermissions.currentPermissionSubject()
+    OneContextSystemPermissions.requestMicrophone(
+      preferencesPath: preferencesPath,
+      subject: subject
+    ) { [weak self] granted in
+      Task { @MainActor in
+        guard let self else { return }
+        if !granted {
+          self.openSystemSettingsPane(OneContextSystemPermissions.microphoneSettingsURL)
+        }
+        self.observeRememberingPermissionGrant(message: "Grant Microphone in System Settings.")
+      }
+    }
+  }
+
+  private func configureAutomationAccess() {
+    let preferencesPath = RuntimePaths.current().preferencesPath
+    let availableTargets = OneContextSystemPermissions.installedAutomationTargets()
+    guard !availableTargets.isEmpty else {
+      showSetupWindow(message: "No supported Automation apps are installed yet.")
+      return
+    }
+
+    let selectedIdentifiers = Set(
+      OneContextSystemPermissions.selectedAutomationTargetBundleIdentifiers(preferencesPath: preferencesPath)
+    )
+    let alert = NSAlert()
+    alert.messageText = "Choose Automation Apps"
+    alert.informativeText = "1Context will ask macOS for control of only these apps."
+    alert.icon = loadFishAlertIcon()
+    alert.addButton(withTitle: "Continue")
+    alert.addButton(withTitle: "Cancel")
+
+    let stack = NSStackView()
+    stack.orientation = .vertical
+    stack.alignment = .leading
+    stack.spacing = 6
+    stack.translatesAutoresizingMaskIntoConstraints = false
+
+    var options: [(button: NSButton, target: OneContextAutomationTarget)] = []
+    for target in availableTargets {
+      let button = NSButton(checkboxWithTitle: target.name, target: nil, action: nil)
+      button.state = selectedIdentifiers.contains(target.bundleIdentifier) ? .on : .off
+      stack.addArrangedSubview(button)
+      options.append((button, target))
+    }
+    alert.accessoryView = stack
+
+    NSApp.activate(ignoringOtherApps: true)
+    guard alert.runModal() == .alertFirstButtonReturn else {
+      observeRememberingPermissionGrant(message: "Choose Automation apps to continue.")
+      return
+    }
+
+    let chosen = options
+      .filter { $0.button.state == .on }
+      .map(\.target.bundleIdentifier)
+    do {
+      try OneContextSystemPermissions.setAutomationTargetBundleIdentifiers(
+        chosen,
+        preferencesPath: preferencesPath
+      )
+      requestAutomationAccess()
+    } catch {
+      showSetupWindow(message: error.localizedDescription)
+    }
+  }
+
+  private func requestAutomationAccess() {
+    startSetupReadinessObservation(message: "Grant Automation in System Settings.")
+    let preferencesPath = RuntimePaths.current().preferencesPath
+    let subject = OneContextSystemPermissions.currentPermissionSubject()
+    let request = Task.detached(priority: .userInitiated) {
+      OneContextSystemPermissions.requestAutomation(
+        preferencesPath: preferencesPath,
+        subject: subject
+      )
+    }
+    Task { [weak self] in
+      let granted = await request.value
+      guard let self else { return }
+      if granted {
+        self.observeRememberingPermissionGrant(message: "Automation is ready.")
+      } else {
+        self.openSystemSettingsPane(OneContextSystemPermissions.automationSettingsURL)
+        self.observeRememberingPermissionGrant(message: "Grant Automation in System Settings.")
+      }
+    }
+  }
+
+  private func requestFullDiskAccess() {
+    openSystemSettingsPane(OneContextSystemPermissions.fullDiskAccessSettingsURL)
+    observeRememberingPermissionGrant(message: "Grant Full Disk Access in System Settings, then restart 1Context if macOS asks.")
+  }
+
+  private func relaunchCurrentApp() {
+    do {
+      try AppInstallMover().relaunch(destinationBundleURL: Bundle.main.bundleURL)
+      NSApp.terminate(nil)
+    } catch {
+      showSetupWindow(message: "Could not relaunch 1Context. \(error.localizedDescription)")
+    }
+  }
+
+  private func openSystemSettingsPane(_ rawURL: String) {
+    guard let url = URL(string: rawURL) else { return }
+    NSWorkspace.shared.open(url)
+  }
+
+  private func observeRememberingPermissionGrant(message: String) {
+    let readiness = currentReadiness()
+    if readiness.requiredSetupReady {
+      completeRequiredSetup(readiness: readiness, message: "1Context setup is ready.")
+      return
+    }
+    startSetupReadinessObservation(message: message)
   }
 
   private func runLocalWebSetupFlow() async -> Bool {
@@ -1330,9 +1703,8 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
     }
 
     let current = currentReadiness()
-    guard !current.requiredSetupReady else {
-      completeLocalWebSetup(readiness: current, message: "Local Wiki Access is ready.")
-      return true
+    guard !current.setup.localWikiAccess.ready else {
+      return finishRequiredSetupStep(readiness: current, message: "Local Wiki Access is ready.")
     }
 
     startSetupReadinessPolling(message: "Grant Local Wiki Access in the macOS prompt.")
@@ -1346,12 +1718,11 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
       } else {
         recordWikiURL(result.setup.targetURL)
       }
-      completeLocalWebSetup(readiness: readiness, message: "Local Wiki Access is ready.")
-      return true
+      return finishRequiredSetupStep(readiness: readiness, message: "Local Wiki Access is ready.")
     } catch {
       let readiness = currentReadiness()
       if readiness.requiredSetupReady {
-        completeLocalWebSetup(readiness: readiness, message: "Local Wiki Access is ready.")
+        completeRequiredSetup(readiness: readiness, message: "1Context setup is ready.")
         return true
       }
 
@@ -1376,6 +1747,20 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
     }
   }
 
+  private func finishRequiredSetupStep(readiness: OneContextAppReadinessSnapshot, message: String) -> Bool {
+    if readiness.requiredSetupReady {
+      completeRequiredSetup(readiness: readiness, message: "1Context setup is ready.")
+      return true
+    }
+
+    isLocalWebSetupInFlight = false
+    cachedRequiredSetupReady = readiness.requiredSetupReady
+    refreshMenuItems()
+    let nextMessage = readiness.setup.localWikiAccess.ready ? readiness.requiredSetupSummary : message
+    startSetupReadinessObservation(message: nextMessage)
+    return false
+  }
+
   private struct LocalWebSetupRecovery {
     let message: String
     let keepWaiting: Bool
@@ -1389,7 +1774,7 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
   private func startSetupReadinessObservation(message: String?) {
     let current = currentReadiness()
     if current.requiredSetupReady {
-      completeLocalWebSetup(readiness: current, message: message ?? "Local Wiki Access is ready.")
+      completeRequiredSetup(readiness: current, message: message ?? "1Context setup is ready.")
       return
     }
 
@@ -1434,6 +1819,7 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
     let message = setupReadinessPollingMessage
 
     Task.detached(priority: .utility) {
+      await Self.refreshRuntimePermissionProofsIfAuthorized()
       let readiness = Self.computeReadiness()
       await MainActor.run {
         self.isSetupReadinessCheckInFlight = false
@@ -1446,12 +1832,12 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
           )
           return
         }
-        self.completeLocalWebSetup(readiness: readiness, message: "Local Wiki Access is ready.")
+        self.completeRequiredSetup(readiness: readiness, message: "1Context setup is ready.")
       }
     }
   }
 
-  private func completeLocalWebSetup(readiness: OneContextAppReadinessSnapshot, message: String) {
+  private func completeRequiredSetup(readiness: OneContextAppReadinessSnapshot, message: String) {
     stopSetupReadinessPolling()
     isLocalWebSetupInFlight = false
     cachedRequiredSetupReady = readiness.requiredSetupReady
@@ -1604,6 +1990,8 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
   }
 
 }
+
+runPermissionCapabilityProbeIfRequested()
 
 private let app = NSApplication.shared
 private let delegate = AppDelegate()

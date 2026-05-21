@@ -37,10 +37,10 @@ forbid_backwards_compatibility_shims = true
 stage_timing_schema = "1context.release-stage-timing.v1"
 
 [release_factory.channels.dev]
-description = "Local compile and smoke proof. Never mutates update feeds or GitHub releases."
+description = "Local compile and smoke proof with fast Apple Development signing. Never mutates update feeds or GitHub releases."
 requires_clean_tree = false
 requires_tag = false
-signing_mode = "adhoc"
+signing_mode = "apple-development"
 notarize = false
 appcast = "none"
 public_asset_mutation = false

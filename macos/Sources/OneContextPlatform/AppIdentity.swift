@@ -34,6 +34,13 @@ public struct OneContextAppIdentity: Equatable, Sendable {
     "\(preferencesDomain).plist"
   }
 
+  public var environmentValue: String {
+    if let suffix = Self.permissionTestSuffix(fromBundleIdentifier: bundleIdentifier) {
+      return "\(Self.devPermissionPrefix)\(suffix)"
+    }
+    return kind.rawValue
+  }
+
   public var requiresPrivilegedLocalWebSetup: Bool {
     kind == .official
   }
@@ -74,9 +81,37 @@ public struct OneContextAppIdentity: Equatable, Sendable {
     localWebAPIPort: 39292
   )
 
+  public static func devPermissionTest(suffix rawSuffix: String) -> OneContextAppIdentity {
+    let suffix = normalizePermissionTestSuffix(rawSuffix)
+    let bundleIdentifier = "com.haptica.1context.dev.permission.\(suffix)"
+    let displayName = "1Context Dev - \(suffix)"
+    let portBase = permissionTestPortBase(suffix)
+    return OneContextAppIdentity(
+      kind: .dev,
+      displayName: displayName,
+      appBundleName: displayName,
+      bundleIdentifier: bundleIdentifier,
+      userContentDirectoryName: "1Context-Dev-\(suffix)",
+      appSupportDirectoryName: displayName,
+      logDirectoryName: displayName,
+      cacheDirectoryName: displayName,
+      preferencesDomain: bundleIdentifier,
+      runtimeLaunchAgentLabel: bundleIdentifier,
+      menuLaunchAgentLabel: "\(bundleIdentifier).menu",
+      localWebProxyLaunchDaemonLabel: "\(bundleIdentifier).local-web-proxy",
+      localWebURLModeRawValue: "local-http-ported",
+      localWebPort: portBase,
+      localWebAPIPort: portBase + 1
+    )
+  }
+
   public static func from(_ rawValue: String?) -> OneContextAppIdentity? {
     guard let rawValue else { return nil }
-    switch rawValue.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
+    let raw = rawValue.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+    if raw.hasPrefix(devPermissionPrefix) {
+      return devPermissionTest(suffix: String(raw.dropFirst(devPermissionPrefix.count)))
+    }
+    switch raw {
     case "official", "release", "prod", "production", "public":
       return .official
     case "dev", "development", "debug", "local":
@@ -165,6 +200,9 @@ public struct OneContextAppIdentity: Equatable, Sendable {
   }
 
   private static func fromBundleIdentifier(_ bundleIdentifier: String?) -> OneContextAppIdentity? {
+    if let suffix = permissionTestSuffix(fromBundleIdentifier: bundleIdentifier) {
+      return devPermissionTest(suffix: suffix)
+    }
     switch bundleIdentifier {
     case dev.bundleIdentifier:
       return .dev
@@ -173,5 +211,36 @@ public struct OneContextAppIdentity: Equatable, Sendable {
     default:
       return nil
     }
+  }
+
+  private static func normalizePermissionTestSuffix(_ raw: String) -> String {
+    let normalized = raw
+      .lowercased()
+      .map { character -> Character in
+        character.isLetter || character.isNumber ? character : "-"
+      }
+    let collapsed = String(normalized)
+      .split(separator: "-", omittingEmptySubsequences: true)
+      .joined(separator: "-")
+    return collapsed.isEmpty ? "local" : String(collapsed.prefix(40))
+  }
+
+  private static let devPermissionPrefix = "dev-permission:"
+  private static let devPermissionBundleIdentifierPrefix = "com.haptica.1context.dev.permission."
+
+  private static func permissionTestSuffix(fromBundleIdentifier bundleIdentifier: String?) -> String? {
+    guard let bundleIdentifier,
+      bundleIdentifier.hasPrefix(devPermissionBundleIdentifierPrefix)
+    else {
+      return nil
+    }
+    return String(bundleIdentifier.dropFirst(devPermissionBundleIdentifierPrefix.count))
+  }
+
+  private static func permissionTestPortBase(_ suffix: String) -> Int {
+    let hash = suffix.utf8.reduce(0) { partial, byte in
+      ((partial * 31) + Int(byte)) % 500
+    }
+    return 39300 + (hash * 2)
   }
 }

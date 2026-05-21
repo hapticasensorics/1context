@@ -74,8 +74,10 @@ Download the latest `1Context.dmg` from
 open it, and either drag `1Context.app` to `/Applications` or launch it and
 choose `Install and Open`.
 
-First launch opens 1Context Setup. Grant Local Wiki Access once, then use the
-menu bar item to open or refresh your wiki.
+First launch opens the single 1Context Setup page. Grant Local Wiki Access,
+Screen & System Audio Recording, Accessibility, Input Monitoring, Browser
+extension permissions, Microphone, Automation, and Full Disk Access there, then
+use the menu bar item to open or refresh your wiki.
 
 Homebrew users can install the same signed app with:
 

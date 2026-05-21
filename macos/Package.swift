@@ -43,7 +43,7 @@ let package = Package(
     ),
     .target(
       name: "OneContextSetup",
-      dependencies: ["OneContextLocalWeb"]
+      dependencies: ["OneContextLocalWeb", "OneContextPlatform"]
     ),
     .target(
       name: "OneContextLocalWeb",

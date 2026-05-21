@@ -37,7 +37,7 @@ See [macos-app-architecture.md](macos-app-architecture.md) and
 
 ## Release Factory
 
-Local ad-hoc package:
+Local Apple Development signed package:
 
 ```bash
 ./scripts/release-train.sh build --channel dev

@@ -121,9 +121,10 @@ if ! /bin/bash "$ROOT/scripts/release-train.sh" validate > "$TMP_DIR/system-bash
 fi
 /bin/bash "$ROOT/scripts/release-train.sh" validate --channel dev >/dev/null
 ONECONTEXT_RELEASE_MANIFEST_FORCE_SIMPLE_TOML=1 "$ROOT/scripts/release-train.sh" manifest validate
-test "$("$ROOT/scripts/release-train.sh" manifest matrix-cases | wc -l | tr -d '[:space:]')" = "14"
-"$ROOT/scripts/release-train.sh" manifest matrix-cases | grep -q "^login_restart_recovery$"
-"$ROOT/scripts/release-train.sh" manifest matrix-cases | grep -q "^real_uninstall_reinstall$"
+"$ROOT/scripts/release-train.sh" manifest matrix-cases > "$TMP_DIR/matrix-cases.out"
+test "$(wc -l < "$TMP_DIR/matrix-cases.out" | tr -d '[:space:]')" = "14"
+grep -q "^login_restart_recovery$" "$TMP_DIR/matrix-cases.out"
+grep -q "^real_uninstall_reinstall$" "$TMP_DIR/matrix-cases.out"
 grep -q '"case": "login_restart_recovery"' "$ROOT/release/tools/proof/self-hosted-update-proof.sh"
 grep -q '"case": "real_uninstall_reinstall"' "$ROOT/release/tools/proof/self-hosted-update-proof.sh"
 grep -q "env -u SUDO_USER -u SUDO_UID -u SUDO_GID -u SUDO_COMMAND" "$ROOT/release/tools/proof/self-hosted-update-proof.sh"
@@ -148,6 +149,7 @@ fi
 grep -q "host package managers or language runtimes" "$TMP_DIR/bad-dependency-audit.out"
 "$ROOT/scripts/release-train.sh" manifest export-env --channel dev | grep -q "ONECONTEXT_RELEASE_CHANNEL=dev"
 "$ROOT/scripts/release-train.sh" manifest export-env --channel dev | grep -q "ONECONTEXT_RELEASE_BUDGET_ADVISORY=1"
+"$ROOT/scripts/release-train.sh" manifest export-env --channel dev | grep -q "ONECONTEXT_RELEASE_CHANNEL_SIGNING_MODE=apple-development"
 "$ROOT/scripts/release-train.sh" manifest export-env --channel dev | grep -q "ONECONTEXT_APP_IDENTITY=dev"
 "$ROOT/scripts/release-train.sh" manifest export-env --channel dev | grep -q "ONECONTEXT_APP_BUNDLE_NAME='1Context Dev'"
 "$ROOT/scripts/release-train.sh" manifest export-env --channel dev | grep -q "ONECONTEXT_BUNDLE_IDENTIFIER=com.haptica.1context.dev"

@@ -1,0 +1,35 @@
+{
+  "manifest_version": 3,
+  "name": "1Context Browser Bridge",
+  "version": "0.1.0",
+  "description": "Connects browser tab context to the local 1Context app.",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAknYwXj1hvT1k5sU0FL0eyYyCxDXAYTXEAcG2CrQupuYtoS3eVxrcH46bPZWx4MnHjAKhTS0VQIq4rjZslEV3yeHJQdi+FCn2wMLCcMCZZEDrfX+frZSWPTMG1k0RSoZErD9fjW/LjxxqSuJ7AEghZMYhmj22E03Ae+FquGlw4zqNnYKT9KDg8ED00riyQF3d1hBFmTfS89cAH6vdzVe0VbvIOUd4cEyFQf8S4H3tCWCA97/+VH5TGqUH37HKf/8A1q9njZ/y96pv6rvIv2ewU8DDILdJ6DJ7TZZ+Ib/gI1crzR5LdiKvvCkcnipbZr1ENSZDFETfPav6BBbq+XQAqwIDAQAB",
+  "permissions": [
+    "activeTab",
+    "nativeMessaging",
+    "scripting",
+    "storage",
+    "tabs"
+  ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
+  "action": {
+    "default_title": "1Context",
+    "default_popup": "popup.html"
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "<all_urls>"
+      ],
+      "js": [
+        "content.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ]
+}

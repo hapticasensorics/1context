@@ -80,7 +80,7 @@ feed. Public update controls live in the app, not in the CLI.
 
 ## Release Packaging
 
-Local ad-hoc packaging:
+Local Apple Development signed packaging:
 
 ```bash
 ./scripts/release-train.sh build --channel dev
@@ -113,6 +113,42 @@ The official app remains `/Applications/1Context.app` with bundle id
 `com.haptica.1context`, `~/1Context`, and the portless local HTTPS helper. The
 dev app uses an unprivileged HTTP localhost port by default, so it does not take
 over the official `443` helper or Sparkle feed.
+
+The dev channel is fast local signing, not release signing: it uses the local
+`Apple Development` certificate when available and skips notarization. Keep this
+mode for normal iteration because macOS privacy grants are keyed to the app's
+designated signing requirement, not just the bundle id. Rebuilding the same
+bundle id with ad-hoc signing can make System Settings show a granted toggle
+while the running build still reports Screen Recording, Accessibility, or Input
+Monitoring as missing.
+
+When the task is specifically to test the first-run permission flow, build a
+fresh dev identity on purpose:
+
+```bash
+ONECONTEXT_PERMISSION_TEST_ID="$(date +%Y%m%d-%H%M%S)" \
+  ./scripts/release-train.sh build --channel dev
+```
+
+That produces `dist/1Context Dev - <suffix>.app` with bundle id
+`com.haptica.1context.dev.permission.<suffix>` and a matching permission-test
+runtime identity. Its app support, logs, preferences, LaunchAgent labels, and
+localhost ports are also suffix-scoped so it can run beside the stable dev app
+without reusing its proof records or instance lock. Install that app when you
+want a clean TCC identity and fresh prompts. Do not use the permission-test
+identity to judge whether normal dev rebuilds preserve existing permissions.
+
+The setup page stores signed-subject proof records for permission lanes that can
+otherwise inherit misleading state across dev builds. Proof records include the
+bundle identifier, app version, and designated code requirement digest; a
+matching bundle id alone is not enough. Input Monitoring, Browser Extension
+Permissions, Automation, Screen & System Audio Recording, and Microphone should
+be tested from the signed app UI, not from `1context-cli` in Terminal. A CLI or
+Terminal-launched helper can exercise the wrong TCC subject and is useful for
+diagnostics only after the app has written its own proof record. Every app build
+also writes permission identity evidence under
+`dist/permission-build-evidence/` with the app path, designated requirement,
+entitlements, and usage strings.
 
 Maintainer release packaging uses Developer ID signing, notarization, and the
 production Sparkle feed configuration:
@@ -147,8 +183,8 @@ Production packaging signs and notarizes both layers:
 2. `dist/1Context-<version>-macos-arm64.dmg` is signed, submitted, stapled, and
    assessed with Gatekeeper.
 
-`scripts/release-train.sh build --channel dev` is the local unsigned package
-path. It is not a release command. Prototype, private, and official channels
+`scripts/release-train.sh build --channel dev` is the local Apple Development
+signed package path. It is not a release command. Prototype, private, and official channels
 must bundle their release-owned runtime inputs and must not install or resolve
 Homebrew packages while creating the shipped `.app` or DMG.
 

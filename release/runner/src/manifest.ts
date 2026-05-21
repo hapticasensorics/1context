@@ -80,7 +80,7 @@ const ChannelSchema = z.object({
   description: z.string().min(1),
   requires_clean_tree: z.boolean(),
   requires_tag: z.boolean(),
-  signing_mode: z.enum(["adhoc", "developer-id"]),
+  signing_mode: z.enum(["adhoc", "apple-development", "developer-id"]),
   notarize: z.boolean(),
   appcast: z.enum(["none", "private", "public"]),
   public_asset_mutation: z.boolean(),
@@ -309,9 +309,9 @@ function validateReleaseFactory(manifest: ReleaseManifest): void {
     }
     if (name === "dev") {
       assertRelease(
-        !policy.requires_clean_tree && !policy.requires_tag && policy.signing_mode === "adhoc" && !policy.notarize &&
+        !policy.requires_clean_tree && !policy.requires_tag && policy.signing_mode === "apple-development" && !policy.notarize &&
           policy.appcast === "none" && !policy.public_asset_mutation,
-        "dev channel must stay local, adhoc, unnotarized, appcast-free, and non-mutating.",
+        "dev channel must stay local, Apple Development signed, unnotarized, appcast-free, and non-mutating.",
       );
     }
     if (name === "prototype") {

@@ -64,6 +64,32 @@ async function developerIdIdentity(ctx: ReleaseContext): Promise<string> {
   return match?.[1] ?? "";
 }
 
+async function appleDevelopmentIdentity(ctx: ReleaseContext): Promise<string> {
+  const keychain = process.env.CODESIGN_KEYCHAIN || process.env.ONECONTEXT_RELEASE_KEYCHAIN || "";
+  const args = ["find-identity", "-v", "-p", "codesigning"];
+  if (keychain) args.push(keychain);
+  const output = await runCapture("security", args, { env: ctxEnv(ctx) });
+  const match = /"([^"]*Apple Development:[^"]*)"/.exec(output);
+  return match?.[1] ?? "";
+}
+
+function permissionTestBuildEnv(rawValue: string | undefined): Record<string, string> {
+  const raw = rawValue?.trim() ?? "";
+  if (!raw) return {};
+  const suffix = raw.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+  assertRelease(suffix.length > 0, "ONECONTEXT_PERMISSION_TEST_ID must contain at least one letter or digit.");
+  assertRelease(suffix.length <= 40, "ONECONTEXT_PERMISSION_TEST_ID must be 40 characters or shorter after normalization.");
+  return {
+    ONECONTEXT_PERMISSION_TEST_ID: suffix,
+    ONECONTEXT_APP_BUNDLE_NAME: `1Context Dev - ${suffix}`,
+    ONECONTEXT_APP_DISPLAY_NAME: `1Context Dev - ${suffix}`,
+    ONECONTEXT_BUNDLE_IDENTIFIER: `com.haptica.1context.dev.permission.${suffix}`,
+    ONECONTEXT_LOCAL_WEB_PROXY_LABEL: `com.haptica.1context.dev.permission.${suffix}.local-web-proxy`,
+    ONECONTEXT_DMG_VOLUME_NAME: `1Context Dev - ${suffix}`,
+    ONECONTEXT_EXPECTED_APP_BASENAME: `1Context Dev - ${suffix}.app`,
+  };
+}
+
 async function sparklePublicKey(ctx: ReleaseContext): Promise<string> {
   const generateKeys = fromRoot("macos", ".build", "artifacts", "sparkle", "Sparkle", "bin", "generate_keys");
   if (!fs.existsSync(generateKeys)) {
@@ -168,7 +194,12 @@ export async function phaseBuild(ctx: ReleaseContext, args: string[]): Promise<v
   const buildEnv: Record<string, string> = {
     ONECONTEXT_VERSION: ctx.version,
     ONECONTEXT_SIGNING_MODE: ctx.policy.signing_mode,
+    ...permissionTestBuildEnv(ctx.channel === "dev" ? process.env.ONECONTEXT_PERMISSION_TEST_ID : undefined),
   };
+  if (ctx.policy.signing_mode === "apple-development") {
+    buildEnv.CODESIGN_IDENTITY = process.env.CODESIGN_IDENTITY || await appleDevelopmentIdentity(ctx);
+    assertRelease(buildEnv.CODESIGN_IDENTITY.length > 0, "No Apple Development signing identity found.");
+  }
   if (ctx.policy.signing_mode === "developer-id") {
     buildEnv.CODESIGN_IDENTITY = process.env.CODESIGN_IDENTITY || await developerIdIdentity(ctx);
     assertRelease(buildEnv.CODESIGN_IDENTITY.length > 0, "No Developer ID Application signing identity found.");
@@ -181,7 +212,7 @@ export async function phaseBuild(ctx: ReleaseContext, args: string[]): Promise<v
   }
 
   await timeReleaseStep(ctx, "build", "build_app_bundle", () => runCommand(fromRoot("scripts", "build-macos-app.sh"), [], { env: ctxEnv(ctx, buildEnv) }));
-  const appBundleName = ctx.env.ONECONTEXT_APP_BUNDLE_NAME || "1Context";
+  const appBundleName = buildEnv.ONECONTEXT_APP_BUNDLE_NAME || ctx.env.ONECONTEXT_APP_BUNDLE_NAME || "1Context";
   const appBundlePath = fromRoot("dist", `${appBundleName}.app`);
   if (ctx.channel === "dev") {
     await timeReleaseStep(ctx, "build", "create_dmg", () => runCommand(fromRoot("release", "tools", "create-macos-dmg.sh"), [appBundlePath, ctx.dmg], { env: ctxEnv(ctx, buildEnv), stdout: "ignore" }));

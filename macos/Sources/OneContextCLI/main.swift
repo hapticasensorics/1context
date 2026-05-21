@@ -176,7 +176,7 @@ struct OneContextCLI {
     print("  Version: \(oneContextVersion)")
     print("  Executable: \(displayPath(currentExecutablePath() ?? CommandLine.arguments[0], redact: redact))")
     print("  App Bundle: \(displayPath(installedAppBundleURL().path, redact: redact))")
-    print("  App Identity: \(identity.kind.rawValue)")
+    print("  App Identity: \(identity.environmentValue)")
     print("  App Version: \(appVersion() ?? "not installed")")
 
     let readiness = OneContextAppReadiness.current()
