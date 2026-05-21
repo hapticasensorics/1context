@@ -43,6 +43,24 @@ Local Apple Development signed package:
 ./scripts/release-train.sh build --channel dev
 ```
 
+Timestamped dev package for fresh permission prompts:
+
+```bash
+BUILD_TIME="$(date +%Y%m%d-%H%M%S)"
+/usr/bin/time -p env ONECONTEXT_PERMISSION_TEST_ID="$BUILD_TIME" \
+  ./scripts/release-train.sh build --channel dev
+
+APP_NAME="1Context Dev - $BUILD_TIME"
+ditto --norsrc --noqtn "dist/$APP_NAME.app" "/Applications/$APP_NAME.app"
+open -na "/Applications/$APP_NAME.app"
+"/Applications/$APP_NAME.app/Contents/MacOS/1context-cli" diagnose
+```
+
+Use the timestamped path only for TCC/permission setup testing. It creates a
+fresh bundle id, preferences domain, LaunchAgent label set, and app support
+directory based on `BUILD_TIME`. Record the `real/user/sys` timing from
+`/usr/bin/time -p` when reporting the build.
+
 Release factory builds:
 
 ```bash

@@ -123,11 +123,22 @@ while the running build still reports Screen Recording, Accessibility, or Input
 Monitoring as missing.
 
 When the task is specifically to test the first-run permission flow, build a
-fresh dev identity on purpose:
+fresh dev identity on purpose. Keep the build time in a variable so the app
+name, bundle id, install path, diagnostics, and evidence files all line up:
 
 ```bash
-ONECONTEXT_PERMISSION_TEST_ID="$(date +%Y%m%d-%H%M%S)" \
+BUILD_TIME="$(date +%Y%m%d-%H%M%S)"
+/usr/bin/time -p env ONECONTEXT_PERMISSION_TEST_ID="$BUILD_TIME" \
   ./scripts/release-train.sh build --channel dev
+
+APP_NAME="1Context Dev - $BUILD_TIME"
+ditto --norsrc --noqtn "dist/$APP_NAME.app" "/Applications/$APP_NAME.app"
+open -na "/Applications/$APP_NAME.app"
+"/Applications/$APP_NAME.app/Contents/MacOS/1context-cli" diagnose
+
+ONECONTEXT_APP="/Applications/$APP_NAME.app" \
+ONECONTEXT_INCLUDE_BROWSER_EXTENSION=1 \
+./scripts/test-installed-app-live-permission-capabilities.sh
 ```
 
 That produces `dist/1Context Dev - <suffix>.app` with bundle id
@@ -137,6 +148,9 @@ localhost ports are also suffix-scoped so it can run beside the stable dev app
 without reusing its proof records or instance lock. Install that app when you
 want a clean TCC identity and fresh prompts. Do not use the permission-test
 identity to judge whether normal dev rebuilds preserve existing permissions.
+When reporting a timestamped build, include the `BUILD_TIME`, the installed app
+path, the `real/user/sys` timing from `/usr/bin/time -p`, and the live
+permission probe evidence path if permissions were part of the task.
 
 The setup page stores signed-subject proof records for permission lanes that can
 otherwise inherit misleading state across dev builds. Proof records include the
