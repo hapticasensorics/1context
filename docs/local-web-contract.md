@@ -72,7 +72,7 @@ The wiki daemon owns the local dynamic wiki API:
 - `GET /api/wiki/search?q=...`
 - `GET /api/wiki/bookmarks`
 - `GET`, `PATCH`, and `POST /api/wiki/state`
-- future inbox/status routes backed by `wiki.mail.*` and `wiki.notify.*`
+- future inbox/status routes only after the agent mail protocol is implemented
 
 These routes are product contract, not Caddy contract. Browser code should only
 call relative `/api/wiki/*` paths so the same static site can run behind local

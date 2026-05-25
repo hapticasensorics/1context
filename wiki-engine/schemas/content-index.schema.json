@@ -29,6 +29,19 @@
       "type": "array",
       "items": { "$ref": "markdown-twin.schema.json" }
     },
+    "reference_index": {
+      "type": "object",
+      "required": ["path", "reference_count", "asset_count", "link_count", "code_block_count", "citation_count"],
+      "properties": {
+        "path": { "type": "string", "minLength": 1 },
+        "reference_count": { "type": "integer", "minimum": 0 },
+        "asset_count": { "type": "integer", "minimum": 0 },
+        "link_count": { "type": "integer", "minimum": 0 },
+        "code_block_count": { "type": "integer", "minimum": 0 },
+        "citation_count": { "type": "integer", "minimum": 0 }
+      },
+      "additionalProperties": false
+    },
     "export_allowlist": {
       "type": "array",
       "items": { "type": "string", "minLength": 1 }

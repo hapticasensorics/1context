@@ -274,7 +274,7 @@ final class SystemPermissionsProofTests: XCTestCase {
 
     XCTAssertEqual(snapshot.screenRecording.status, .required)
     XCTAssertEqual(snapshot.inputMonitoring.status, .required)
-    XCTAssertEqual(snapshot.browserExtension.status, .required)
+    XCTAssertEqual(snapshot.browserExtension.status, .notRequired)
     XCTAssertEqual(snapshot.microphone.status, .required)
 
     let preferences = try XCTUnwrap(NSDictionary(contentsOfFile: preferencesPath) as? [String: Any])

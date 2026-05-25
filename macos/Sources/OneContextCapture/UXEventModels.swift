@@ -36,6 +36,7 @@ public struct UXEventPrimitive: Equatable, Sendable {
   public var isMomentumScroll: Bool
   public var clickState: Int
   public var targetProcessID: Int32?
+  public var shortcutCategory: UXShortcutActionCategory?
 
   public init(
     time: Date,
@@ -48,7 +49,8 @@ public struct UXEventPrimitive: Equatable, Sendable {
     isAutoRepeat: Bool = false,
     isMomentumScroll: Bool = false,
     clickState: Int = 0,
-    targetProcessID: Int32? = nil
+    targetProcessID: Int32? = nil,
+    shortcutCategory: UXShortcutActionCategory? = nil
   ) {
     self.time = time
     self.kind = kind
@@ -61,6 +63,7 @@ public struct UXEventPrimitive: Equatable, Sendable {
     self.isMomentumScroll = isMomentumScroll
     self.clickState = clickState
     self.targetProcessID = targetProcessID
+    self.shortcutCategory = shortcutCategory
   }
 }
 
@@ -69,6 +72,8 @@ public enum UXEventAnchorKind: String, Codable, Equatable, Hashable, Sendable {
   case pointer = "pointer"
   case modifiers = "modifiers"
   case keyboardActivity = "keyboard_activity"
+  case shortcut
+  case focusTransition = "focus_transition"
 
   public var captureEventType: String {
     switch self {
@@ -80,6 +85,10 @@ public enum UXEventAnchorKind: String, Codable, Equatable, Hashable, Sendable {
       return "capture.ux.modifiers.v1"
     case .keyboardActivity:
       return "capture.ux.keyboard_activity.v1"
+    case .shortcut:
+      return "capture.ux.shortcut.v1"
+    case .focusTransition:
+      return "capture.ux.focus_transition.v1"
     }
   }
 }
@@ -219,6 +228,155 @@ public struct UXKeyboardActivitySummary: Codable, Equatable, Sendable {
   }
 }
 
+public enum UXShortcutActionCategory: String, Codable, Equatable, Hashable, Sendable {
+  case editing
+  case navigation
+  case document
+  case appWindow = "app_window"
+  case system
+  case function
+  case unknownModifiedKey = "unknown_modified_key"
+}
+
+public struct UXShortcutModifierCombinationSummary: Codable, Equatable, Sendable {
+  public var modifiers: [String]
+  public var eventCount: Int
+
+  public init(modifiers: [String], eventCount: Int) {
+    self.modifiers = modifiers
+    self.eventCount = eventCount
+  }
+
+  enum CodingKeys: String, CodingKey {
+    case modifiers
+    case eventCount = "event_count"
+  }
+}
+
+public struct UXShortcutActionCategorySummary: Codable, Equatable, Sendable {
+  public var category: UXShortcutActionCategory
+  public var eventCount: Int
+
+  public init(category: UXShortcutActionCategory, eventCount: Int) {
+    self.category = category
+    self.eventCount = eventCount
+  }
+
+  enum CodingKeys: String, CodingKey {
+    case category
+    case eventCount = "event_count"
+  }
+}
+
+public struct UXShortcutSummary: Codable, Equatable, Sendable {
+  public var eventCount: Int
+  public var keyDownCount: Int
+  public var autoRepeatCount: Int
+  public var modifierCombinations: [UXShortcutModifierCombinationSummary]
+  public var actionCategories: [UXShortcutActionCategorySummary]
+  public var durationMilliseconds: Int
+
+  public init(
+    eventCount: Int,
+    keyDownCount: Int,
+    autoRepeatCount: Int,
+    modifierCombinations: [UXShortcutModifierCombinationSummary],
+    actionCategories: [UXShortcutActionCategorySummary],
+    durationMilliseconds: Int
+  ) {
+    self.eventCount = eventCount
+    self.keyDownCount = keyDownCount
+    self.autoRepeatCount = autoRepeatCount
+    self.modifierCombinations = modifierCombinations
+    self.actionCategories = actionCategories
+    self.durationMilliseconds = durationMilliseconds
+  }
+
+  enum CodingKeys: String, CodingKey {
+    case eventCount = "event_count"
+    case keyDownCount = "key_down_count"
+    case autoRepeatCount = "auto_repeat_count"
+    case modifierCombinations = "modifier_combinations"
+    case actionCategories = "action_categories"
+    case durationMilliseconds = "duration_ms"
+  }
+}
+
+public enum UXFocusTransitionTrigger: String, Codable, Equatable, Sendable {
+  case pointer
+  case keyboard
+  case scroll
+  case modifier
+}
+
+public struct UXFocusTargetHint: Codable, Equatable, Sendable {
+  public var processID: Int32?
+  public var bundleID: String?
+  public var appName: String?
+  public var windowID: UInt32?
+  public var source: String
+
+  public init(
+    processID: Int32? = nil,
+    bundleID: String? = nil,
+    appName: String? = nil,
+    windowID: UInt32? = nil,
+    source: String = "parent_unresolved"
+  ) {
+    self.processID = processID
+    self.bundleID = bundleID
+    self.appName = appName
+    self.windowID = windowID
+    self.source = source
+  }
+
+  enum CodingKeys: String, CodingKey {
+    case processID = "process_id"
+    case bundleID = "bundle_id"
+    case appName = "app_name"
+    case windowID = "window_id"
+    case source
+  }
+}
+
+public struct UXFocusTransitionSummary: Codable, Equatable, Sendable {
+  public var previousProcessID: Int32?
+  public var currentProcessID: Int32?
+  public var trigger: UXFocusTransitionTrigger
+  public var targetSource: String
+  public var confidence: String
+  public var previousTarget: UXFocusTargetHint?
+  public var currentTarget: UXFocusTargetHint?
+
+  public init(
+    previousProcessID: Int32? = nil,
+    currentProcessID: Int32? = nil,
+    trigger: UXFocusTransitionTrigger,
+    targetSource: String = "cg_event_target_pid",
+    confidence: String = "medium",
+    previousTarget: UXFocusTargetHint? = nil,
+    currentTarget: UXFocusTargetHint? = nil
+  ) {
+    self.previousProcessID = previousProcessID
+    self.currentProcessID = currentProcessID
+    self.trigger = trigger
+    self.targetSource = targetSource
+    self.confidence = confidence
+    self.previousTarget = previousTarget
+    self.currentTarget = currentTarget
+  }
+
+  enum CodingKeys: String, CodingKey {
+    case previousProcessID = "previous_process_id"
+    case currentProcessID = "current_process_id"
+    case trigger
+    case targetSource = "target_source"
+    case confidence
+    case previousTarget = "previous_target"
+    case currentTarget = "current_target"
+  }
+}
+
 public struct UXEventAnchor: Codable, Equatable, Sendable {
   public var schemaVersion: Int
   public var kind: UXEventAnchorKind
@@ -230,6 +388,8 @@ public struct UXEventAnchor: Codable, Equatable, Sendable {
   public var pointer: UXPointerSummary?
   public var modifiers: UXModifierSummary?
   public var keyboardActivity: UXKeyboardActivitySummary?
+  public var shortcut: UXShortcutSummary?
+  public var focusTransition: UXFocusTransitionSummary?
 
   public init(
     schemaVersion: Int = 1,
@@ -241,7 +401,9 @@ public struct UXEventAnchor: Codable, Equatable, Sendable {
     scroll: UXScrollBurstSummary? = nil,
     pointer: UXPointerSummary? = nil,
     modifiers: UXModifierSummary? = nil,
-    keyboardActivity: UXKeyboardActivitySummary? = nil
+    keyboardActivity: UXKeyboardActivitySummary? = nil,
+    shortcut: UXShortcutSummary? = nil,
+    focusTransition: UXFocusTransitionSummary? = nil
   ) {
     self.schemaVersion = schemaVersion
     self.kind = kind
@@ -253,6 +415,8 @@ public struct UXEventAnchor: Codable, Equatable, Sendable {
     self.pointer = pointer
     self.modifiers = modifiers
     self.keyboardActivity = keyboardActivity
+    self.shortcut = shortcut
+    self.focusTransition = focusTransition
   }
 
   public var captureEventType: String {
@@ -270,6 +434,8 @@ public struct UXEventAnchor: Codable, Equatable, Sendable {
     case pointer
     case modifiers
     case keyboardActivity = "keyboard_activity"
+    case shortcut
+    case focusTransition = "focus_transition"
   }
 }
 
@@ -422,6 +588,7 @@ struct UXEventAggregatorCurrentState: Equatable, Sendable {
 public final class UXEventAggregator: @unchecked Sendable {
   public var scrollBurstGap: TimeInterval
   public var keyboardBurstGap: TimeInterval
+  public var shortcutBurstGap: TimeInterval
   public var modifierDebounce: TimeInterval
   public var recentWindow: TimeInterval
 
@@ -429,6 +596,7 @@ public final class UXEventAggregator: @unchecked Sendable {
   private var scrollBurst: ScrollBurstState?
   private var pointerState: PointerState?
   private var keyboardBurst: KeyboardBurstState?
+  private var shortcutBurst: ShortcutBurstState?
   private var lastModifierRaw: UInt64 = 0
   private var lastModifierEmittedAt: Date = .distantPast
   private var lastScrollAt: Date?
@@ -443,11 +611,13 @@ public final class UXEventAggregator: @unchecked Sendable {
   public init(
     scrollBurstGap: TimeInterval = 0.18,
     keyboardBurstGap: TimeInterval = 0.35,
+    shortcutBurstGap: TimeInterval = 0.35,
     modifierDebounce: TimeInterval = 0.08,
     recentWindow: TimeInterval = 1.25
   ) {
     self.scrollBurstGap = scrollBurstGap
     self.keyboardBurstGap = keyboardBurstGap
+    self.shortcutBurstGap = shortcutBurstGap
     self.modifierDebounce = modifierDebounce
     self.recentWindow = recentWindow
   }
@@ -471,6 +641,7 @@ public final class UXEventAggregator: @unchecked Sendable {
       var anchors: [UXEventAnchor] = []
       finalizeScrollBurst(into: &anchors)
       finalizeKeyboardBurst(into: &anchors)
+      finalizeShortcutBurst(into: &anchors)
       emitted += anchors.count
       _ = now
       return anchors
@@ -526,9 +697,11 @@ public final class UXEventAggregator: @unchecked Sendable {
   private func ingestLocked(_ event: UXEventPrimitive, into anchors: inout [UXEventAnchor]) {
     switch event.kind {
     case .scrollWheel:
+      ingestFocusTransition(for: event, trigger: .scroll, into: &anchors)
       recordTargetProcess(for: event)
       ingestScroll(event)
     case .leftMouseDown, .rightMouseDown, .otherMouseDown:
+      ingestFocusTransition(for: event, trigger: .pointer, into: &anchors)
       recordTargetProcess(for: event)
       finalizePointer(into: &anchors)
       let button = pointerButton(for: event.kind)
@@ -548,6 +721,7 @@ public final class UXEventAggregator: @unchecked Sendable {
       lastFocusAt = event.time
       anchors.append(pointerAnchor(action: .down, event: event, button: button))
     case .leftMouseUp, .rightMouseUp, .otherMouseUp:
+      ingestFocusTransition(for: event, trigger: .pointer, into: &anchors)
       recordTargetProcess(for: event)
       lastFocusAt = event.time
       if let pointerState, pointerState.button == pointerButton(for: event.kind) {
@@ -566,6 +740,7 @@ public final class UXEventAggregator: @unchecked Sendable {
         anchors.append(pointerAnchor(action: .up, event: event, button: pointerButton(for: event.kind)))
       }
     case .leftMouseDragged, .rightMouseDragged, .otherMouseDragged:
+      ingestFocusTransition(for: event, trigger: .pointer, into: &anchors)
       recordTargetProcess(for: event)
       lastFocusAt = event.time
       if var state = pointerState {
@@ -583,9 +758,12 @@ public final class UXEventAggregator: @unchecked Sendable {
         anchors.append(pointerAnchor(action: .drag, event: event, button: pointerButton(for: event.kind)))
       }
     case .flagsChanged:
+      ingestFocusTransition(for: event, trigger: .modifier, into: &anchors)
       recordTargetProcess(for: event)
       ingestModifier(event, into: &anchors)
     case .keyDown, .keyUp:
+      ingestFocusTransition(for: event, trigger: .keyboard, into: &anchors)
+      ingestShortcut(event)
       ingestKeyboard(event)
     }
   }
@@ -653,6 +831,40 @@ public final class UXEventAggregator: @unchecked Sendable {
     }
   }
 
+  private func ingestShortcut(_ event: UXEventPrimitive) {
+    guard event.kind == .keyDown, UXModifierNames.modifiedKeyMaskActive(event.modifierFlagsRaw) else {
+      return
+    }
+
+    let combination = UXModifierNames.names(event.modifierFlagsRaw).joined(separator: "+")
+    let category = event.shortcutCategory ?? .unknownModifiedKey
+    let eventTargetProcessID = sanitizedTargetProcessID(for: event)
+    if var burst = shortcutBurst {
+      burst.endedAt = event.time
+      burst.eventCount += 1
+      burst.keyDownCount += 1
+      burst.autoRepeatCount += event.isAutoRepeat ? 1 : 0
+      burst.modifierCombinationCounts[combination, default: 0] += 1
+      burst.actionCategoryCounts[category, default: 0] += 1
+      if let eventTargetProcessID {
+        burst.recentTargetProcessID = eventTargetProcessID
+      }
+      shortcutBurst = burst
+      coalesced += 1
+    } else {
+      shortcutBurst = ShortcutBurstState(
+        startedAt: event.time,
+        endedAt: event.time,
+        eventCount: 1,
+        keyDownCount: 1,
+        autoRepeatCount: event.isAutoRepeat ? 1 : 0,
+        modifierCombinationCounts: [combination: 1],
+        actionCategoryCounts: [category: 1],
+        recentTargetProcessID: eventTargetProcessID
+      )
+    }
+  }
+
   private func recordTargetProcess(for event: UXEventPrimitive) {
     guard let targetProcessID = sanitizedTargetProcessID(for: event) else {
       return
@@ -694,12 +906,48 @@ public final class UXEventAggregator: @unchecked Sendable {
     lastModifierEmittedAt = event.time
   }
 
+  private func ingestFocusTransition(
+    for event: UXEventPrimitive,
+    trigger: UXFocusTransitionTrigger,
+    into anchors: inout [UXEventAnchor]
+  ) {
+    guard let currentProcessID = sanitizedTargetProcessID(for: event) else {
+      return
+    }
+    let previousProcessID = lastTargetProcessID
+    guard previousProcessID != currentProcessID else {
+      return
+    }
+
+    let confidence = trigger == .keyboard || trigger == .pointer ? "high" : "medium"
+    anchors.append(
+      UXEventAnchor(
+        kind: .focusTransition,
+        startedAt: UXEventTime.isoString(event.time),
+        endedAt: UXEventTime.isoString(event.time),
+        recentTargetProcessID: currentProcessID,
+        focusTransition: UXFocusTransitionSummary(
+          previousProcessID: previousProcessID,
+          currentProcessID: currentProcessID,
+          trigger: trigger,
+          confidence: confidence,
+          previousTarget: previousProcessID.map { UXFocusTargetHint(processID: $0, source: "cg_event_target_pid") },
+          currentTarget: UXFocusTargetHint(processID: currentProcessID, source: "cg_event_target_pid")
+        )
+      )
+    )
+    lastFocusAt = event.time
+  }
+
   private func finalizeExpired(before time: Date, into anchors: inout [UXEventAnchor]) {
     if let burst = scrollBurst, time.timeIntervalSince(burst.endedAt) >= scrollBurstGap {
       finalizeScrollBurst(into: &anchors)
     }
     if let burst = keyboardBurst, time.timeIntervalSince(burst.endedAt) >= keyboardBurstGap {
       finalizeKeyboardBurst(into: &anchors)
+    }
+    if let burst = shortcutBurst, time.timeIntervalSince(burst.endedAt) >= shortcutBurstGap {
+      finalizeShortcutBurst(into: &anchors)
     }
   }
 
@@ -743,6 +991,27 @@ public final class UXEventAggregator: @unchecked Sendable {
       )
     )
     keyboardBurst = nil
+  }
+
+  private func finalizeShortcutBurst(into anchors: inout [UXEventAnchor]) {
+    guard let burst = shortcutBurst else { return }
+    anchors.append(
+      UXEventAnchor(
+        kind: .shortcut,
+        startedAt: UXEventTime.isoString(burst.startedAt),
+        endedAt: UXEventTime.isoString(burst.endedAt),
+        recentTargetProcessID: burst.recentTargetProcessID,
+        shortcut: UXShortcutSummary(
+          eventCount: burst.eventCount,
+          keyDownCount: burst.keyDownCount,
+          autoRepeatCount: burst.autoRepeatCount,
+          modifierCombinations: burst.modifierCombinationSummaries(),
+          actionCategories: burst.actionCategorySummaries(),
+          durationMilliseconds: durationMilliseconds(from: burst.startedAt, to: burst.endedAt)
+        )
+      )
+    )
+    shortcutBurst = nil
   }
 
   private func finalizePointer(into anchors: inout [UXEventAnchor]) {
@@ -862,6 +1131,46 @@ public final class UXEventAggregator: @unchecked Sendable {
     var autoRepeatCount: Int
     var modifiedKeyEventCount: Int
     var recentTargetProcessID: Int32?
+  }
+
+  private struct ShortcutBurstState {
+    var startedAt: Date
+    var endedAt: Date
+    var eventCount: Int
+    var keyDownCount: Int
+    var autoRepeatCount: Int
+    var modifierCombinationCounts: [String: Int]
+    var actionCategoryCounts: [UXShortcutActionCategory: Int]
+    var recentTargetProcessID: Int32?
+
+    func modifierCombinationSummaries() -> [UXShortcutModifierCombinationSummary] {
+      modifierCombinationCounts
+        .map { key, count in
+          UXShortcutModifierCombinationSummary(
+            modifiers: key.isEmpty ? [] : key.split(separator: "+").map(String.init),
+            eventCount: count
+          )
+        }
+        .sorted {
+          if $0.modifiers == $1.modifiers {
+            return $0.eventCount > $1.eventCount
+          }
+          return $0.modifiers.lexicographicallyPrecedes($1.modifiers)
+        }
+    }
+
+    func actionCategorySummaries() -> [UXShortcutActionCategorySummary] {
+      actionCategoryCounts
+        .map { category, count in
+          UXShortcutActionCategorySummary(category: category, eventCount: count)
+        }
+        .sorted {
+          if $0.eventCount == $1.eventCount {
+            return $0.category.rawValue < $1.category.rawValue
+          }
+          return $0.eventCount > $1.eventCount
+        }
+    }
   }
 }
 

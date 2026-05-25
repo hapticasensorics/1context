@@ -1,206 +1,128 @@
 # Wiki Agent Use Story
 
-- Status: narrative operating model
-- Last updated: 2026-05-20
+- Status: narrative model for the current wiki workbench
+- Last updated: 2026-05-24
 
-This is the story of how an agent should experience the 1Context wiki system
-when the pieces are working together. It is not a replacement for the API
-contract or the runbook. It is the product feel we are trying to preserve while
-the implementation keeps changing underneath.
-
-The short version:
+This is how the wiki should feel to an agent using it for real work.
 
 ```text
-Wake up -> identify -> read status -> inspect mail -> open page -> edit source
-or talk -> add assets when needed -> publish only when reader content changed
--> validate -> leave evidence -> sleep.
+inspect -> open page -> edit or create -> attach evidence -> talk when useful
+-> publish only when reader content changed -> verify -> leave a receipt
 ```
 
-## The Agent Arrives
+The wiki editing loop is not an inbox system. Agent mail is now a separate
+protocol and toolset; page talk remains durable collaboration context, and
+explicit mail delivery turns selected talk entries into claimable work.
 
-An agent wakes up with a thread id, a role, and maybe a task from the user or
-another agent. It does not begin by walking folders. It introduces itself to the
-wiki core.
+For a generic agent runtime, the wiki operations in this story are the
+`toolset-wiki` side of the [Agent Tool Gateway](agent-tool-gateway.md). Mail
+coordination belongs in `toolset-mail`, not in this page-editing loop.
 
-```text
-wiki.agent.identify(thread_id, roles, capabilities, lease_seconds)
-```
+## The Agent Starts With State
 
-The core returns an agent id, stable addresses, active roles, current liveness,
-and any renewed lease information. From the agent's point of view this is the
-same as getting a badge at the door: "I am here, I am alive, this is how you
-can send me mail."
-
-The agent then asks for the whole system's condition:
+The agent begins by asking the core what exists:
 
 ```text
-wiki.status()
 wiki.list()
+wiki.publish.status()
 ```
 
-It learns:
+It should see configured pages, custom pages, generated reader routes, missing
+source, tombstones, template-derived pages, edited pages, validation warnings,
+and publish needs. It should not have to guess from folder names.
 
-- whether the wiki has source work that needs publishing
-- whether automatic publishing is throttled by app Settings
-- which pages are runtime defaults, user-edited pages, custom pages, generated
-  site pages, tombstoned pages, or missing fallback source
-- whether there is unread mail, open actionable work, or broken render state
-- what the Local Web reader surface most recently published
-
-This is important. The agent should not have to infer the state of the world by
-guessing paths or running helper scripts.
-
-## The Inbox Comes First
-
-Before editing, a well-behaved agent checks its mail.
-
-```text
-wiki.agent.inbox(agent_id)
-wiki.mail.inbox(address)
-wiki.notify.poll(agent_id)
-```
-
-The inbox is where page talk becomes operational. A page curator may receive a
-proposal. A reviewer may receive a request for validation. A topic agent may be
-subscribed to new talk on `topics`. A user message may arrive through the same
-shape later.
-
-The agent reads only the relevant message or thread:
-
-```text
-wiki.mail.read(message_id)
-wiki.mail.claim(message_id, recipient, agent_id)
-wiki.mail.mark(message_id, recipient, state)
-```
-
-The point is to avoid the old failure mode where every agent had to reread a
-whole talk folder just to discover whether anything mattered to it. Talk
-folders remain the durable record, but mail is the agent's working surface.
-
-## Opening A Page Feels Like Opening A Workbench
-
-When an agent decides to work on a page, it opens the page through the API:
+For one page:
 
 ```text
 wiki.page.status("topics")
 wiki.page.open("topics")
 ```
 
-The response should feel like a workbench, not a scavenger hunt. It includes:
+The response should feel like opening a workbench:
 
-- the page id, route, title, type, collection, and navigation placement
-- whether the page is from a template, runtime default, edited default, or
-  custom source
-- the source file handle and expected source hash
-- talk folder handles and conventions
-- allowed next actions
-- mail summary and open work
-- publish status and validation hints
+- page id, title, route, slug, type, collection, and navigation placement
+- whether this is a template-derived page, edited page, custom page, generated
+  route, missing source, or tombstone
+- source body and `source_sha256`
+- source, talk, curator, conventions, asset, and published handles
+- validation and next action
 
-If the page does not exist yet, the agent should create it instead of hand
-constructing folder paths:
+## Creating A Page Is One Operation
+
+If a page does not exist, the agent does not assemble paths by hand. It calls:
 
 ```text
-wiki.page.create(
-  id,
-  title,
-  route,
-  nav_section,
-  nav_order,
-  family_group,
-  family_id,
-  template
-)
+wiki.page.create(...)
 ```
 
-Page creation writes `wiki.toml`, source, talk conventions, curator files, and
-page-ledger evidence together. The agent should not have to remember the tree
-shape.
+The call owns the sitemap entry, source file, talk folder, conventions,
+curator prompt, and page-ledger evidence. The agent may choose the route,
+family group, family id, nav section, nav order, page type, and template.
 
-## Editing Is Small And Evidence-Backed
+This is the right level of control: configurable, but not fussy.
 
-For source edits, the agent uses body operations with hash preconditions:
+## Editing Is Hash-Backed
+
+For page edits, the agent opens the page, reads the current hash, and writes
+with a precondition:
 
 ```text
-wiki.page.write_body(page, body, expected_source_sha256)
 wiki.page.patch_body(page, find, replace, expected_source_sha256)
+wiki.page.write_body(page, body, expected_source_sha256)
 ```
 
-This lets agents edit markdown in natural units while the core protects against
-stale writes. The receipt tells the agent whether rendering is required and
-what to do next.
+If another actor changed the file, the write fails. The agent reopens the page
+and tries again with the current source.
 
-An agent should prefer small patches with visible evidence:
+Receipts should tell the agent:
 
-```text
-open page
-read current hash
-patch one section
-receive new hash
-publish or leave draft state intentionally
-```
+- the new source hash
+- whether publish is required
+- what validation changed
+- what to do next
 
-If validation fails, the agent should repair the source rather than pushing
-through the renderer. Invalid frontmatter, broken configured routes, bad
-templates, tombstones, and stale hashes should all produce direct next actions.
+## Assets Are Page Inputs
 
-## Assets Are Part Of The Page
-
-When an agent needs an image, diagram, PDF, CSV, or supporting file, it should
-not hand-copy files into arbitrary static folders. It calls:
+Images, screenshots, PDFs, logs, CSVs, and other evidence should be added
+through:
 
 ```text
 wiki.asset.add(page, file, purpose, caption, alt_text)
 ```
 
-The core copies the file into the page-local asset folder:
+The core copies the file into the page-local asset folder and returns the
+markdown snippet to insert into the page. The agent then patches the body and
+publishes.
 
-```text
-user-wiki/source/families/<group>/<family>/source/<page-slug>.assets/
-```
+This keeps rendered assets tied to source truth and makes embedded files easy
+to audit. After publish, images, files, external links, internal links,
+Wikipedia-style footnote citations, and fenced code blocks are listed in
+`.1context/reference-index.json` with stable `user-wiki://` citation URIs so an
+agent can cite resources without path-walking.
 
-It sanitizes the filename, records hash and media metadata, appends a ledger
-event, and returns the exact markdown to insert:
+Short code examples should stay as normal fenced Markdown blocks. Code files
+that should be downloaded, hashed, or cited as files should be attached through
+`wiki.asset.add` and linked from the body.
 
-```markdown
-![A test topic map](./topics.assets/topic-map.png)
-```
+## Talk Is For Durable Context
 
-Then the agent patches the page body with that markdown. On publish, the
-renderer copies assets to route-sibling output:
-
-```text
-/topics.assets/topic-map.png
-```
-
-This matters because embedded files are now real wiki inputs. Changing an asset
-changes the publish fingerprint. The reader surface cannot silently keep an old
-diagram while the source tree contains a newer one.
-
-## Talk Is Not The Same As Publishing
-
-If an agent writes a talk entry, it calls:
+When an agent wants to leave a note, review, question, decision, or dogfood
+evidence without changing reader content, it uses:
 
 ```text
 wiki.talk.append(page, kind, subject, from, to, cc, body, attachments)
 ```
 
-The talk entry is durable immediately. The mail delivery ledger and
-notification outbox are updated immediately. Agents who are subscribed or named
-can see the message without a site render.
+In current V0, `to` and `cc` are metadata labels unless the caller explicitly
+sets `delivery_mode = "mail"`. Delivery, notification, and claim state belong
+to `toolset-mail`, not to implicit wiki page editing.
 
-That does not necessarily mean the reader-facing page needs publishing.
-Publishing is for reader content, route changes, source changes, tombstones,
-assets, `wiki.toml`, generated site pages, and renderable talk surfaces when
-the user explicitly wants the static reader refreshed.
+Talk append should normally leave publish status unchanged. Publishing is for
+reader content, route changes, assets, tombstones, templates, and site config.
 
-This distinction is part of the product feel. Agents should not trigger a full
-publish just because they marked mail as read or replied to a private
-coordination thread.
+## Publishing Is Proof
 
-## Publishing Is A Proof Step
-
-When page content changed, the agent publishes:
+When source truth changes, the agent publishes:
 
 ```text
 wiki.publish(trigger = "agent")
@@ -208,126 +130,44 @@ wiki.publish(trigger = "agent")
 
 A successful publish means:
 
-- configured missing fallback pages were safely backfilled
-- validation passed
-- the renderer built a full staging site
-- the staged site was validated
+- the inventory validated
+- missing configured source pages were safely backfilled
+- the static renderer completed
+- the staged site validated
 - `user-wiki/site` was promoted
 - the Application Support mirror used by Local Web was updated
-- route manifests, render receipts, link diagnostics, and ledgers record what
-  happened
+- route manifests and receipts explain what happened
 
-If publish fails, last-good output remains served. The agent receives a
-structured failure and repair hints. It should fix the source, template, route,
-asset, or link issue and publish again.
+If publish fails, the last-good site remains served. The agent fixes the
+source, config, template, asset, route, or link issue and publishes again.
 
-Automatic publishing is app behavior, not source truth. The menu-bar Settings
-choice controls automatic source publish cadence:
+## Deleting Is Managed
 
-```text
-no_limit
-1_minute
-30_minute
-```
-
-Manual `wiki.publish` bypasses that cadence because the caller is asking for
-immediate proof. `wiki.status` tells agents whether automatic publishing is
-currently delayed and when it may run next.
-
-## The Home Page Tells The Human What Changed
-
-The generated home page should be useful without becoming another inbox. It has
-a rolling feed of what changed:
-
-- page creation and body edits from the page ledger
-- asset additions
-- publish/render events
-- link diagnostic changes
-- accepted decisions when configured
-
-The feed is for human orientation. Agents still use status, list, mail, and
-notification APIs for work. The home page answers the user's natural question:
-"What has the wiki been doing while I was away?"
-
-## Deleting Is A Managed Lifecycle Event
-
-Deleting a page is not a raw file removal. The agent calls:
+Deleting a page is:
 
 ```text
 wiki.page.delete(page, mode = "tombstone")
 ```
 
-The core returns affected routes and source-level link impact. The page becomes
-tombstoned, navigation is updated, and publish decides whether the route should
-disappear from the reader surface. Talk may still keep archival context when
-explicitly allowed.
-
-If the deletion was wrong:
+The route disappears after publish, but the tombstone preserves intent and
+prevents accidental recreation. Restoring is:
 
 ```text
 wiki.page.restore(page)
 ```
 
-Restore should make the route, navigation, source, talk state, and next publish
-action obvious.
+This gives agents a full lifecycle without raw file surgery.
 
-## A Normal Agent Loop
+## What Good Feels Like
 
-This is the happy path for an agent editing a page:
+The wiki workbench is good when an agent can say:
 
-```text
-1. wiki.agent.identify(...)
-2. wiki.status()
-3. wiki.agent.inbox(...)
-4. wiki.page.status("topics")
-5. wiki.page.open("topics")
-6. wiki.asset.add("topics", "/tmp/topic-map.png", alt_text = "...")
-7. wiki.page.patch_body("topics", find = "## Engineering", replace = "...")
-8. wiki.validate()
-9. wiki.publish(trigger = "agent")
-10. wiki.mail.mark(..., state = "done")
-11. wiki.notify.ack(...)
-```
+- "show me the site"
+- "open this page"
+- "make this small edit"
+- "add this image"
+- "leave a talk note"
+- "publish and prove it"
+- "delete and prove it disappeared"
 
-A quieter loop is also valid:
-
-```text
-identify -> inbox -> read -> claim -> reply on talk -> mark done -> sleep
-```
-
-No publish is needed if only mail state or coordination changed.
-
-## What Should Feel Good
-
-An agent should feel that the wiki is a living workspace with a small set of
-obvious handles:
-
-- `wiki.status` tells whether the system is calm or needs action.
-- `wiki.list` tells what pages exist and where they came from.
-- `wiki.page.open` gives everything needed to edit one page safely.
-- `wiki.page.create` and `wiki.page.delete` own the hard placement and
-  lifecycle details.
-- `wiki.asset.add` makes embedding files boring.
-- `wiki.talk.append` makes discussion durable.
-- `wiki.mail.*` makes discussion actionable.
-- `wiki.publish` is the proof step.
-- `wiki.validate` explains why publishing would fail.
-
-The agent should not need to remember renderer internals, Swift internals,
-template folder conventions, Application Support mirrors, or Local Web serving
-paths. Those are real implementation details, but they are not the agent's
-working surface.
-
-## What Still Wants Refinement
-
-The wiki surface is now usable, but this story makes the remaining design
-pressure visible:
-
-- mail and notification ergonomics should keep getting sharper
-- curator apply should stay explicit and evidence-backed
-- the home feed should become richer without turning into a noisy log dump
-- generated site pages should remain inspectable but not editable as source
-- settings should expose only choices agents can explain back to the user
-
-The guiding taste is simple: if I were the agent using this all day, I would
-want fewer verbs, better receipts, and zero path guessing.
+without learning the folder layout or waking up an unrelated mail subsystem.

@@ -96,6 +96,9 @@ INFO="$APP/Contents/Info.plist"
 MAIN_EXE="$APP/Contents/MacOS/1Context"
 CLI_EXE="$APP/Contents/MacOS/1context-cli"
 DAEMON_EXE="$APP/Contents/MacOS/1contextd"
+MEMORYD_EXE="$APP/Contents/MacOS/onecontext-memoryd"
+CAPTURE_DASHBOARD_EXE="$APP/Contents/MacOS/onecontext-capture-dashboard"
+AGENT_HARNESS_EXE="$APP/Contents/MacOS/onecontext-agent-harness"
 WIKI_EXE="$APP/Contents/MacOS/onecontext-wiki"
 LOCAL_WEB_PROXY_EXE="$APP/Contents/Resources/1context-local-web-proxy"
 
@@ -202,7 +205,7 @@ verify_signed_entitled_target "$MAIN_EXE" main
 verify_signed_entitled_target "$CLI_EXE" cli
 verify_signed_entitled_target "$DAEMON_EXE" daemon
 
-for helper in "$WIKI_EXE" "$LOCAL_WEB_PROXY_EXE"; do
+for helper in "$MEMORYD_EXE" "$CAPTURE_DASHBOARD_EXE" "$AGENT_HARNESS_EXE" "$WIKI_EXE" "$LOCAL_WEB_PROXY_EXE"; do
   [[ -x "$helper" ]] || fail "packaged helper is missing or not executable: $helper"
   codesign --verify --strict "$helper" >/dev/null 2>"$EVIDENCE_OUT/$(basename "$helper").verify.err" \
     || fail "packaged helper does not pass strict codesign verification: $helper"

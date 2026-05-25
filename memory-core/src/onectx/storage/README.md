@@ -37,6 +37,26 @@ Files can still exist when they are the best human-readable artifact. The
 lakestore records where they are, what they mean, and which evidence allowed
 the system to trust them.
 
+## Remembering Input Contract
+
+Screen, accessibility, input-monitoring, browser-extension, microphone,
+Automation, and Full Disk Access source data belongs in the lakestore once the
+macOS app or source-specific setup flow has granted the required permission.
+Capture code should not invent a parallel memory database.
+
+Use the tables this way:
+
+```text
+events      capture ticks, active app/window facts, OCR text, input summaries
+artifacts   durable frame files, OCR sidecars, and materialized observation windows
+evidence    checks proving a capture artifact is readable, scoped, and usable
+documents   readable text packets that memory jobs can cite or summarize
+```
+
+Raw files may live beside runtime support state when they are too large or too
+binary for table rows. Their stable paths, hashes, and provenance still belong
+in `artifacts`, and state-machine progress should still flow through `evidence`.
+
 ## Runtime Experience Projections
 
 Rendered lived experience is first-class in storage, but it is not the source

@@ -194,6 +194,7 @@ final class WikiRenderCoordinatorTests: XCTestCase {
     XCTAssertTrue(FileManager.default.fileExists(atPath: current.appendingPathComponent("your-context.md").path))
     XCTAssertTrue(FileManager.default.fileExists(atPath: current.appendingPathComponent("assets/enhance.js").path))
     XCTAssertTrue(FileManager.default.fileExists(atPath: current.appendingPathComponent(".1context/route-manifest.json").path))
+    XCTAssertTrue(FileManager.default.fileExists(atPath: current.appendingPathComponent(".1context/reference-index.json").path))
   }
 
   func testValidatorRejectsBrokenMarkdownTwinHash() throws {
@@ -393,7 +394,15 @@ final class WikiRenderCoordinatorTests: XCTestCase {
       "output": "\(jsonEscape(site.path))",
       "route_count": 1,
       "routes": [\(routeJSON)],
-      "assets": []
+      "assets": [],
+      "reference_index": {
+        "path": ".1context/reference-index.json",
+        "reference_count": 0,
+        "asset_count": 0,
+        "link_count": 0,
+        "code_block_count": 0,
+        "citation_count": 0
+      }
     }
     """
     let contentIndex = """
@@ -423,11 +432,36 @@ final class WikiRenderCoordinatorTests: XCTestCase {
         "talk_enabled": true,
         "talk_url": null
       }],
-      "export_allowlist": ["*.html", "*.md", "*/index.html", "assets/*", ".1context/route-manifest.json", ".1context/content-index.json"]
+      "reference_index": {
+        "path": ".1context/reference-index.json",
+        "reference_count": 0,
+        "asset_count": 0,
+        "link_count": 0,
+        "code_block_count": 0,
+        "citation_count": 0
+      },
+      "export_allowlist": ["*.html", "*.md", "*/index.html", "assets/*", ".1context/route-manifest.json", ".1context/content-index.json", ".1context/reference-index.json"]
+    }
+    """
+    let referenceIndex = """
+    {
+      "schema_version": "wiki.reference-index.v1",
+      "generated_at": "2026-05-14T00:00:00.000Z",
+      "output": "\(jsonEscape(site.path))",
+      "reference_count": 0,
+      "asset_count": 0,
+      "link_count": 0,
+      "code_block_count": 0,
+      "citation_count": 0,
+      "assets": [],
+      "links": [],
+      "code_blocks": [],
+      "citations": []
     }
     """
     try writeString(routeManifest, to: site.appendingPathComponent(".1context/route-manifest.json"))
     try writeString(contentIndex, to: site.appendingPathComponent(".1context/content-index.json"))
+    try writeString(referenceIndex, to: site.appendingPathComponent(".1context/reference-index.json"))
   }
 
   private func sha256Hex(_ data: Data) -> String {

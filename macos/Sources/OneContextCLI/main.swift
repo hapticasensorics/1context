@@ -1,5 +1,6 @@
 import Darwin
 import Foundation
+import OneContextCapture
 import OneContextInstall
 import OneContextLocalWeb
 import OneContextCore
@@ -31,6 +32,8 @@ struct OneContextCLI {
         try await uninstall()
       case "wiki":
         try await wiki()
+      case "capture":
+        try capture()
       default:
         FileHandle.standardError.write(Data("Unknown command: \(command ?? "")\n".utf8))
         printHelp()
@@ -64,6 +67,11 @@ struct OneContextCLI {
       1context --help
       1context diagnose
       1context uninstall [--delete-data] [--keep-app]
+      1context capture status
+      1context capture snapshot
+      1context capture metadata-sample [--duration-seconds <seconds>] [--max-frames <n>]
+      1context capture dashboard [--snapshot] [--watch] [--interval-seconds <seconds>]
+      1context capture dashboard-gui
       1context wiki local-url
       1context wiki list
       1context wiki validate
@@ -76,33 +84,19 @@ struct OneContextCLI {
       1context wiki asset-list <page-id-or-route>
       1context wiki page-delete <page-id-or-route> [--mode tombstone]
       1context wiki page-restore <page-id-or-route>
-      1context wiki page-watch <page-id-or-route> --agent-id <agent-id> [--list <list://address>] [--kind <kind>]... [--ttl-seconds <seconds>]
-      1context wiki page-unwatch <page-id-or-route> --agent-id <agent-id> [--list <list://address>] [--kind <kind>]...
-      1context wiki page-assign-role <page-id-or-route> --agent-id <agent-id> --role <role> [--kind <kind>]... [--ttl-seconds <seconds>]
-      1context wiki list-create --address <list://address> [--title <title>] [--description <text>] [--page <page-id-or-route>] [--owner <address-or-agent-id>]
-      1context wiki lists [--page <page-id-or-route>] [--address <list://address>]
-      1context wiki list-status <list://address> [--include-archived] [--include-snoozed]
-      1context wiki list-members <list://address>
-      1context wiki agent-register --thread-id <thread> [--role <address>]... [--capability <name>]... [--ttl-seconds <seconds>]
-      1context wiki agent-identify --thread-id <thread> [--role <address>]... [--capability <name>]... [--ttl-seconds <seconds>]
+      1context wiki agent-identify --thread-id <codex-thread-id> [--role <address>]... [--capability <name>]... [--ttl-seconds <seconds>]
       1context wiki agent-heartbeat <agent-id> [--ttl-seconds <seconds>]
-      1context wiki agent-retire <agent-id> [--reason <text>]
-      1context wiki whoami (--thread-id <thread> | --agent-id <agent-id>)
-      1context wiki agent-list [--include-stale] [--include-retired]
+      1context wiki agent-retire <agent-id>
       1context wiki agent-status <agent-id>
-      1context wiki agent-inbox <agent-id> [--include-archived] [--include-snoozed]
-      1context wiki agent-claim <agent-id> <message-id>
-      1context wiki talk-append <page-id-or-route> --subject <subject> --from <address> (--body <markdown> | --body-file <path>) (--to <address> | --to-role <role>) [--to <address>]... [--to-role <role>]... [--attachment <path>]... [--attachment-filename <name>]... [--attachment-caption <caption>]... [--attachment-alt <text>]...
-      1context wiki mail-inbox <recipient> [--include-archived] [--include-snoozed]
-      1context wiki mail-read (--message-id <id> | --thread-id <id>)
-      1context wiki mail-subscribe --agent-id <agent-id> --address <address> [--relation <relation>] [--kind <kind>]... [--ttl-seconds <seconds>]
-      1context wiki mail-unsubscribe --agent-id <agent-id> --address <address> [--relation <relation>] [--kind <kind>]...
-      1context wiki mail-subscriptions [--agent-id <agent-id>] [--address <address>]
-      1context wiki mail-mark <message-id> --recipient <address> --state <state> [--until <iso-time>]
-      1context wiki mail-mark-all <message-id> --state <state> [--until <iso-time>]
-      1context wiki mail-claim <message-id> --recipient <address> --agent-id <agent-id>
-      1context wiki notify-poll <agent-id>
-      1context wiki notify-ack <notification-id> --agent-id <agent-id> [--state <state>]
+      1context wiki agent-inbox <agent-id>
+      1context wiki mail-open <delivery-id> --agent-id <agent-id>
+      1context wiki mail-claim <delivery-id> --agent-id <agent-id>
+      1context wiki mail-mark <delivery-id> --agent-id <agent-id> --state read|done|archived|rejected
+      1context wiki mail-snooze <delivery-id> --agent-id <agent-id> --until <rfc3339>
+      1context wiki notify-poll <agent-id> [--cursor <cursor>]
+      1context wiki notify-ack <notification-id> --agent-id <agent-id>
+      1context wiki notify-dispatch <agent-id> (--dry-run | --steering-command <command> [--steering-arg <arg>]...) [--payload-format text|json] [--limit <n>]
+      1context wiki talk-append <page-id-or-route> --subject <subject> --from <address> (--body <markdown> | --body-file <path>) [--operation-id <id>] [--delivery-mode labels-only|mail] [--to <address>]... [--cc <address>]... [--attachment <path>]... [--attachment-filename <name>]... [--attachment-caption <caption>]... [--attachment-alt <text>]...
       1context wiki publish-status
       1context wiki publish [--trigger <label>] [--force] [--wiki-engine <dir>] [--node <path>]
     """)
@@ -125,35 +119,34 @@ struct OneContextCLI {
       1context wiki asset-list <page-id-or-route>
       1context wiki page-delete <page-id-or-route> [--mode tombstone]
       1context wiki page-restore <page-id-or-route>
-      1context wiki page-watch <page-id-or-route> --agent-id <agent-id> [--list <list://address>] [--kind <kind>]... [--ttl-seconds <seconds>]
-      1context wiki page-unwatch <page-id-or-route> --agent-id <agent-id> [--list <list://address>] [--kind <kind>]...
-      1context wiki page-assign-role <page-id-or-route> --agent-id <agent-id> --role <role> [--kind <kind>]... [--ttl-seconds <seconds>]
-      1context wiki list-create --address <list://address> [--title <title>] [--description <text>] [--page <page-id-or-route>] [--owner <address-or-agent-id>]
-      1context wiki lists [--page <page-id-or-route>] [--address <list://address>]
-      1context wiki list-status <list://address> [--include-archived] [--include-snoozed]
-      1context wiki list-members <list://address>
-      1context wiki agent-register --thread-id <thread> [--role <address>]... [--capability <name>]... [--ttl-seconds <seconds>]
-      1context wiki agent-identify --thread-id <thread> [--role <address>]... [--capability <name>]... [--ttl-seconds <seconds>]
+      1context wiki agent-identify --thread-id <codex-thread-id> [--role <address>]... [--capability <name>]... [--ttl-seconds <seconds>]
       1context wiki agent-heartbeat <agent-id> [--ttl-seconds <seconds>]
-      1context wiki agent-retire <agent-id> [--reason <text>]
-      1context wiki whoami (--thread-id <thread> | --agent-id <agent-id>)
-      1context wiki agent-list [--include-stale] [--include-retired]
+      1context wiki agent-retire <agent-id>
       1context wiki agent-status <agent-id>
-      1context wiki agent-inbox <agent-id> [--include-archived] [--include-snoozed]
-      1context wiki agent-claim <agent-id> <message-id>
-      1context wiki talk-append <page-id-or-route> --subject <subject> --from <address> (--body <markdown> | --body-file <path>) (--to <address> | --to-role <role>) [--to <address>]... [--to-role <role>]... [--attachment <path>]... [--attachment-filename <name>]... [--attachment-caption <caption>]... [--attachment-alt <text>]...
-      1context wiki mail-inbox <recipient> [--include-archived] [--include-snoozed]
-      1context wiki mail-read (--message-id <id> | --thread-id <id>)
-      1context wiki mail-subscribe --agent-id <agent-id> --address <address> [--relation <relation>] [--kind <kind>]... [--ttl-seconds <seconds>]
-      1context wiki mail-unsubscribe --agent-id <agent-id> --address <address> [--relation <relation>] [--kind <kind>]...
-      1context wiki mail-subscriptions [--agent-id <agent-id>] [--address <address>]
-      1context wiki mail-mark <message-id> --recipient <address> --state <state> [--until <iso-time>]
-      1context wiki mail-mark-all <message-id> --state <state> [--until <iso-time>]
-      1context wiki mail-claim <message-id> --recipient <address> --agent-id <agent-id>
-      1context wiki notify-poll <agent-id>
-      1context wiki notify-ack <notification-id> --agent-id <agent-id> [--state <state>]
+      1context wiki agent-inbox <agent-id>
+      1context wiki mail-open <delivery-id> --agent-id <agent-id>
+      1context wiki mail-claim <delivery-id> --agent-id <agent-id>
+      1context wiki mail-mark <delivery-id> --agent-id <agent-id> --state read|done|archived|rejected
+      1context wiki mail-snooze <delivery-id> --agent-id <agent-id> --until <rfc3339>
+      1context wiki notify-poll <agent-id> [--cursor <cursor>]
+      1context wiki notify-ack <notification-id> --agent-id <agent-id>
+      1context wiki notify-dispatch <agent-id> (--dry-run | --steering-command <command> [--steering-arg <arg>]...) [--payload-format text|json] [--limit <n>]
+      1context wiki talk-append <page-id-or-route> --subject <subject> --from <address> (--body <markdown> | --body-file <path>) [--operation-id <id>] [--delivery-mode labels-only|mail] [--to <address>]... [--cc <address>]... [--attachment <path>]... [--attachment-filename <name>]... [--attachment-caption <caption>]... [--attachment-alt <text>]...
       1context wiki publish-status
       1context wiki publish [--trigger <label>] [--force] [--wiki-engine <dir>] [--node <path>]
+    """)
+  }
+
+  static func printCaptureHelp() {
+    print("""
+    1Context Capture
+
+    Usage:
+      1context capture status
+      1context capture snapshot
+      1context capture metadata-sample [--duration-seconds <seconds>] [--max-frames <n>]
+      1context capture dashboard [--snapshot] [--watch] [--interval-seconds <seconds>]
+      1context capture dashboard-gui
     """)
   }
 
@@ -200,6 +193,7 @@ struct OneContextCLI {
     print("  App Support: \(displayPath(paths.appSupportDirectory.path, redact: redact))")
     print("  Socket: \(displayPath(paths.socketPath, redact: redact))")
 
+    printMemoryDiagnostics(redact: redact)
     printLocalWebDiagnostics(redact: redact)
 
     print("\nSetup:")
@@ -268,6 +262,37 @@ struct OneContextCLI {
     print("  Next Site: \(displayPath(diagnostics.nextSitePath, redact: redact))")
     print("  Current Has Index: \(yesNo(diagnostics.currentSiteHasIndex))")
     print("  Current Has Health: \(yesNo(diagnostics.currentSiteHasHealth))")
+  }
+
+  static func printMemoryDiagnostics(redact: Bool) {
+    print("\nMemory:")
+    do {
+      let payload = try UnixJSONRPCClient().call(method: "memory.status")
+      print("  Health: \((payload["running"] as? Bool) == true ? "OK" : "not running")")
+      if let executable = payload["executable"] as? String {
+        print("  Executable: \(displayPath(executable, redact: redact))")
+      }
+      if let statusPath = payload["status_path"] as? String {
+        print("  Status: \(displayPath(statusPath, redact: redact))")
+      }
+      if let cursorPath = payload["cursor_path"] as? String {
+        print("  Cursors: \(displayPath(cursorPath, redact: redact))")
+      }
+      if let status = payload["status"] as? [String: Any],
+        let sources = status["sources"] as? [[String: Any]]
+      {
+        for source in sources {
+          let name = source["source"] as? String ?? "unknown"
+          let state = source["status"] as? String ?? "unknown"
+          let records = source["record_count"] as? Int ?? 0
+          let elapsed = source["elapsed_ms"] as? Int ?? 0
+          print("  Source \(name): \(state), records=\(records), elapsed_ms=\(elapsed)")
+        }
+      }
+    } catch {
+      print("  Health: no response")
+      print("  Error: \(error.localizedDescription)")
+    }
   }
 
   static func uninstall() async throws {
@@ -387,66 +412,35 @@ struct OneContextCLI {
     case "page-restore":
       try requireWikiArgumentCount(3)
       try printJSON(UnixJSONRPCClient().call(method: "wiki.page.restore", params: ["page": args[2]]))
-    case "page-watch":
-      try printJSON(UnixJSONRPCClient().call(method: "wiki.page.watch", params: try wikiPageWatchParams()))
-    case "page-unwatch":
-      try printJSON(UnixJSONRPCClient().call(method: "wiki.page.unwatch", params: try wikiPageUnwatchParams()))
-    case "page-assign-role":
-      try printJSON(UnixJSONRPCClient().call(method: "wiki.page.assign_role", params: try wikiPageAssignRoleParams()))
-    case "list-create":
-      try printJSON(UnixJSONRPCClient().call(method: "wiki.list.create", params: try wikiListCreateParams()))
-    case "lists":
-      try printJSON(UnixJSONRPCClient().call(method: "wiki.lists", params: try wikiListsParams()))
-    case "list-status":
-      try printJSON(UnixJSONRPCClient().call(method: "wiki.list.status", params: try wikiListStatusParams()))
-    case "list-members":
-      try requireWikiArgumentCount(3)
-      try printJSON(UnixJSONRPCClient().call(method: "wiki.list.members", params: ["address": args[2]]))
-    case "agent-register":
-      try printJSON(UnixJSONRPCClient().call(method: "wiki.agent.register", params: try wikiAgentRegistrationParams("agent-register")))
     case "agent-identify":
-      try printJSON(UnixJSONRPCClient().call(method: "wiki.agent.identify", params: try wikiAgentRegistrationParams("agent-identify")))
+      try printJSON(UnixJSONRPCClient().call(method: "wiki.agent.identify", params: try wikiAgentIdentifyParams()))
     case "agent-heartbeat":
       try printJSON(UnixJSONRPCClient().call(method: "wiki.agent.heartbeat", params: try wikiAgentHeartbeatParams()))
     case "agent-retire":
-      try printJSON(UnixJSONRPCClient().call(method: "wiki.agent.retire", params: try wikiAgentRetireParams()))
-    case "whoami", "agent-whoami":
-      try printJSON(UnixJSONRPCClient().call(method: "wiki.agent.whoami", params: try wikiAgentWhoamiParams()))
-    case "agent-list":
-      try printJSON(UnixJSONRPCClient().call(method: "wiki.agent.list", params: try wikiAgentListParams()))
+      try requireWikiArgumentCount(3)
+      try printJSON(UnixJSONRPCClient().call(method: "wiki.agent.retire", params: ["agent_id": args[2]]))
     case "agent-status":
       try requireWikiArgumentCount(3)
-      try printJSON(UnixJSONRPCClient().call(method: "wiki.agent.status", params: ["agent": args[2]]))
+      try printJSON(UnixJSONRPCClient().call(method: "wiki.agent.status", params: ["agent_id": args[2]]))
     case "agent-inbox":
-      try printJSON(UnixJSONRPCClient().call(method: "wiki.agent.inbox", params: try wikiAgentInboxParams()))
-    case "agent-claim":
-      try printJSON(UnixJSONRPCClient().call(method: "wiki.agent.claim", params: try wikiAgentClaimParams()))
-    case "talk-append":
-      try printJSON(UnixJSONRPCClient().call(method: "wiki.talk.append", params: try wikiTalkAppendParams()))
-    case "mail-inbox":
-      try printJSON(UnixJSONRPCClient().call(method: "wiki.mail.inbox", params: try wikiMailInboxParams()))
-    case "mail-read":
-      try printJSON(UnixJSONRPCClient().call(method: "wiki.mail.read", params: try wikiMailReadParams()))
-    case "mail-subscribe":
-      try printJSON(UnixJSONRPCClient().call(method: "wiki.mail.subscribe", params: try wikiMailSubscribeParams()))
-    case "mail-unsubscribe":
-      try printJSON(UnixJSONRPCClient().call(method: "wiki.mail.unsubscribe", params: try wikiMailUnsubscribeParams()))
-    case "mail-subscriptions":
-      try printJSON(UnixJSONRPCClient().call(method: "wiki.mail.subscriptions", params: try wikiMailSubscriptionsParams()))
+      try requireWikiArgumentCount(3)
+      try printJSON(UnixJSONRPCClient().call(method: "wiki.agent.inbox", params: ["agent_id": args[2]]))
+    case "mail-open":
+      try printJSON(UnixJSONRPCClient().call(method: "wiki.mail.open", params: try wikiDeliveryAgentParams("mail-open")))
+    case "mail-claim":
+      try printJSON(UnixJSONRPCClient().call(method: "wiki.mail.claim", params: try wikiDeliveryAgentParams("mail-claim")))
     case "mail-mark":
       try printJSON(UnixJSONRPCClient().call(method: "wiki.mail.mark", params: try wikiMailMarkParams()))
-    case "mail-mark-all":
-      try printJSON(UnixJSONRPCClient().call(method: "wiki.mail.mark_all", params: try wikiMailMarkAllParams()))
-    case "mail-claim":
-      try printJSON(UnixJSONRPCClient().call(method: "wiki.mail.claim", params: try wikiMailClaimParams()))
+    case "mail-snooze":
+      try printJSON(UnixJSONRPCClient().call(method: "wiki.mail.snooze", params: try wikiMailSnoozeParams()))
     case "notify-poll":
-      guard args.count >= 3 else {
-        throw CLIError.commandFailed("wiki notify-poll requires an agent id")
-      }
-      try requireWikiArgumentCount(3)
-      try printJSON(UnixJSONRPCClient().call(method: "wiki.notify.poll", params: ["agent": args[2]]))
+      try printJSON(UnixJSONRPCClient().call(method: "wiki.notify.poll", params: try wikiNotifyPollParams()))
     case "notify-ack":
       try printJSON(UnixJSONRPCClient().call(method: "wiki.notify.ack", params: try wikiNotifyAckParams()))
+    case "notify-dispatch":
+      try printJSON(UnixJSONRPCClient().call(method: "wiki.notify.dispatch", params: try wikiNotifyDispatchParams()))
+    case "talk-append":
+      try printJSON(UnixJSONRPCClient().call(method: "wiki.talk.append", params: try wikiTalkAppendParams()))
     case "publish-status":
       try requireWikiArgumentCount(2)
       try printJSON(UnixJSONRPCClient().call(method: "wiki.publish.status"))
@@ -458,6 +452,156 @@ struct OneContextCLI {
     default:
       throw CLIError.commandFailed("Unknown wiki subcommand: \(args[1])")
     }
+  }
+
+  static func capture() throws {
+    guard args.count >= 2 else {
+      throw CLIError.commandFailed("capture requires a subcommand")
+    }
+
+    if args.count == 2, ["--help", "-h", "help"].contains(args[1]) {
+      printCaptureHelp()
+      return
+    }
+
+    switch args[1] {
+    case "status":
+      try requireCaptureArgumentCount(2)
+      try printJSON(UnixJSONRPCClient().call(method: "capture.status"))
+    case "snapshot":
+      try requireCaptureArgumentCount(2)
+      try printJSON(UnixJSONRPCClient(timeoutMilliseconds: 10_000).call(method: "capture.snapshot"))
+    case "metadata-sample":
+      try captureMetadataSample()
+    case "dashboard":
+      try captureDashboard()
+    case "dashboard-gui":
+      try requireCaptureArgumentCount(2)
+      try launchCaptureDashboardGUI()
+    default:
+      throw CLIError.commandFailed("Unknown capture subcommand: \(args[1])")
+    }
+  }
+
+  static func captureMetadataSample() throws {
+    let options = try captureMetadataSampleOptions()
+    let timeoutMilliseconds = Int32((options.durationSeconds + 10) * 1_000)
+    try printJSON(UnixJSONRPCClient(timeoutMilliseconds: timeoutMilliseconds).call(
+      method: "capture.active_window_metadata_sample",
+      params: [
+        "duration_seconds": options.durationSeconds,
+        "max_frames": options.maxFrames
+      ]
+    ))
+  }
+
+  struct CaptureMetadataSampleOptions {
+    var durationSeconds: TimeInterval
+    var maxFrames: Int
+  }
+
+  static func captureMetadataSampleOptions() throws -> CaptureMetadataSampleOptions {
+    var durationSeconds: TimeInterval = 3
+    var maxFrames = 30
+    var index = 2
+    while index < args.count {
+      switch args[index] {
+      case "--duration-seconds":
+        index += 1
+        guard index < args.count, let parsed = Double(args[index]), parsed > 0 else {
+          throw CLIError.commandFailed("capture metadata-sample requires a positive value for --duration-seconds")
+        }
+        durationSeconds = parsed
+        index += 1
+      case "--max-frames":
+        index += 1
+        guard index < args.count, let parsed = Int(args[index]), parsed > 0 else {
+          throw CLIError.commandFailed("capture metadata-sample requires a positive integer for --max-frames")
+        }
+        maxFrames = parsed
+        index += 1
+      default:
+        throw CLIError.unknownArgument(args[index])
+      }
+    }
+    return CaptureMetadataSampleOptions(durationSeconds: durationSeconds, maxFrames: maxFrames)
+  }
+
+  static func launchCaptureDashboardGUI() throws {
+    let fileManager = FileManager.default
+    let sibling = currentExecutablePath().map {
+      URL(fileURLWithPath: $0).deletingLastPathComponent().appendingPathComponent("onecontext-capture-dashboard").path
+    }
+    let candidates = [
+      sibling,
+      Optional(installedAppBundleURL().appendingPathComponent("Contents/MacOS/onecontext-capture-dashboard").path),
+      Optional(URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+        .appendingPathComponent("target/debug/onecontext-capture-dashboard").path),
+      Optional(URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+        .appendingPathComponent("target/release/onecontext-capture-dashboard").path)
+    ].compactMap { $0 }
+
+    guard let executable = candidates.first(where: { fileManager.isExecutableFile(atPath: $0) }) else {
+      throw CLIError.commandFailed("Could not find onecontext-capture-dashboard. Build the Rust dashboard first.")
+    }
+
+    let process = Process()
+    process.executableURL = URL(fileURLWithPath: executable)
+    process.environment = ProcessInfo.processInfo.environment
+    try process.run()
+    print("Opened 1Context Capture Dashboard GUI: \(executable)")
+  }
+
+  static func captureDashboard() throws {
+    let options = try captureDashboardOptions()
+    repeat {
+      if options.captureFreshSnapshot {
+        _ = try? UnixJSONRPCClient(timeoutMilliseconds: 10_000).call(method: "capture.snapshot")
+      }
+      print("\u{001B}[2J\u{001B}[H", terminator: "")
+      print(try OneContextCaptureDashboard(runtimePaths: RuntimePaths.current()).render())
+      fflush(stdout)
+      if options.watch {
+        Thread.sleep(forTimeInterval: options.intervalSeconds)
+      }
+    } while options.watch
+  }
+
+  struct CaptureDashboardOptions {
+    var captureFreshSnapshot: Bool
+    var watch: Bool
+    var intervalSeconds: TimeInterval
+  }
+
+  static func captureDashboardOptions() throws -> CaptureDashboardOptions {
+    var captureFreshSnapshot = false
+    var watch = false
+    var intervalSeconds: TimeInterval = 2
+    var index = 2
+    while index < args.count {
+      switch args[index] {
+      case "--snapshot":
+        captureFreshSnapshot = true
+        index += 1
+      case "--watch":
+        watch = true
+        index += 1
+      case "--interval-seconds":
+        index += 1
+        guard index < args.count, let parsed = Double(args[index]), parsed > 0 else {
+          throw CLIError.commandFailed("capture dashboard requires a positive value for --interval-seconds")
+        }
+        intervalSeconds = parsed
+        index += 1
+      default:
+        throw CLIError.unknownArgument(args[index])
+      }
+    }
+    return CaptureDashboardOptions(
+      captureFreshSnapshot: captureFreshSnapshot,
+      watch: watch,
+      intervalSeconds: intervalSeconds
+    )
   }
 
   static func wikiPageCreateParams() throws -> [String: Any] {
@@ -570,108 +714,7 @@ struct OneContextCLI {
     return params
   }
 
-  static func wikiPageWatchParams() throws -> [String: Any] {
-    guard args.count >= 3 else {
-      throw CLIError.commandFailed("wiki page-watch requires a page id or route")
-    }
-    var params = try wikiParams(
-      startIndex: 3,
-      valueFlags: [
-        "--agent-id": "agent_id",
-        "--list": "list",
-        "--ttl-seconds": "ttl_seconds"
-      ],
-      repeatedFlags: ["--kind": "kinds"]
-    )
-    guard params["agent_id"] != nil else {
-      throw CLIError.commandFailed("wiki page-watch requires --agent-id")
-    }
-    params["page"] = args[2]
-    return params
-  }
-
-  static func wikiPageUnwatchParams() throws -> [String: Any] {
-    guard args.count >= 3 else {
-      throw CLIError.commandFailed("wiki page-unwatch requires a page id or route")
-    }
-    var params = try wikiParams(
-      startIndex: 3,
-      valueFlags: [
-        "--agent-id": "agent_id",
-        "--list": "list"
-      ],
-      repeatedFlags: ["--kind": "kinds"]
-    )
-    guard params["agent_id"] != nil else {
-      throw CLIError.commandFailed("wiki page-unwatch requires --agent-id")
-    }
-    params["page"] = args[2]
-    return params
-  }
-
-  static func wikiPageAssignRoleParams() throws -> [String: Any] {
-    guard args.count >= 3 else {
-      throw CLIError.commandFailed("wiki page-assign-role requires a page id or route")
-    }
-    var params = try wikiParams(
-      startIndex: 3,
-      valueFlags: [
-        "--agent-id": "agent_id",
-        "--role": "role",
-        "--ttl-seconds": "ttl_seconds"
-      ],
-      repeatedFlags: ["--kind": "kinds"]
-    )
-    for required in ["agent_id", "role"] where params[required] == nil {
-      throw CLIError.commandFailed("wiki page-assign-role requires --\(required.replacingOccurrences(of: "_", with: "-"))")
-    }
-    params["page"] = args[2]
-    return params
-  }
-
-  static func wikiListCreateParams() throws -> [String: Any] {
-    let params = try wikiParams(
-      startIndex: 2,
-      valueFlags: [
-        "--address": "address",
-        "--title": "title",
-        "--description": "description",
-        "--page": "page",
-        "--owner": "owner"
-      ]
-    )
-    guard params["address"] != nil else {
-      throw CLIError.commandFailed("wiki list-create requires --address")
-    }
-    return params
-  }
-
-  static func wikiListsParams() throws -> [String: Any] {
-    try wikiParams(
-      startIndex: 2,
-      valueFlags: [
-        "--page": "page",
-        "--address": "address"
-      ]
-    )
-  }
-
-  static func wikiListStatusParams() throws -> [String: Any] {
-    guard args.count >= 3 else {
-      throw CLIError.commandFailed("wiki list-status requires a list address")
-    }
-    var params = try wikiParams(
-      startIndex: 3,
-      boolFlags: [
-        "--include-archived": "include_archived",
-        "--include-snoozed": "include_snoozed"
-      ]
-    )
-    params["address"] = args[2]
-    return params
-  }
-
-  static func wikiAgentRegistrationParams(_ commandName: String) throws -> [String: Any] {
+  static func wikiAgentIdentifyParams() throws -> [String: Any] {
     let params = try wikiParams(
       startIndex: 2,
       valueFlags: [
@@ -684,7 +727,7 @@ struct OneContextCLI {
       ]
     )
     guard params["thread_id"] != nil else {
-      throw CLIError.commandFailed("wiki \(commandName) requires --thread-id")
+      throw CLIError.commandFailed("wiki agent-identify requires --thread-id")
     }
     return params
   }
@@ -694,64 +737,98 @@ struct OneContextCLI {
       throw CLIError.commandFailed("wiki agent-heartbeat requires an agent id")
     }
     var params = try wikiParams(startIndex: 3, valueFlags: ["--ttl-seconds": "ttl_seconds"])
-    params["agent"] = args[2]
+    params["agent_id"] = args[2]
     return params
   }
 
-  static func wikiAgentRetireParams() throws -> [String: Any] {
+  static func wikiDeliveryAgentParams(_ command: String) throws -> [String: Any] {
     guard args.count >= 3 else {
-      throw CLIError.commandFailed("wiki agent-retire requires an agent id")
+      throw CLIError.commandFailed("wiki \(command) requires a delivery id")
     }
-    var params = try wikiParams(startIndex: 3, valueFlags: ["--reason": "reason"])
-    params["agent"] = args[2]
+    var params = try wikiParams(startIndex: 3, valueFlags: ["--agent-id": "agent_id"])
+    guard params["agent_id"] != nil else {
+      throw CLIError.commandFailed("wiki \(command) requires --agent-id")
+    }
+    params["delivery_id"] = args[2]
     return params
   }
 
-  static func wikiAgentWhoamiParams() throws -> [String: Any] {
-    let params = try wikiParams(
-      startIndex: 2,
-      valueFlags: [
-        "--thread-id": "thread_id",
-        "--agent-id": "agent_id"
-      ]
-    )
-    if params["thread_id"] == nil && params["agent_id"] == nil {
-      throw CLIError.commandFailed("wiki whoami requires --thread-id or --agent-id")
-    }
-    return params
-  }
-
-  static func wikiAgentListParams() throws -> [String: Any] {
-    try wikiParams(
-      startIndex: 2,
-      boolFlags: [
-        "--include-stale": "include_stale",
-        "--include-retired": "include_retired"
-      ]
-    )
-  }
-
-  static func wikiAgentInboxParams() throws -> [String: Any] {
+  static func wikiMailMarkParams() throws -> [String: Any] {
     guard args.count >= 3 else {
-      throw CLIError.commandFailed("wiki agent-inbox requires an agent id")
+      throw CLIError.commandFailed("wiki mail-mark requires a delivery id")
     }
     var params = try wikiParams(
       startIndex: 3,
-      boolFlags: [
-        "--include-archived": "include_archived",
-        "--include-snoozed": "include_snoozed"
+      valueFlags: [
+        "--agent-id": "agent_id",
+        "--state": "state"
       ]
     )
-    params["agent"] = args[2]
+    for required in ["agent_id", "state"] where params[required] == nil {
+      throw CLIError.commandFailed("wiki mail-mark requires --\(required.replacingOccurrences(of: "_", with: "-"))")
+    }
+    params["delivery_id"] = args[2]
     return params
   }
 
-  static func wikiAgentClaimParams() throws -> [String: Any] {
-    guard args.count >= 4 else {
-      throw CLIError.commandFailed("wiki agent-claim requires an agent id and message id")
+  static func wikiMailSnoozeParams() throws -> [String: Any] {
+    guard args.count >= 3 else {
+      throw CLIError.commandFailed("wiki mail-snooze requires a delivery id")
     }
-    try requireWikiArgumentCount(4)
-    return ["agent": args[2], "message": args[3]]
+    var params = try wikiParams(
+      startIndex: 3,
+      valueFlags: [
+        "--agent-id": "agent_id",
+        "--until": "until"
+      ]
+    )
+    guard params["agent_id"] != nil else {
+      throw CLIError.commandFailed("wiki mail-snooze requires --agent-id")
+    }
+    guard params["until"] != nil else {
+      throw CLIError.commandFailed("wiki mail-snooze requires --until")
+    }
+    params["delivery_id"] = args[2]
+    return params
+  }
+
+  static func wikiNotifyPollParams() throws -> [String: Any] {
+    guard args.count >= 3 else {
+      throw CLIError.commandFailed("wiki notify-poll requires an agent id")
+    }
+    var params = try wikiParams(startIndex: 3, valueFlags: ["--cursor": "cursor"])
+    params["agent_id"] = args[2]
+    return params
+  }
+
+  static func wikiNotifyAckParams() throws -> [String: Any] {
+    guard args.count >= 3 else {
+      throw CLIError.commandFailed("wiki notify-ack requires a notification id")
+    }
+    var params = try wikiParams(startIndex: 3, valueFlags: ["--agent-id": "agent_id"])
+    guard params["agent_id"] != nil else {
+      throw CLIError.commandFailed("wiki notify-ack requires --agent-id")
+    }
+    params["notification_id"] = args[2]
+    return params
+  }
+
+  static func wikiNotifyDispatchParams() throws -> [String: Any] {
+    guard args.count >= 3 else {
+      throw CLIError.commandFailed("wiki notify-dispatch requires an agent id")
+    }
+    var params = try wikiParams(
+      startIndex: 3,
+      valueFlags: [
+        "--steering-command": "steering_command",
+        "--payload-format": "payload_format",
+        "--limit": "limit"
+      ],
+      repeatedFlags: ["--steering-arg": "steering_args"],
+      boolFlags: ["--dry-run": "dry_run"]
+    )
+    params["agent_id"] = args[2]
+    return params
   }
 
   static func wikiTalkAppendParams() throws -> [String: Any] {
@@ -766,14 +843,14 @@ struct OneContextCLI {
         "--from": "from",
         "--thread-id": "thread_id",
         "--reply-to": "reply_to",
+        "--operation-id": "operation_id",
+        "--delivery-mode": "delivery_mode",
         "--body": "body",
         "--body-file": "body_file"
       ],
       repeatedFlags: [
         "--to": "to",
-        "--to-role": "toRoles",
         "--cc": "cc",
-        "--cc-role": "ccRoles",
         "--attachment": "attachments",
         "--attachment-filename": "attachment_filenames",
         "--attachment-caption": "attachment_captions",
@@ -818,151 +895,6 @@ struct OneContextCLI {
         throw CLIError.commandFailed("wiki talk-append received \(flag) metadata without a matching --attachment")
       }
     }
-  }
-
-  static func wikiMailInboxParams() throws -> [String: Any] {
-    guard args.count >= 3 else {
-      throw CLIError.commandFailed("wiki mail-inbox requires a recipient address")
-    }
-    var params = try wikiParams(
-      startIndex: 3,
-      boolFlags: [
-        "--include-archived": "include_archived",
-        "--include-snoozed": "include_snoozed"
-      ]
-    )
-    params["recipient"] = args[2]
-    return params
-  }
-
-  static func wikiMailReadParams() throws -> [String: Any] {
-    let params = try wikiParams(
-      startIndex: 2,
-      valueFlags: [
-        "--message-id": "message_id",
-        "--thread-id": "thread_id"
-      ]
-    )
-    if params["message_id"] == nil && params["thread_id"] == nil {
-      throw CLIError.commandFailed("wiki mail-read requires --message-id or --thread-id")
-    }
-    return params
-  }
-
-  static func wikiMailSubscribeParams() throws -> [String: Any] {
-    let params = try wikiParams(
-      startIndex: 2,
-      valueFlags: [
-        "--agent-id": "agent_id",
-        "--address": "address",
-        "--relation": "relation",
-        "--ttl-seconds": "ttl_seconds"
-      ],
-      repeatedFlags: ["--kind": "kinds"]
-    )
-    for required in ["agent_id", "address"] where params[required] == nil {
-      throw CLIError.commandFailed("wiki mail-subscribe requires --\(required.replacingOccurrences(of: "_", with: "-"))")
-    }
-    return params
-  }
-
-  static func wikiMailUnsubscribeParams() throws -> [String: Any] {
-    let params = try wikiParams(
-      startIndex: 2,
-      valueFlags: [
-        "--agent-id": "agent_id",
-        "--address": "address",
-        "--relation": "relation"
-      ],
-      repeatedFlags: ["--kind": "kinds"]
-    )
-    for required in ["agent_id", "address"] where params[required] == nil {
-      throw CLIError.commandFailed("wiki mail-unsubscribe requires --\(required.replacingOccurrences(of: "_", with: "-"))")
-    }
-    return params
-  }
-
-  static func wikiMailSubscriptionsParams() throws -> [String: Any] {
-    try wikiParams(
-      startIndex: 2,
-      valueFlags: [
-        "--agent-id": "agent_id",
-        "--address": "address"
-      ]
-    )
-  }
-
-  static func wikiMailMarkParams() throws -> [String: Any] {
-    guard args.count >= 3 else {
-      throw CLIError.commandFailed("wiki mail-mark requires a message id")
-    }
-    var params = try wikiParams(
-      startIndex: 3,
-      valueFlags: [
-        "--recipient": "recipient",
-        "--state": "state",
-        "--until": "until"
-      ]
-    )
-    for required in ["recipient", "state"] where params[required] == nil {
-      throw CLIError.commandFailed("wiki mail-mark requires --\(required)")
-    }
-    params["message"] = args[2]
-    return params
-  }
-
-  static func wikiMailMarkAllParams() throws -> [String: Any] {
-    guard args.count >= 3 else {
-      throw CLIError.commandFailed("wiki mail-mark-all requires a message id")
-    }
-    var params = try wikiParams(
-      startIndex: 3,
-      valueFlags: [
-        "--state": "state",
-        "--until": "until"
-      ]
-    )
-    guard params["state"] != nil else {
-      throw CLIError.commandFailed("wiki mail-mark-all requires --state")
-    }
-    params["message"] = args[2]
-    return params
-  }
-
-  static func wikiMailClaimParams() throws -> [String: Any] {
-    guard args.count >= 3 else {
-      throw CLIError.commandFailed("wiki mail-claim requires a message id")
-    }
-    var params = try wikiParams(
-      startIndex: 3,
-      valueFlags: [
-        "--recipient": "recipient",
-        "--agent-id": "agent_id"
-      ]
-    )
-    for required in ["recipient", "agent_id"] where params[required] == nil {
-      throw CLIError.commandFailed("wiki mail-claim requires --\(required)")
-    }
-    params["message"] = args[2]
-    return params
-  }
-
-  static func wikiNotifyAckParams() throws -> [String: Any] {
-    guard args.count >= 3 else {
-      throw CLIError.commandFailed("wiki notify-ack requires a notification id")
-    }
-    var params = try wikiParams(
-      startIndex: 3,
-      valueFlags: [
-        "--agent-id": "agent_id",
-        "--state": "state"
-      ]
-    )
-    guard params["agent_id"] != nil else {
-      throw CLIError.commandFailed("wiki notify-ack requires --agent-id")
-    }
-    params["notification"] = args[2]
-    return params
   }
 
   static func wikiPublishParams() throws -> [String: Any] {
@@ -1046,6 +978,15 @@ struct OneContextCLI {
     }
     guard args.count == count else {
       throw CLIError.commandFailed("wiki \(args[1]) expected \(count - 2) argument(s)")
+    }
+  }
+
+  static func requireCaptureArgumentCount(_ count: Int) throws {
+    if args.count > count {
+      throw CLIError.unknownArgument(args[count])
+    }
+    guard args.count == count else {
+      throw CLIError.commandFailed("capture \(args[1]) expected \(count - 2) argument(s)")
     }
   }
 
@@ -1138,34 +1079,19 @@ struct OneContextCLI {
     "asset-list": "wiki.asset.list",
     "page-delete": "wiki.page.delete",
     "page-restore": "wiki.page.restore",
-    "page-watch": "wiki.page.watch",
-    "page-unwatch": "wiki.page.unwatch",
-    "page-assign-role": "wiki.page.assign_role",
-    "list-create": "wiki.list.create",
-    "lists": "wiki.lists",
-    "list-status": "wiki.list.status",
-    "list-members": "wiki.list.members",
-    "agent-register": "wiki.agent.register",
     "agent-identify": "wiki.agent.identify",
     "agent-heartbeat": "wiki.agent.heartbeat",
     "agent-retire": "wiki.agent.retire",
-    "whoami": "wiki.agent.whoami",
-    "agent-whoami": "wiki.agent.whoami",
-    "agent-list": "wiki.agent.list",
     "agent-status": "wiki.agent.status",
     "agent-inbox": "wiki.agent.inbox",
-    "agent-claim": "wiki.agent.claim",
-    "talk-append": "wiki.talk.append",
-    "mail-inbox": "wiki.mail.inbox",
-    "mail-read": "wiki.mail.read",
-    "mail-subscribe": "wiki.mail.subscribe",
-    "mail-unsubscribe": "wiki.mail.unsubscribe",
-    "mail-subscriptions": "wiki.mail.subscriptions",
-    "mail-mark": "wiki.mail.mark",
-    "mail-mark-all": "wiki.mail.mark_all",
+    "mail-open": "wiki.mail.open",
     "mail-claim": "wiki.mail.claim",
+    "mail-mark": "wiki.mail.mark",
+    "mail-snooze": "wiki.mail.snooze",
     "notify-poll": "wiki.notify.poll",
     "notify-ack": "wiki.notify.ack",
+    "notify-dispatch": "wiki.notify.dispatch",
+    "talk-append": "wiki.talk.append",
     "publish-status": "wiki.publish.status",
     "publish": "wiki.publish"
   ]

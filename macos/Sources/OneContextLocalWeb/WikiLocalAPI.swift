@@ -115,6 +115,19 @@ public struct WikiLocalAPIResponse: Sendable {
       body: data
     )
   }
+
+  public static func html(_ body: String, statusCode: Int = 200, reason: String = "OK") -> WikiLocalAPIResponse {
+    WikiLocalAPIResponse(
+      statusCode: statusCode,
+      reason: reason,
+      headers: [
+        "Content-Type": "text/html; charset=utf-8",
+        "Cache-Control": "no-store",
+        "X-Content-Type-Options": "nosniff"
+      ],
+      body: Data(body.utf8)
+    )
+  }
 }
 
 public final class WikiLocalAPIHandler: @unchecked Sendable {
@@ -123,19 +136,96 @@ public final class WikiLocalAPIHandler: @unchecked Sendable {
   private let paths: LocalWebPaths
   private let fileManager: FileManager
   private let renderState: @Sendable () -> String
+  private let memoryStatus: () -> [String: Any]
+  private let memoryViewport: ([String: String]) -> [String: Any]
+  private let memoryObject: ([String: String]) -> [String: Any]
+  private let memoryDensity: ([String: String]) -> [String: Any]
+  private let memoryEdges: ([String: String]) -> [String: Any]
+  private let memorySearch: ([String: String]) -> [String: Any]
 
   public init(
     paths: LocalWebPaths,
     fileManager: FileManager = .default,
-    renderState: @escaping @Sendable () -> String = { "idle" }
+    renderState: @escaping @Sendable () -> String = { "idle" },
+    memoryStatus: @escaping () -> [String: Any] = { ["status": "unavailable"] },
+    memoryViewport: @escaping ([String: String]) -> [String: Any] = { _ in
+      [
+        "schema_version": 1,
+        "surface": "memory_viewport",
+        "protocol": "memory.queryViewport.v1",
+        "status": "unavailable",
+        "object_count": 0,
+        "sources": [],
+        "objects": []
+      ]
+    },
+    memoryObject: @escaping ([String: String]) -> [String: Any] = { query in
+      [
+        "schema_version": 1,
+        "surface": "memory_object_hydration",
+        "protocol": "memory.hydrateObjects.v1",
+        "status": "unavailable",
+        "object_id": query["object_id"] ?? query["id"] ?? "",
+        "object": NSNull()
+      ]
+    },
+    memoryDensity: @escaping ([String: String]) -> [String: Any] = { _ in
+      [
+        "schema_version": 1,
+        "surface": "memory_density",
+        "protocol": "memory.queryDensity.v1",
+        "status": "unavailable",
+        "buckets": []
+      ]
+    },
+    memoryEdges: @escaping ([String: String]) -> [String: Any] = { query in
+      [
+        "schema_version": 1,
+        "surface": "memory_edges",
+        "protocol": "memory.queryEdges.v1",
+        "status": "unavailable",
+        "object_id": query["object_id"] ?? query["id"] ?? "",
+        "edges": []
+      ]
+    },
+    memorySearch: @escaping ([String: String]) -> [String: Any] = { query in
+      [
+        "schema_version": 1,
+        "surface": "memory_search",
+        "protocol": "memory.searchText.v1",
+        "status": "unavailable",
+        "query": query["q"] ?? query["query"] ?? "",
+        "objects": []
+      ]
+    }
   ) {
     self.paths = paths
     self.fileManager = fileManager
     self.renderState = renderState
+    self.memoryStatus = memoryStatus
+    self.memoryViewport = memoryViewport
+    self.memoryObject = memoryObject
+    self.memoryDensity = memoryDensity
+    self.memoryEdges = memoryEdges
+    self.memorySearch = memorySearch
   }
 
   public func handle(_ request: WikiLocalAPIRequest) -> WikiLocalAPIResponse {
     switch (request.method, request.path) {
+    case ("GET", "/memory"):
+      return .html(memoryViewerHTML())
+    case ("GET", "/api/memory/status"):
+      return .json(browserSafeMemoryPayload(memoryStatus()))
+    case ("GET", "/api/memory/viewport"), ("POST", "/api/memory/viewport"):
+      return .json(browserSafeMemoryPayload(memoryViewport(memoryQueryParameters(request))))
+    case ("GET", "/api/memory/object"), ("POST", "/api/memory/object"):
+      return .json(browserSafeMemoryPayload(memoryObject(memoryQueryParameters(request))))
+    case ("GET", "/api/memory/density"), ("POST", "/api/memory/density"):
+      return .json(browserSafeMemoryPayload(memoryDensity(memoryQueryParameters(request))))
+    case ("GET", "/api/memory/edges"), ("POST", "/api/memory/edges"):
+      return .json(browserSafeMemoryPayload(memoryEdges(memoryQueryParameters(request))))
+    case ("GET", "/api/memory/search"), ("POST", "/api/memory/search"):
+      return .json(browserSafeMemoryPayload(memorySearch(memoryQueryParameters(request))))
     case ("GET", "/api/wiki/health"):
       return .json(healthPayload())
     case ("GET", "/api/wiki/search"):
@@ -289,6 +379,610 @@ public final class WikiLocalAPIHandler: @unchecked Sendable {
       return nil
     }
     return object
+  }
+
+  private func memoryQueryParameters(_ request: WikiLocalAPIRequest) -> [String: String] {
+    var parameters = request.query
+    guard let body = decodeJSONObject(request.body) else {
+      return parameters
+    }
+    for (key, value) in body {
+      switch value {
+      case let string as String:
+        parameters[key] = string
+      case let number as NSNumber:
+        parameters[key] = number.stringValue
+      case let array as [String]:
+        parameters[key] = array.joined(separator: ",")
+      case let array as [Any]:
+        parameters[key] = array.compactMap { $0 as? String }.joined(separator: ",")
+      default:
+        continue
+      }
+    }
+    return parameters
+  }
+
+  private func browserSafeMemoryPayload(_ payload: [String: Any]) -> [String: Any] {
+    redactBrowserVisibleValue(payload) as? [String: Any] ?? payload
+  }
+
+  private func redactBrowserVisibleValue(_ value: Any) -> Any {
+    if let object = value as? [String: Any] {
+      return object.mapValues { redactBrowserVisibleValue($0) }
+    }
+    if let array = value as? [Any] {
+      return array.map { redactBrowserVisibleValue($0) }
+    }
+    guard var string = value as? String else {
+      return value
+    }
+
+    let appSupportRoot = paths.directory.deletingLastPathComponent().path
+    let appSupportParent = paths.directory
+      .deletingLastPathComponent()
+      .deletingLastPathComponent()
+    let inferredRuntimeRoot = appSupportParent.deletingLastPathComponent()
+    let inferredUserContentRoot = inferredRuntimeRoot.appendingPathComponent("1Context", isDirectory: true).path
+    if string.hasPrefix("file://"),
+      let url = URL(string: string),
+      url.isFileURL
+    {
+      string = url.path
+    }
+    let replacements = [
+      (paths.wikiSiteDirectory.path, "app-support://wiki-site"),
+      (appSupportRoot, "app-support://"),
+      (inferredUserContentRoot, "user-content://"),
+      (NSHomeDirectory(), "~"),
+      (inferredRuntimeRoot.path, "runtime://")
+    ]
+    for (prefix, replacement) in replacements where !prefix.isEmpty {
+      if string == prefix {
+        string = replacement
+      } else if string.hasPrefix(prefix + "/") {
+        var suffix = String(string.dropFirst(prefix.count))
+        if replacement.hasSuffix("://"), suffix.hasPrefix("/") {
+          suffix.removeFirst()
+        }
+        string = replacement + suffix
+      }
+    }
+    return string
+  }
+
+  private func memoryViewerHTML() -> String {
+    """
+    <!doctype html>
+    <html lang="en">
+    <head>
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1">
+      <title>1Context Memory</title>
+      <style>
+        :root {
+          color-scheme: light dark;
+          --bg: #f6f5f1;
+          --ink: #161616;
+          --muted: #68645d;
+          --panel: #ffffff;
+          --line: #d8d2c5;
+          --codex: #2d6cdf;
+          --claude: #b84d2c;
+          --imessage: #0d8f65;
+          --other: #6f5aa7;
+        }
+
+        @media (prefers-color-scheme: dark) {
+          :root {
+            --bg: #151515;
+            --ink: #f2f0ea;
+            --muted: #b6b0a5;
+            --panel: #20201f;
+            --line: #393734;
+          }
+        }
+
+        * { box-sizing: border-box; }
+
+        body {
+          margin: 0;
+          background: var(--bg);
+          color: var(--ink);
+          font: 14px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        }
+
+        header {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 16px;
+          padding: 18px 22px;
+          border-bottom: 1px solid var(--line);
+        }
+
+        h1 {
+          margin: 0;
+          font-size: 18px;
+          font-weight: 700;
+        }
+
+        button {
+          appearance: none;
+          border: 1px solid var(--line);
+          background: var(--panel);
+          color: var(--ink);
+          border-radius: 8px;
+          padding: 7px 11px;
+          font: inherit;
+          cursor: pointer;
+        }
+
+        main {
+          display: grid;
+          grid-template-columns: minmax(260px, 330px) minmax(0, 1fr);
+          min-height: calc(100vh - 62px);
+        }
+
+        aside {
+          border-right: 1px solid var(--line);
+          padding: 18px;
+        }
+
+        .content { padding: 18px 22px 28px; }
+        .panel {
+          background: var(--panel);
+          border: 1px solid var(--line);
+          border-radius: 8px;
+          padding: 14px;
+        }
+
+        .metric-grid {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 10px;
+          margin-bottom: 14px;
+        }
+
+        .metric span {
+          display: block;
+          color: var(--muted);
+          font-size: 11px;
+          text-transform: uppercase;
+          letter-spacing: .04em;
+        }
+
+        .metric strong {
+          display: block;
+          margin-top: 3px;
+          font-size: 18px;
+        }
+
+        .metric small {
+          display: block;
+          margin-top: 2px;
+          color: var(--muted);
+          font-size: 12px;
+        }
+
+        .filters {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 8px;
+          margin-top: 14px;
+        }
+
+        .filters button.active {
+          border-color: var(--ink);
+          box-shadow: inset 0 0 0 1px var(--ink);
+        }
+
+        .lane {
+          display: grid;
+          grid-template-columns: 180px minmax(0, 1fr);
+          gap: 12px;
+          align-items: stretch;
+          padding: 12px 0;
+          border-bottom: 1px solid var(--line);
+        }
+
+        .lane-name {
+          font-weight: 650;
+          overflow-wrap: anywhere;
+        }
+
+        .lane-name span {
+          display: block;
+          color: var(--muted);
+          font-size: 12px;
+          font-weight: 400;
+        }
+
+        .timeline {
+          position: relative;
+          height: 34px;
+          border-radius: 8px;
+          background: color-mix(in srgb, var(--line) 42%, transparent);
+          overflow: hidden;
+        }
+
+        .bar {
+          position: absolute;
+          top: 7px;
+          min-width: 4px;
+          height: 20px;
+          border-radius: 5px;
+          background: var(--other);
+        }
+
+        .bar.codex { background: var(--codex); }
+        .bar.claude { background: var(--claude); }
+        .bar.imessage { background: var(--imessage); }
+
+        .records {
+          display: grid;
+          gap: 10px;
+          margin-top: 16px;
+        }
+
+        .record {
+          display: grid;
+          grid-template-columns: 136px minmax(0, 1fr);
+          gap: 12px;
+          background: var(--panel);
+          border: 1px solid var(--line);
+          border-radius: 8px;
+          padding: 12px;
+          cursor: pointer;
+        }
+
+        .record.selected {
+          border-color: var(--ink);
+          box-shadow: inset 0 0 0 1px var(--ink);
+        }
+
+        .stamp {
+          color: var(--muted);
+          font-size: 12px;
+          overflow-wrap: anywhere;
+        }
+
+        .title {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          font-weight: 650;
+        }
+
+        .dot {
+          width: 9px;
+          height: 9px;
+          border-radius: 999px;
+          background: var(--other);
+          flex: 0 0 auto;
+        }
+
+        .dot.codex { background: var(--codex); }
+        .dot.claude { background: var(--claude); }
+        .dot.imessage { background: var(--imessage); }
+
+        .text {
+          margin-top: 4px;
+          color: var(--muted);
+          white-space: pre-wrap;
+          overflow-wrap: anywhere;
+          max-height: 8.4em;
+          overflow: hidden;
+        }
+
+        .empty {
+          color: var(--muted);
+          padding: 24px;
+          text-align: center;
+        }
+
+        .state {
+          margin-bottom: 12px;
+          color: var(--muted);
+        }
+
+        .state.error {
+          color: #b3261e;
+          border-color: #e2a6a0;
+        }
+
+        .density, .detail {
+          margin-top: 14px;
+        }
+
+        .density-bars {
+          display: grid;
+          grid-template-columns: repeat(auto-fit, minmax(28px, 1fr));
+          align-items: end;
+          gap: 4px;
+          height: 70px;
+        }
+
+        .bucket {
+          min-height: 3px;
+          border-radius: 4px 4px 0 0;
+          background: var(--codex);
+        }
+
+        .detail pre {
+          margin: 10px 0 0;
+          max-height: 260px;
+          overflow: auto;
+          white-space: pre-wrap;
+          overflow-wrap: anywhere;
+        }
+
+        @media (max-width: 760px) {
+          main { grid-template-columns: 1fr; }
+          aside { border-right: 0; border-bottom: 1px solid var(--line); }
+          .lane { grid-template-columns: 1fr; }
+          .record { grid-template-columns: 1fr; }
+        }
+      </style>
+    </head>
+    <body>
+      <header>
+        <h1>1Context Memory</h1>
+        <button id="refresh" type="button">Refresh</button>
+      </header>
+      <main>
+        <aside>
+          <div class="metric-grid">
+            <div class="metric panel"><span>Records</span><strong id="record-count">0</strong><small id="record-detail"></small></div>
+            <div class="metric panel"><span>Sources</span><strong id="source-count">0</strong></div>
+            <div class="metric panel"><span>Daemon</span><strong id="daemon-state">-</strong></div>
+            <div class="metric panel"><span>Tick</span><strong id="tick-ms">-</strong></div>
+          </div>
+          <div class="panel">
+            <div class="lane-name">Sources</div>
+            <div id="filters" class="filters"></div>
+          </div>
+        </aside>
+        <section class="content">
+          <div id="load-state" class="state panel">Loading memory viewport...</div>
+          <div id="lanes" class="panel"></div>
+          <div id="density" class="density panel"></div>
+          <div id="detail" class="detail panel"></div>
+          <div id="records" class="records"></div>
+        </section>
+      </main>
+      <script>
+        const state = { source: "all", selectedObjectID: null };
+        const sourceClass = source => {
+          const value = String(source || "").toLowerCase();
+          if (value.includes("codex")) return "codex";
+          if (value.includes("claude")) return "claude";
+          if (value.includes("imessage")) return "imessage";
+          return "other";
+        };
+        const fmt = value => {
+          const date = value ? new Date(value) : null;
+          return date && !Number.isNaN(date.getTime()) ? date.toLocaleString() : "-";
+        };
+        const text = value => value == null ? "" : String(value);
+        const normalize = item => {
+          const record = item.record || item;
+          const envelope = record.envelope || {};
+          const sourceRecord = item.source_record || record.source_record || {};
+          const sourceValue = item.source || item.source_type || item.source_id || sourceRecord.source_key || record.connector_key || "unknown";
+          return {
+            objectID: item.object_id || record.object_id || envelope.object_id || "",
+            source: sourceValue,
+            kind: item.kind || record.kind || envelope.kind || "object",
+            title: item.display_title || record.display_title || envelope.display_title || envelope.kind || "Captured object",
+            body: item.display_text_preview || item.display_text || record.display_text_preview || record.display_text || envelope.display_text || redactionText(envelope),
+            start: item.event_start || record.event_start || envelope.event_start || item.stored_at,
+            end: item.event_end || record.event_end || envelope.event_end || envelope.event_start || item.stored_at,
+            hash: item.source_record_hash || item.source_hash || sourceRecord.source_record_hash || record.source_hash || "",
+            uri: item.source_uri || sourceRecord.source_record_key || record.source_uri || ""
+          };
+        };
+        const redactionText = envelope => {
+          const payload = envelope.payload || {};
+          if (payload.text_redacted) {
+            const count = payload.text_char_count || 0;
+            return count ? `Sensitive text redacted (${count} characters)` : "Sensitive text redacted";
+          }
+          return "No display text";
+        };
+        async function load() {
+          setLoadState("Loading memory viewport...");
+          const [status, viewport, density] = await Promise.all([
+            fetchJSON("/api/memory/status"),
+            fetchJSON(`/api/memory/viewport?limit=180&source=${encodeURIComponent(state.source)}`),
+            fetchJSON(`/api/memory/density?bucket=1m&source=${encodeURIComponent(state.source)}`).catch(error => ({ status: "unavailable", message: error.message, buckets: [] }))
+          ]);
+          const viewportProblem = protocolProblem(viewport);
+          const viewportResult = protocolResult(viewport);
+          const statusBody = status.status || {};
+          const records = (viewportResult.objects || viewportResult.records || []).map(normalize).sort((a, b) => new Date(a.start) - new Date(b.start));
+          const defaultSources = ["codex.local_sessions", "claude.local_sessions", "imessage.chat_db"];
+          const sources = Array.from(new Set([...defaultSources, ...(viewportResult.sources || []), ...records.map(r => r.source).filter(Boolean)])).sort();
+          const shownCount = viewportResult.shown_object_count ?? viewportResult.shown_record_count ?? viewportResult.object_count ?? viewportResult.record_count ?? records.length;
+          const totalCount = viewportResult.total_object_count ?? viewportResult.total_record_count ?? shownCount;
+          document.getElementById("record-count").textContent = totalCount.toLocaleString();
+          document.getElementById("record-detail").textContent = shownCount === totalCount ? "shown" : `${shownCount.toLocaleString()} shown`;
+          document.getElementById("source-count").textContent = sources.length;
+          document.getElementById("daemon-state").textContent = status.running ? "running" : "stopped";
+          document.getElementById("tick-ms").textContent = statusBody.elapsed_ms == null ? "-" : `${statusBody.elapsed_ms} ms`;
+          renderFilters(sources);
+          renderLanes(records);
+          renderDensity(density);
+          renderRecords(records.slice(-160).reverse());
+          if (state.selectedObjectID) {
+            await openObject(state.selectedObjectID, { preserveSelection: true });
+          } else {
+            renderDetail(null);
+          }
+          if (viewportProblem) {
+            setLoadState(viewportProblem, true);
+          } else {
+            setLoadState(records.length ? "" : "No memory objects in this viewport yet.");
+          }
+        }
+        function renderFilters(sources) {
+          const host = document.getElementById("filters");
+          const all = ["all", ...sources];
+          host.innerHTML = all.map(source => `<button type="button" data-source="${escapeAttr(source)}" class="${state.source === source ? "active" : ""}">${escapeHTML(source)}</button>`).join("");
+          host.querySelectorAll("button").forEach(button => {
+            button.addEventListener("click", () => {
+              state.source = button.dataset.source;
+              load();
+            });
+          });
+        }
+        function renderLanes(records) {
+          const host = document.getElementById("lanes");
+          if (!records.length) {
+            host.innerHTML = `<div class="empty">No memory objects in this viewport yet.</div>`;
+            return;
+          }
+          const times = records.flatMap(r => [new Date(r.start).getTime(), new Date(r.end).getTime()]).filter(Number.isFinite);
+          const min = Math.min(...times);
+          const max = Math.max(...times);
+          const span = Math.max(1, max - min);
+          const bySource = Map.groupBy ? Map.groupBy(records, r => r.source) : records.reduce((map, r) => {
+            if (!map.has(r.source)) map.set(r.source, []);
+            map.get(r.source).push(r);
+            return map;
+          }, new Map());
+          host.innerHTML = Array.from(bySource.entries()).map(([source, rows]) => {
+            const bars = rows.map(row => {
+              const left = Math.max(0, Math.min(100, ((new Date(row.start).getTime() - min) / span) * 100));
+              const width = Math.max(0.8, Math.min(100 - left, ((new Date(row.end).getTime() - new Date(row.start).getTime()) / span) * 100));
+              return `<span class="bar ${sourceClass(source)}" title="${escapeAttr(`${row.kind} ${fmt(row.start)}`)}" style="left:${left}%;width:${width}%"></span>`;
+            }).join("");
+            return `<div class="lane"><div class="lane-name">${escapeHTML(source)}<span>${rows.length} objects</span></div><div class="timeline">${bars}</div></div>`;
+          }).join("");
+        }
+        function renderRecords(records) {
+          const host = document.getElementById("records");
+          host.innerHTML = records.map(row => `
+            <article class="record ${state.selectedObjectID && state.selectedObjectID === row.objectID ? "selected" : ""}" data-object-id="${escapeAttr(row.objectID)}" tabindex="0" role="button">
+              <div class="stamp">${escapeHTML(fmt(row.start))}<br>${escapeHTML(row.source)}</div>
+              <div>
+                <div class="title"><span class="dot ${sourceClass(row.source)}"></span>${escapeHTML(row.title)} · ${escapeHTML(row.kind)}</div>
+                <div class="text">${escapeHTML(row.body)}</div>
+              </div>
+            </article>
+          `).join("");
+          host.querySelectorAll(".record[data-object-id]").forEach(record => {
+            const objectID = record.dataset.objectId;
+            if (!objectID) return;
+            const activate = () => openObject(objectID);
+            record.addEventListener("click", activate);
+            record.addEventListener("keydown", event => {
+              if (event.key === "Enter" || event.key === " ") {
+                event.preventDefault();
+                activate();
+              }
+            });
+          });
+        }
+        function renderDensity(payload) {
+          const host = document.getElementById("density");
+          const densityResult = protocolResult(payload);
+          const buckets = densityResult.buckets || densityResult.density || [];
+          if (!buckets.length) {
+            host.innerHTML = `<div class="lane-name">Density<span>No density buckets available.</span></div>`;
+            return;
+          }
+          const values = buckets.map(bucket => Number(bucket.object_count ?? bucket.count ?? bucket.value ?? 0));
+          const max = Math.max(1, ...values);
+          host.innerHTML = `
+            <div class="lane-name">Density<span>${buckets.length} buckets</span></div>
+            <div class="density-bars">
+              ${buckets.map((bucket, index) => {
+                const value = values[index];
+                const height = Math.max(3, Math.round((value / max) * 70));
+                return `<span class="bucket" style="height:${height}px" title="${escapeAttr(`${bucket.bucket_start || bucket.start || bucket.time || ""}: ${value}`)}"></span>`;
+              }).join("")}
+            </div>
+          `;
+        }
+        async function openObject(objectID, options = {}) {
+          state.selectedObjectID = objectID;
+          renderDetail({ status: "loading", object_id: objectID });
+          try {
+            const detail = await fetchJSON(`/api/memory/object?object_id=${encodeURIComponent(objectID)}`);
+            renderDetail(detail);
+            if (!options.preserveSelection) {
+              document.querySelectorAll(".record").forEach(item => {
+                item.classList.toggle("selected", item.dataset.objectId === objectID);
+              });
+            }
+          } catch (error) {
+            renderDetail({ status: "error", object_id: objectID, message: error.message });
+          }
+        }
+        function renderDetail(payload) {
+          const host = document.getElementById("detail");
+          if (!payload) {
+            host.innerHTML = `<div class="lane-name">Object details<span>Select an object to hydrate it.</span></div>`;
+            return;
+          }
+          if (payload.status === "loading") {
+            host.innerHTML = `<div class="lane-name">Object details<span>Loading ${escapeHTML(payload.object_id)}...</span></div>`;
+            return;
+          }
+          const detailResult = protocolResult(payload);
+          const object = detailResult.object || (detailResult.objects || [])[0] || detailResult;
+          const title = object.display_title || object.title || object.object_id || payload.object_id || "Object details";
+          const body = JSON.stringify(object, null, 2);
+          host.innerHTML = `
+            <div class="lane-name">${escapeHTML(title)}<span>${escapeHTML(payload.status || "ok")}</span></div>
+            ${payload.message ? `<div class="text">${escapeHTML(payload.message)}</div>` : ""}
+            <pre>${escapeHTML(body)}</pre>
+          `;
+        }
+        function setLoadState(message, isError = false) {
+          const host = document.getElementById("load-state");
+          host.textContent = message;
+          host.classList.toggle("error", isError);
+          host.hidden = !message;
+        }
+        async function fetchJSON(url) {
+          const response = await fetch(url);
+          const payload = await response.json().catch(() => ({}));
+          if (!response.ok) {
+            throw new Error(payload.message || payload.error || `${response.status} ${response.statusText}`);
+          }
+          return payload;
+        }
+        function protocolResult(payload) {
+          return payload && payload.result && typeof payload.result === "object" ? payload.result : (payload || {});
+        }
+        function protocolProblem(payload) {
+          if (!payload || payload.status === "ok" || payload.status == null) return "";
+          const error = payload.error && typeof payload.error === "object" ? payload.error.message : payload.error;
+          return payload.message || error || `Memory protocol ${payload.status}`;
+        }
+        function escapeHTML(value) {
+          return text(value).replace(/[&<>"']/g, char => ({
+            "&": "&amp;",
+            "<": "&lt;",
+            ">": "&gt;",
+            '"': "&quot;",
+            "'": "&#039;"
+          })[char]);
+        }
+        function escapeAttr(value) {
+          return escapeHTML(value).replace(/`/g, "&#096;");
+        }
+        document.getElementById("refresh").addEventListener("click", load);
+        load().catch(error => {
+          setLoadState(error.message, true);
+          document.getElementById("records").innerHTML = "";
+        });
+      </script>
+    </body>
+    </html>
+    """
   }
 }
 

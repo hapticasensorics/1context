@@ -112,6 +112,7 @@ public final class OneContextCaptureLogStore: @unchecked Sendable {
       eventType: "capture.window_snapshot",
       durability: .lossless,
       recordedAt: snapshot.generatedAt,
+      canonicalMetadata: windowSnapshotMetadata(snapshot, ingestedAt: currentISOTimestamp()),
       payload: snapshot
     )
     return try append(envelope, to: windowsLogURL(for: snapshot.generatedAt))
@@ -123,6 +124,7 @@ public final class OneContextCaptureLogStore: @unchecked Sendable {
       eventType: "capture.active_window_frame_metadata",
       durability: .bestEffort,
       recordedAt: metadata.capturedAt,
+      canonicalMetadata: activeWindowFrameMetadata(metadata, ingestedAt: currentISOTimestamp()),
       payload: metadata
     )
   }
@@ -133,6 +135,12 @@ public final class OneContextCaptureLogStore: @unchecked Sendable {
       eventType: anchor.captureEventType,
       durability: .bestEffort,
       recordedAt: anchor.endedAt,
+      canonicalMetadata: uxEventAnchorMetadata(
+        anchor,
+        ingestedAt: currentISOTimestamp(),
+        captureBundleID: uxCaptureBundleID(for: [anchor]),
+        index: 0
+      ),
       payload: anchor
     )
   }
@@ -145,12 +153,20 @@ public final class OneContextCaptureLogStore: @unchecked Sendable {
       var urls: [URL] = []
       urls.reserveCapacity(anchors.count)
       var linesByURL: [URL: Data] = [:]
+      let ingestedAt = currentISOTimestamp()
+      let captureBundleID = uxCaptureBundleID(for: anchors)
 
-      for anchor in anchors {
+      for (index, anchor) in anchors.enumerated() {
         let envelope = CaptureEventEnvelope(
           eventType: anchor.captureEventType,
           durability: CaptureEventDurability.bestEffort,
           recordedAt: anchor.endedAt,
+          canonicalMetadata: uxEventAnchorMetadata(
+            anchor,
+            ingestedAt: ingestedAt,
+            captureBundleID: captureBundleID,
+            index: index
+          ),
           payload: anchor
         )
         var line = try encoder.encode(envelope)
@@ -168,16 +184,60 @@ public final class OneContextCaptureLogStore: @unchecked Sendable {
   }
 
   @discardableResult
+  public func appendAXSemanticEvents(_ events: [CaptureAXSemanticEvent]) throws -> [URL] {
+    guard !events.isEmpty else { return [] }
+    return try queue.sync {
+      try prepareLocked()
+      var urls: [URL] = []
+      urls.reserveCapacity(events.count)
+      var linesByURL: [URL: Data] = [:]
+      let ingestedAt = currentISOTimestamp()
+      let captureBundleID = axSemanticCaptureBundleID(for: events)
+
+      for (index, event) in events.enumerated() {
+        let envelope = CaptureEventEnvelope(
+          eventType: event.eventType,
+          durability: CaptureEventDurability.bestEffort,
+          recordedAt: event.generatedAt,
+          canonicalMetadata: axSemanticEventMetadata(
+            event,
+            ingestedAt: ingestedAt,
+            captureBundleID: captureBundleID,
+            index: index
+          ),
+          payload: event
+        )
+        var line = try encoder.encode(envelope)
+        line.append(0x0A)
+        let url = eventsLogURL(for: event.generatedAt)
+        urls.append(url)
+        linesByURL[url, default: Data()].append(line)
+      }
+
+      for (url, data) in linesByURL {
+        try appendLineDataLocked(data, to: url)
+      }
+      return urls
+    }
+  }
+
+  @discardableResult
   public func appendEvent<Payload: Codable & Sendable>(
     eventType: String,
     durability: CaptureEventDurability,
     recordedAt: String,
+    canonicalMetadata: CaptureEventCanonicalMetadata? = nil,
     payload: Payload
   ) throws -> URL {
     let envelope = CaptureEventEnvelope(
       eventType: eventType,
       durability: durability,
       recordedAt: recordedAt,
+      canonicalMetadata: canonicalMetadata ?? genericEventMetadata(
+        eventType: eventType,
+        recordedAt: recordedAt,
+        ingestedAt: currentISOTimestamp()
+      ),
       payload: payload
     )
     return try append(envelope, to: eventsLogURL(for: recordedAt))
@@ -205,6 +265,129 @@ public final class OneContextCaptureLogStore: @unchecked Sendable {
 
   private func appendLineDataLocked(_ data: Data, to fileURL: URL) throws {
     try appendPrivateData(data, to: fileURL)
+  }
+
+  private func windowSnapshotMetadata(
+    _ snapshot: CaptureSnapshot,
+    ingestedAt: String
+  ) -> CaptureEventCanonicalMetadata {
+    CaptureEventCanonicalMetadata(
+      eventTimeStart: snapshot.generatedAt,
+      eventTimeEnd: snapshot.generatedAt,
+      ingestedAt: ingestedAt,
+      laneID: "capture.windows",
+      streamID: snapshot.activeApplication?.bundleID ?? "window_snapshot",
+      sourceRecordID: "window_snapshot:\(snapshot.generatedAt)",
+      captureBundleID: captureBundleID(for: snapshot.generatedAt),
+      privacyClass: .privateMetadata,
+      privacyShape: .windowTopology,
+      sourceClock: .systemUTC
+    )
+  }
+
+  private func activeWindowFrameMetadata(
+    _ metadata: ActiveWindowFrameMetadata,
+    ingestedAt: String
+  ) -> CaptureEventCanonicalMetadata {
+    CaptureEventCanonicalMetadata(
+      eventTimeStart: metadata.capturedAt,
+      eventTimeEnd: metadata.capturedAt,
+      ingestedAt: ingestedAt,
+      laneID: "capture.active_window_frames",
+      streamID: metadata.streamID,
+      sourceRecordID: "active_window_frame:\(metadata.streamID):\(metadata.sequence)",
+      captureBundleID: activeWindowCaptureBundleID(for: metadata),
+      privacyClass: .privateMetadata,
+      privacyShape: .frameMetadata,
+      sourceClock: .screenCaptureKit
+    )
+  }
+
+  private func uxEventAnchorMetadata(
+    _ anchor: UXEventAnchor,
+    ingestedAt: String,
+    captureBundleID: String,
+    index: Int
+  ) -> CaptureEventCanonicalMetadata {
+    CaptureEventCanonicalMetadata(
+      eventTimeStart: anchor.startedAt,
+      eventTimeEnd: anchor.endedAt,
+      ingestedAt: ingestedAt,
+      laneID: "capture.ux",
+      streamID: "ux.\(anchor.kind.rawValue)",
+      sourceRecordID: "ux:\(anchor.kind.rawValue):\(anchor.startedAt):\(anchor.endedAt):\(index)",
+      captureBundleID: captureBundleID,
+      privacyClass: .interactionMetadata,
+      privacyShape: .uxAnchor,
+      sourceClock: .cgEventTap
+    )
+  }
+
+  private func axSemanticEventMetadata(
+    _ event: CaptureAXSemanticEvent,
+    ingestedAt: String,
+    captureBundleID: String,
+    index: Int
+  ) -> CaptureEventCanonicalMetadata {
+    CaptureEventCanonicalMetadata(
+      eventTimeStart: event.generatedAt,
+      eventTimeEnd: event.generatedAt,
+      ingestedAt: ingestedAt,
+      laneID: "capture.ax_semantic",
+      streamID: "ax_semantic.\(event.kind.rawValue)",
+      sourceRecordID: "ax_semantic:\(event.kind.rawValue):\(event.generatedAt):\(index)",
+      captureBundleID: captureBundleID,
+      privacyClass: .accessibilitySemantic,
+      privacyShape: .axSemanticEvent,
+      sourceClock: .accessibilityAPI
+    )
+  }
+
+  private func genericEventMetadata(
+    eventType: String,
+    recordedAt: String,
+    ingestedAt: String
+  ) -> CaptureEventCanonicalMetadata {
+    let isAXFocusedContext = eventType == "capture.ax_focused_context"
+    return CaptureEventCanonicalMetadata(
+      eventTimeStart: recordedAt,
+      eventTimeEnd: recordedAt,
+      ingestedAt: ingestedAt,
+      laneID: isAXFocusedContext ? "capture.ax_focused_context" : "capture.events",
+      streamID: eventType,
+      sourceRecordID: "\(eventType):\(recordedAt)",
+      captureBundleID: isAXFocusedContext ? captureBundleID(for: recordedAt) : nil,
+      privacyClass: isAXFocusedContext ? .accessibilitySemantic : .privateMetadata,
+      privacyShape: isAXFocusedContext ? .axSemanticEvent : .genericPayload,
+      sourceClock: isAXFocusedContext ? .accessibilityAPI : .systemUTC
+    )
+  }
+
+  private func activeWindowCaptureBundleID(for metadata: ActiveWindowFrameMetadata) -> String {
+    let bundle = metadata.target.bundleID ?? "pid-\(metadata.target.appPID)"
+    return "active-window:\(bundle):\(metadata.target.windowID):\(metadata.streamID)"
+  }
+
+  private func uxCaptureBundleID(for anchors: [UXEventAnchor]) -> String {
+    let first = anchors.first?.startedAt ?? "empty"
+    let last = anchors.last?.endedAt ?? first
+    return "ux-anchor-batch:\(first):\(last):\(anchors.count)"
+  }
+
+  private func axSemanticCaptureBundleID(for events: [CaptureAXSemanticEvent]) -> String {
+    let first = events.first?.generatedAt ?? "empty"
+    let last = events.last?.generatedAt ?? first
+    return "ax-semantic-batch:\(first):\(last):\(events.count)"
+  }
+
+  private func captureBundleID(for timestamp: String) -> String {
+    "window-capture:\(timestamp)"
+  }
+
+  private func currentISOTimestamp() -> String {
+    let formatter = ISO8601DateFormatter()
+    formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+    return formatter.string(from: Date())
   }
 
   private func windowsLogURL(for isoTimestamp: String) -> URL {
@@ -403,7 +586,9 @@ private extension UXEventAnchorKind {
     UXEventAnchorKind.scrollBurst.captureEventType,
     UXEventAnchorKind.pointer.captureEventType,
     UXEventAnchorKind.modifiers.captureEventType,
-    UXEventAnchorKind.keyboardActivity.captureEventType
+    UXEventAnchorKind.keyboardActivity.captureEventType,
+    UXEventAnchorKind.shortcut.captureEventType,
+    UXEventAnchorKind.focusTransition.captureEventType
   ]
 }
 

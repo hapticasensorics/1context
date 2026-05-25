@@ -20,6 +20,12 @@ Current goals:
 - [1Context Wiki Engine V0 Goal](1context-wiki-engine-v0-goal.md)
   - Status: renderer slice extracted into `wiki-engine/`; current closure work
     is tracked by the Wiki Memory Runtime V0 goal.
+- [1Context Agent Mail Protocol Goal](1context-agent-mail-protocol-goal.md)
+  - Status: planning. Defines the implementation boundary for bringing agent
+    mail back beside the wiki runtime as a clean transport kernel.
+- [1Context Codex Adapter Implementation Goal](1context-codex-adapter-implementation-goal.md)
+  - Status: active. Tracks the Rust adapter spine for Codex app-server binding,
+    hooks, wake dispatch, body injection, event mirroring, and redacted proof.
 - [1Context Release Factory Goal](1context-release-factory-goal.md)
 
 Archived goals:

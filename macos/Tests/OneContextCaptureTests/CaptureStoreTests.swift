@@ -109,6 +109,57 @@ final class CaptureStoreTests: XCTestCase {
     XCTAssertNil(snapshot.windows.first?.focusMetadata)
   }
 
+  func testOldMinimalCaptureEventEnvelopeStillDecodes() throws {
+    let json = """
+      {
+        "schemaVersion": 1,
+        "eventType": "capture.window_snapshot",
+        "durability": "lossless",
+        "recordedAt": "2026-05-24T10:12:12.123Z",
+        "payload": {
+          "schemaVersion": 1,
+          "generatedAt": "2026-05-24T10:12:12.123Z",
+          "activeApplication": null,
+          "displays": [],
+          "windows": []
+        }
+      }
+      """
+
+    let envelope = try JSONDecoder().decode(CaptureEventEnvelope<CaptureSnapshot>.self, from: Data(json.utf8))
+
+    XCTAssertEqual(envelope.eventType, "capture.window_snapshot")
+    XCTAssertEqual(envelope.recordedAt, "2026-05-24T10:12:12.123Z")
+    XCTAssertNil(envelope.eventTimeStart)
+    XCTAssertNil(envelope.ingestedAt)
+    XCTAssertNil(envelope.privacyClass)
+  }
+
+  func testWindowSnapshotSerializesCanonicalTimelineSourceAndPrivacyFields() throws {
+    let root = temporaryRoot()
+    defer { try? FileManager.default.removeItem(at: root) }
+    let store = OneContextCaptureLogStore(runtimePaths: runtimePaths(root: root))
+    let snapshot = snapshot(generatedAt: "2026-05-24T10:12:12.123Z", windowID: 8, title: "new")
+
+    let logURL = try store.appendWindowSnapshot(snapshot)
+    let text = try String(contentsOf: logURL, encoding: .utf8)
+    let envelope = try firstEnvelope(from: logURL, payloadType: CaptureSnapshot.self)
+
+    XCTAssertTrue(text.contains("\"event_time_start\":\"2026-05-24T10:12:12.123Z\""))
+    XCTAssertTrue(text.contains("\"ingested_at\""))
+    XCTAssertTrue(text.contains("\"privacy_class\":\"private_metadata\""))
+    XCTAssertEqual(envelope.eventTimeStart, "2026-05-24T10:12:12.123Z")
+    XCTAssertEqual(envelope.eventTimeEnd, "2026-05-24T10:12:12.123Z")
+    XCTAssertNotNil(envelope.ingestedAt)
+    XCTAssertEqual(envelope.laneID, "capture.windows")
+    XCTAssertEqual(envelope.streamID, "com.example.Terminal")
+    XCTAssertEqual(envelope.sourceRecordID, "window_snapshot:2026-05-24T10:12:12.123Z")
+    XCTAssertEqual(envelope.captureBundleID, "window-capture:2026-05-24T10:12:12.123Z")
+    XCTAssertEqual(envelope.privacyClass, .privateMetadata)
+    XCTAssertEqual(envelope.privacyShape, .windowTopology)
+    XCTAssertEqual(envelope.sourceClock, .systemUTC)
+  }
+
   func testActiveWindowFrameMetadataIsBestEffortEventAndLatestReadable() throws {
     let root = temporaryRoot()
     defer { try? FileManager.default.removeItem(at: root) }
@@ -133,6 +184,30 @@ final class CaptureStoreTests: XCTestCase {
     XCTAssertEqual(latest.payload.dirtyRectSummary.dirtyRectCount, 2)
   }
 
+  func testActiveWindowFrameMetadataSetsCanonicalEventTimeAndSourceFields() throws {
+    let root = temporaryRoot()
+    defer { try? FileManager.default.removeItem(at: root) }
+    let store = OneContextCaptureLogStore(runtimePaths: runtimePaths(root: root))
+    let metadata = activeWindowMetadata(
+      capturedAt: "2026-05-24T10:12:12.123Z",
+      sequence: 7,
+      dirtyRectCount: 2
+    )
+
+    let logURL = try store.appendActiveWindowFrameMetadata(metadata)
+    let envelope = try firstEnvelope(from: logURL, payloadType: ActiveWindowFrameMetadata.self)
+
+    XCTAssertEqual(envelope.eventTimeStart, "2026-05-24T10:12:12.123Z")
+    XCTAssertEqual(envelope.eventTimeEnd, "2026-05-24T10:12:12.123Z")
+    XCTAssertEqual(envelope.laneID, "capture.active_window_frames")
+    XCTAssertEqual(envelope.streamID, "stream-1")
+    XCTAssertEqual(envelope.sourceRecordID, "active_window_frame:stream-1:7")
+    XCTAssertEqual(envelope.captureBundleID, "active-window:com.example.Terminal:7:stream-1")
+    XCTAssertEqual(envelope.privacyClass, .privateMetadata)
+    XCTAssertEqual(envelope.privacyShape, .frameMetadata)
+    XCTAssertEqual(envelope.sourceClock, .screenCaptureKit)
+  }
+
   func testUXEventAnchorsPersistAsBestEffortJSONLWithDashboardEventTypes() throws {
     let root = temporaryRoot()
     defer { try? FileManager.default.removeItem(at: root) }
@@ -141,7 +216,9 @@ final class CaptureStoreTests: XCTestCase {
       uxAnchor(kind: .scrollBurst, endedAt: "2026-05-24T10:12:12.123Z"),
       uxAnchor(kind: .pointer, endedAt: "2026-05-24T10:12:13.123Z"),
       uxAnchor(kind: .keyboardActivity, endedAt: "2026-05-24T10:12:14.123Z"),
-      uxAnchor(kind: .modifiers, endedAt: "2026-05-24T10:12:15.123Z")
+      uxAnchor(kind: .modifiers, endedAt: "2026-05-24T10:12:15.123Z"),
+      uxAnchor(kind: .shortcut, endedAt: "2026-05-24T10:12:16.123Z"),
+      uxAnchor(kind: .focusTransition, endedAt: "2026-05-24T10:12:17.123Z")
     ]
 
     let logURLs = try store.appendUXEventAnchors(anchors)
@@ -152,12 +229,110 @@ final class CaptureStoreTests: XCTestCase {
     XCTAssertTrue(text.contains("\"eventType\":\"capture.ux.pointer.v1\""))
     XCTAssertTrue(text.contains("\"eventType\":\"capture.ux.keyboard_activity.v1\""))
     XCTAssertTrue(text.contains("\"eventType\":\"capture.ux.modifiers.v1\""))
-    XCTAssertEqual(text.split(separator: "\n").count, 4)
+    XCTAssertTrue(text.contains("\"eventType\":\"capture.ux.shortcut.v1\""))
+    XCTAssertTrue(text.contains("\"eventType\":\"capture.ux.focus_transition.v1\""))
+    XCTAssertEqual(text.split(separator: "\n").count, 6)
     XCTAssertEqual(try mode(logURL), 0o600)
 
     let latest = try XCTUnwrap(store.latestUXEventAnchor())
-    XCTAssertEqual(latest.envelope.eventType, "capture.ux.modifiers.v1")
-    XCTAssertEqual(latest.payload.kind, .modifiers)
+    XCTAssertEqual(latest.envelope.eventType, "capture.ux.focus_transition.v1")
+    XCTAssertEqual(latest.payload.kind, .focusTransition)
+  }
+
+  func testUXEventAnchorsSetCanonicalEventTimeAndSharedBatchMetadata() throws {
+    let root = temporaryRoot()
+    defer { try? FileManager.default.removeItem(at: root) }
+    let store = OneContextCaptureLogStore(runtimePaths: runtimePaths(root: root))
+    let anchors = [
+      uxAnchor(kind: .scrollBurst, endedAt: "2026-05-24T10:12:12.123Z"),
+      uxAnchor(kind: .keyboardActivity, endedAt: "2026-05-24T10:12:13.123Z")
+    ]
+
+    let logURL = try XCTUnwrap(try store.appendUXEventAnchors(anchors).last)
+    let envelopes = try allEnvelopes(from: logURL, payloadType: UXEventAnchor.self)
+
+    XCTAssertEqual(envelopes.count, 2)
+    XCTAssertEqual(envelopes.map(\.eventTimeStart), [
+      "2026-05-24T10:12:12.000Z",
+      "2026-05-24T10:12:12.000Z"
+    ])
+    XCTAssertEqual(envelopes.map(\.eventTimeEnd), [
+      "2026-05-24T10:12:12.123Z",
+      "2026-05-24T10:12:13.123Z"
+    ])
+    XCTAssertEqual(Set(envelopes.compactMap(\.captureBundleID)).count, 1)
+    XCTAssertEqual(envelopes.map(\.laneID), ["capture.ux", "capture.ux"])
+    XCTAssertEqual(envelopes.map(\.streamID), ["ux.scroll_burst", "ux.keyboard_activity"])
+    XCTAssertEqual(envelopes.map(\.privacyClass), [.interactionMetadata, .interactionMetadata])
+    XCTAssertEqual(envelopes.map(\.privacyShape), [.uxAnchor, .uxAnchor])
+    XCTAssertEqual(envelopes.map(\.sourceClock), [.cgEventTap, .cgEventTap])
+  }
+
+  func testAXSemanticEventsPersistAsBestEffortDashboardEvents() throws {
+    let root = temporaryRoot()
+    defer { try? FileManager.default.removeItem(at: root) }
+    let store = OneContextCaptureLogStore(runtimePaths: runtimePaths(root: root))
+    let events = [
+      CaptureAXSemanticEvent(
+        kind: .focusedWindowChanged,
+        generatedAt: "2026-05-24T10:12:12.123Z",
+        activeApplication: CaptureActiveApplication(processID: 42, bundleID: "com.example.Terminal", appName: "Terminal"),
+        focusedApplicationProcessID: 42,
+        matchedWindowID: 7
+      ),
+      CaptureAXSemanticEvent(
+        kind: .selectedTextChanged,
+        generatedAt: "2026-05-24T10:12:13.123Z",
+        selection: CaptureAXSelectionContext(selectedTextRedacted: true)
+      )
+    ]
+
+    let logURLs = try store.appendAXSemanticEvents(events)
+    let logURL = try XCTUnwrap(logURLs.last)
+    let text = try String(contentsOf: logURL, encoding: .utf8)
+
+    XCTAssertTrue(text.contains("\"eventType\":\"capture.ax_semantic.focused_window_changed.v1\""))
+    XCTAssertTrue(text.contains("\"eventType\":\"capture.ax_semantic.selected_text_changed.v1\""))
+    XCTAssertTrue(text.contains("\"durability\":\"best_effort\""))
+    XCTAssertEqual(text.split(separator: "\n").count, 2)
+    XCTAssertEqual(try mode(logURL), 0o600)
+  }
+
+  func testAXSemanticEventsSetCanonicalEventTimeAndSharedBatchMetadata() throws {
+    let root = temporaryRoot()
+    defer { try? FileManager.default.removeItem(at: root) }
+    let store = OneContextCaptureLogStore(runtimePaths: runtimePaths(root: root))
+    let events = [
+      CaptureAXSemanticEvent(
+        kind: .focusedWindowChanged,
+        generatedAt: "2026-05-24T10:12:12.123Z",
+        matchedWindowID: 7
+      ),
+      CaptureAXSemanticEvent(
+        kind: .selectedTextChanged,
+        generatedAt: "2026-05-24T10:12:13.123Z",
+        selection: CaptureAXSelectionContext(selectedTextRedacted: true)
+      )
+    ]
+
+    let logURL = try XCTUnwrap(try store.appendAXSemanticEvents(events).last)
+    let envelopes = try allEnvelopes(from: logURL, payloadType: CaptureAXSemanticEvent.self)
+
+    XCTAssertEqual(envelopes.count, 2)
+    XCTAssertEqual(envelopes.map(\.eventTimeStart), [
+      "2026-05-24T10:12:12.123Z",
+      "2026-05-24T10:12:13.123Z"
+    ])
+    XCTAssertEqual(envelopes.map(\.eventTimeEnd), [
+      "2026-05-24T10:12:12.123Z",
+      "2026-05-24T10:12:13.123Z"
+    ])
+    XCTAssertEqual(Set(envelopes.compactMap(\.captureBundleID)).count, 1)
+    XCTAssertEqual(envelopes.map(\.laneID), ["capture.ax_semantic", "capture.ax_semantic"])
+    XCTAssertEqual(envelopes.map(\.streamID), ["ax_semantic.focused_window_changed", "ax_semantic.selected_text_changed"])
+    XCTAssertEqual(envelopes.map(\.privacyClass), [.accessibilitySemantic, .accessibilitySemantic])
+    XCTAssertEqual(envelopes.map(\.privacyShape), [.axSemanticEvent, .axSemanticEvent])
+    XCTAssertEqual(envelopes.map(\.sourceClock), [.accessibilityAPI, .accessibilityAPI])
   }
 
   func testRecentUXEventAnchorsCanFilterForDashboardLanes() throws {
@@ -523,7 +698,58 @@ final class CaptureStoreTests: XCTestCase {
           changedModifiers: ["command"]
         )
       )
+    case .shortcut:
+      return UXEventAnchor(
+        kind: .shortcut,
+        startedAt: "2026-05-24T10:12:12.000Z",
+        endedAt: endedAt,
+        recentTargetProcessID: 42,
+        shortcut: UXShortcutSummary(
+          eventCount: 1,
+          keyDownCount: 1,
+          autoRepeatCount: 0,
+          modifierCombinations: [
+            UXShortcutModifierCombinationSummary(modifiers: ["command"], eventCount: 1)
+          ],
+          actionCategories: [
+            UXShortcutActionCategorySummary(category: .editing, eventCount: 1)
+          ],
+          durationMilliseconds: 0
+        )
+      )
+    case .focusTransition:
+      return UXEventAnchor(
+        kind: .focusTransition,
+        startedAt: "2026-05-24T10:12:12.000Z",
+        endedAt: endedAt,
+        recentTargetProcessID: 42,
+        focusTransition: UXFocusTransitionSummary(
+          previousProcessID: nil,
+          currentProcessID: 42,
+          trigger: .keyboard,
+          currentTarget: UXFocusTargetHint(processID: 42, source: "cg_event_target_pid")
+        )
+      )
     }
+  }
+
+  private func firstEnvelope<Payload: Codable & Sendable>(
+    from url: URL,
+    payloadType: Payload.Type
+  ) throws -> CaptureEventEnvelope<Payload> {
+    try XCTUnwrap(allEnvelopes(from: url, payloadType: payloadType).first)
+  }
+
+  private func allEnvelopes<Payload: Codable & Sendable>(
+    from url: URL,
+    payloadType: Payload.Type
+  ) throws -> [CaptureEventEnvelope<Payload>] {
+    let text = try String(contentsOf: url, encoding: .utf8)
+    return try text
+      .split(separator: "\n", omittingEmptySubsequences: true)
+      .map { line in
+        try JSONDecoder().decode(CaptureEventEnvelope<Payload>.self, from: Data(line.utf8))
+      }
   }
 
   private func mode(_ url: URL) throws -> Int {

@@ -346,7 +346,7 @@ public final class OneContextUXEventTap: @unchecked Sendable {
     let startup = UXEventTapStartupBox()
     var startedThread = false
 
-    try lock.withLock {
+    lock.withLock {
       guard tap == nil, thread == nil else { return }
       callbackState.prepareForPersistentStart()
       callbackState.setLifecycle("starting")
@@ -694,10 +694,34 @@ public final class OneContextUXEventTap: @unchecked Sendable {
         kind: type == .keyDown ? .keyDown : .keyUp,
         modifierFlagsRaw: flagsRaw,
         isAutoRepeat: event.getIntegerValueField(.keyboardEventAutorepeat) != 0,
-        targetProcessID: targetPID
+        targetProcessID: targetPID,
+        shortcutCategory: type == .keyDown ? shortcutCategory(for: event, flagsRaw: flagsRaw) : nil
       )
     default:
       return nil
+    }
+  }
+
+  private static func shortcutCategory(for event: CGEvent, flagsRaw: UInt64) -> UXShortcutActionCategory? {
+    guard UXModifierNames.modifiedKeyMaskActive(flagsRaw) else {
+      return nil
+    }
+
+    switch Int(event.getIntegerValueField(.keyboardEventKeycode)) {
+    case 0, 6, 7, 8, 9, 11, 24, 27, 51:
+      return .editing
+    case 36, 48, 53, 115, 116, 119, 121, 123, 124, 125, 126:
+      return .navigation
+    case 1, 15, 31, 35, 45:
+      return .document
+    case 12, 13, 14, 17, 46, 50:
+      return .appWindow
+    case 96...111, 122:
+      return .function
+    case 49:
+      return .system
+    default:
+      return .unknownModifiedKey
     }
   }
 

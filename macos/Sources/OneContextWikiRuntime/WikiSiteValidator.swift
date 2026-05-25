@@ -30,6 +30,7 @@ public final class WikiSiteValidator: @unchecked Sendable {
     var route_count: Int
     var routes: [RouteEntry]
     var assets: [String]
+    var reference_index: ReferenceIndexSummary?
   }
 
   private struct ContentIndex: Decodable {
@@ -39,7 +40,56 @@ public final class WikiSiteValidator: @unchecked Sendable {
     var markdown_twin_count: Int
     var pages: [RouteEntry]
     var markdown_twins: [MarkdownTwin]
+    var reference_index: ReferenceIndexSummary?
     var export_allowlist: [String]
+  }
+
+  private struct ReferenceIndexSummary: Decodable, Equatable {
+    var path: String
+    var reference_count: Int
+    var asset_count: Int
+    var link_count: Int
+    var code_block_count: Int
+    var citation_count: Int
+  }
+
+  private struct ReferenceIndex: Decodable {
+    var schema_version: String
+    var reference_count: Int
+    var asset_count: Int
+    var link_count: Int
+    var code_block_count: Int
+    var citation_count: Int
+    var assets: [ReferenceAsset]
+    var links: [ReferenceLink]
+    var code_blocks: [ReferenceCodeBlock]
+    var citations: [ReferenceCitation]
+  }
+
+  private struct ReferenceAsset: Decodable {
+    var path: String
+    var citation_uri: String
+    var sha256: String
+    var bytes: Int
+  }
+
+  private struct ReferenceLink: Decodable {
+    var citation_uri: String
+    var href: String
+  }
+
+  private struct ReferenceCodeBlock: Decodable {
+    var id: String
+    var citation_uri: String
+    var sha256: String
+    var bytes: Int
+  }
+
+  private struct ReferenceCitation: Decodable {
+    var id: String
+    var citation_uri: String
+    var sha256: String
+    var bytes: Int
   }
 
   private struct RouteEntry: Codable, Equatable {
@@ -93,6 +143,11 @@ public final class WikiSiteValidator: @unchecked Sendable {
     let contentIndex = try decode(ContentIndex.self, from: contentIndexURL)
     try validate(routeManifest: routeManifest, site: site)
     try validate(contentIndex: contentIndex, routeManifest: routeManifest, site: site)
+    try validateReferenceIndex(
+      routeSummary: routeManifest.reference_index,
+      contentSummary: contentIndex.reference_index,
+      site: site
+    )
 
     return WikiSiteValidationReport(
       routeCount: routeManifest.routes.count,
@@ -221,6 +276,88 @@ public final class WikiSiteValidator: @unchecked Sendable {
     }
   }
 
+  private func validateReferenceIndex(
+    routeSummary: ReferenceIndexSummary?,
+    contentSummary: ReferenceIndexSummary?,
+    site: URL
+  ) throws {
+    guard let summary = routeSummary ?? contentSummary else {
+      return
+    }
+    if let routeSummary, let contentSummary, routeSummary != contentSummary {
+      throw failure("Route manifest and content index reference-index summaries differ.")
+    }
+    let referenceURL = try existingRelativeFile(site: site, path: summary.path, label: "reference index")
+    let index = try decode(ReferenceIndex.self, from: referenceURL)
+    guard index.schema_version == "wiki.reference-index.v1" else {
+      throw failure("Invalid reference index schema: \(index.schema_version)")
+    }
+    guard index.assets.count == index.asset_count else {
+      throw failure("Reference index asset count mismatch.")
+    }
+    guard index.links.count == index.link_count else {
+      throw failure("Reference index link count mismatch.")
+    }
+    guard index.code_blocks.count == index.code_block_count else {
+      throw failure("Reference index code block count mismatch.")
+    }
+    guard index.citations.count == index.citation_count else {
+      throw failure("Reference index citation count mismatch.")
+    }
+    guard index.reference_count == index.asset_count + index.link_count + index.code_block_count + index.citation_count else {
+      throw failure("Reference index total count mismatch.")
+    }
+    guard summary.reference_count == index.reference_count,
+          summary.asset_count == index.asset_count,
+          summary.link_count == index.link_count,
+          summary.code_block_count == index.code_block_count,
+          summary.citation_count == index.citation_count else {
+      throw failure("Reference index summary does not match index counts.")
+    }
+
+    for asset in index.assets {
+      try validateCitationURI(asset.citation_uri, label: "reference asset")
+      let assetURL = try existingRelativeFile(site: site, path: asset.path, label: "reference asset")
+      let data = try Data(contentsOf: assetURL)
+      guard data.count == asset.bytes else {
+        throw failure("Reference asset byte count mismatch for \(asset.path).")
+      }
+      guard sha256Hex(data) == asset.sha256 else {
+        throw failure("Reference asset sha256 mismatch for \(asset.path).")
+      }
+    }
+    for link in index.links {
+      try validateCitationURI(link.citation_uri, label: "reference link")
+      guard !link.href.isEmpty else {
+        throw failure("Reference link has empty href.")
+      }
+    }
+    for block in index.code_blocks {
+      try validateCitationURI(block.citation_uri, label: "reference code block")
+      guard !block.id.isEmpty else {
+        throw failure("Reference code block has empty id.")
+      }
+      guard block.sha256.range(of: #"^[0-9a-f]{64}$"#, options: .regularExpression) != nil else {
+        throw failure("Reference code block has invalid sha256.")
+      }
+      guard block.bytes >= 0 else {
+        throw failure("Reference code block has invalid byte count.")
+      }
+    }
+    for citation in index.citations {
+      try validateCitationURI(citation.citation_uri, label: "reference citation")
+      guard !citation.id.isEmpty else {
+        throw failure("Reference citation has empty id.")
+      }
+      guard citation.sha256.range(of: #"^[0-9a-f]{64}$"#, options: .regularExpression) != nil else {
+        throw failure("Reference citation has invalid sha256.")
+      }
+      guard citation.bytes >= 0 else {
+        throw failure("Reference citation has invalid byte count.")
+      }
+    }
+  }
+
   private func validateExportAllowlist(_ allowlist: [String]) throws {
     guard !allowlist.isEmpty else {
       throw failure("Static export allowlist is empty.")
@@ -248,6 +385,12 @@ public final class WikiSiteValidator: @unchecked Sendable {
   private func validateAccess(_ access: String, label: String) throws {
     guard ["private", "shared", "public"].contains(access) else {
       throw failure("Invalid access tier for \(label): \(access)")
+    }
+  }
+
+  private func validateCitationURI(_ value: String, label: String) throws {
+    guard value.hasPrefix("user-wiki://") else {
+      throw failure("Invalid citation URI for \(label): \(value)")
     }
   }
 

@@ -1,0 +1,80 @@
+{
+  "run_id": "attention-debug-20260524-215739",
+  "time_range_utc": {
+    "start": "2026-05-25T04:57:39Z",
+    "end": "2026-05-25T04:58:53Z"
+  },
+  "bundle_root": "docs/assets/attention-capture-mockup/attention-debug-20260524-215739",
+  "screen_recording": {
+    "path": "screen-recording.mov",
+    "ffprobe": {
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "width": 2940,
+          "height": 1912,
+          "r_frame_rate": "60/1",
+          "avg_frame_rate": "161/3",
+          "duration": "59.978333",
+          "nb_frames": "3220"
+        }
+      ],
+      "format": {
+        "duration": "59.978333",
+        "size": "89758469"
+      }
+    }
+  },
+  "derived_candidates": {
+    "frames_1fps_dir": "frames-1fps",
+    "frames_1fps_count": 60,
+    "frames_2fps_dir": "frames-2fps",
+    "frames_2fps_count": 120,
+    "contact_1fps": "contact-1fps.jpg",
+    "contact_2fps": "contact-2fps.jpg"
+  },
+  "capture_snapshots": {
+    "index": "snapshot-index.tsv",
+    "directory": "snapshots",
+    "attempted_count": 61,
+    "success_count": 58,
+    "error_count": 3,
+    "before": "capture-snapshot-before.json",
+    "after": "capture-snapshot-after.json",
+    "active_app_before": "Google Chrome",
+    "active_app_after": "Codex"
+  },
+  "native_metadata": {
+    "status_before": "capture-status-before.json",
+    "status_after": "capture-status-after.json",
+    "concurrent_metadata_sample": "metadata-sample.json",
+    "concurrent_metadata_sample_stderr": "metadata-sample.stderr",
+    "postcheck_metadata_sample": "metadata-sample-postcheck.json",
+    "postcheck_metadata_sample_stderr": "metadata-sample-postcheck.stderr"
+  },
+  "ux_events": {
+    "copied_source_listing": "capture-events/source-files.txt",
+    "full_copied_jsonl": "capture-events/2026-05-25.events.jsonl",
+    "run_window_jsonl": "capture-events/run-window.events.jsonl",
+    "run_window_event_count": 155,
+    "counts_by_event_type": {
+      "capture.ax_focused_context": 60,
+      "capture.ux.pointer.v1": 36,
+      "capture.ux.scroll_burst.v1": 19,
+      "capture.ux.keyboard_activity.v1": 13,
+      "capture.active_window_frame_metadata": 10,
+      "capture.ux.focus_transition.v1": 4,
+      "capture.ax_semantic.focused_window_changed.v1": 4,
+      "capture.ux.modifiers.v1": 2,
+      "capture.ax_semantic.value_changed.v1": 2,
+      "capture.ax_semantic.selected_text_changed.v1": 2,
+      "capture.ax_semantic.focused_element_changed.v1": 2,
+      "capture.ux.shortcut.v1": 1
+    }
+  },
+  "known_issues": [
+    "concurrent metadata-sample timed out while recording; postcheck metadata-sample succeeded after the run",
+    "snapshot poll samples 007-009 failed while the daemon socket was temporarily unavailable"
+  ]
+}

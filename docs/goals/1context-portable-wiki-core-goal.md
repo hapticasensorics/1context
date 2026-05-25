@@ -1,5 +1,12 @@
 # Milestone: Portable Wiki Core
 
+Status note, 2026-05-21: this is a historical milestone document. The current
+mail/notification contract is now governed by
+`docs/goals/1context-agent-mail-protocol-goal.md` and
+`docs/agent-mail-protocol.md`. Any older checklist lines below that claim
+notification outbox or `notify-*` proof should be read as superseded until the
+new protocol lands that layer deliberately.
+
 ## Goal
 
 Build the greenfield wiki core as portable infrastructure that Swift, the

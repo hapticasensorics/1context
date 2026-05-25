@@ -1,0 +1,2781 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-05-25T12:42:39.510Z",
+  "title": "Agent Mail Triad Dogfood",
+  "summary": "Three harness-born agents use wiki mail through the MCP facade. Every visible body was opened through the mail injection boundary; injection receipt recording is host-only and simulates app-server success unless a real app-server is wired in.",
+  "runtime": {
+    "run_id": "20260525T124239Z-3c011c11",
+    "evidence_dir": "/Users/paulhan/dev/1context-public-launch/test-results/agent-mail-triad-demo-20260525T124239Z-3c011c11",
+    "runtime_root": "/tmp/1context-agent-mail-triad-124239-3c011c11/1Context",
+    "command_log": "/Users/paulhan/dev/1context-public-launch/test-results/agent-mail-triad-demo-20260525T124239Z-3c011c11/commands.jsonl",
+    "mcp_protocol_log": "/Users/paulhan/dev/1context-public-launch/test-results/agent-mail-triad-demo-20260525T124239Z-3c011c11/mcp-protocol.jsonl",
+    "app_server_execution": "simulated_record_only",
+    "host_only_tools": [
+      "wiki.ensure",
+      "wiki.page.create_all",
+      "wiki.mail.record_injection"
+    ],
+    "mcp_initialize": {
+      "protocol_version": "2025-06-18",
+      "server_info": {
+        "name": "onecontext",
+        "version": "0.1.0"
+      }
+    },
+    "mcp_tools": [
+      "wiki.list",
+      "wiki.page.status",
+      "wiki.agent.identify",
+      "wiki.agent.inbox",
+      "wiki.mail.open",
+      "wiki.mail.claim",
+      "wiki.mail.mark",
+      "wiki.notify.poll",
+      "wiki.notify.ack",
+      "wiki.talk.append"
+    ],
+    "mail_control_events": "/tmp/1context-agent-mail-triad-124239-3c011c11/1Context/context-engine/mail/control-events.jsonl",
+    "injection_receipts": "/tmp/1context-agent-mail-triad-124239-3c011c11/1Context/context-engine/mail/injection-receipts.jsonl",
+    "copied_ledgers": {
+      "mail_control_events": "/Users/paulhan/dev/1context-public-launch/test-results/agent-mail-triad-demo-20260525T124239Z-3c011c11/ledgers/mail_control_events.jsonl",
+      "injection_receipts": "/Users/paulhan/dev/1context-public-launch/test-results/agent-mail-triad-demo-20260525T124239Z-3c011c11/ledgers/injection_receipts.jsonl",
+      "mail_deliveries": "/Users/paulhan/dev/1context-public-launch/test-results/agent-mail-triad-demo-20260525T124239Z-3c011c11/ledgers/mail_deliveries.jsonl",
+      "mail_claims": "/Users/paulhan/dev/1context-public-launch/test-results/agent-mail-triad-demo-20260525T124239Z-3c011c11/ledgers/mail_claims.jsonl",
+      "notifications_outbox": "/Users/paulhan/dev/1context-public-launch/test-results/agent-mail-triad-demo-20260525T124239Z-3c011c11/ledgers/notifications_outbox.jsonl"
+    },
+    "command_count": 175
+  },
+  "agents": [
+    {
+      "key": "pip",
+      "name": "Pip Promptsmith",
+      "role": "Mission Framer",
+      "accent": "#e56b5d",
+      "prompt": "Turn vague wishes into crisp mission postcards. Add one odd constraint, one acceptance check, then mail the route-builder.",
+      "role_address": "role://triad.promptsmith",
+      "unit_id": "agent-triad-pip-124239-3c011c11",
+      "agent_id": "agent_codex_ff60cb259f5e543e",
+      "thread_id": "triad-pip-thread-124239-3c011c11",
+      "session_id": "triad-pip-session-124239-3c011c11",
+      "certificate_id": "agent-cert-000000000001",
+      "mcp_server": {
+        "server_name": "onecontext",
+        "uri": "mcp://onecontext",
+        "transport": "stdio",
+        "command": "node",
+        "args": [
+          "/Users/paulhan/dev/1context-public-launch/scripts/onecontext-wiki-mcp-server.mjs",
+          "--root",
+          "/tmp/1context-agent-mail-triad-124239-3c011c11/1Context",
+          "--wiki-bin",
+          "/Users/paulhan/dev/1context-public-launch/target/debug/onecontext-wiki"
+        ],
+        "env": {
+          "ONECONTEXT_ROOT": "/tmp/1context-agent-mail-triad-124239-3c011c11/1Context",
+          "ONECONTEXT_WIKI_CORE_BIN": "/Users/paulhan/dev/1context-public-launch/target/debug/onecontext-wiki"
+        },
+        "visible_toolsets": [
+          "toolset-mail",
+          "toolset-wiki"
+        ],
+        "hidden_host_tools": [
+          "wiki.notify.dispatch",
+          "wiki.mail.record_injection"
+        ]
+      },
+      "turns_started": 6,
+      "turns_completed": 6,
+      "session": [
+        {
+          "kind": "prompt",
+          "task_id": "all",
+          "title": "standing prompt",
+          "body": "Turn vague wishes into crisp mission postcards. Add one odd constraint, one acceptance check, then mail the route-builder.",
+          "meta": [
+            "birth prompt",
+            "role://triad.promptsmith"
+          ]
+        },
+        {
+          "at": "2026-05-25T12:42:44.444Z",
+          "kind": "harness",
+          "task_id": "all",
+          "title": "born into harness",
+          "body": "Birth certificate agent-cert-000000000001; wiki directory identity agent_codex_ff60cb259f5e543e; MCP server onecontext mounted for toolset-mail and toolset-wiki.",
+          "meta": [
+            "harness.birth",
+            "wiki.agent.identify",
+            "mcp://onecontext"
+          ]
+        },
+        {
+          "at": "2026-05-25T12:42:46.445Z",
+          "kind": "mail-in",
+          "task_id": "shortcut-museum",
+          "title": "Mission control mail",
+          "body": "Opened Frame task: Tiny Museum Of Lost Keyboard Shortcuts; body entered through thread/inject_items, then Pip Promptsmith claimed the delivery. Injection success is host-only simulated app-server recording for this demo run.",
+          "notification_id": "notif_d1f5bee01f9e61fd",
+          "injection_id": "mail_injection_d62b2af851b15b3e",
+          "control_event_id": "mail_control_5ebf28fa0556fc0d",
+          "meta": [
+            "delivery_09712a4c79e978f2",
+            "notif_d1f5bee01f9e61fd",
+            "mail_injection_d62b2af851b15b3e",
+            "mail_control_5ebf28fa0556fc0d",
+            "bodyless notification",
+            "host-only wiki.mail.record_injection"
+          ]
+        },
+        {
+          "at": "2026-05-25T12:42:47.205Z",
+          "kind": "mail-done",
+          "task_id": "shortcut-museum",
+          "title": "Forwarded framed task",
+          "body": "Mission card for \"Tiny Museum Of Lost Keyboard Shortcuts\"\nOdd constraint: no exhibit label may exceed seven words.\nAcceptance check: the resulting wiki page has one summary, three links, and one open question.\nProject link: [[projects#shortcut-museum]] should be the durable coordination anchor.\nPlease map the route around a glass case for Command-Option-Whatever.",
+          "notification_id": "notif_d1f5bee01f9e61fd",
+          "injection_id": "mail_injection_d62b2af851b15b3e",
+          "control_event_id": "mail_control_5ebf28fa0556fc0d",
+          "meta": [
+            "wiki.mail.mark(done)",
+            "wiki.notify.ack",
+            "notif_d1f5bee01f9e61fd"
+          ]
+        },
+        {
+          "at": "2026-05-25T12:42:50.575Z",
+          "kind": "mail-in",
+          "task_id": "shortcut-museum",
+          "title": "Archivist closure receipt",
+          "body": "Opened Closure receipt: Tiny Museum Of Lost Keyboard Shortcuts; body entered through thread/inject_items, then Pip Promptsmith claimed the delivery. Injection success is host-only simulated app-server recording for this demo run.",
+          "notification_id": "notif_cfc91cc647607558",
+          "injection_id": "mail_injection_22229136fd2c0c63",
+          "control_event_id": "mail_control_bbd839efba3ccd89",
+          "meta": [
+            "delivery_0269e8eb54e70473",
+            "notif_cfc91cc647607558",
+            "mail_injection_22229136fd2c0c63",
+            "mail_control_bbd839efba3ccd89",
+            "bodyless notification",
+            "host-only wiki.mail.record_injection"
+          ]
+        },
+        {
+          "at": "2026-05-25T12:42:50.937Z",
+          "kind": "mail-done",
+          "task_id": "shortcut-museum",
+          "title": "Closed task loop",
+          "body": "Task loop closed for \"Tiny Museum Of Lost Keyboard Shortcuts\". Pip has the route, receipt note, and follow-up question.",
+          "notification_id": "notif_cfc91cc647607558",
+          "injection_id": "mail_injection_22229136fd2c0c63",
+          "control_event_id": "mail_control_bbd839efba3ccd89",
+          "meta": [
+            "wiki.mail.mark(done)",
+            "wiki.notify.ack",
+            "notif_cfc91cc647607558"
+          ]
+        },
+        {
+          "at": "2026-05-25T12:42:51.565Z",
+          "kind": "mail-in",
+          "task_id": "moonbase-onboarding",
+          "title": "Mission control mail",
+          "body": "Opened Frame task: Moonbase Onboarding For New Agents; body entered through thread/inject_items, then Pip Promptsmith claimed the delivery. Injection success is host-only simulated app-server recording for this demo run.",
+          "notification_id": "notif_7585d3f0890d3432",
+          "injection_id": "mail_injection_90200faffa4413f9",
+          "control_event_id": "mail_control_2caf3979e877ca09",
+          "meta": [
+            "delivery_a62cace2924c8138",
+            "notif_7585d3f0890d3432",
+            "mail_injection_90200faffa4413f9",
+            "mail_control_2caf3979e877ca09",
+            "bodyless notification",
+            "host-only wiki.mail.record_injection"
+          ]
+        },
+        {
+          "at": "2026-05-25T12:42:52.300Z",
+          "kind": "mail-done",
+          "task_id": "moonbase-onboarding",
+          "title": "Forwarded framed task",
+          "body": "Mission card for \"Moonbase Onboarding For New Agents\"\nOdd constraint: every step must leave a durable receipt.\nAcceptance check: the resulting wiki page has one summary, three links, and one open question.\nProject link: [[projects#moonbase-onboarding]] should be the durable coordination anchor.\nPlease map the route around a laminated airlock checklist.",
+          "notification_id": "notif_7585d3f0890d3432",
+          "injection_id": "mail_injection_90200faffa4413f9",
+          "control_event_id": "mail_control_2caf3979e877ca09",
+          "meta": [
+            "wiki.mail.mark(done)",
+            "wiki.notify.ack",
+            "notif_7585d3f0890d3432"
+          ]
+        },
+        {
+          "at": "2026-05-25T12:42:56.212Z",
+          "kind": "mail-in",
+          "task_id": "moonbase-onboarding",
+          "title": "Archivist closure receipt",
+          "body": "Opened Closure receipt: Moonbase Onboarding For New Agents; body entered through thread/inject_items, then Pip Promptsmith claimed the delivery. Injection success is host-only simulated app-server recording for this demo run.",
+          "notification_id": "notif_d2de2044617c854b",
+          "injection_id": "mail_injection_9a79e48bb399ac1a",
+          "control_event_id": "mail_control_0dcf6730bb074d38",
+          "meta": [
+            "delivery_634a7c0b02a4555a",
+            "notif_d2de2044617c854b",
+            "mail_injection_9a79e48bb399ac1a",
+            "mail_control_0dcf6730bb074d38",
+            "bodyless notification",
+            "host-only wiki.mail.record_injection"
+          ]
+        },
+        {
+          "at": "2026-05-25T12:42:57.303Z",
+          "kind": "mail-done",
+          "task_id": "moonbase-onboarding",
+          "title": "Closed task loop",
+          "body": "Task loop closed for \"Moonbase Onboarding For New Agents\". Pip has the route, receipt note, and follow-up question.",
+          "notification_id": "notif_d2de2044617c854b",
+          "injection_id": "mail_injection_9a79e48bb399ac1a",
+          "control_event_id": "mail_control_0dcf6730bb074d38",
+          "meta": [
+            "wiki.mail.mark(done)",
+            "wiki.notify.ack",
+            "notif_d2de2044617c854b"
+          ]
+        },
+        {
+          "at": "2026-05-25T12:42:58.083Z",
+          "kind": "mail-in",
+          "task_id": "snack-sprint",
+          "title": "Mission control mail",
+          "body": "Opened Frame task: Snack-Powered Wiki Maintenance Sprint; body entered through thread/inject_items, then Pip Promptsmith claimed the delivery. Injection success is host-only simulated app-server recording for this demo run.",
+          "notification_id": "notif_b5c94068aee67339",
+          "injection_id": "mail_injection_85304aad6aebc6e6",
+          "control_event_id": "mail_control_51abf364722be696",
+          "meta": [
+            "delivery_8d2aeabbd29829f3",
+            "notif_b5c94068aee67339",
+            "mail_injection_85304aad6aebc6e6",
+            "mail_control_51abf364722be696",
+            "bodyless notification",
+            "host-only wiki.mail.record_injection"
+          ]
+        },
+        {
+          "at": "2026-05-25T12:42:58.792Z",
+          "kind": "mail-done",
+          "task_id": "snack-sprint",
+          "title": "Forwarded framed task",
+          "body": "Mission card for \"Snack-Powered Wiki Maintenance Sprint\"\nOdd constraint: no one can claim two crunchy tasks in a row.\nAcceptance check: the resulting wiki page has one summary, three links, and one open question.\nProject link: [[projects#snack-sprint]] should be the durable coordination anchor.\nPlease map the route around a crumb-proof task board.",
+          "notification_id": "notif_b5c94068aee67339",
+          "injection_id": "mail_injection_85304aad6aebc6e6",
+          "control_event_id": "mail_control_51abf364722be696",
+          "meta": [
+            "wiki.mail.mark(done)",
+            "wiki.notify.ack",
+            "notif_b5c94068aee67339"
+          ]
+        },
+        {
+          "at": "2026-05-25T12:43:02.663Z",
+          "kind": "mail-in",
+          "task_id": "snack-sprint",
+          "title": "Archivist closure receipt",
+          "body": "Opened Closure receipt: Snack-Powered Wiki Maintenance Sprint; body entered through thread/inject_items, then Pip Promptsmith claimed the delivery. Injection success is host-only simulated app-server recording for this demo run.",
+          "notification_id": "notif_411e13f25dff76e3",
+          "injection_id": "mail_injection_d8b0af87da5871ed",
+          "control_event_id": "mail_control_41c00c29ba12754b",
+          "meta": [
+            "delivery_ccae6eb8219c8370",
+            "notif_411e13f25dff76e3",
+            "mail_injection_d8b0af87da5871ed",
+            "mail_control_41c00c29ba12754b",
+            "bodyless notification",
+            "host-only wiki.mail.record_injection"
+          ]
+        },
+        {
+          "at": "2026-05-25T12:43:03.061Z",
+          "kind": "mail-done",
+          "task_id": "snack-sprint",
+          "title": "Closed task loop",
+          "body": "Task loop closed for \"Snack-Powered Wiki Maintenance Sprint\". Pip has the route, receipt note, and follow-up question.",
+          "notification_id": "notif_411e13f25dff76e3",
+          "injection_id": "mail_injection_d8b0af87da5871ed",
+          "control_event_id": "mail_control_41c00c29ba12754b",
+          "meta": [
+            "wiki.mail.mark(done)",
+            "wiki.notify.ack",
+            "notif_411e13f25dff76e3"
+          ]
+        }
+      ],
+      "lifecycle": {
+        "active_turn_id": null,
+        "availability": "active",
+        "session_id": "agent-session-000000000001",
+        "state": "ready",
+        "turns_completed": 6,
+        "turns_started": 6
+      },
+      "proof_status": {
+        "capabilities": [
+          {
+            "binding_id": "toolset-mail",
+            "gate_status": "satisfied",
+            "lifecycle_hint": "ready",
+            "missing": [],
+            "observed": [
+              "transport_identity",
+              "tool_conformance"
+            ],
+            "required": [
+              "transport_identity",
+              "tool_conformance"
+            ],
+            "unknown_required": [],
+            "warnings": []
+          },
+          {
+            "binding_id": "toolset-wiki",
+            "gate_status": "satisfied",
+            "lifecycle_hint": "ready",
+            "missing": [],
+            "observed": [
+              "transport_identity",
+              "tool_conformance"
+            ],
+            "required": [
+              "transport_identity",
+              "tool_conformance"
+            ],
+            "unknown_required": [],
+            "warnings": []
+          }
+        ],
+        "gate_status": "satisfied",
+        "lifecycle_hint": "ready",
+        "missing": [],
+        "observed": [
+          "transport_identity",
+          "tool_conformance"
+        ],
+        "required": [
+          "transport_identity",
+          "tool_conformance"
+        ],
+        "unknown_required": [],
+        "warnings": []
+      }
+    },
+    {
+      "key": "mira",
+      "name": "Mira Mapmaker",
+      "role": "Route Builder",
+      "accent": "#43a98f",
+      "prompt": "Convert mission postcards into dependency maps. Name the first two links to create and send the clean route onward.",
+      "role_address": "role://triad.cartographer",
+      "unit_id": "agent-triad-mira-124239-3c011c11",
+      "agent_id": "agent_codex_0ec0126bed18b617",
+      "thread_id": "triad-mira-thread-124239-3c011c11",
+      "session_id": "triad-mira-session-124239-3c011c11",
+      "certificate_id": "agent-cert-000000000006",
+      "mcp_server": {
+        "server_name": "onecontext",
+        "uri": "mcp://onecontext",
+        "transport": "stdio",
+        "command": "node",
+        "args": [
+          "/Users/paulhan/dev/1context-public-launch/scripts/onecontext-wiki-mcp-server.mjs",
+          "--root",
+          "/tmp/1context-agent-mail-triad-124239-3c011c11/1Context",
+          "--wiki-bin",
+          "/Users/paulhan/dev/1context-public-launch/target/debug/onecontext-wiki"
+        ],
+        "env": {
+          "ONECONTEXT_ROOT": "/tmp/1context-agent-mail-triad-124239-3c011c11/1Context",
+          "ONECONTEXT_WIKI_CORE_BIN": "/Users/paulhan/dev/1context-public-launch/target/debug/onecontext-wiki"
+        },
+        "visible_toolsets": [
+          "toolset-mail",
+          "toolset-wiki"
+        ],
+        "hidden_host_tools": [
+          "wiki.notify.dispatch",
+          "wiki.mail.record_injection"
+        ]
+      },
+      "turns_started": 3,
+      "turns_completed": 3,
+      "session": [
+        {
+          "kind": "prompt",
+          "task_id": "all",
+          "title": "standing prompt",
+          "body": "Convert mission postcards into dependency maps. Name the first two links to create and send the clean route onward.",
+          "meta": [
+            "birth prompt",
+            "role://triad.cartographer"
+          ]
+        },
+        {
+          "at": "2026-05-25T12:42:44.884Z",
+          "kind": "harness",
+          "task_id": "all",
+          "title": "born into harness",
+          "body": "Birth certificate agent-cert-000000000006; wiki directory identity agent_codex_0ec0126bed18b617; MCP server onecontext mounted for toolset-mail and toolset-wiki.",
+          "meta": [
+            "harness.birth",
+            "wiki.agent.identify",
+            "mcp://onecontext"
+          ]
+        },
+        {
+          "at": "2026-05-25T12:42:47.842Z",
+          "kind": "mail-in",
+          "task_id": "shortcut-museum",
+          "title": "Promptsmith handoff",
+          "body": "Opened Route request: Tiny Museum Of Lost Keyboard Shortcuts; body entered through thread/inject_items, then Mira Mapmaker claimed the delivery. Injection success is host-only simulated app-server recording for this demo run.",
+          "notification_id": "notif_468ce15e90f55073",
+          "injection_id": "mail_injection_24216b578228f588",
+          "control_event_id": "mail_control_ab150ded8596a697",
+          "meta": [
+            "delivery_cd19ea9724688715",
+            "notif_468ce15e90f55073",
+            "mail_injection_24216b578228f588",
+            "mail_control_ab150ded8596a697",
+            "bodyless notification",
+            "host-only wiki.mail.record_injection"
+          ]
+        },
+        {
+          "at": "2026-05-25T12:42:48.712Z",
+          "kind": "mail-done",
+          "task_id": "shortcut-museum",
+          "title": "Sent route map",
+          "body": "Route map for \"Tiny Museum Of Lost Keyboard Shortcuts\"\nFirst project link: [[projects#shortcut-museum-brief]] captures the mission card.\nSecond project link: [[projects#shortcut-museum-receipts]] stores the mail and injection receipts.\nDependency: Nox should close with a wiki-ready log and one unresolved follow-up.",
+          "notification_id": "notif_468ce15e90f55073",
+          "injection_id": "mail_injection_24216b578228f588",
+          "control_event_id": "mail_control_ab150ded8596a697",
+          "meta": [
+            "wiki.mail.mark(done)",
+            "wiki.notify.ack",
+            "notif_468ce15e90f55073"
+          ]
+        },
+        {
+          "at": "2026-05-25T12:42:53.068Z",
+          "kind": "mail-in",
+          "task_id": "moonbase-onboarding",
+          "title": "Promptsmith handoff",
+          "body": "Opened Route request: Moonbase Onboarding For New Agents; body entered through thread/inject_items, then Mira Mapmaker claimed the delivery. Injection success is host-only simulated app-server recording for this demo run.",
+          "notification_id": "notif_37279fb9c7e78dae",
+          "injection_id": "mail_injection_c13793faeab9858b",
+          "control_event_id": "mail_control_24a8dc124bcb4362",
+          "meta": [
+            "delivery_051442e716c825d1",
+            "notif_37279fb9c7e78dae",
+            "mail_injection_c13793faeab9858b",
+            "mail_control_24a8dc124bcb4362",
+            "bodyless notification",
+            "host-only wiki.mail.record_injection"
+          ]
+        },
+        {
+          "at": "2026-05-25T12:42:53.868Z",
+          "kind": "mail-done",
+          "task_id": "moonbase-onboarding",
+          "title": "Sent route map",
+          "body": "Route map for \"Moonbase Onboarding For New Agents\"\nFirst project link: [[projects#moonbase-onboarding-brief]] captures the mission card.\nSecond project link: [[projects#moonbase-onboarding-receipts]] stores the mail and injection receipts.\nDependency: Nox should close with a wiki-ready log and one unresolved follow-up.",
+          "notification_id": "notif_37279fb9c7e78dae",
+          "injection_id": "mail_injection_c13793faeab9858b",
+          "control_event_id": "mail_control_24a8dc124bcb4362",
+          "meta": [
+            "wiki.mail.mark(done)",
+            "wiki.notify.ack",
+            "notif_37279fb9c7e78dae"
+          ]
+        },
+        {
+          "at": "2026-05-25T12:42:59.345Z",
+          "kind": "mail-in",
+          "task_id": "snack-sprint",
+          "title": "Promptsmith handoff",
+          "body": "Opened Route request: Snack-Powered Wiki Maintenance Sprint; body entered through thread/inject_items, then Mira Mapmaker claimed the delivery. Injection success is host-only simulated app-server recording for this demo run.",
+          "notification_id": "notif_2194dfb897dccaa9",
+          "injection_id": "mail_injection_aef889f5fab3a556",
+          "control_event_id": "mail_control_f4c5a7db31cec0cd",
+          "meta": [
+            "delivery_143b8d82deb4c824",
+            "notif_2194dfb897dccaa9",
+            "mail_injection_aef889f5fab3a556",
+            "mail_control_f4c5a7db31cec0cd",
+            "bodyless notification",
+            "host-only wiki.mail.record_injection"
+          ]
+        },
+        {
+          "at": "2026-05-25T12:43:00.165Z",
+          "kind": "mail-done",
+          "task_id": "snack-sprint",
+          "title": "Sent route map",
+          "body": "Route map for \"Snack-Powered Wiki Maintenance Sprint\"\nFirst project link: [[projects#snack-sprint-brief]] captures the mission card.\nSecond project link: [[projects#snack-sprint-receipts]] stores the mail and injection receipts.\nDependency: Nox should close with a wiki-ready log and one unresolved follow-up.",
+          "notification_id": "notif_2194dfb897dccaa9",
+          "injection_id": "mail_injection_aef889f5fab3a556",
+          "control_event_id": "mail_control_f4c5a7db31cec0cd",
+          "meta": [
+            "wiki.mail.mark(done)",
+            "wiki.notify.ack",
+            "notif_2194dfb897dccaa9"
+          ]
+        }
+      ],
+      "lifecycle": {
+        "active_turn_id": null,
+        "availability": "active",
+        "session_id": "agent-session-000000000006",
+        "state": "ready",
+        "turns_completed": 3,
+        "turns_started": 3
+      },
+      "proof_status": {
+        "capabilities": [
+          {
+            "binding_id": "toolset-mail",
+            "gate_status": "satisfied",
+            "lifecycle_hint": "ready",
+            "missing": [],
+            "observed": [
+              "transport_identity",
+              "tool_conformance"
+            ],
+            "required": [
+              "transport_identity",
+              "tool_conformance"
+            ],
+            "unknown_required": [],
+            "warnings": []
+          },
+          {
+            "binding_id": "toolset-wiki",
+            "gate_status": "satisfied",
+            "lifecycle_hint": "ready",
+            "missing": [],
+            "observed": [
+              "transport_identity",
+              "tool_conformance"
+            ],
+            "required": [
+              "transport_identity",
+              "tool_conformance"
+            ],
+            "unknown_required": [],
+            "warnings": []
+          }
+        ],
+        "gate_status": "satisfied",
+        "lifecycle_hint": "ready",
+        "missing": [],
+        "observed": [
+          "transport_identity",
+          "tool_conformance"
+        ],
+        "required": [
+          "transport_identity",
+          "tool_conformance"
+        ],
+        "unknown_required": [],
+        "warnings": []
+      }
+    },
+    {
+      "key": "nox",
+      "name": "Nox Archivist",
+      "role": "Receipt Closer",
+      "accent": "#7c6df2",
+      "prompt": "Close loops. Turn routes into wiki-ready notes with receipts, unanswered questions, and a tiny harmless flourish.",
+      "role_address": "role://triad.archivist",
+      "unit_id": "agent-triad-nox-124239-3c011c11",
+      "agent_id": "agent_codex_ead6adfc5a150dbe",
+      "thread_id": "triad-nox-thread-124239-3c011c11",
+      "session_id": "triad-nox-session-124239-3c011c11",
+      "certificate_id": "agent-cert-000000000011",
+      "mcp_server": {
+        "server_name": "onecontext",
+        "uri": "mcp://onecontext",
+        "transport": "stdio",
+        "command": "node",
+        "args": [
+          "/Users/paulhan/dev/1context-public-launch/scripts/onecontext-wiki-mcp-server.mjs",
+          "--root",
+          "/tmp/1context-agent-mail-triad-124239-3c011c11/1Context",
+          "--wiki-bin",
+          "/Users/paulhan/dev/1context-public-launch/target/debug/onecontext-wiki"
+        ],
+        "env": {
+          "ONECONTEXT_ROOT": "/tmp/1context-agent-mail-triad-124239-3c011c11/1Context",
+          "ONECONTEXT_WIKI_CORE_BIN": "/Users/paulhan/dev/1context-public-launch/target/debug/onecontext-wiki"
+        },
+        "visible_toolsets": [
+          "toolset-mail",
+          "toolset-wiki"
+        ],
+        "hidden_host_tools": [
+          "wiki.notify.dispatch",
+          "wiki.mail.record_injection"
+        ]
+      },
+      "turns_started": 3,
+      "turns_completed": 3,
+      "session": [
+        {
+          "kind": "prompt",
+          "task_id": "all",
+          "title": "standing prompt",
+          "body": "Close loops. Turn routes into wiki-ready notes with receipts, unanswered questions, and a tiny harmless flourish.",
+          "meta": [
+            "birth prompt",
+            "role://triad.archivist"
+          ]
+        },
+        {
+          "at": "2026-05-25T12:42:45.334Z",
+          "kind": "harness",
+          "task_id": "all",
+          "title": "born into harness",
+          "body": "Birth certificate agent-cert-000000000011; wiki directory identity agent_codex_ead6adfc5a150dbe; MCP server onecontext mounted for toolset-mail and toolset-wiki.",
+          "meta": [
+            "harness.birth",
+            "wiki.agent.identify",
+            "mcp://onecontext"
+          ]
+        },
+        {
+          "at": "2026-05-25T12:42:49.352Z",
+          "kind": "mail-in",
+          "task_id": "shortcut-museum",
+          "title": "Mapmaker handoff",
+          "body": "Opened Archive request: Tiny Museum Of Lost Keyboard Shortcuts; body entered through thread/inject_items, then Nox Archivist claimed the delivery. Injection success is host-only simulated app-server recording for this demo run.",
+          "notification_id": "notif_7ac6966d4c5d485d",
+          "injection_id": "mail_injection_398b4408e929e585",
+          "control_event_id": "mail_control_3a741a81931e04ed",
+          "meta": [
+            "delivery_86455e02458f47ed",
+            "notif_7ac6966d4c5d485d",
+            "mail_injection_398b4408e929e585",
+            "mail_control_3a741a81931e04ed",
+            "bodyless notification",
+            "host-only wiki.mail.record_injection"
+          ]
+        },
+        {
+          "at": "2026-05-25T12:42:50.102Z",
+          "kind": "mail-done",
+          "task_id": "shortcut-museum",
+          "title": "Sent closure receipt",
+          "body": "Archive closure for \"Tiny Museum Of Lost Keyboard Shortcuts\"\nReady project page shape: summary, route, receipts, follow-up.\nReceipt note: all bodies were opened by mail.open and recorded as injection receipts.\nUnresolved question: who curates a glass case for Command-Option-Whatever after the first pass?",
+          "notification_id": "notif_7ac6966d4c5d485d",
+          "injection_id": "mail_injection_398b4408e929e585",
+          "control_event_id": "mail_control_3a741a81931e04ed",
+          "meta": [
+            "wiki.mail.mark(done)",
+            "wiki.notify.ack",
+            "notif_7ac6966d4c5d485d"
+          ]
+        },
+        {
+          "at": "2026-05-25T12:42:54.435Z",
+          "kind": "mail-in",
+          "task_id": "moonbase-onboarding",
+          "title": "Mapmaker handoff",
+          "body": "Opened Archive request: Moonbase Onboarding For New Agents; body entered through thread/inject_items, then Nox Archivist claimed the delivery. Injection success is host-only simulated app-server recording for this demo run.",
+          "notification_id": "notif_f9c847c42f28ad8f",
+          "injection_id": "mail_injection_939268d97ac97058",
+          "control_event_id": "mail_control_34fca173c2eda1e5",
+          "meta": [
+            "delivery_f7ba378c421c826d",
+            "notif_f9c847c42f28ad8f",
+            "mail_injection_939268d97ac97058",
+            "mail_control_34fca173c2eda1e5",
+            "bodyless notification",
+            "host-only wiki.mail.record_injection"
+          ]
+        },
+        {
+          "at": "2026-05-25T12:42:55.511Z",
+          "kind": "mail-done",
+          "task_id": "moonbase-onboarding",
+          "title": "Sent closure receipt",
+          "body": "Archive closure for \"Moonbase Onboarding For New Agents\"\nReady project page shape: summary, route, receipts, follow-up.\nReceipt note: all bodies were opened by mail.open and recorded as injection receipts.\nUnresolved question: who curates a laminated airlock checklist after the first pass?",
+          "notification_id": "notif_f9c847c42f28ad8f",
+          "injection_id": "mail_injection_939268d97ac97058",
+          "control_event_id": "mail_control_34fca173c2eda1e5",
+          "meta": [
+            "wiki.mail.mark(done)",
+            "wiki.notify.ack",
+            "notif_f9c847c42f28ad8f"
+          ]
+        },
+        {
+          "at": "2026-05-25T12:43:00.790Z",
+          "kind": "mail-in",
+          "task_id": "snack-sprint",
+          "title": "Mapmaker handoff",
+          "body": "Opened Archive request: Snack-Powered Wiki Maintenance Sprint; body entered through thread/inject_items, then Nox Archivist claimed the delivery. Injection success is host-only simulated app-server recording for this demo run.",
+          "notification_id": "notif_e6ac72c9ce5c0977",
+          "injection_id": "mail_injection_267960a47d606dae",
+          "control_event_id": "mail_control_705ad896ceb57f40",
+          "meta": [
+            "delivery_d37319f5c142c106",
+            "notif_e6ac72c9ce5c0977",
+            "mail_injection_267960a47d606dae",
+            "mail_control_705ad896ceb57f40",
+            "bodyless notification",
+            "host-only wiki.mail.record_injection"
+          ]
+        },
+        {
+          "at": "2026-05-25T12:43:02.005Z",
+          "kind": "mail-done",
+          "task_id": "snack-sprint",
+          "title": "Sent closure receipt",
+          "body": "Archive closure for \"Snack-Powered Wiki Maintenance Sprint\"\nReady project page shape: summary, route, receipts, follow-up.\nReceipt note: all bodies were opened by mail.open and recorded as injection receipts.\nUnresolved question: who curates a crumb-proof task board after the first pass?",
+          "notification_id": "notif_e6ac72c9ce5c0977",
+          "injection_id": "mail_injection_267960a47d606dae",
+          "control_event_id": "mail_control_705ad896ceb57f40",
+          "meta": [
+            "wiki.mail.mark(done)",
+            "wiki.notify.ack",
+            "notif_e6ac72c9ce5c0977"
+          ]
+        }
+      ],
+      "lifecycle": {
+        "active_turn_id": null,
+        "availability": "active",
+        "session_id": "agent-session-000000000011",
+        "state": "ready",
+        "turns_completed": 3,
+        "turns_started": 3
+      },
+      "proof_status": {
+        "capabilities": [
+          {
+            "binding_id": "toolset-mail",
+            "gate_status": "satisfied",
+            "lifecycle_hint": "ready",
+            "missing": [],
+            "observed": [
+              "transport_identity",
+              "tool_conformance"
+            ],
+            "required": [
+              "transport_identity",
+              "tool_conformance"
+            ],
+            "unknown_required": [],
+            "warnings": []
+          },
+          {
+            "binding_id": "toolset-wiki",
+            "gate_status": "satisfied",
+            "lifecycle_hint": "ready",
+            "missing": [],
+            "observed": [
+              "transport_identity",
+              "tool_conformance"
+            ],
+            "required": [
+              "transport_identity",
+              "tool_conformance"
+            ],
+            "unknown_required": [],
+            "warnings": []
+          }
+        ],
+        "gate_status": "satisfied",
+        "lifecycle_hint": "ready",
+        "missing": [],
+        "observed": [
+          "transport_identity",
+          "tool_conformance"
+        ],
+        "required": [
+          "transport_identity",
+          "tool_conformance"
+        ],
+        "unknown_required": [],
+        "warnings": []
+      }
+    }
+  ],
+  "tasks": [
+    {
+      "id": "shortcut-museum",
+      "title": "Tiny Museum Of Lost Keyboard Shortcuts",
+      "seed": "Design a wiki page plan for a tiny museum that preserves lost keyboard shortcuts as if they were artifacts.",
+      "object": "a glass case for Command-Option-Whatever",
+      "odd_constraint": "no exhibit label may exceed seven words"
+    },
+    {
+      "id": "moonbase-onboarding",
+      "title": "Moonbase Onboarding For New Agents",
+      "seed": "Create a first-day onboarding ritual for agents arriving at a wiki-powered moonbase.",
+      "object": "a laminated airlock checklist",
+      "odd_constraint": "every step must leave a durable receipt"
+    },
+    {
+      "id": "snack-sprint",
+      "title": "Snack-Powered Wiki Maintenance Sprint",
+      "seed": "Plan a small maintenance sprint where wiki cleanup tasks are unlocked by increasingly specific snacks.",
+      "object": "a crumb-proof task board",
+      "odd_constraint": "no one can claim two crunchy tasks in a row"
+    }
+  ],
+  "mail": [
+    {
+      "task_id": "shortcut-museum",
+      "message_id": "talkmsg_op_a611354202",
+      "delivery_id": "delivery_09712a4c79e978f2",
+      "notification_id": "notif_d1f5bee01f9e61fd",
+      "from": "system://dogfood.mission-control",
+      "to": "role://triad.promptsmith",
+      "subject": "Frame task: Tiny Museum Of Lost Keyboard Shortcuts",
+      "wiki_page": "projects",
+      "wiki_route": "/projects",
+      "talk_thread_id": "thread_projects_frame-task-tiny-museum-of-lost-keyboard-shortcuts",
+      "talk_source": "user-wiki://page/projects/talk/messages/talkmsg_op_a611354202",
+      "body_excerpt": "Design a wiki page plan for a tiny museum that preserves lost keyboard shortcuts as if they were artifacts.",
+      "body_sha256": "sha256:95399a6a79bf50de8b5f957b895ddbda13d4af818b18f61fb2d6ebd1f52b3d3b",
+      "state": "done",
+      "operation_id": "triad-124239-3c011c11-shortcut-museum-1",
+      "reply_to": null,
+      "injection_id": "mail_injection_d62b2af851b15b3e",
+      "control_event_id": "mail_control_5ebf28fa0556fc0d",
+      "injection_item_count": 1,
+      "app_server_execution": "simulated_record_only",
+      "claim_state": "claimed",
+      "claimed_by": "agent_codex_ff60cb259f5e543e",
+      "mark_state": "done",
+      "notification_ack_state": "acknowledged",
+      "content_delivery_method": "thread/inject_items"
+    },
+    {
+      "task_id": "shortcut-museum",
+      "message_id": "talkmsg_op_d69b3a6f7a",
+      "delivery_id": "delivery_cd19ea9724688715",
+      "notification_id": "notif_468ce15e90f55073",
+      "from": "agent://codex/agent_codex_ff60cb259f5e543e",
+      "to": "role://triad.cartographer",
+      "subject": "Route request: Tiny Museum Of Lost Keyboard Shortcuts",
+      "wiki_page": "projects",
+      "wiki_route": "/projects",
+      "talk_thread_id": "thread_projects_frame-task-tiny-museum-of-lost-keyboard-shortcuts",
+      "talk_source": "user-wiki://page/projects/talk/messages/talkmsg_op_d69b3a6f7a",
+      "body_excerpt": "Mission card for \"Tiny Museum Of Lost Keyboard Shortcuts\"\nOdd constraint: no exhibit label may exceed seven words.\nAcceptance check: the resulting wiki page has one summary, three links, and one open question.\nProject...",
+      "body_sha256": "sha256:eed4f04668a57cdb2a4b1db5d33fe273849324299b7c86b30bdcbc03fdc7207c",
+      "state": "done",
+      "operation_id": "triad-124239-3c011c11-shortcut-museum-2",
+      "reply_to": "talkmsg_op_a611354202",
+      "injection_id": "mail_injection_24216b578228f588",
+      "control_event_id": "mail_control_ab150ded8596a697",
+      "injection_item_count": 1,
+      "app_server_execution": "simulated_record_only",
+      "claim_state": "claimed",
+      "claimed_by": "agent_codex_0ec0126bed18b617",
+      "mark_state": "done",
+      "notification_ack_state": "acknowledged",
+      "content_delivery_method": "thread/inject_items"
+    },
+    {
+      "task_id": "shortcut-museum",
+      "message_id": "talkmsg_op_5efa8a939b",
+      "delivery_id": "delivery_86455e02458f47ed",
+      "notification_id": "notif_7ac6966d4c5d485d",
+      "from": "agent://codex/agent_codex_0ec0126bed18b617",
+      "to": "role://triad.archivist",
+      "subject": "Archive request: Tiny Museum Of Lost Keyboard Shortcuts",
+      "wiki_page": "projects",
+      "wiki_route": "/projects",
+      "talk_thread_id": "thread_projects_frame-task-tiny-museum-of-lost-keyboard-shortcuts",
+      "talk_source": "user-wiki://page/projects/talk/messages/talkmsg_op_5efa8a939b",
+      "body_excerpt": "Route map for \"Tiny Museum Of Lost Keyboard Shortcuts\"\nFirst project link: [[projects#shortcut-museum-brief]] captures the mission card.\nSecond project link: [[projects#shortcut-museum-receipts]] stores the mail and i...",
+      "body_sha256": "sha256:31f10c2055634517bcf69923d37ea63b1127ed94dd27aa42907f42ae14a49829",
+      "state": "done",
+      "operation_id": "triad-124239-3c011c11-shortcut-museum-3",
+      "reply_to": "talkmsg_op_d69b3a6f7a",
+      "injection_id": "mail_injection_398b4408e929e585",
+      "control_event_id": "mail_control_3a741a81931e04ed",
+      "injection_item_count": 1,
+      "app_server_execution": "simulated_record_only",
+      "claim_state": "claimed",
+      "claimed_by": "agent_codex_ead6adfc5a150dbe",
+      "mark_state": "done",
+      "notification_ack_state": "acknowledged",
+      "content_delivery_method": "thread/inject_items"
+    },
+    {
+      "task_id": "shortcut-museum",
+      "message_id": "talkmsg_op_6c1b65528a",
+      "delivery_id": "delivery_0269e8eb54e70473",
+      "notification_id": "notif_cfc91cc647607558",
+      "from": "agent://codex/agent_codex_ead6adfc5a150dbe",
+      "to": "role://triad.promptsmith",
+      "subject": "Closure receipt: Tiny Museum Of Lost Keyboard Shortcuts",
+      "wiki_page": "projects",
+      "wiki_route": "/projects",
+      "talk_thread_id": "thread_projects_frame-task-tiny-museum-of-lost-keyboard-shortcuts",
+      "talk_source": "user-wiki://page/projects/talk/messages/talkmsg_op_6c1b65528a",
+      "body_excerpt": "Archive closure for \"Tiny Museum Of Lost Keyboard Shortcuts\"\nReady project page shape: summary, route, receipts, follow-up.\nReceipt note: all bodies were opened by mail.open and recorded as injection receipts.\nUnresol...",
+      "body_sha256": "sha256:0b051ae75c538c052d7fa5856a96231ecc60c7344f31e565b02c5f5fc6a2228d",
+      "state": "done",
+      "operation_id": "triad-124239-3c011c11-shortcut-museum-4",
+      "reply_to": "talkmsg_op_5efa8a939b",
+      "injection_id": "mail_injection_22229136fd2c0c63",
+      "control_event_id": "mail_control_bbd839efba3ccd89",
+      "injection_item_count": 1,
+      "app_server_execution": "simulated_record_only",
+      "claim_state": "claimed",
+      "claimed_by": "agent_codex_ff60cb259f5e543e",
+      "mark_state": "done",
+      "notification_ack_state": "acknowledged",
+      "content_delivery_method": "thread/inject_items"
+    },
+    {
+      "task_id": "moonbase-onboarding",
+      "message_id": "talkmsg_op_9c980df2bb",
+      "delivery_id": "delivery_a62cace2924c8138",
+      "notification_id": "notif_7585d3f0890d3432",
+      "from": "system://dogfood.mission-control",
+      "to": "role://triad.promptsmith",
+      "subject": "Frame task: Moonbase Onboarding For New Agents",
+      "wiki_page": "projects",
+      "wiki_route": "/projects",
+      "talk_thread_id": "thread_projects_frame-task-moonbase-onboarding-for-new-agents",
+      "talk_source": "user-wiki://page/projects/talk/messages/talkmsg_op_9c980df2bb",
+      "body_excerpt": "Create a first-day onboarding ritual for agents arriving at a wiki-powered moonbase.",
+      "body_sha256": "sha256:22ae77d79ddced9e736f4cfe640eb362761f15314c0a46afbdad04bf3734167f",
+      "state": "done",
+      "operation_id": "triad-124239-3c011c11-moonbase-onboarding-5",
+      "reply_to": null,
+      "injection_id": "mail_injection_90200faffa4413f9",
+      "control_event_id": "mail_control_2caf3979e877ca09",
+      "injection_item_count": 1,
+      "app_server_execution": "simulated_record_only",
+      "claim_state": "claimed",
+      "claimed_by": "agent_codex_ff60cb259f5e543e",
+      "mark_state": "done",
+      "notification_ack_state": "acknowledged",
+      "content_delivery_method": "thread/inject_items"
+    },
+    {
+      "task_id": "moonbase-onboarding",
+      "message_id": "talkmsg_op_36cff539f3",
+      "delivery_id": "delivery_051442e716c825d1",
+      "notification_id": "notif_37279fb9c7e78dae",
+      "from": "agent://codex/agent_codex_ff60cb259f5e543e",
+      "to": "role://triad.cartographer",
+      "subject": "Route request: Moonbase Onboarding For New Agents",
+      "wiki_page": "projects",
+      "wiki_route": "/projects",
+      "talk_thread_id": "thread_projects_frame-task-moonbase-onboarding-for-new-agents",
+      "talk_source": "user-wiki://page/projects/talk/messages/talkmsg_op_36cff539f3",
+      "body_excerpt": "Mission card for \"Moonbase Onboarding For New Agents\"\nOdd constraint: every step must leave a durable receipt.\nAcceptance check: the resulting wiki page has one summary, three links, and one open question.\nProject lin...",
+      "body_sha256": "sha256:e0cb6112a6ae9927d60c97fdb61aa6722a4065131c8923eafce4b50d500a630b",
+      "state": "done",
+      "operation_id": "triad-124239-3c011c11-moonbase-onboarding-6",
+      "reply_to": "talkmsg_op_9c980df2bb",
+      "injection_id": "mail_injection_c13793faeab9858b",
+      "control_event_id": "mail_control_24a8dc124bcb4362",
+      "injection_item_count": 1,
+      "app_server_execution": "simulated_record_only",
+      "claim_state": "claimed",
+      "claimed_by": "agent_codex_0ec0126bed18b617",
+      "mark_state": "done",
+      "notification_ack_state": "acknowledged",
+      "content_delivery_method": "thread/inject_items"
+    },
+    {
+      "task_id": "moonbase-onboarding",
+      "message_id": "talkmsg_op_e639157616",
+      "delivery_id": "delivery_f7ba378c421c826d",
+      "notification_id": "notif_f9c847c42f28ad8f",
+      "from": "agent://codex/agent_codex_0ec0126bed18b617",
+      "to": "role://triad.archivist",
+      "subject": "Archive request: Moonbase Onboarding For New Agents",
+      "wiki_page": "projects",
+      "wiki_route": "/projects",
+      "talk_thread_id": "thread_projects_frame-task-moonbase-onboarding-for-new-agents",
+      "talk_source": "user-wiki://page/projects/talk/messages/talkmsg_op_e639157616",
+      "body_excerpt": "Route map for \"Moonbase Onboarding For New Agents\"\nFirst project link: [[projects#moonbase-onboarding-brief]] captures the mission card.\nSecond project link: [[projects#moonbase-onboarding-receipts]] stores the mail a...",
+      "body_sha256": "sha256:d50ec7523e064f0c8eac4f56c68643bbb0014bb295f42c88541989618a42a779",
+      "state": "done",
+      "operation_id": "triad-124239-3c011c11-moonbase-onboarding-7",
+      "reply_to": "talkmsg_op_36cff539f3",
+      "injection_id": "mail_injection_939268d97ac97058",
+      "control_event_id": "mail_control_34fca173c2eda1e5",
+      "injection_item_count": 1,
+      "app_server_execution": "simulated_record_only",
+      "claim_state": "claimed",
+      "claimed_by": "agent_codex_ead6adfc5a150dbe",
+      "mark_state": "done",
+      "notification_ack_state": "acknowledged",
+      "content_delivery_method": "thread/inject_items"
+    },
+    {
+      "task_id": "moonbase-onboarding",
+      "message_id": "talkmsg_op_8a1528004e",
+      "delivery_id": "delivery_634a7c0b02a4555a",
+      "notification_id": "notif_d2de2044617c854b",
+      "from": "agent://codex/agent_codex_ead6adfc5a150dbe",
+      "to": "role://triad.promptsmith",
+      "subject": "Closure receipt: Moonbase Onboarding For New Agents",
+      "wiki_page": "projects",
+      "wiki_route": "/projects",
+      "talk_thread_id": "thread_projects_frame-task-moonbase-onboarding-for-new-agents",
+      "talk_source": "user-wiki://page/projects/talk/messages/talkmsg_op_8a1528004e",
+      "body_excerpt": "Archive closure for \"Moonbase Onboarding For New Agents\"\nReady project page shape: summary, route, receipts, follow-up.\nReceipt note: all bodies were opened by mail.open and recorded as injection receipts.\nUnresolved ...",
+      "body_sha256": "sha256:8919cc86b31f3d1f052f0dd1772e81c9ef63f665881a8690038055295f60b2b5",
+      "state": "done",
+      "operation_id": "triad-124239-3c011c11-moonbase-onboarding-8",
+      "reply_to": "talkmsg_op_e639157616",
+      "injection_id": "mail_injection_9a79e48bb399ac1a",
+      "control_event_id": "mail_control_0dcf6730bb074d38",
+      "injection_item_count": 1,
+      "app_server_execution": "simulated_record_only",
+      "claim_state": "claimed",
+      "claimed_by": "agent_codex_ff60cb259f5e543e",
+      "mark_state": "done",
+      "notification_ack_state": "acknowledged",
+      "content_delivery_method": "thread/inject_items"
+    },
+    {
+      "task_id": "snack-sprint",
+      "message_id": "talkmsg_op_4ae2583ab0",
+      "delivery_id": "delivery_8d2aeabbd29829f3",
+      "notification_id": "notif_b5c94068aee67339",
+      "from": "system://dogfood.mission-control",
+      "to": "role://triad.promptsmith",
+      "subject": "Frame task: Snack-Powered Wiki Maintenance Sprint",
+      "wiki_page": "projects",
+      "wiki_route": "/projects",
+      "talk_thread_id": "thread_projects_frame-task-snack-powered-wiki-maintenance-sprint",
+      "talk_source": "user-wiki://page/projects/talk/messages/talkmsg_op_4ae2583ab0",
+      "body_excerpt": "Plan a small maintenance sprint where wiki cleanup tasks are unlocked by increasingly specific snacks.",
+      "body_sha256": "sha256:d05ad61188a74d988ff0626e5be210c2cebf29912f72109623db5f40a7cde1e2",
+      "state": "done",
+      "operation_id": "triad-124239-3c011c11-snack-sprint-9",
+      "reply_to": null,
+      "injection_id": "mail_injection_85304aad6aebc6e6",
+      "control_event_id": "mail_control_51abf364722be696",
+      "injection_item_count": 1,
+      "app_server_execution": "simulated_record_only",
+      "claim_state": "claimed",
+      "claimed_by": "agent_codex_ff60cb259f5e543e",
+      "mark_state": "done",
+      "notification_ack_state": "acknowledged",
+      "content_delivery_method": "thread/inject_items"
+    },
+    {
+      "task_id": "snack-sprint",
+      "message_id": "talkmsg_op_66c31a8557",
+      "delivery_id": "delivery_143b8d82deb4c824",
+      "notification_id": "notif_2194dfb897dccaa9",
+      "from": "agent://codex/agent_codex_ff60cb259f5e543e",
+      "to": "role://triad.cartographer",
+      "subject": "Route request: Snack-Powered Wiki Maintenance Sprint",
+      "wiki_page": "projects",
+      "wiki_route": "/projects",
+      "talk_thread_id": "thread_projects_frame-task-snack-powered-wiki-maintenance-sprint",
+      "talk_source": "user-wiki://page/projects/talk/messages/talkmsg_op_66c31a8557",
+      "body_excerpt": "Mission card for \"Snack-Powered Wiki Maintenance Sprint\"\nOdd constraint: no one can claim two crunchy tasks in a row.\nAcceptance check: the resulting wiki page has one summary, three links, and one open question.\nProj...",
+      "body_sha256": "sha256:ee80a405c60d9a7d97e60b7b92dab887db6bb215e7bbe7f44d0326a852d1d15d",
+      "state": "done",
+      "operation_id": "triad-124239-3c011c11-snack-sprint-10",
+      "reply_to": "talkmsg_op_4ae2583ab0",
+      "injection_id": "mail_injection_aef889f5fab3a556",
+      "control_event_id": "mail_control_f4c5a7db31cec0cd",
+      "injection_item_count": 1,
+      "app_server_execution": "simulated_record_only",
+      "claim_state": "claimed",
+      "claimed_by": "agent_codex_0ec0126bed18b617",
+      "mark_state": "done",
+      "notification_ack_state": "acknowledged",
+      "content_delivery_method": "thread/inject_items"
+    },
+    {
+      "task_id": "snack-sprint",
+      "message_id": "talkmsg_op_c8a8346a59",
+      "delivery_id": "delivery_d37319f5c142c106",
+      "notification_id": "notif_e6ac72c9ce5c0977",
+      "from": "agent://codex/agent_codex_0ec0126bed18b617",
+      "to": "role://triad.archivist",
+      "subject": "Archive request: Snack-Powered Wiki Maintenance Sprint",
+      "wiki_page": "projects",
+      "wiki_route": "/projects",
+      "talk_thread_id": "thread_projects_frame-task-snack-powered-wiki-maintenance-sprint",
+      "talk_source": "user-wiki://page/projects/talk/messages/talkmsg_op_c8a8346a59",
+      "body_excerpt": "Route map for \"Snack-Powered Wiki Maintenance Sprint\"\nFirst project link: [[projects#snack-sprint-brief]] captures the mission card.\nSecond project link: [[projects#snack-sprint-receipts]] stores the mail and injectio...",
+      "body_sha256": "sha256:9b6305d44a7cf0f92b681f91bb1e7afedc0e15af7986f6a86ea2b9540e62771f",
+      "state": "done",
+      "operation_id": "triad-124239-3c011c11-snack-sprint-11",
+      "reply_to": "talkmsg_op_66c31a8557",
+      "injection_id": "mail_injection_267960a47d606dae",
+      "control_event_id": "mail_control_705ad896ceb57f40",
+      "injection_item_count": 1,
+      "app_server_execution": "simulated_record_only",
+      "claim_state": "claimed",
+      "claimed_by": "agent_codex_ead6adfc5a150dbe",
+      "mark_state": "done",
+      "notification_ack_state": "acknowledged",
+      "content_delivery_method": "thread/inject_items"
+    },
+    {
+      "task_id": "snack-sprint",
+      "message_id": "talkmsg_op_a9c325c9db",
+      "delivery_id": "delivery_ccae6eb8219c8370",
+      "notification_id": "notif_411e13f25dff76e3",
+      "from": "agent://codex/agent_codex_ead6adfc5a150dbe",
+      "to": "role://triad.promptsmith",
+      "subject": "Closure receipt: Snack-Powered Wiki Maintenance Sprint",
+      "wiki_page": "projects",
+      "wiki_route": "/projects",
+      "talk_thread_id": "thread_projects_frame-task-snack-powered-wiki-maintenance-sprint",
+      "talk_source": "user-wiki://page/projects/talk/messages/talkmsg_op_a9c325c9db",
+      "body_excerpt": "Archive closure for \"Snack-Powered Wiki Maintenance Sprint\"\nReady project page shape: summary, route, receipts, follow-up.\nReceipt note: all bodies were opened by mail.open and recorded as injection receipts.\nUnresolv...",
+      "body_sha256": "sha256:d21633263f95442bd25050bb5480ab35b12d410ccfeccae85706bb845d0dd0a8",
+      "state": "done",
+      "operation_id": "triad-124239-3c011c11-snack-sprint-12",
+      "reply_to": "talkmsg_op_c8a8346a59",
+      "injection_id": "mail_injection_d8b0af87da5871ed",
+      "control_event_id": "mail_control_41c00c29ba12754b",
+      "injection_item_count": 1,
+      "app_server_execution": "simulated_record_only",
+      "claim_state": "claimed",
+      "claimed_by": "agent_codex_ff60cb259f5e543e",
+      "mark_state": "done",
+      "notification_ack_state": "acknowledged",
+      "content_delivery_method": "thread/inject_items"
+    }
+  ],
+  "assertions": [
+    {
+      "code": "mcp_tools_match_declared_capabilities",
+      "status": "passed"
+    },
+    {
+      "code": "wiki_list_status_ok",
+      "status": "passed"
+    },
+    {
+      "code": "wiki_list_includes_projects_page",
+      "status": "passed"
+    },
+    {
+      "code": "wiki_page_status_ok",
+      "status": "passed"
+    },
+    {
+      "code": "wiki_page_status_projects",
+      "status": "passed"
+    },
+    {
+      "code": "wiki_project_route_matches",
+      "status": "passed"
+    },
+    {
+      "code": "wiki_project_talk_handle_present",
+      "status": "passed"
+    },
+    {
+      "code": "mail_delivered",
+      "status": "passed"
+    },
+    {
+      "code": "notification_polled",
+      "status": "passed"
+    },
+    {
+      "code": "notification_bodyless",
+      "status": "passed"
+    },
+    {
+      "code": "inbox_contains_delivery",
+      "status": "passed"
+    },
+    {
+      "code": "mail_open_delivery_matches",
+      "status": "passed"
+    },
+    {
+      "code": "mail_open_message_matches",
+      "status": "passed"
+    },
+    {
+      "code": "mail_open_transport_is_codex_inject_items",
+      "status": "passed"
+    },
+    {
+      "code": "mail_open_uses_injection",
+      "status": "passed"
+    },
+    {
+      "code": "mail_open_thread_matches",
+      "status": "passed"
+    },
+    {
+      "code": "mail_open_injection_item_count_positive",
+      "status": "passed"
+    },
+    {
+      "code": "mail_open_item_has_delivery_id",
+      "status": "passed"
+    },
+    {
+      "code": "mail_open_item_has_message_id",
+      "status": "passed"
+    },
+    {
+      "code": "mail_open_item_has_expected_body",
+      "status": "passed"
+    },
+    {
+      "code": "record_injection_operation_matches",
+      "status": "passed"
+    },
+    {
+      "code": "record_injection_delivery_matches",
+      "status": "passed"
+    },
+    {
+      "code": "record_injection_message_matches",
+      "status": "passed"
+    },
+    {
+      "code": "record_injection_agent_matches",
+      "status": "passed"
+    },
+    {
+      "code": "record_injection_thread_matches",
+      "status": "passed"
+    },
+    {
+      "code": "record_injection_method_matches",
+      "status": "passed"
+    },
+    {
+      "code": "record_injection_result_ok",
+      "status": "passed"
+    },
+    {
+      "code": "record_injection_item_count_matches",
+      "status": "passed"
+    },
+    {
+      "code": "record_injection_control_event_delivery_matches",
+      "status": "passed"
+    },
+    {
+      "code": "mail_claim_state_claimed",
+      "status": "passed"
+    },
+    {
+      "code": "mail_claim_agent_matches",
+      "status": "passed"
+    },
+    {
+      "code": "mail_delivered",
+      "status": "passed"
+    },
+    {
+      "code": "mail_mark_done",
+      "status": "passed"
+    },
+    {
+      "code": "mail_mark_agent_matches",
+      "status": "passed"
+    },
+    {
+      "code": "notify_acknowledged",
+      "status": "passed"
+    },
+    {
+      "code": "notification_polled",
+      "status": "passed"
+    },
+    {
+      "code": "notification_bodyless",
+      "status": "passed"
+    },
+    {
+      "code": "inbox_contains_delivery",
+      "status": "passed"
+    },
+    {
+      "code": "mail_open_delivery_matches",
+      "status": "passed"
+    },
+    {
+      "code": "mail_open_message_matches",
+      "status": "passed"
+    },
+    {
+      "code": "mail_open_transport_is_codex_inject_items",
+      "status": "passed"
+    },
+    {
+      "code": "mail_open_uses_injection",
+      "status": "passed"
+    },
+    {
+      "code": "mail_open_thread_matches",
+      "status": "passed"
+    },
+    {
+      "code": "mail_open_injection_item_count_positive",
+      "status": "passed"
+    },
+    {
+      "code": "mail_open_item_has_delivery_id",
+      "status": "passed"
+    },
+    {
+      "code": "mail_open_item_has_message_id",
+      "status": "passed"
+    },
+    {
+      "code": "mail_open_item_has_expected_body",
+      "status": "passed"
+    },
+    {
+      "code": "record_injection_operation_matches",
+      "status": "passed"
+    },
+    {
+      "code": "record_injection_delivery_matches",
+      "status": "passed"
+    },
+    {
+      "code": "record_injection_message_matches",
+      "status": "passed"
+    },
+    {
+      "code": "record_injection_agent_matches",
+      "status": "passed"
+    },
+    {
+      "code": "record_injection_thread_matches",
+      "status": "passed"
+    },
+    {
+      "code": "record_injection_method_matches",
+      "status": "passed"
+    },
+    {
+      "code": "record_injection_result_ok",
+      "status": "passed"
+    },
+    {
+      "code": "record_injection_item_count_matches",
+      "status": "passed"
+    },
+    {
+      "code": "record_injection_control_event_delivery_matches",
+      "status": "passed"
+    },
+    {
+      "code": "mail_claim_state_claimed",
+      "status": "passed"
+    },
+    {
+      "code": "mail_claim_agent_matches",
+      "status": "passed"
+    },
+    {
+      "code": "mail_delivered",
+      "status": "passed"
+    },
+    {
+      "code": "mail_mark_done",
+      "status": "passed"
+    },
+    {
+      "code": "mail_mark_agent_matches",
+      "status": "passed"
+    },
+    {
+      "code": "notify_acknowledged",
+      "status": "passed"
+    },
+    {
+      "code": "notification_polled",
+      "status": "passed"
+    },
+    {
+      "code": "notification_bodyless",
+      "status": "passed"
+    },
+    {
+      "code": "inbox_contains_delivery",
+      "status": "passed"
+    },
+    {
+      "code": "mail_open_delivery_matches",
+      "status": "passed"
+    },
+    {
+      "code": "mail_open_message_matches",
+      "status": "passed"
+    },
+    {
+      "code": "mail_open_transport_is_codex_inject_items",
+      "status": "passed"
+    },
+    {
+      "code": "mail_open_uses_injection",
+      "status": "passed"
+    },
+    {
+      "code": "mail_open_thread_matches",
+      "status": "passed"
+    },
+    {
+      "code": "mail_open_injection_item_count_positive",
+      "status": "passed"
+    },
+    {
+      "code": "mail_open_item_has_delivery_id",
+      "status": "passed"
+    },
+    {
+      "code": "mail_open_item_has_message_id",
+      "status": "passed"
+    },
+    {
+      "code": "mail_open_item_has_expected_body",
+      "status": "passed"
+    },
+    {
+      "code": "record_injection_operation_matches",
+      "status": "passed"
+    },
+    {
+      "code": "record_injection_delivery_matches",
+      "status": "passed"
+    },
+    {
+      "code": "record_injection_message_matches",
+      "status": "passed"
+    },
+    {
+      "code": "record_injection_agent_matches",
+      "status": "passed"
+    },
+    {
+      "code": "record_injection_thread_matches",
+      "status": "passed"
+    },
+    {
+      "code": "record_injection_method_matches",
+      "status": "passed"
+    },
+    {
+      "code": "record_injection_result_ok",
+      "status": "passed"
+    },
+    {
+      "code": "record_injection_item_count_matches",
+      "status": "passed"
+    },
+    {
+      "code": "record_injection_control_event_delivery_matches",
+      "status": "passed"
+    },
+    {
+      "code": "mail_claim_state_claimed",
+      "status": "passed"
+    },
+    {
+      "code": "mail_claim_agent_matches",
+      "status": "passed"
+    },
+    {
+      "code": "mail_delivered",
+      "status": "passed"
+    },
+    {
+      "code": "mail_mark_done",
+      "status": "passed"
+    },
+    {
+      "code": "mail_mark_agent_matches",
+      "status": "passed"
+    },
+    {
+      "code": "notify_acknowledged",
+      "status": "passed"
+    },
+    {
+      "code": "notification_polled",
+      "status": "passed"
+    },
+    {
+      "code": "notification_bodyless",
+      "status": "passed"
+    },
+    {
+      "code": "inbox_contains_delivery",
+      "status": "passed"
+    },
+    {
+      "code": "mail_open_delivery_matches",
+      "status": "passed"
+    },
+    {
+      "code": "mail_open_message_matches",
+      "status": "passed"
+    },
+    {
+      "code": "mail_open_transport_is_codex_inject_items",
+      "status": "passed"
+    },
+    {
+      "code": "mail_open_uses_injection",
+      "status": "passed"
+    },
+    {
+      "code": "mail_open_thread_matches",
+      "status": "passed"
+    },
+    {
+      "code": "mail_open_injection_item_count_positive",
+      "status": "passed"
+    },
+    {
+      "code": "mail_open_item_has_delivery_id",
+      "status": "passed"
+    },
+    {
+      "code": "mail_open_item_has_message_id",
+      "status": "passed"
+    },
+    {
+      "code": "mail_open_item_has_expected_body",
+      "status": "passed"
+    },
+    {
+      "code": "record_injection_operation_matches",
+      "status": "passed"
+    },
+    {
+      "code": "record_injection_delivery_matches",
+      "status": "passed"
+    },
+    {
+      "code": "record_injection_message_matches",
+      "status": "passed"
+    },
+    {
+      "code": "record_injection_agent_matches",
+      "status": "passed"
+    },
+    {
+      "code": "record_injection_thread_matches",
+      "status": "passed"
+    },
+    {
+      "code": "record_injection_method_matches",
+      "status": "passed"
+    },
+    {
+      "code": "record_injection_result_ok",
+      "status": "passed"
+    },
+    {
+      "code": "record_injection_item_count_matches",
+      "status": "passed"
+    },
+    {
+      "code": "record_injection_control_event_delivery_matches",
+      "status": "passed"
+    },
+    {
+      "code": "mail_claim_state_claimed",
+      "status": "passed"
+    },
+    {
+      "code": "mail_claim_agent_matches",
+      "status": "passed"
+    },
+    {
+      "code": "mail_mark_done",
+      "status": "passed"
+    },
+    {
+      "code": "mail_mark_agent_matches",
+      "status": "passed"
+    },
+    {
+      "code": "notify_acknowledged",
+      "status": "passed"
+    },
+    {
+      "code": "mail_delivered",
+      "status": "passed"
+    },
+    {
+      "code": "notification_polled",
+      "status": "passed"
+    },
+    {
+      "code": "notification_bodyless",
+      "status": "passed"
+    },
+    {
+      "code": "inbox_contains_delivery",
+      "status": "passed"
+    },
+    {
+      "code": "mail_open_delivery_matches",
+      "status": "passed"
+    },
+    {
+      "code": "mail_open_message_matches",
+      "status": "passed"
+    },
+    {
+      "code": "mail_open_transport_is_codex_inject_items",
+      "status": "passed"
+    },
+    {
+      "code": "mail_open_uses_injection",
+      "status": "passed"
+    },
+    {
+      "code": "mail_open_thread_matches",
+      "status": "passed"
+    },
+    {
+      "code": "mail_open_injection_item_count_positive",
+      "status": "passed"
+    },
+    {
+      "code": "mail_open_item_has_delivery_id",
+      "status": "passed"
+    },
+    {
+      "code": "mail_open_item_has_message_id",
+      "status": "passed"
+    },
+    {
+      "code": "mail_open_item_has_expected_body",
+      "status": "passed"
+    },
+    {
+      "code": "record_injection_operation_matches",
+      "status": "passed"
+    },
+    {
+      "code": "record_injection_delivery_matches",
+      "status": "passed"
+    },
+    {
+      "code": "record_injection_message_matches",
+      "status": "passed"
+    },
+    {
+      "code": "record_injection_agent_matches",
+      "status": "passed"
+    },
+    {
+      "code": "record_injection_thread_matches",
+      "status": "passed"
+    },
+    {
+      "code": "record_injection_method_matches",
+      "status": "passed"
+    },
+    {
+      "code": "record_injection_result_ok",
+      "status": "passed"
+    },
+    {
+      "code": "record_injection_item_count_matches",
+      "status": "passed"
+    },
+    {
+      "code": "record_injection_control_event_delivery_matches",
+      "status": "passed"
+    },
+    {
+      "code": "mail_claim_state_claimed",
+      "status": "passed"
+    },
+    {
+      "code": "mail_claim_agent_matches",
+      "status": "passed"
+    },
+    {
+      "code": "mail_delivered",
+      "status": "passed"
+    },
+    {
+      "code": "mail_mark_done",
+      "status": "passed"
+    },
+    {
+      "code": "mail_mark_agent_matches",
+      "status": "passed"
+    },
+    {
+      "code": "notify_acknowledged",
+      "status": "passed"
+    },
+    {
+      "code": "notification_polled",
+      "status": "passed"
+    },
+    {
+      "code": "notification_bodyless",
+      "status": "passed"
+    },
+    {
+      "code": "inbox_contains_delivery",
+      "status": "passed"
+    },
+    {
+      "code": "mail_open_delivery_matches",
+      "status": "passed"
+    },
+    {
+      "code": "mail_open_message_matches",
+      "status": "passed"
+    },
+    {
+      "code": "mail_open_transport_is_codex_inject_items",
+      "status": "passed"
+    },
+    {
+      "code": "mail_open_uses_injection",
+      "status": "passed"
+    },
+    {
+      "code": "mail_open_thread_matches",
+      "status": "passed"
+    },
+    {
+      "code": "mail_open_injection_item_count_positive",
+      "status": "passed"
+    },
+    {
+      "code": "mail_open_item_has_delivery_id",
+      "status": "passed"
+    },
+    {
+      "code": "mail_open_item_has_message_id",
+      "status": "passed"
+    },
+    {
+      "code": "mail_open_item_has_expected_body",
+      "status": "passed"
+    },
+    {
+      "code": "record_injection_operation_matches",
+      "status": "passed"
+    },
+    {
+      "code": "record_injection_delivery_matches",
+      "status": "passed"
+    },
+    {
+      "code": "record_injection_message_matches",
+      "status": "passed"
+    },
+    {
+      "code": "record_injection_agent_matches",
+      "status": "passed"
+    },
+    {
+      "code": "record_injection_thread_matches",
+      "status": "passed"
+    },
+    {
+      "code": "record_injection_method_matches",
+      "status": "passed"
+    },
+    {
+      "code": "record_injection_result_ok",
+      "status": "passed"
+    },
+    {
+      "code": "record_injection_item_count_matches",
+      "status": "passed"
+    },
+    {
+      "code": "record_injection_control_event_delivery_matches",
+      "status": "passed"
+    },
+    {
+      "code": "mail_claim_state_claimed",
+      "status": "passed"
+    },
+    {
+      "code": "mail_claim_agent_matches",
+      "status": "passed"
+    },
+    {
+      "code": "mail_delivered",
+      "status": "passed"
+    },
+    {
+      "code": "mail_mark_done",
+      "status": "passed"
+    },
+    {
+      "code": "mail_mark_agent_matches",
+      "status": "passed"
+    },
+    {
+      "code": "notify_acknowledged",
+      "status": "passed"
+    },
+    {
+      "code": "notification_polled",
+      "status": "passed"
+    },
+    {
+      "code": "notification_bodyless",
+      "status": "passed"
+    },
+    {
+      "code": "inbox_contains_delivery",
+      "status": "passed"
+    },
+    {
+      "code": "mail_open_delivery_matches",
+      "status": "passed"
+    },
+    {
+      "code": "mail_open_message_matches",
+      "status": "passed"
+    },
+    {
+      "code": "mail_open_transport_is_codex_inject_items",
+      "status": "passed"
+    },
+    {
+      "code": "mail_open_uses_injection",
+      "status": "passed"
+    },
+    {
+      "code": "mail_open_thread_matches",
+      "status": "passed"
+    },
+    {
+      "code": "mail_open_injection_item_count_positive",
+      "status": "passed"
+    },
+    {
+      "code": "mail_open_item_has_delivery_id",
+      "status": "passed"
+    },
+    {
+      "code": "mail_open_item_has_message_id",
+      "status": "passed"
+    },
+    {
+      "code": "mail_open_item_has_expected_body",
+      "status": "passed"
+    },
+    {
+      "code": "record_injection_operation_matches",
+      "status": "passed"
+    },
+    {
+      "code": "record_injection_delivery_matches",
+      "status": "passed"
+    },
+    {
+      "code": "record_injection_message_matches",
+      "status": "passed"
+    },
+    {
+      "code": "record_injection_agent_matches",
+      "status": "passed"
+    },
+    {
+      "code": "record_injection_thread_matches",
+      "status": "passed"
+    },
+    {
+      "code": "record_injection_method_matches",
+      "status": "passed"
+    },
+    {
+      "code": "record_injection_result_ok",
+      "status": "passed"
+    },
+    {
+      "code": "record_injection_item_count_matches",
+      "status": "passed"
+    },
+    {
+      "code": "record_injection_control_event_delivery_matches",
+      "status": "passed"
+    },
+    {
+      "code": "mail_claim_state_claimed",
+      "status": "passed"
+    },
+    {
+      "code": "mail_claim_agent_matches",
+      "status": "passed"
+    },
+    {
+      "code": "mail_delivered",
+      "status": "passed"
+    },
+    {
+      "code": "mail_mark_done",
+      "status": "passed"
+    },
+    {
+      "code": "mail_mark_agent_matches",
+      "status": "passed"
+    },
+    {
+      "code": "notify_acknowledged",
+      "status": "passed"
+    },
+    {
+      "code": "notification_polled",
+      "status": "passed"
+    },
+    {
+      "code": "notification_bodyless",
+      "status": "passed"
+    },
+    {
+      "code": "inbox_contains_delivery",
+      "status": "passed"
+    },
+    {
+      "code": "mail_open_delivery_matches",
+      "status": "passed"
+    },
+    {
+      "code": "mail_open_message_matches",
+      "status": "passed"
+    },
+    {
+      "code": "mail_open_transport_is_codex_inject_items",
+      "status": "passed"
+    },
+    {
+      "code": "mail_open_uses_injection",
+      "status": "passed"
+    },
+    {
+      "code": "mail_open_thread_matches",
+      "status": "passed"
+    },
+    {
+      "code": "mail_open_injection_item_count_positive",
+      "status": "passed"
+    },
+    {
+      "code": "mail_open_item_has_delivery_id",
+      "status": "passed"
+    },
+    {
+      "code": "mail_open_item_has_message_id",
+      "status": "passed"
+    },
+    {
+      "code": "mail_open_item_has_expected_body",
+      "status": "passed"
+    },
+    {
+      "code": "record_injection_operation_matches",
+      "status": "passed"
+    },
+    {
+      "code": "record_injection_delivery_matches",
+      "status": "passed"
+    },
+    {
+      "code": "record_injection_message_matches",
+      "status": "passed"
+    },
+    {
+      "code": "record_injection_agent_matches",
+      "status": "passed"
+    },
+    {
+      "code": "record_injection_thread_matches",
+      "status": "passed"
+    },
+    {
+      "code": "record_injection_method_matches",
+      "status": "passed"
+    },
+    {
+      "code": "record_injection_result_ok",
+      "status": "passed"
+    },
+    {
+      "code": "record_injection_item_count_matches",
+      "status": "passed"
+    },
+    {
+      "code": "record_injection_control_event_delivery_matches",
+      "status": "passed"
+    },
+    {
+      "code": "mail_claim_state_claimed",
+      "status": "passed"
+    },
+    {
+      "code": "mail_claim_agent_matches",
+      "status": "passed"
+    },
+    {
+      "code": "mail_mark_done",
+      "status": "passed"
+    },
+    {
+      "code": "mail_mark_agent_matches",
+      "status": "passed"
+    },
+    {
+      "code": "notify_acknowledged",
+      "status": "passed"
+    },
+    {
+      "code": "mail_delivered",
+      "status": "passed"
+    },
+    {
+      "code": "notification_polled",
+      "status": "passed"
+    },
+    {
+      "code": "notification_bodyless",
+      "status": "passed"
+    },
+    {
+      "code": "inbox_contains_delivery",
+      "status": "passed"
+    },
+    {
+      "code": "mail_open_delivery_matches",
+      "status": "passed"
+    },
+    {
+      "code": "mail_open_message_matches",
+      "status": "passed"
+    },
+    {
+      "code": "mail_open_transport_is_codex_inject_items",
+      "status": "passed"
+    },
+    {
+      "code": "mail_open_uses_injection",
+      "status": "passed"
+    },
+    {
+      "code": "mail_open_thread_matches",
+      "status": "passed"
+    },
+    {
+      "code": "mail_open_injection_item_count_positive",
+      "status": "passed"
+    },
+    {
+      "code": "mail_open_item_has_delivery_id",
+      "status": "passed"
+    },
+    {
+      "code": "mail_open_item_has_message_id",
+      "status": "passed"
+    },
+    {
+      "code": "mail_open_item_has_expected_body",
+      "status": "passed"
+    },
+    {
+      "code": "record_injection_operation_matches",
+      "status": "passed"
+    },
+    {
+      "code": "record_injection_delivery_matches",
+      "status": "passed"
+    },
+    {
+      "code": "record_injection_message_matches",
+      "status": "passed"
+    },
+    {
+      "code": "record_injection_agent_matches",
+      "status": "passed"
+    },
+    {
+      "code": "record_injection_thread_matches",
+      "status": "passed"
+    },
+    {
+      "code": "record_injection_method_matches",
+      "status": "passed"
+    },
+    {
+      "code": "record_injection_result_ok",
+      "status": "passed"
+    },
+    {
+      "code": "record_injection_item_count_matches",
+      "status": "passed"
+    },
+    {
+      "code": "record_injection_control_event_delivery_matches",
+      "status": "passed"
+    },
+    {
+      "code": "mail_claim_state_claimed",
+      "status": "passed"
+    },
+    {
+      "code": "mail_claim_agent_matches",
+      "status": "passed"
+    },
+    {
+      "code": "mail_delivered",
+      "status": "passed"
+    },
+    {
+      "code": "mail_mark_done",
+      "status": "passed"
+    },
+    {
+      "code": "mail_mark_agent_matches",
+      "status": "passed"
+    },
+    {
+      "code": "notify_acknowledged",
+      "status": "passed"
+    },
+    {
+      "code": "notification_polled",
+      "status": "passed"
+    },
+    {
+      "code": "notification_bodyless",
+      "status": "passed"
+    },
+    {
+      "code": "inbox_contains_delivery",
+      "status": "passed"
+    },
+    {
+      "code": "mail_open_delivery_matches",
+      "status": "passed"
+    },
+    {
+      "code": "mail_open_message_matches",
+      "status": "passed"
+    },
+    {
+      "code": "mail_open_transport_is_codex_inject_items",
+      "status": "passed"
+    },
+    {
+      "code": "mail_open_uses_injection",
+      "status": "passed"
+    },
+    {
+      "code": "mail_open_thread_matches",
+      "status": "passed"
+    },
+    {
+      "code": "mail_open_injection_item_count_positive",
+      "status": "passed"
+    },
+    {
+      "code": "mail_open_item_has_delivery_id",
+      "status": "passed"
+    },
+    {
+      "code": "mail_open_item_has_message_id",
+      "status": "passed"
+    },
+    {
+      "code": "mail_open_item_has_expected_body",
+      "status": "passed"
+    },
+    {
+      "code": "record_injection_operation_matches",
+      "status": "passed"
+    },
+    {
+      "code": "record_injection_delivery_matches",
+      "status": "passed"
+    },
+    {
+      "code": "record_injection_message_matches",
+      "status": "passed"
+    },
+    {
+      "code": "record_injection_agent_matches",
+      "status": "passed"
+    },
+    {
+      "code": "record_injection_thread_matches",
+      "status": "passed"
+    },
+    {
+      "code": "record_injection_method_matches",
+      "status": "passed"
+    },
+    {
+      "code": "record_injection_result_ok",
+      "status": "passed"
+    },
+    {
+      "code": "record_injection_item_count_matches",
+      "status": "passed"
+    },
+    {
+      "code": "record_injection_control_event_delivery_matches",
+      "status": "passed"
+    },
+    {
+      "code": "mail_claim_state_claimed",
+      "status": "passed"
+    },
+    {
+      "code": "mail_claim_agent_matches",
+      "status": "passed"
+    },
+    {
+      "code": "mail_delivered",
+      "status": "passed"
+    },
+    {
+      "code": "mail_mark_done",
+      "status": "passed"
+    },
+    {
+      "code": "mail_mark_agent_matches",
+      "status": "passed"
+    },
+    {
+      "code": "notify_acknowledged",
+      "status": "passed"
+    },
+    {
+      "code": "notification_polled",
+      "status": "passed"
+    },
+    {
+      "code": "notification_bodyless",
+      "status": "passed"
+    },
+    {
+      "code": "inbox_contains_delivery",
+      "status": "passed"
+    },
+    {
+      "code": "mail_open_delivery_matches",
+      "status": "passed"
+    },
+    {
+      "code": "mail_open_message_matches",
+      "status": "passed"
+    },
+    {
+      "code": "mail_open_transport_is_codex_inject_items",
+      "status": "passed"
+    },
+    {
+      "code": "mail_open_uses_injection",
+      "status": "passed"
+    },
+    {
+      "code": "mail_open_thread_matches",
+      "status": "passed"
+    },
+    {
+      "code": "mail_open_injection_item_count_positive",
+      "status": "passed"
+    },
+    {
+      "code": "mail_open_item_has_delivery_id",
+      "status": "passed"
+    },
+    {
+      "code": "mail_open_item_has_message_id",
+      "status": "passed"
+    },
+    {
+      "code": "mail_open_item_has_expected_body",
+      "status": "passed"
+    },
+    {
+      "code": "record_injection_operation_matches",
+      "status": "passed"
+    },
+    {
+      "code": "record_injection_delivery_matches",
+      "status": "passed"
+    },
+    {
+      "code": "record_injection_message_matches",
+      "status": "passed"
+    },
+    {
+      "code": "record_injection_agent_matches",
+      "status": "passed"
+    },
+    {
+      "code": "record_injection_thread_matches",
+      "status": "passed"
+    },
+    {
+      "code": "record_injection_method_matches",
+      "status": "passed"
+    },
+    {
+      "code": "record_injection_result_ok",
+      "status": "passed"
+    },
+    {
+      "code": "record_injection_item_count_matches",
+      "status": "passed"
+    },
+    {
+      "code": "record_injection_control_event_delivery_matches",
+      "status": "passed"
+    },
+    {
+      "code": "mail_claim_state_claimed",
+      "status": "passed"
+    },
+    {
+      "code": "mail_claim_agent_matches",
+      "status": "passed"
+    },
+    {
+      "code": "mail_delivered",
+      "status": "passed"
+    },
+    {
+      "code": "mail_mark_done",
+      "status": "passed"
+    },
+    {
+      "code": "mail_mark_agent_matches",
+      "status": "passed"
+    },
+    {
+      "code": "notify_acknowledged",
+      "status": "passed"
+    },
+    {
+      "code": "notification_polled",
+      "status": "passed"
+    },
+    {
+      "code": "notification_bodyless",
+      "status": "passed"
+    },
+    {
+      "code": "inbox_contains_delivery",
+      "status": "passed"
+    },
+    {
+      "code": "mail_open_delivery_matches",
+      "status": "passed"
+    },
+    {
+      "code": "mail_open_message_matches",
+      "status": "passed"
+    },
+    {
+      "code": "mail_open_transport_is_codex_inject_items",
+      "status": "passed"
+    },
+    {
+      "code": "mail_open_uses_injection",
+      "status": "passed"
+    },
+    {
+      "code": "mail_open_thread_matches",
+      "status": "passed"
+    },
+    {
+      "code": "mail_open_injection_item_count_positive",
+      "status": "passed"
+    },
+    {
+      "code": "mail_open_item_has_delivery_id",
+      "status": "passed"
+    },
+    {
+      "code": "mail_open_item_has_message_id",
+      "status": "passed"
+    },
+    {
+      "code": "mail_open_item_has_expected_body",
+      "status": "passed"
+    },
+    {
+      "code": "record_injection_operation_matches",
+      "status": "passed"
+    },
+    {
+      "code": "record_injection_delivery_matches",
+      "status": "passed"
+    },
+    {
+      "code": "record_injection_message_matches",
+      "status": "passed"
+    },
+    {
+      "code": "record_injection_agent_matches",
+      "status": "passed"
+    },
+    {
+      "code": "record_injection_thread_matches",
+      "status": "passed"
+    },
+    {
+      "code": "record_injection_method_matches",
+      "status": "passed"
+    },
+    {
+      "code": "record_injection_result_ok",
+      "status": "passed"
+    },
+    {
+      "code": "record_injection_item_count_matches",
+      "status": "passed"
+    },
+    {
+      "code": "record_injection_control_event_delivery_matches",
+      "status": "passed"
+    },
+    {
+      "code": "mail_claim_state_claimed",
+      "status": "passed"
+    },
+    {
+      "code": "mail_claim_agent_matches",
+      "status": "passed"
+    },
+    {
+      "code": "mail_mark_done",
+      "status": "passed"
+    },
+    {
+      "code": "mail_mark_agent_matches",
+      "status": "passed"
+    },
+    {
+      "code": "notify_acknowledged",
+      "status": "passed"
+    },
+    {
+      "code": "protocol_coverage_complete",
+      "status": "passed"
+    },
+    {
+      "code": "three_agents_collaborated_by_mail",
+      "status": "passed",
+      "detail": "12 delivered mail records across 3 tasks"
+    }
+  ],
+  "protocol_coverage": {
+    "status": "passed",
+    "expected_mail_count": 12,
+    "operation_counts": {
+      "initialize": 1,
+      "tools/list": 1,
+      "wiki.list": 1,
+      "wiki.page.status": 1,
+      "wiki.agent.identify": 3,
+      "wiki.talk.append": 12,
+      "wiki.notify.poll": 12,
+      "wiki.agent.inbox": 12,
+      "wiki.mail.open": 12,
+      "wiki.mail.claim": 12,
+      "wiki.mail.mark": 12,
+      "wiki.notify.ack": 12
+    },
+    "host_operation_counts": {
+      "wiki.ensure": 1,
+      "wiki.page.create_all": 1,
+      "wiki.mail.record_injection": 12
+    },
+    "project_page": {
+      "page_id": "projects",
+      "list_seen": true,
+      "status_seen": true,
+      "route": "/projects",
+      "talk_handle": "user-wiki://page/projects/talk",
+      "published_handle": "app-support://wiki/projects"
+    },
+    "ledgers": {
+      "mail_deliveries": {
+        "rows": 36,
+        "states": {
+          "unread": 12,
+          "claimed": 12,
+          "done": 12
+        }
+      },
+      "mail_claims": {
+        "rows": 24,
+        "states": {
+          "claimed": 12,
+          "done": 12
+        }
+      },
+      "injection_receipts": {
+        "rows": 12,
+        "ok": 12
+      },
+      "notifications_outbox": {
+        "rows": 24,
+        "states": {
+          "pending": 12,
+          "acknowledged": 12
+        }
+      },
+      "mail_control_events": {
+        "rows": 12,
+        "record_only": 12
+      }
+    },
+    "surfaces": [
+      {
+        "id": "mcp_tool_discovery",
+        "expected": 1,
+        "observed": 1,
+        "status": "passed"
+      },
+      {
+        "id": "wiki_list_inventory",
+        "expected": 1,
+        "observed": 1,
+        "status": "passed"
+      },
+      {
+        "id": "wiki_page_status_projects",
+        "expected": 1,
+        "observed": 1,
+        "status": "passed",
+        "page_id": "projects",
+        "route": "/projects"
+      },
+      {
+        "id": "talk_append_mail_delivery",
+        "expected": 12,
+        "observed": 12,
+        "status": "passed",
+        "page_id": "projects"
+      },
+      {
+        "id": "mail_delivery_records",
+        "expected": 12,
+        "observed": 12,
+        "status": "passed"
+      },
+      {
+        "id": "notify_poll",
+        "expected": 12,
+        "observed": 12,
+        "status": "passed"
+      },
+      {
+        "id": "agent_inbox",
+        "expected": 12,
+        "observed": 12,
+        "status": "passed"
+      },
+      {
+        "id": "mail_open",
+        "expected": 12,
+        "observed": 12,
+        "status": "passed"
+      },
+      {
+        "id": "host_injection_receipts",
+        "expected": 12,
+        "observed": 12,
+        "status": "passed",
+        "app_server_execution": "simulated_record_only"
+      },
+      {
+        "id": "mail_claim",
+        "expected": 12,
+        "observed": 12,
+        "status": "passed"
+      },
+      {
+        "id": "mail_mark_done",
+        "expected": 12,
+        "observed": 12,
+        "status": "passed"
+      },
+      {
+        "id": "notify_ack",
+        "expected": 12,
+        "observed": 12,
+        "status": "passed"
+      },
+      {
+        "id": "project_talk_links",
+        "expected": 12,
+        "observed": 12,
+        "status": "passed",
+        "page_id": "projects",
+        "route": "/projects",
+        "talk_handle": "user-wiki://page/projects/talk",
+        "published_handle": "app-support://wiki/projects"
+      },
+      {
+        "id": "ledger_claimed_events",
+        "expected": 12,
+        "observed": 12,
+        "status": "passed"
+      },
+      {
+        "id": "ledger_done_events",
+        "expected": 12,
+        "observed": 12,
+        "status": "passed"
+      },
+      {
+        "id": "ledger_injection_receipts",
+        "expected": 12,
+        "observed": 12,
+        "status": "passed"
+      },
+      {
+        "id": "ledger_control_events",
+        "expected": 12,
+        "observed": 12,
+        "status": "passed"
+      },
+      {
+        "id": "ledger_acknowledged_notifications",
+        "expected": 12,
+        "observed": 12,
+        "status": "passed"
+      },
+      {
+        "id": "mail_delivery_state_chain_join",
+        "expected": 12,
+        "observed": 12,
+        "status": "passed",
+        "joins": [
+          "delivery_id",
+          "message_id",
+          "recipient",
+          "claimed_by"
+        ],
+        "required_states": [
+          "unread",
+          "claimed",
+          "done"
+        ]
+      },
+      {
+        "id": "mail_claim_ledger_agent_join",
+        "expected": 12,
+        "observed": 12,
+        "status": "passed",
+        "joins": [
+          "delivery_id",
+          "message_id",
+          "recipient",
+          "agent_id"
+        ],
+        "required_states": [
+          "claimed",
+          "done"
+        ]
+      },
+      {
+        "id": "injection_receipt_identity_join",
+        "expected": 12,
+        "observed": 12,
+        "status": "passed",
+        "joins": [
+          "delivery_id",
+          "message_id",
+          "agent_id",
+          "thread_id",
+          "body_sha256",
+          "item_count"
+        ],
+        "app_server_execution": "simulated_record_only"
+      },
+      {
+        "id": "notification_lifecycle_identity_join",
+        "expected": 12,
+        "observed": 12,
+        "status": "passed",
+        "joins": [
+          "notification_id",
+          "delivery_id",
+          "message_id",
+          "agent_id",
+          "transport_thread_id"
+        ],
+        "required_states": [
+          "pending",
+          "acknowledged"
+        ]
+      },
+      {
+        "id": "mcp_call_order_per_delivery",
+        "expected": 12,
+        "observed": 12,
+        "status": "passed",
+        "order": [
+          "talk.append",
+          "notify.poll",
+          "agent.inbox",
+          "mail.open",
+          "mail.claim",
+          "mail.mark(done)",
+          "notify.ack"
+        ]
+      },
+      {
+        "id": "reply_chain_edges_within_task",
+        "expected": 9,
+        "observed": 9,
+        "status": "passed",
+        "expected_non_seed_replies": 9
+      },
+      {
+        "id": "body_project_anchor_mentions",
+        "expected": 6,
+        "observed": 6,
+        "status": "passed",
+        "note": "Only Pip and Mira generated bodies are expected to mention wiki project anchors; seed and closure-only messages are not counted."
+      },
+      {
+        "id": "agent_lifecycle_ready_status",
+        "expected": 3,
+        "observed": 3,
+        "status": "passed",
+        "joins": [
+          "unit_id",
+          "turns_started",
+          "turns_completed",
+          "proof_status.gate_status"
+        ]
+      }
+    ],
+    "gaps": []
+  }
+}

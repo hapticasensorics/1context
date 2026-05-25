@@ -56,8 +56,8 @@ class WikiCoreClient:
     """Thin Python client for the portable Rust wiki core.
 
     The memory system uses this client when it needs wiki semantics. It should
-    not duplicate page placement, template fallback, talk delivery, inbox, or
-    notification rules in Python.
+    not duplicate page placement, template fallback, talk files, or render rules
+    in Python.
     """
 
     runtime_home: Path
@@ -247,6 +247,12 @@ class WikiCoreClient:
     def asset_list(self, page: str) -> dict[str, Any]:
         return self.call("asset-list", page)
 
+    def reference_list(self, page: str | None = None) -> dict[str, Any]:
+        args = ["reference-list"]
+        if page is not None:
+            args.append(page)
+        return self.call(*args)
+
     def page_restore(self, page: str) -> dict[str, Any]:
         return self.call("page-restore", page)
 
@@ -270,70 +276,137 @@ class WikiCoreClient:
             args.append("--force")
         return self.call(*args)
 
-    def agent_register(
-        self,
-        *,
-        thread_id: str,
-        roles: list[str] | tuple[str, ...] = (),
-        capabilities: list[str] | tuple[str, ...] = (),
-        ttl_seconds: int = 1800,
-    ) -> dict[str, Any]:
-        args = ["agent-register", "--thread-id", thread_id, "--ttl-seconds", str(ttl_seconds)]
-        for role in roles:
-            args.extend(["--role", role])
-        for capability in capabilities:
-            args.extend(["--capability", capability])
-        return self.call(*args)
-
     def agent_identify(
         self,
         *,
         thread_id: str,
         roles: list[str] | tuple[str, ...] = (),
         capabilities: list[str] | tuple[str, ...] = (),
-        ttl_seconds: int = 1800,
+        ttl_seconds: int | None = None,
     ) -> dict[str, Any]:
-        args = ["agent-identify", "--thread-id", thread_id, "--ttl-seconds", str(ttl_seconds)]
+        args = ["agent-identify", "--thread-id", thread_id]
         for role in roles:
             args.extend(["--role", role])
         for capability in capabilities:
             args.extend(["--capability", capability])
+        if ttl_seconds is not None:
+            args.extend(["--ttl-seconds", str(ttl_seconds)])
         return self.call(*args)
 
-    def agent_heartbeat(self, agent_id: str, *, ttl_seconds: int = 1800) -> dict[str, Any]:
-        return self.call("agent-heartbeat", agent_id, "--ttl-seconds", str(ttl_seconds))
-
-    def agent_retire(self, agent_id: str, *, reason: str = "completed") -> dict[str, Any]:
-        return self.call("agent-retire", agent_id, "--reason", reason)
-
-    def agent_whoami(
-        self,
-        *,
-        thread_id: str | None = None,
-        agent_id: str | None = None,
-    ) -> dict[str, Any]:
-        args = ["whoami"]
-        if thread_id is not None:
-            args.extend(["--thread-id", thread_id])
-        if agent_id is not None:
-            args.extend(["--agent-id", agent_id])
-        return self.call(*args)
-
-    def agent_list(
-        self,
-        *,
-        include_stale: bool = False,
-        include_retired: bool = False,
-    ) -> dict[str, Any]:
-        args = ["agent-list"]
-        if include_stale:
-            args.append("--include-stale")
-        if include_retired:
-            args.append("--include-retired")
+    def agent_heartbeat(self, agent_id: str, *, ttl_seconds: int | None = None) -> dict[str, Any]:
+        args = ["agent-heartbeat", agent_id]
+        if ttl_seconds is not None:
+            args.extend(["--ttl-seconds", str(ttl_seconds)])
         return self.call(*args)
 
     def agent_status(self, agent_id: str) -> dict[str, Any]:
         return self.call("agent-status", agent_id)
+
+    def agent_status_by_thread(self, thread_id: str) -> dict[str, Any]:
+        return self.call("agent-status-by-thread", thread_id)
+
+    def agent_retire(self, agent_id: str) -> dict[str, Any]:
+        return self.call("agent-retire", agent_id)
+
+    def agent_inbox(self, agent_id: str) -> dict[str, Any]:
+        return self.call("agent-inbox", agent_id)
+
+    def mail_open(self, delivery_id: str, *, agent_id: str) -> dict[str, Any]:
+        return self.call("mail-open", delivery_id, "--agent-id", agent_id)
+
+    def mail_record_injection(
+        self,
+        delivery_id: str,
+        *,
+        agent_id: str,
+        result: str = "ok",
+        item_count: int | None = None,
+        thread_id: str | None = None,
+        error: str | None = None,
+    ) -> dict[str, Any]:
+        args = ["mail-record-injection", delivery_id, "--agent-id", agent_id, "--result", result]
+        if item_count is not None:
+            args.extend(["--item-count", str(item_count)])
+        if thread_id is not None:
+            args.extend(["--thread-id", thread_id])
+        if error is not None:
+            args.extend(["--error", error])
+        return self.call(*args)
+
+    def mail_claim(self, delivery_id: str, *, agent_id: str) -> dict[str, Any]:
+        return self.call("mail-claim", delivery_id, "--agent-id", agent_id)
+
+    def mail_mark(self, delivery_id: str, *, agent_id: str, state: str) -> dict[str, Any]:
+        return self.call("mail-mark", delivery_id, "--agent-id", agent_id, "--state", state)
+
+    def mail_snooze(self, delivery_id: str, *, agent_id: str, until: str) -> dict[str, Any]:
+        return self.call("mail-snooze", delivery_id, "--agent-id", agent_id, "--until", until)
+
+    def notify_poll(self, agent_id: str, *, cursor: str | None = None) -> dict[str, Any]:
+        args = ["notify-poll", agent_id]
+        if cursor is not None:
+            args.extend(["--cursor", cursor])
+        return self.call(*args)
+
+    def notify_ack(self, notification_id: str, *, agent_id: str) -> dict[str, Any]:
+        return self.call("notify-ack", notification_id, "--agent-id", agent_id)
+
+    def notify_dispatch(
+        self,
+        agent_id: str,
+        *,
+        dry_run: bool = False,
+        steering_command: str | None = None,
+        steering_args: list[str] | tuple[str, ...] = (),
+        payload_format: str | None = None,
+        limit: int | None = None,
+    ) -> dict[str, Any]:
+        args = ["notify-dispatch", agent_id]
+        if dry_run:
+            args.append("--dry-run")
+        if steering_command is not None:
+            args.extend(["--steering-command", steering_command])
+        for steering_arg in steering_args:
+            args.extend(["--steering-arg", steering_arg])
+        if payload_format is not None:
+            args.extend(["--payload-format", payload_format])
+        if limit is not None:
+            args.extend(["--limit", str(limit)])
+        return self.call(*args)
+
+    def mail_send(
+        self,
+        *,
+        page: str,
+        subject: str,
+        from_address: str,
+        to: list[str] | tuple[str, ...] = (),
+        body_markdown: str | None = None,
+        body_file: Path | str | None = None,
+        kind: str = "proposal",
+        cc: list[str] | tuple[str, ...] = (),
+        attachments: list[Path | str] | tuple[Path | str, ...] = (),
+        allow_tombstoned: bool = False,
+        thread_id: str | None = None,
+        reply_to: str | None = None,
+        operation_id: str | None = None,
+    ) -> dict[str, Any]:
+        return self.talk_append(
+            page=page,
+            subject=subject,
+            from_address=from_address,
+            to=to,
+            body_markdown=body_markdown,
+            body_file=body_file,
+            kind=kind,
+            cc=cc,
+            attachments=attachments,
+            allow_tombstoned=allow_tombstoned,
+            thread_id=thread_id,
+            reply_to=reply_to,
+            operation_id=operation_id,
+            delivery_mode="mail",
+        )
 
     def talk_append(
         self,
@@ -341,17 +414,17 @@ class WikiCoreClient:
         page: str,
         subject: str,
         from_address: str,
-        to: list[str] | tuple[str, ...],
+        to: list[str] | tuple[str, ...] = (),
         body_markdown: str | None = None,
         body_file: Path | str | None = None,
         kind: str = "proposal",
         cc: list[str] | tuple[str, ...] = (),
-        to_roles: list[str] | tuple[str, ...] = (),
-        cc_roles: list[str] | tuple[str, ...] = (),
         attachments: list[Path | str] | tuple[Path | str, ...] = (),
         allow_tombstoned: bool = False,
         thread_id: str | None = None,
         reply_to: str | None = None,
+        operation_id: str | None = None,
+        delivery_mode: str | None = None,
     ) -> dict[str, Any]:
         args = [
             "talk-append",
@@ -368,14 +441,14 @@ class WikiCoreClient:
             args.extend(["--thread-id", thread_id])
         if reply_to is not None:
             args.extend(["--reply-to", reply_to])
+        if operation_id is not None:
+            args.extend(["--operation-id", operation_id])
+        if delivery_mode is not None:
+            args.extend(["--delivery-mode", delivery_mode])
         for recipient in to:
             args.extend(["--to", recipient])
         for recipient in cc:
             args.extend(["--cc", recipient])
-        for role in to_roles:
-            args.extend(["--to-role", role])
-        for role in cc_roles:
-            args.extend(["--cc-role", role])
         for attachment in attachments:
             args.extend(["--attachment", str(attachment)])
         _extend_text_or_file_arg(
@@ -389,240 +462,6 @@ class WikiCoreClient:
         if allow_tombstoned:
             args.append("--allow-tombstoned")
         return self.call(*args)
-
-    def mail_inbox(
-        self,
-        recipient: str,
-        *,
-        include_archived: bool = False,
-        include_snoozed: bool = False,
-    ) -> dict[str, Any]:
-        args = ["mail-inbox", recipient]
-        if include_archived:
-            args.append("--include-archived")
-        if include_snoozed:
-            args.append("--include-snoozed")
-        return self.call(*args)
-
-    def mail_read(
-        self,
-        *,
-        message_id: str | None = None,
-        thread_id: str | None = None,
-    ) -> dict[str, Any]:
-        args = ["mail-read"]
-        if message_id is not None:
-            args.extend(["--message-id", message_id])
-        if thread_id is not None:
-            args.extend(["--thread-id", thread_id])
-        return self.call(*args)
-
-    def mail_subscribe(
-        self,
-        *,
-        agent_id: str,
-        address: str,
-        relation: str = "subscriber",
-        kinds: list[str] | tuple[str, ...] = (),
-        ttl_seconds: int = 1800,
-    ) -> dict[str, Any]:
-        args = [
-            "mail-subscribe",
-            "--agent-id",
-            agent_id,
-            "--address",
-            address,
-            "--relation",
-            relation,
-            "--ttl-seconds",
-            str(ttl_seconds),
-        ]
-        for kind in kinds:
-            args.extend(["--kind", kind])
-        return self.call(*args)
-
-    def mail_unsubscribe(
-        self,
-        *,
-        agent_id: str,
-        address: str,
-        relation: str | None = None,
-        kinds: list[str] | tuple[str, ...] = (),
-    ) -> dict[str, Any]:
-        args = ["mail-unsubscribe", "--agent-id", agent_id, "--address", address]
-        if relation is not None:
-            args.extend(["--relation", relation])
-        for kind in kinds:
-            args.extend(["--kind", kind])
-        return self.call(*args)
-
-    def mail_subscriptions(
-        self,
-        *,
-        agent_id: str | None = None,
-        address: str | None = None,
-    ) -> dict[str, Any]:
-        args = ["mail-subscriptions"]
-        if agent_id is not None:
-            args.extend(["--agent-id", agent_id])
-        if address is not None:
-            args.extend(["--address", address])
-        return self.call(*args)
-
-    def page_watch(
-        self,
-        page: str,
-        *,
-        agent_id: str,
-        list_address: str | None = None,
-        kinds: list[str] | tuple[str, ...] = (),
-        ttl_seconds: int = 1800,
-    ) -> dict[str, Any]:
-        args = ["page-watch", page, "--agent-id", agent_id, "--ttl-seconds", str(ttl_seconds)]
-        if list_address is not None:
-            args.extend(["--list", list_address])
-        for kind in kinds:
-            args.extend(["--kind", kind])
-        return self.call(*args)
-
-    def page_unwatch(
-        self,
-        page: str,
-        *,
-        agent_id: str,
-        list_address: str | None = None,
-        kinds: list[str] | tuple[str, ...] = (),
-    ) -> dict[str, Any]:
-        args = ["page-unwatch", page, "--agent-id", agent_id]
-        if list_address is not None:
-            args.extend(["--list", list_address])
-        for kind in kinds:
-            args.extend(["--kind", kind])
-        return self.call(*args)
-
-    def page_assign_role(
-        self,
-        page: str,
-        *,
-        agent_id: str,
-        role: str,
-        kinds: list[str] | tuple[str, ...] = (),
-        ttl_seconds: int = 1800,
-    ) -> dict[str, Any]:
-        args = [
-            "page-assign-role",
-            page,
-            "--agent-id",
-            agent_id,
-            "--role",
-            role,
-            "--ttl-seconds",
-            str(ttl_seconds),
-        ]
-        for kind in kinds:
-            args.extend(["--kind", kind])
-        return self.call(*args)
-
-    def list_create(
-        self,
-        *,
-        address: str,
-        title: str | None = None,
-        description: str | None = None,
-        page: str | None = None,
-        owner: str | None = None,
-    ) -> dict[str, Any]:
-        args = ["list-create", "--address", address]
-        for flag, value in [
-            ("--title", title),
-            ("--description", description),
-            ("--page", page),
-            ("--owner", owner),
-        ]:
-            if value is not None:
-                args.extend([flag, value])
-        return self.call(*args)
-
-    def lists(
-        self,
-        *,
-        page: str | None = None,
-        address: str | None = None,
-    ) -> dict[str, Any]:
-        args = ["lists"]
-        if page is not None:
-            args.extend(["--page", page])
-        if address is not None:
-            args.extend(["--address", address])
-        return self.call(*args)
-
-    def list_status(
-        self,
-        address: str,
-        *,
-        include_archived: bool = False,
-        include_snoozed: bool = False,
-    ) -> dict[str, Any]:
-        args = ["list-status", address]
-        if include_archived:
-            args.append("--include-archived")
-        if include_snoozed:
-            args.append("--include-snoozed")
-        return self.call(*args)
-
-    def list_members(self, address: str) -> dict[str, Any]:
-        return self.call("list-members", address)
-
-    def agent_inbox(
-        self,
-        agent_id: str,
-        *,
-        include_archived: bool = False,
-        include_snoozed: bool = False,
-    ) -> dict[str, Any]:
-        args = ["agent-inbox", agent_id]
-        if include_archived:
-            args.append("--include-archived")
-        if include_snoozed:
-            args.append("--include-snoozed")
-        return self.call(*args)
-
-    def agent_claim(self, agent_id: str, message_id: str) -> dict[str, Any]:
-        return self.call("agent-claim", agent_id, message_id)
-
-    def mail_mark(
-        self,
-        message_id: str,
-        *,
-        recipient: str,
-        state: str,
-        until: str | None = None,
-    ) -> dict[str, Any]:
-        args = ["mail-mark", message_id, "--recipient", recipient, "--state", state]
-        if until is not None:
-            args.extend(["--until", until])
-        return self.call(*args)
-
-    def mail_mark_all(
-        self,
-        message_id: str,
-        *,
-        state: str,
-        until: str | None = None,
-    ) -> dict[str, Any]:
-        args = ["mail-mark-all", message_id, "--state", state]
-        if until is not None:
-            args.extend(["--until", until])
-        return self.call(*args)
-
-    def mail_claim(self, message_id: str, *, recipient: str, agent_id: str) -> dict[str, Any]:
-        return self.call("mail-claim", message_id, "--recipient", recipient, "--agent-id", agent_id)
-
-    def notify_poll(self, agent_id: str) -> dict[str, Any]:
-        return self.call("notify-poll", agent_id)
-
-    def notify_ack(self, notification_id: str, *, agent_id: str, state: str = "delivered") -> dict[str, Any]:
-        return self.call("notify-ack", notification_id, "--agent-id", agent_id, "--state", state)
 
 
 def resolve_wiki_core_binary(explicit: Path | str | None = None) -> Path:
@@ -756,6 +595,15 @@ def wiki_asset_list(runtime_home: Path, page: str, *, binary: Path | str | None 
     return WikiCoreClient(runtime_home=runtime_home, binary=binary).asset_list(page)
 
 
+def wiki_reference_list(
+    runtime_home: Path,
+    page: str | None = None,
+    *,
+    binary: Path | str | None = None,
+) -> dict[str, Any]:
+    return WikiCoreClient(runtime_home=runtime_home, binary=binary).reference_list(page)
+
+
 def wiki_page_delete(runtime_home: Path, page: str, *, mode: str = "tombstone", binary: Path | str | None = None) -> dict[str, Any]:
     return WikiCoreClient(runtime_home=runtime_home, binary=binary).page_delete(page, mode=mode)
 
@@ -791,27 +639,10 @@ def wiki_agent_identify(
     thread_id: str,
     roles: list[str] | tuple[str, ...] = (),
     capabilities: list[str] | tuple[str, ...] = (),
-    ttl_seconds: int = 1800,
+    ttl_seconds: int | None = None,
     binary: Path | str | None = None,
 ) -> dict[str, Any]:
     return WikiCoreClient(runtime_home=runtime_home, binary=binary).agent_identify(
-        thread_id=thread_id,
-        roles=roles,
-        capabilities=capabilities,
-        ttl_seconds=ttl_seconds,
-    )
-
-
-def wiki_agent_register(
-    runtime_home: Path,
-    *,
-    thread_id: str,
-    roles: list[str] | tuple[str, ...] = (),
-    capabilities: list[str] | tuple[str, ...] = (),
-    ttl_seconds: int = 1800,
-    binary: Path | str | None = None,
-) -> dict[str, Any]:
-    return WikiCoreClient(runtime_home=runtime_home, binary=binary).agent_register(
         thread_id=thread_id,
         roles=roles,
         capabilities=capabilities,
@@ -823,7 +654,7 @@ def wiki_agent_heartbeat(
     runtime_home: Path,
     agent_id: str,
     *,
-    ttl_seconds: int = 1800,
+    ttl_seconds: int | None = None,
     binary: Path | str | None = None,
 ) -> dict[str, Any]:
     return WikiCoreClient(runtime_home=runtime_home, binary=binary).agent_heartbeat(
@@ -832,77 +663,172 @@ def wiki_agent_heartbeat(
     )
 
 
-def wiki_agent_retire(
-    runtime_home: Path,
-    agent_id: str,
-    *,
-    reason: str = "completed",
-    binary: Path | str | None = None,
-) -> dict[str, Any]:
-    return WikiCoreClient(runtime_home=runtime_home, binary=binary).agent_retire(
-        agent_id,
-        reason=reason,
-    )
-
-
-def wiki_agent_whoami(
-    runtime_home: Path,
-    *,
-    thread_id: str | None = None,
-    agent_id: str | None = None,
-    binary: Path | str | None = None,
-) -> dict[str, Any]:
-    return WikiCoreClient(runtime_home=runtime_home, binary=binary).agent_whoami(
-        thread_id=thread_id,
-        agent_id=agent_id,
-    )
-
-
-def wiki_agent_list(
-    runtime_home: Path,
-    *,
-    include_stale: bool = False,
-    include_retired: bool = False,
-    binary: Path | str | None = None,
-) -> dict[str, Any]:
-    return WikiCoreClient(runtime_home=runtime_home, binary=binary).agent_list(
-        include_stale=include_stale,
-        include_retired=include_retired,
-    )
-
-
-def wiki_agent_status(
-    runtime_home: Path,
-    agent_id: str,
-    *,
-    binary: Path | str | None = None,
-) -> dict[str, Any]:
+def wiki_agent_status(runtime_home: Path, agent_id: str, *, binary: Path | str | None = None) -> dict[str, Any]:
     return WikiCoreClient(runtime_home=runtime_home, binary=binary).agent_status(agent_id)
 
 
-def wiki_agent_inbox(
+def wiki_agent_status_by_thread(
     runtime_home: Path,
-    agent_id: str,
+    thread_id: str,
     *,
-    include_archived: bool = False,
-    include_snoozed: bool = False,
     binary: Path | str | None = None,
 ) -> dict[str, Any]:
-    return WikiCoreClient(runtime_home=runtime_home, binary=binary).agent_inbox(
-        agent_id,
-        include_archived=include_archived,
-        include_snoozed=include_snoozed,
+    return WikiCoreClient(runtime_home=runtime_home, binary=binary).agent_status_by_thread(thread_id)
+
+
+def wiki_agent_retire(runtime_home: Path, agent_id: str, *, binary: Path | str | None = None) -> dict[str, Any]:
+    return WikiCoreClient(runtime_home=runtime_home, binary=binary).agent_retire(agent_id)
+
+
+def wiki_agent_inbox(runtime_home: Path, agent_id: str, *, binary: Path | str | None = None) -> dict[str, Any]:
+    return WikiCoreClient(runtime_home=runtime_home, binary=binary).agent_inbox(agent_id)
+
+
+def wiki_mail_open(
+    runtime_home: Path,
+    delivery_id: str,
+    *,
+    agent_id: str,
+    binary: Path | str | None = None,
+) -> dict[str, Any]:
+    return WikiCoreClient(runtime_home=runtime_home, binary=binary).mail_open(delivery_id, agent_id=agent_id)
+
+
+def wiki_mail_record_injection(
+    runtime_home: Path,
+    delivery_id: str,
+    *,
+    agent_id: str,
+    result: str = "ok",
+    item_count: int | None = None,
+    thread_id: str | None = None,
+    error: str | None = None,
+    binary: Path | str | None = None,
+) -> dict[str, Any]:
+    return WikiCoreClient(runtime_home=runtime_home, binary=binary).mail_record_injection(
+        delivery_id,
+        agent_id=agent_id,
+        result=result,
+        item_count=item_count,
+        thread_id=thread_id,
+        error=error,
     )
 
 
-def wiki_agent_claim(
+def wiki_mail_claim(
     runtime_home: Path,
-    agent_id: str,
-    message_id: str,
+    delivery_id: str,
     *,
+    agent_id: str,
     binary: Path | str | None = None,
 ) -> dict[str, Any]:
-    return WikiCoreClient(runtime_home=runtime_home, binary=binary).agent_claim(agent_id, message_id)
+    return WikiCoreClient(runtime_home=runtime_home, binary=binary).mail_claim(delivery_id, agent_id=agent_id)
+
+
+def wiki_mail_mark(
+    runtime_home: Path,
+    delivery_id: str,
+    *,
+    agent_id: str,
+    state: str,
+    binary: Path | str | None = None,
+) -> dict[str, Any]:
+    return WikiCoreClient(runtime_home=runtime_home, binary=binary).mail_mark(
+        delivery_id,
+        agent_id=agent_id,
+        state=state,
+    )
+
+
+def wiki_mail_snooze(
+    runtime_home: Path,
+    delivery_id: str,
+    *,
+    agent_id: str,
+    until: str,
+    binary: Path | str | None = None,
+) -> dict[str, Any]:
+    return WikiCoreClient(runtime_home=runtime_home, binary=binary).mail_snooze(
+        delivery_id,
+        agent_id=agent_id,
+        until=until,
+    )
+
+
+def wiki_notify_poll(
+    runtime_home: Path,
+    agent_id: str,
+    *,
+    cursor: str | None = None,
+    binary: Path | str | None = None,
+) -> dict[str, Any]:
+    return WikiCoreClient(runtime_home=runtime_home, binary=binary).notify_poll(agent_id, cursor=cursor)
+
+
+def wiki_notify_ack(
+    runtime_home: Path,
+    notification_id: str,
+    *,
+    agent_id: str,
+    binary: Path | str | None = None,
+) -> dict[str, Any]:
+    return WikiCoreClient(runtime_home=runtime_home, binary=binary).notify_ack(notification_id, agent_id=agent_id)
+
+
+def wiki_notify_dispatch(
+    runtime_home: Path,
+    agent_id: str,
+    *,
+    dry_run: bool = False,
+    steering_command: str | None = None,
+    steering_args: list[str] | tuple[str, ...] = (),
+    payload_format: str | None = None,
+    limit: int | None = None,
+    binary: Path | str | None = None,
+) -> dict[str, Any]:
+    return WikiCoreClient(runtime_home=runtime_home, binary=binary).notify_dispatch(
+        agent_id,
+        dry_run=dry_run,
+        steering_command=steering_command,
+        steering_args=steering_args,
+        payload_format=payload_format,
+        limit=limit,
+    )
+
+
+def wiki_mail_send(
+    runtime_home: Path,
+    *,
+    page: str,
+    subject: str,
+    from_address: str,
+    to: list[str] | tuple[str, ...] = (),
+    body_markdown: str | None = None,
+    body_file: Path | str | None = None,
+    kind: str = "proposal",
+    cc: list[str] | tuple[str, ...] = (),
+    attachments: list[Path | str] | tuple[Path | str, ...] = (),
+    allow_tombstoned: bool = False,
+    thread_id: str | None = None,
+    reply_to: str | None = None,
+    operation_id: str | None = None,
+    binary: Path | str | None = None,
+) -> dict[str, Any]:
+    return WikiCoreClient(runtime_home=runtime_home, binary=binary).mail_send(
+        page=page,
+        subject=subject,
+        from_address=from_address,
+        to=to,
+        body_markdown=body_markdown,
+        body_file=body_file,
+        kind=kind,
+        cc=cc,
+        attachments=attachments,
+        allow_tombstoned=allow_tombstoned,
+        thread_id=thread_id,
+        reply_to=reply_to,
+        operation_id=operation_id,
+    )
 
 
 def wiki_talk_append(
@@ -911,17 +837,17 @@ def wiki_talk_append(
     page: str,
     subject: str,
     from_address: str,
-    to: list[str] | tuple[str, ...],
+    to: list[str] | tuple[str, ...] = (),
     body_markdown: str | None = None,
     body_file: Path | str | None = None,
     kind: str = "proposal",
     cc: list[str] | tuple[str, ...] = (),
-    to_roles: list[str] | tuple[str, ...] = (),
-    cc_roles: list[str] | tuple[str, ...] = (),
     attachments: list[Path | str] | tuple[Path | str, ...] = (),
     allow_tombstoned: bool = False,
     thread_id: str | None = None,
     reply_to: str | None = None,
+    operation_id: str | None = None,
+    delivery_mode: str | None = None,
     binary: Path | str | None = None,
 ) -> dict[str, Any]:
     return WikiCoreClient(runtime_home=runtime_home, binary=binary).talk_append(
@@ -933,271 +859,12 @@ def wiki_talk_append(
         body_file=body_file,
         kind=kind,
         cc=cc,
-        to_roles=to_roles,
-        cc_roles=cc_roles,
         attachments=attachments,
         allow_tombstoned=allow_tombstoned,
         thread_id=thread_id,
         reply_to=reply_to,
-    )
-
-
-def wiki_mail_inbox(
-    runtime_home: Path,
-    recipient: str,
-    *,
-    include_archived: bool = False,
-    include_snoozed: bool = False,
-    binary: Path | str | None = None,
-) -> dict[str, Any]:
-    return WikiCoreClient(runtime_home=runtime_home, binary=binary).mail_inbox(
-        recipient,
-        include_archived=include_archived,
-        include_snoozed=include_snoozed,
-    )
-
-
-def wiki_mail_read(
-    runtime_home: Path,
-    *,
-    message_id: str | None = None,
-    thread_id: str | None = None,
-    binary: Path | str | None = None,
-) -> dict[str, Any]:
-    return WikiCoreClient(runtime_home=runtime_home, binary=binary).mail_read(
-        message_id=message_id,
-        thread_id=thread_id,
-    )
-
-
-def wiki_mail_subscribe(
-    runtime_home: Path,
-    *,
-    agent_id: str,
-    address: str,
-    relation: str = "subscriber",
-    kinds: list[str] | tuple[str, ...] = (),
-    ttl_seconds: int = 1800,
-    binary: Path | str | None = None,
-) -> dict[str, Any]:
-    return WikiCoreClient(runtime_home=runtime_home, binary=binary).mail_subscribe(
-        agent_id=agent_id,
-        address=address,
-        relation=relation,
-        kinds=kinds,
-        ttl_seconds=ttl_seconds,
-    )
-
-
-def wiki_mail_subscriptions(
-    runtime_home: Path,
-    *,
-    agent_id: str | None = None,
-    address: str | None = None,
-    binary: Path | str | None = None,
-) -> dict[str, Any]:
-    return WikiCoreClient(runtime_home=runtime_home, binary=binary).mail_subscriptions(
-        agent_id=agent_id,
-        address=address,
-    )
-
-
-def wiki_mail_unsubscribe(
-    runtime_home: Path,
-    *,
-    agent_id: str,
-    address: str,
-    relation: str | None = None,
-    kinds: list[str] | tuple[str, ...] = (),
-    binary: Path | str | None = None,
-) -> dict[str, Any]:
-    return WikiCoreClient(runtime_home=runtime_home, binary=binary).mail_unsubscribe(
-        agent_id=agent_id,
-        address=address,
-        relation=relation,
-        kinds=kinds,
-    )
-
-
-def wiki_page_watch(
-    runtime_home: Path,
-    page: str,
-    *,
-    agent_id: str,
-    list_address: str | None = None,
-    kinds: list[str] | tuple[str, ...] = (),
-    ttl_seconds: int = 1800,
-    binary: Path | str | None = None,
-) -> dict[str, Any]:
-    return WikiCoreClient(runtime_home=runtime_home, binary=binary).page_watch(
-        page,
-        agent_id=agent_id,
-        list_address=list_address,
-        kinds=kinds,
-        ttl_seconds=ttl_seconds,
-    )
-
-
-def wiki_page_unwatch(
-    runtime_home: Path,
-    page: str,
-    *,
-    agent_id: str,
-    list_address: str | None = None,
-    kinds: list[str] | tuple[str, ...] = (),
-    binary: Path | str | None = None,
-) -> dict[str, Any]:
-    return WikiCoreClient(runtime_home=runtime_home, binary=binary).page_unwatch(
-        page,
-        agent_id=agent_id,
-        list_address=list_address,
-        kinds=kinds,
-    )
-
-
-def wiki_page_assign_role(
-    runtime_home: Path,
-    page: str,
-    *,
-    agent_id: str,
-    role: str,
-    kinds: list[str] | tuple[str, ...] = (),
-    ttl_seconds: int = 1800,
-    binary: Path | str | None = None,
-) -> dict[str, Any]:
-    return WikiCoreClient(runtime_home=runtime_home, binary=binary).page_assign_role(
-        page,
-        agent_id=agent_id,
-        role=role,
-        kinds=kinds,
-        ttl_seconds=ttl_seconds,
-    )
-
-
-def wiki_list_create(
-    runtime_home: Path,
-    *,
-    address: str,
-    title: str | None = None,
-    description: str | None = None,
-    page: str | None = None,
-    owner: str | None = None,
-    binary: Path | str | None = None,
-) -> dict[str, Any]:
-    return WikiCoreClient(runtime_home=runtime_home, binary=binary).list_create(
-        address=address,
-        title=title,
-        description=description,
-        page=page,
-        owner=owner,
-    )
-
-
-def wiki_lists(
-    runtime_home: Path,
-    *,
-    page: str | None = None,
-    address: str | None = None,
-    binary: Path | str | None = None,
-) -> dict[str, Any]:
-    return WikiCoreClient(runtime_home=runtime_home, binary=binary).lists(
-        page=page,
-        address=address,
-    )
-
-
-def wiki_list_status(
-    runtime_home: Path,
-    address: str,
-    *,
-    include_archived: bool = False,
-    include_snoozed: bool = False,
-    binary: Path | str | None = None,
-) -> dict[str, Any]:
-    return WikiCoreClient(runtime_home=runtime_home, binary=binary).list_status(
-        address,
-        include_archived=include_archived,
-        include_snoozed=include_snoozed,
-    )
-
-
-def wiki_list_members(
-    runtime_home: Path,
-    address: str,
-    *,
-    binary: Path | str | None = None,
-) -> dict[str, Any]:
-    return WikiCoreClient(runtime_home=runtime_home, binary=binary).list_members(address)
-
-
-def wiki_mail_mark(
-    runtime_home: Path,
-    message_id: str,
-    *,
-    recipient: str,
-    state: str,
-    until: str | None = None,
-    binary: Path | str | None = None,
-) -> dict[str, Any]:
-    return WikiCoreClient(runtime_home=runtime_home, binary=binary).mail_mark(
-        message_id,
-        recipient=recipient,
-        state=state,
-        until=until,
-    )
-
-
-def wiki_mail_claim(
-    runtime_home: Path,
-    message_id: str,
-    *,
-    recipient: str,
-    agent_id: str,
-    binary: Path | str | None = None,
-) -> dict[str, Any]:
-    return WikiCoreClient(runtime_home=runtime_home, binary=binary).mail_claim(
-        message_id,
-        recipient=recipient,
-        agent_id=agent_id,
-    )
-
-
-def wiki_mail_mark_all(
-    runtime_home: Path,
-    message_id: str,
-    *,
-    state: str,
-    until: str | None = None,
-    binary: Path | str | None = None,
-) -> dict[str, Any]:
-    return WikiCoreClient(runtime_home=runtime_home, binary=binary).mail_mark_all(
-        message_id,
-        state=state,
-        until=until,
-    )
-
-
-def wiki_notify_poll(
-    runtime_home: Path,
-    agent_id: str,
-    *,
-    binary: Path | str | None = None,
-) -> dict[str, Any]:
-    return WikiCoreClient(runtime_home=runtime_home, binary=binary).notify_poll(agent_id)
-
-
-def wiki_notify_ack(
-    runtime_home: Path,
-    notification_id: str,
-    *,
-    agent_id: str,
-    state: str = "delivered",
-    binary: Path | str | None = None,
-) -> dict[str, Any]:
-    return WikiCoreClient(runtime_home=runtime_home, binary=binary).notify_ack(
-        notification_id,
-        agent_id=agent_id,
-        state=state,
+        operation_id=operation_id,
+        delivery_mode=delivery_mode,
     )
 
 

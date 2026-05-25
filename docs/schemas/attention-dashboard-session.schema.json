@@ -1,0 +1,441 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://haptica.ai/schemas/attention-dashboard-session.v1.json",
+  "title": "Attention Dashboard Session",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "session_id",
+    "title",
+    "created_at",
+    "fixture",
+    "media",
+    "inputs",
+    "filter_output",
+    "review",
+    "ui",
+    "agent_work_packages"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "attention-dashboard.v1"
+    },
+    "session_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "fixture": {
+      "$ref": "#/$defs/fixture"
+    },
+    "media": {
+      "$ref": "#/$defs/media"
+    },
+    "inputs": {
+      "$ref": "#/$defs/inputs"
+    },
+    "filter_output": {
+      "$ref": "#/$defs/filter_output"
+    },
+    "review": {
+      "$ref": "#/$defs/review"
+    },
+    "ui": {
+      "$ref": "#/$defs/ui"
+    },
+    "agent_work_packages": {
+      "type": "array",
+      "minItems": 4,
+      "items": {
+        "$ref": "#/$defs/agent_work_package"
+      }
+    }
+  },
+  "$defs": {
+    "fixture": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["run_id", "root", "duration_ms"],
+      "properties": {
+        "run_id": {
+          "type": "string"
+        },
+        "root": {
+          "type": "string"
+        },
+        "duration_ms": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "timezone": {
+          "type": "string"
+        },
+        "notes": {
+          "type": "string"
+        },
+        "source_manifest_ref": {
+          "type": "string"
+        },
+        "source_readme_ref": {
+          "type": "string"
+        }
+      }
+    },
+    "media": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "video_ref",
+        "video_width",
+        "video_height",
+        "video_duration_ms",
+        "playback_mode",
+        "candidate_frame_sets"
+      ],
+      "properties": {
+        "video_ref": {
+          "type": "string"
+        },
+        "video_width": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "video_height": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "video_duration_ms": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "video_fps": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "playback_mode": {
+          "enum": ["frame_cache", "native_decoder", "external_player"]
+        },
+        "frame_cache": {
+          "$ref": "#/$defs/frame_cache"
+        },
+        "candidate_frame_sets": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/candidate_frame_set"
+          }
+        }
+      }
+    },
+    "frame_cache": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["root", "index_ref", "frame_width", "frame_height", "fps", "format"],
+      "properties": {
+        "root": {
+          "type": "string"
+        },
+        "index_ref": {
+          "type": "string"
+        },
+        "frame_width": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "frame_height": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "fps": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "format": {
+          "enum": ["jpg", "png"]
+        }
+      }
+    },
+    "candidate_frame_set": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "root", "fps", "count", "naming"],
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "root": {
+          "type": "string"
+        },
+        "fps": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "naming": {
+          "type": "string"
+        }
+      }
+    },
+    "inputs": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["event_refs", "timeline_lanes"],
+      "properties": {
+        "candidate_index_ref": {
+          "type": "string"
+        },
+        "snapshots_root": {
+          "type": "string"
+        },
+        "event_refs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/event_ref"
+          }
+        },
+        "timeline_lanes": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/timeline_lane"
+          }
+        }
+      }
+    },
+    "event_ref": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "kind", "ref", "format", "required"],
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "capture_events",
+            "snapshot_index",
+            "window_metadata",
+            "ax_snapshots",
+            "browser_events",
+            "terminal_events",
+            "review_labels",
+            "algorithm_output"
+          ]
+        },
+        "ref": {
+          "type": "string"
+        },
+        "format": {
+          "enum": ["json", "jsonl", "tsv"]
+        },
+        "required": {
+          "type": "boolean"
+        }
+      }
+    },
+    "timeline_lane": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "title", "kind", "visible", "color"],
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "video",
+            "candidate_frames",
+            "saved_states",
+            "keyboard",
+            "pointer",
+            "scroll",
+            "selection",
+            "window_focus",
+            "source_conflict",
+            "attention_debt",
+            "algorithm",
+            "review_labels"
+          ]
+        },
+        "visible": {
+          "type": "boolean"
+        },
+        "color": {
+          "type": "string"
+        },
+        "source_ref": {
+          "type": "string"
+        }
+      }
+    },
+    "filter_output": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ref", "schema_version"],
+      "properties": {
+        "ref": {
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "attention-ledger.v3"
+        },
+        "generated_by": {
+          "type": "string"
+        },
+        "generated_at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "review": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["labels_ref", "autosave", "allowed_labels", "required_metrics"],
+      "properties": {
+        "labels_ref": {
+          "type": "string"
+        },
+        "autosave": {
+          "type": "boolean"
+        },
+        "allowed_labels": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/review_label"
+          }
+        },
+        "required_metrics": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "must_save_recall",
+              "bad_save_rate",
+              "compression_ratio",
+              "stable_outcome_accuracy",
+              "region_quality",
+              "reason_quality",
+              "sensitivity_quality"
+            ]
+          }
+        }
+      }
+    },
+    "review_label": {
+      "enum": [
+        "must_save",
+        "good_save",
+        "acceptable_drop",
+        "bad_save",
+        "missed_save",
+        "wrong_region",
+        "wrong_reason",
+        "too_sensitive",
+        "not_sensitive"
+      ]
+    },
+    "ui": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "default_left_panel",
+        "default_right_panel",
+        "default_bottom_panel",
+        "enabled_tabs",
+        "feature_flags"
+      ],
+      "properties": {
+        "default_left_panel": {
+          "const": "video"
+        },
+        "default_right_panel": {
+          "enum": ["current_decision", "saved_states", "agent_packet", "raw_audit"]
+        },
+        "default_bottom_panel": {
+          "const": "timeline"
+        },
+        "enabled_tabs": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "final_output",
+              "agent_packet",
+              "saved_states",
+              "composites",
+              "object_lineage",
+              "raw_buffer",
+              "source_conflicts",
+              "algorithm_votes",
+              "json"
+            ]
+          }
+        },
+        "feature_flags": {
+          "$ref": "#/$defs/feature_flags"
+        }
+      }
+    },
+    "feature_flags": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "algorithm_toggles",
+        "ablation_compare",
+        "label_export",
+        "overlay_editor",
+        "side_by_side_runs"
+      ],
+      "properties": {
+        "algorithm_toggles": {
+          "type": "boolean"
+        },
+        "ablation_compare": {
+          "type": "boolean"
+        },
+        "label_export": {
+          "type": "boolean"
+        },
+        "overlay_editor": {
+          "type": "boolean"
+        },
+        "side_by_side_runs": {
+          "type": "boolean"
+        }
+      }
+    },
+    "agent_work_package": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "title", "owner", "deliverables"],
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        },
+        "owner": {
+          "type": "string"
+        },
+        "deliverables": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  }
+}

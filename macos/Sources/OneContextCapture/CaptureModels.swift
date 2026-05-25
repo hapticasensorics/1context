@@ -296,6 +296,7 @@ public struct CaptureAXTextRange: Codable, Equatable, Sendable {
 
 public struct CaptureAXSelectionContext: Codable, Equatable, Sendable {
   public var range: CaptureAXTextRange?
+  public var isInsertionPoint: Bool?
   public var selectedText: String?
   public var selectedTextCharacterCount: Int?
   public var selectedTextTruncated: Bool
@@ -303,12 +304,14 @@ public struct CaptureAXSelectionContext: Codable, Equatable, Sendable {
 
   public init(
     range: CaptureAXTextRange? = nil,
+    isInsertionPoint: Bool? = nil,
     selectedText: String? = nil,
     selectedTextCharacterCount: Int? = nil,
     selectedTextTruncated: Bool = false,
     selectedTextRedacted: Bool = false
   ) {
     self.range = range
+    self.isInsertionPoint = isInsertionPoint
     self.selectedText = selectedText
     self.selectedTextCharacterCount = selectedTextCharacterCount
     self.selectedTextTruncated = selectedTextTruncated
@@ -335,6 +338,142 @@ public struct CaptureAXValueShape: Codable, Equatable, Sendable {
   }
 }
 
+public struct CaptureAXVisibleTextShape: Codable, Equatable, Sendable {
+  public var sourceAttribute: String
+  public var characterCount: Int?
+  public var truncated: Bool
+  public var redacted: Bool
+
+  public init(
+    sourceAttribute: String,
+    characterCount: Int? = nil,
+    truncated: Bool = false,
+    redacted: Bool = false
+  ) {
+    self.sourceAttribute = sourceAttribute
+    self.characterCount = characterCount
+    self.truncated = truncated
+    self.redacted = redacted
+  }
+}
+
+public struct CaptureAXVisibleRegionSummary: Codable, Equatable, Sendable {
+  public var regionID: String
+  public var source: String
+  public var depth: Int
+  public var role: String?
+  public var subrole: String?
+  public var titleShape: CaptureAXVisibleTextShape?
+  public var frame: CaptureRect?
+  public var valueShape: CaptureAXValueShape?
+  public var visibleRange: CaptureAXTextRange?
+  public var selectedTextRange: CaptureAXTextRange?
+  public var isInsertionPoint: Bool?
+  public var scroll: CaptureAXScrollContext?
+  public var childCount: Int?
+  public var capturedChildCount: Int
+  public var childrenTruncated: Bool
+  public var isSensitive: Bool
+  public var redactionReasons: [String]
+
+  public init(
+    regionID: String,
+    source: String,
+    depth: Int,
+    role: String? = nil,
+    subrole: String? = nil,
+    titleShape: CaptureAXVisibleTextShape? = nil,
+    frame: CaptureRect? = nil,
+    valueShape: CaptureAXValueShape? = nil,
+    visibleRange: CaptureAXTextRange? = nil,
+    selectedTextRange: CaptureAXTextRange? = nil,
+    isInsertionPoint: Bool? = nil,
+    scroll: CaptureAXScrollContext? = nil,
+    childCount: Int? = nil,
+    capturedChildCount: Int = 0,
+    childrenTruncated: Bool = false,
+    isSensitive: Bool = false,
+    redactionReasons: [String] = []
+  ) {
+    self.regionID = regionID
+    self.source = source
+    self.depth = depth
+    self.role = role
+    self.subrole = subrole
+    self.titleShape = titleShape
+    self.frame = frame
+    self.valueShape = valueShape
+    self.visibleRange = visibleRange
+    self.selectedTextRange = selectedTextRange
+    self.isInsertionPoint = isInsertionPoint
+    self.scroll = scroll
+    self.childCount = childCount
+    self.capturedChildCount = capturedChildCount
+    self.childrenTruncated = childrenTruncated
+    self.isSensitive = isSensitive
+    self.redactionReasons = redactionReasons
+  }
+}
+
+public struct CaptureAXElementUnderPointerHint: Codable, Equatable, Sendable {
+  public var regionID: String
+  public var role: String?
+  public var subrole: String?
+  public var titleShape: CaptureAXVisibleTextShape?
+  public var frame: CaptureRect?
+  public var isSensitive: Bool
+  public var redactionReasons: [String]
+
+  public init(
+    regionID: String,
+    role: String? = nil,
+    subrole: String? = nil,
+    titleShape: CaptureAXVisibleTextShape? = nil,
+    frame: CaptureRect? = nil,
+    isSensitive: Bool = false,
+    redactionReasons: [String] = []
+  ) {
+    self.regionID = regionID
+    self.role = role
+    self.subrole = subrole
+    self.titleShape = titleShape
+    self.frame = frame
+    self.isSensitive = isSensitive
+    self.redactionReasons = redactionReasons
+  }
+}
+
+public struct CaptureAXVisibleContext: Codable, Equatable, Sendable {
+  public var source: String
+  public var focusedWindowRegionID: String?
+  public var regions: [CaptureAXVisibleRegionSummary]
+  public var capturedRegionCount: Int
+  public var maxRegionCount: Int
+  public var maxDepth: Int
+  public var truncated: Bool
+  public var elementUnderPointer: CaptureAXElementUnderPointerHint?
+
+  public init(
+    source: String = "ax_visible_context",
+    focusedWindowRegionID: String? = nil,
+    regions: [CaptureAXVisibleRegionSummary] = [],
+    capturedRegionCount: Int = 0,
+    maxRegionCount: Int,
+    maxDepth: Int,
+    truncated: Bool = false,
+    elementUnderPointer: CaptureAXElementUnderPointerHint? = nil
+  ) {
+    self.source = source
+    self.focusedWindowRegionID = focusedWindowRegionID
+    self.regions = regions
+    self.capturedRegionCount = capturedRegionCount
+    self.maxRegionCount = maxRegionCount
+    self.maxDepth = maxDepth
+    self.truncated = truncated
+    self.elementUnderPointer = elementUnderPointer
+  }
+}
+
 public struct CaptureAXNodeContext: Codable, Equatable, Sendable {
   public var role: String?
   public var subrole: String?
@@ -344,6 +483,9 @@ public struct CaptureAXNodeContext: Codable, Equatable, Sendable {
   public var frame: CaptureRect?
   public var valueShape: CaptureAXValueShape?
   public var selection: CaptureAXSelectionContext?
+  public var visibleRange: CaptureAXTextRange?
+  public var scroll: CaptureAXScrollContext?
+  public var transientUI: CaptureAXTransientUIState?
   public var isSensitive: Bool
   public var redactionReasons: [String]
 
@@ -356,6 +498,9 @@ public struct CaptureAXNodeContext: Codable, Equatable, Sendable {
     frame: CaptureRect? = nil,
     valueShape: CaptureAXValueShape? = nil,
     selection: CaptureAXSelectionContext? = nil,
+    visibleRange: CaptureAXTextRange? = nil,
+    scroll: CaptureAXScrollContext? = nil,
+    transientUI: CaptureAXTransientUIState? = nil,
     isSensitive: Bool = false,
     redactionReasons: [String] = []
   ) {
@@ -367,6 +512,9 @@ public struct CaptureAXNodeContext: Codable, Equatable, Sendable {
     self.frame = frame
     self.valueShape = valueShape
     self.selection = selection
+    self.visibleRange = visibleRange
+    self.scroll = scroll
+    self.transientUI = transientUI
     self.isSensitive = isSensitive
     self.redactionReasons = redactionReasons
   }
@@ -381,6 +529,7 @@ public struct CaptureAXFocusedContext: Codable, Equatable, Sendable {
   public var focusedApplicationProcessID: Int32?
   public var focusedWindow: CaptureAXNodeContext?
   public var focusedElement: CaptureAXNodeContext?
+  public var visibleContext: CaptureAXVisibleContext?
   public var matchedWindowID: UInt32?
   public var issues: [CaptureAXFocusedContextIssue]
 
@@ -393,6 +542,7 @@ public struct CaptureAXFocusedContext: Codable, Equatable, Sendable {
     focusedApplicationProcessID: Int32? = nil,
     focusedWindow: CaptureAXNodeContext? = nil,
     focusedElement: CaptureAXNodeContext? = nil,
+    visibleContext: CaptureAXVisibleContext? = nil,
     matchedWindowID: UInt32? = nil,
     issues: [CaptureAXFocusedContextIssue] = []
   ) {
@@ -404,6 +554,7 @@ public struct CaptureAXFocusedContext: Codable, Equatable, Sendable {
     self.focusedApplicationProcessID = focusedApplicationProcessID
     self.focusedWindow = focusedWindow
     self.focusedElement = focusedElement
+    self.visibleContext = visibleContext
     self.matchedWindowID = matchedWindowID
     self.issues = issues
   }
@@ -414,11 +565,83 @@ public enum CaptureEventDurability: String, Codable, Sendable {
   case bestEffort = "best_effort"
 }
 
+public enum CapturePrivacyClass: String, Codable, Sendable {
+  case privateMetadata = "private_metadata"
+  case interactionMetadata = "interaction_metadata"
+  case accessibilitySemantic = "accessibility_semantic"
+}
+
+public enum CapturePrivacyShape: String, Codable, Sendable {
+  case windowTopology = "window_topology"
+  case frameMetadata = "frame_metadata"
+  case uxAnchor = "ux_anchor"
+  case axSemanticEvent = "ax_semantic_event"
+  case genericPayload = "generic_payload"
+}
+
+public enum CaptureSourceClock: String, Codable, Sendable {
+  case systemUTC = "system_utc"
+  case screenCaptureKit = "screen_capture_kit"
+  case cgEventTap = "cg_event_tap"
+  case accessibilityAPI = "accessibility_api"
+}
+
+public struct CaptureEventCanonicalMetadata: Sendable {
+  public var eventTimeStart: String?
+  public var eventTimeEnd: String?
+  public var ingestedAt: String?
+  public var laneID: String?
+  public var streamID: String?
+  public var sourceRecordID: String?
+  public var sourceHash: String?
+  public var captureBundleID: String?
+  public var privacyClass: CapturePrivacyClass?
+  public var privacyShape: CapturePrivacyShape?
+  public var sourceClock: CaptureSourceClock?
+
+  public init(
+    eventTimeStart: String? = nil,
+    eventTimeEnd: String? = nil,
+    ingestedAt: String? = nil,
+    laneID: String? = nil,
+    streamID: String? = nil,
+    sourceRecordID: String? = nil,
+    sourceHash: String? = nil,
+    captureBundleID: String? = nil,
+    privacyClass: CapturePrivacyClass? = nil,
+    privacyShape: CapturePrivacyShape? = nil,
+    sourceClock: CaptureSourceClock? = nil
+  ) {
+    self.eventTimeStart = eventTimeStart
+    self.eventTimeEnd = eventTimeEnd
+    self.ingestedAt = ingestedAt
+    self.laneID = laneID
+    self.streamID = streamID
+    self.sourceRecordID = sourceRecordID
+    self.sourceHash = sourceHash
+    self.captureBundleID = captureBundleID
+    self.privacyClass = privacyClass
+    self.privacyShape = privacyShape
+    self.sourceClock = sourceClock
+  }
+}
+
 public struct CaptureEventEnvelope<Payload: Codable & Sendable>: Codable, Sendable {
   public var schemaVersion: Int
   public var eventType: String
   public var durability: CaptureEventDurability
   public var recordedAt: String
+  public var eventTimeStart: String?
+  public var eventTimeEnd: String?
+  public var ingestedAt: String?
+  public var laneID: String?
+  public var streamID: String?
+  public var sourceRecordID: String?
+  public var sourceHash: String?
+  public var captureBundleID: String?
+  public var privacyClass: CapturePrivacyClass?
+  public var privacyShape: CapturePrivacyShape?
+  public var sourceClock: CaptureSourceClock?
   public var payload: Payload
 
   public init(
@@ -426,13 +649,84 @@ public struct CaptureEventEnvelope<Payload: Codable & Sendable>: Codable, Sendab
     eventType: String,
     durability: CaptureEventDurability,
     recordedAt: String,
+    canonicalMetadata: CaptureEventCanonicalMetadata = CaptureEventCanonicalMetadata(),
     payload: Payload
   ) {
     self.schemaVersion = schemaVersion
     self.eventType = eventType
     self.durability = durability
     self.recordedAt = recordedAt
+    self.eventTimeStart = canonicalMetadata.eventTimeStart
+    self.eventTimeEnd = canonicalMetadata.eventTimeEnd
+    self.ingestedAt = canonicalMetadata.ingestedAt
+    self.laneID = canonicalMetadata.laneID
+    self.streamID = canonicalMetadata.streamID
+    self.sourceRecordID = canonicalMetadata.sourceRecordID
+    self.sourceHash = canonicalMetadata.sourceHash
+    self.captureBundleID = canonicalMetadata.captureBundleID
+    self.privacyClass = canonicalMetadata.privacyClass
+    self.privacyShape = canonicalMetadata.privacyShape
+    self.sourceClock = canonicalMetadata.sourceClock
     self.payload = payload
+  }
+
+  enum CodingKeys: String, CodingKey {
+    case schemaVersion
+    case eventType
+    case durability
+    case recordedAt
+    case eventTimeStart = "event_time_start"
+    case eventTimeEnd = "event_time_end"
+    case ingestedAt = "ingested_at"
+    case laneID = "lane_id"
+    case streamID = "stream_id"
+    case sourceRecordID = "source_record_id"
+    case sourceHash = "source_hash"
+    case captureBundleID = "capture_bundle_id"
+    case privacyClass = "privacy_class"
+    case privacyShape = "privacy_shape"
+    case sourceClock = "source_clock"
+    case payload
+  }
+
+  public init(from decoder: Decoder) throws {
+    let container = try decoder.container(keyedBy: CodingKeys.self)
+    self.schemaVersion = try container.decode(Int.self, forKey: .schemaVersion)
+    self.eventType = try container.decode(String.self, forKey: .eventType)
+    self.durability = try container.decode(CaptureEventDurability.self, forKey: .durability)
+    self.recordedAt = try container.decode(String.self, forKey: .recordedAt)
+    self.eventTimeStart = try container.decodeIfPresent(String.self, forKey: .eventTimeStart)
+    self.eventTimeEnd = try container.decodeIfPresent(String.self, forKey: .eventTimeEnd)
+    self.ingestedAt = try container.decodeIfPresent(String.self, forKey: .ingestedAt)
+    self.laneID = try container.decodeIfPresent(String.self, forKey: .laneID)
+    self.streamID = try container.decodeIfPresent(String.self, forKey: .streamID)
+    self.sourceRecordID = try container.decodeIfPresent(String.self, forKey: .sourceRecordID)
+    self.sourceHash = try container.decodeIfPresent(String.self, forKey: .sourceHash)
+    self.captureBundleID = try container.decodeIfPresent(String.self, forKey: .captureBundleID)
+    self.privacyClass = try container.decodeIfPresent(CapturePrivacyClass.self, forKey: .privacyClass)
+    self.privacyShape = try container.decodeIfPresent(CapturePrivacyShape.self, forKey: .privacyShape)
+    self.sourceClock = try container.decodeIfPresent(CaptureSourceClock.self, forKey: .sourceClock)
+    self.payload = try container.decode(Payload.self, forKey: .payload)
+  }
+
+  public func encode(to encoder: Encoder) throws {
+    var container = encoder.container(keyedBy: CodingKeys.self)
+    try container.encode(schemaVersion, forKey: .schemaVersion)
+    try container.encode(eventType, forKey: .eventType)
+    try container.encode(durability, forKey: .durability)
+    try container.encode(recordedAt, forKey: .recordedAt)
+    try container.encodeIfPresent(eventTimeStart, forKey: .eventTimeStart)
+    try container.encodeIfPresent(eventTimeEnd, forKey: .eventTimeEnd)
+    try container.encodeIfPresent(ingestedAt, forKey: .ingestedAt)
+    try container.encodeIfPresent(laneID, forKey: .laneID)
+    try container.encodeIfPresent(streamID, forKey: .streamID)
+    try container.encodeIfPresent(sourceRecordID, forKey: .sourceRecordID)
+    try container.encodeIfPresent(sourceHash, forKey: .sourceHash)
+    try container.encodeIfPresent(captureBundleID, forKey: .captureBundleID)
+    try container.encodeIfPresent(privacyClass, forKey: .privacyClass)
+    try container.encodeIfPresent(privacyShape, forKey: .privacyShape)
+    try container.encodeIfPresent(sourceClock, forKey: .sourceClock)
+    try container.encode(payload, forKey: .payload)
   }
 }
 
@@ -615,6 +909,7 @@ public struct ActiveWindowFrameMetadata: Codable, Equatable, Sendable {
   public var uxMotionHints: UXMotionHints?
   public var uxMotionHintsFused: Bool
   public var feedsMotionClassifier: Bool
+  public var adaptiveDecision: ActiveWindowMetadataAdaptiveDecision?
   public var parseWarnings: [String]
 
   public init(
@@ -635,6 +930,7 @@ public struct ActiveWindowFrameMetadata: Codable, Equatable, Sendable {
     uxMotionHints: UXMotionHints? = nil,
     uxMotionHintsFused: Bool = false,
     feedsMotionClassifier: Bool,
+    adaptiveDecision: ActiveWindowMetadataAdaptiveDecision? = nil,
     parseWarnings: [String]
   ) {
     self.schemaVersion = schemaVersion
@@ -654,6 +950,7 @@ public struct ActiveWindowFrameMetadata: Codable, Equatable, Sendable {
     self.uxMotionHints = uxMotionHints
     self.uxMotionHintsFused = uxMotionHintsFused
     self.feedsMotionClassifier = feedsMotionClassifier
+    self.adaptiveDecision = adaptiveDecision
     self.parseWarnings = parseWarnings
   }
 }
@@ -675,6 +972,11 @@ public struct ActiveWindowMetadataSample: Codable, Equatable, Sendable {
   public var persistedEventCount: Int
   public var persistErrors: [String]
   public var uxMotionHintsFusedFrameCount: Int
+  public var adaptiveDecisionCount: Int
+  public var configurationUpdateDecisionCount: Int
+  public var configurationUpdateErrors: [String]
+  public var initialAdaptiveDecision: ActiveWindowMetadataAdaptiveDecision?
+  public var latestAdaptiveDecision: ActiveWindowMetadataAdaptiveDecision?
   public var latestUXMotionHints: UXMotionHints?
   public var latestFrame: ActiveWindowFrameMetadata?
   public var frames: [ActiveWindowFrameMetadata]
@@ -696,6 +998,11 @@ public struct ActiveWindowMetadataSample: Codable, Equatable, Sendable {
     persistedEventCount: Int,
     persistErrors: [String],
     uxMotionHintsFusedFrameCount: Int = 0,
+    adaptiveDecisionCount: Int = 0,
+    configurationUpdateDecisionCount: Int = 0,
+    configurationUpdateErrors: [String] = [],
+    initialAdaptiveDecision: ActiveWindowMetadataAdaptiveDecision? = nil,
+    latestAdaptiveDecision: ActiveWindowMetadataAdaptiveDecision? = nil,
     latestUXMotionHints: UXMotionHints? = nil,
     latestFrame: ActiveWindowFrameMetadata?,
     frames: [ActiveWindowFrameMetadata]
@@ -716,13 +1023,125 @@ public struct ActiveWindowMetadataSample: Codable, Equatable, Sendable {
     self.persistedEventCount = persistedEventCount
     self.persistErrors = persistErrors
     self.uxMotionHintsFusedFrameCount = uxMotionHintsFusedFrameCount
+    self.adaptiveDecisionCount = adaptiveDecisionCount
+    self.configurationUpdateDecisionCount = configurationUpdateDecisionCount
+    self.configurationUpdateErrors = configurationUpdateErrors
+    self.initialAdaptiveDecision = initialAdaptiveDecision
+    self.latestAdaptiveDecision = latestAdaptiveDecision
     self.latestUXMotionHints = latestUXMotionHints
     self.latestFrame = latestFrame
     self.frames = frames
   }
 }
 
-public struct CapturePolicyDecision: Equatable, Sendable {
+public enum ActiveWindowMetadataConfigurationUpdateReason: String, Codable, Equatable, Sendable {
+  case initial
+  case modeChanged = "mode_changed"
+  case fpsIncrease = "fps_increase"
+  case fpsDecrease = "fps_decrease"
+  case hysteresisHold = "hysteresis_hold"
+  case unchanged
+}
+
+public struct ActiveWindowMetadataAdaptiveDecision: Codable, Equatable, Sendable {
+  public var schemaVersion: Int
+  public var classifierMode: CaptureMode
+  public var controllerMode: CaptureMode
+  public var proposedTargetFPS: Int
+  public var targetFPS: Int
+  public var previousTargetFPS: Int?
+  public var targetAnalysisFPS: Int
+  public var minimumFrameIntervalSeconds: Double
+  public var shouldUpdateStreamConfiguration: Bool
+  public var updateReason: ActiveWindowMetadataConfigurationUpdateReason
+  public var shouldStoreKeyframe: Bool
+  public var shouldOCRDirtyRegions: Bool
+  public var shouldEncodeVideoSegment: Bool
+  public var dirtyRectCount: Int
+  public var dirtyAreaRatio: Double
+  public var changedTileRatio: Double
+  public var estimatedDY: Double
+  public var scrollEventRecently: Bool
+  public var keyboardEventRecently: Bool
+  public var uxMotionHintsFused: Bool
+
+  public init(
+    schemaVersion: Int = 1,
+    classifierMode: CaptureMode,
+    controllerMode: CaptureMode,
+    proposedTargetFPS: Int,
+    targetFPS: Int,
+    previousTargetFPS: Int? = nil,
+    targetAnalysisFPS: Int,
+    minimumFrameIntervalSeconds: Double,
+    shouldUpdateStreamConfiguration: Bool,
+    updateReason: ActiveWindowMetadataConfigurationUpdateReason,
+    shouldStoreKeyframe: Bool,
+    shouldOCRDirtyRegions: Bool,
+    shouldEncodeVideoSegment: Bool,
+    dirtyRectCount: Int,
+    dirtyAreaRatio: Double,
+    changedTileRatio: Double,
+    estimatedDY: Double,
+    scrollEventRecently: Bool,
+    keyboardEventRecently: Bool,
+    uxMotionHintsFused: Bool
+  ) {
+    self.schemaVersion = schemaVersion
+    self.classifierMode = classifierMode
+    self.controllerMode = controllerMode
+    self.proposedTargetFPS = proposedTargetFPS
+    self.targetFPS = targetFPS
+    self.previousTargetFPS = previousTargetFPS
+    self.targetAnalysisFPS = targetAnalysisFPS
+    self.minimumFrameIntervalSeconds = minimumFrameIntervalSeconds
+    self.shouldUpdateStreamConfiguration = shouldUpdateStreamConfiguration
+    self.updateReason = updateReason
+    self.shouldStoreKeyframe = shouldStoreKeyframe
+    self.shouldOCRDirtyRegions = shouldOCRDirtyRegions
+    self.shouldEncodeVideoSegment = shouldEncodeVideoSegment
+    self.dirtyRectCount = dirtyRectCount
+    self.dirtyAreaRatio = dirtyAreaRatio
+    self.changedTileRatio = changedTileRatio
+    self.estimatedDY = estimatedDY
+    self.scrollEventRecently = scrollEventRecently
+    self.keyboardEventRecently = keyboardEventRecently
+    self.uxMotionHintsFused = uxMotionHintsFused
+  }
+}
+
+public struct ActiveWindowMetadataAdaptivePolicy: Equatable, Sendable {
+  public var minimumFPS: Int
+  public var maximumFPS: Int
+  public var significantFPSDelta: Int
+  public var downgradeHysteresisSeconds: TimeInterval
+
+  public init(
+    minimumFPS: Int = 1,
+    maximumFPS: Int = 30,
+    significantFPSDelta: Int = 2,
+    downgradeHysteresisSeconds: TimeInterval = 1.5
+  ) {
+    self.minimumFPS = max(1, minimumFPS)
+    self.maximumFPS = max(self.minimumFPS, maximumFPS)
+    self.significantFPSDelta = max(1, significantFPSDelta)
+    self.downgradeHysteresisSeconds = max(0, downgradeHysteresisSeconds)
+  }
+
+  public func targetFPS(for decision: CapturePolicyDecision, features: MotionFeatures) -> Int {
+    var fps = decision.targetCaptureFPS
+    if decision.mode == .watch, features.dirtyRectCount > 0, features.dirtyAreaRatio >= 0.01 {
+      fps = max(fps, 5)
+    }
+    return min(maximumFPS, max(minimumFPS, fps))
+  }
+
+  public func minimumFrameIntervalSeconds(for fps: Int) -> Double {
+    1 / Double(max(1, fps))
+  }
+}
+
+public struct CapturePolicyDecision: Codable, Equatable, Sendable {
   public var mode: CaptureMode
   public var targetCaptureFPS: Int
   public var targetAnalysisFPS: Int

@@ -292,14 +292,266 @@ final class WindowIndexerTests: XCTestCase {
     XCTAssertEqual(windows[1].focusMetadata?.confidence, "medium")
   }
 
+  func testWindowGeometryFullyVisibleAssignsDisplayAndPixels() {
+    var windows = [
+      window(
+        windowID: 10,
+        appPID: 10,
+        appName: "Terminal",
+        bundleID: "com.apple.Terminal",
+        framePoints: CaptureRect(x: 100, y: 50, width: 200, height: 100),
+        zRank: 0
+      )
+    ]
+
+    OneContextWindowIndexer.annotateWindowGeometry(displays: [
+      display(displayID: "main", framePoints: CaptureRect(x: 0, y: 0, width: 1000, height: 800), scaleFactor: 2)
+    ], windows: &windows)
+
+    XCTAssertEqual(windows[0].displayID, "main")
+    XCTAssertEqual(windows[0].framePixels, CaptureRect(x: 200, y: 100, width: 400, height: 200))
+    XCTAssertEqual(windows[0].visibleFractionEstimate ?? -1, 1, accuracy: 0.001)
+  }
+
+  func testWindowGeometryPartiallyOffscreenClipsToDisplayBounds() {
+    var windows = [
+      window(
+        windowID: 10,
+        appPID: 10,
+        appName: "Terminal",
+        bundleID: "com.apple.Terminal",
+        framePoints: CaptureRect(x: -50, y: 20, width: 100, height: 100),
+        zRank: 0
+      )
+    ]
+
+    OneContextWindowIndexer.annotateWindowGeometry(displays: [
+      display(displayID: "main", framePoints: CaptureRect(x: 0, y: 0, width: 1000, height: 800))
+    ], windows: &windows)
+
+    XCTAssertEqual(windows[0].displayID, "main")
+    XCTAssertEqual(windows[0].framePixels, CaptureRect(x: -50, y: 20, width: 100, height: 100))
+    XCTAssertEqual(windows[0].visibleFractionEstimate ?? -1, 0.5, accuracy: 0.001)
+  }
+
+  func testWindowGeometryFullyOccludedByHigherZRankWindow() {
+    var windows = [
+      window(
+        windowID: 20,
+        appPID: 20,
+        appName: "Chrome",
+        bundleID: "com.google.Chrome",
+        framePoints: CaptureRect(x: 100, y: 100, width: 200, height: 100),
+        zRank: 0
+      ),
+      window(
+        windowID: 10,
+        appPID: 10,
+        appName: "Terminal",
+        bundleID: "com.apple.Terminal",
+        framePoints: CaptureRect(x: 100, y: 100, width: 200, height: 100),
+        zRank: 1
+      )
+    ]
+
+    OneContextWindowIndexer.annotateWindowGeometry(displays: [
+      display(displayID: "main", framePoints: CaptureRect(x: 0, y: 0, width: 1000, height: 800))
+    ], windows: &windows)
+
+    XCTAssertEqual(windows[1].visibleFractionEstimate ?? -1, 0, accuracy: 0.001)
+  }
+
+  func testWindowGeometryPartiallyOccludedByHigherZRankWindow() {
+    var windows = [
+      window(
+        windowID: 20,
+        appPID: 20,
+        appName: "Chrome",
+        bundleID: "com.google.Chrome",
+        framePoints: CaptureRect(x: 100, y: 100, width: 100, height: 100),
+        zRank: 0
+      ),
+      window(
+        windowID: 10,
+        appPID: 10,
+        appName: "Terminal",
+        bundleID: "com.apple.Terminal",
+        framePoints: CaptureRect(x: 100, y: 100, width: 200, height: 100),
+        zRank: 1
+      )
+    ]
+
+    OneContextWindowIndexer.annotateWindowGeometry(displays: [
+      display(displayID: "main", framePoints: CaptureRect(x: 0, y: 0, width: 1000, height: 800))
+    ], windows: &windows)
+
+    XCTAssertEqual(windows[1].visibleFractionEstimate ?? -1, 0.5, accuracy: 0.001)
+  }
+
+  func testWindowGeometryChoosesBestIntersectingDisplayAndScale() {
+    var windows = [
+      window(
+        windowID: 10,
+        appPID: 10,
+        appName: "Terminal",
+        bundleID: "com.apple.Terminal",
+        framePoints: CaptureRect(x: 900, y: 100, width: 300, height: 200),
+        zRank: 0
+      )
+    ]
+
+    OneContextWindowIndexer.annotateWindowGeometry(displays: [
+      display(displayID: "main", framePoints: CaptureRect(x: 0, y: 0, width: 1000, height: 800), scaleFactor: 2, isMain: true),
+      display(displayID: "external", framePoints: CaptureRect(x: 1000, y: 0, width: 800, height: 600), scaleFactor: 1.5)
+    ], windows: &windows)
+
+    XCTAssertEqual(windows[0].displayID, "external")
+    XCTAssertEqual(windows[0].framePixels, CaptureRect(x: -150, y: 150, width: 450, height: 300))
+    XCTAssertEqual(windows[0].visibleFractionEstimate ?? -1, 1, accuracy: 0.001)
+  }
+
+  func testWindowGeometryMinimizedWindowWithoutDisplayHasNoVisibleArea() {
+    var windows = [
+      window(
+        windowID: 10,
+        appPID: 10,
+        appName: "Terminal",
+        bundleID: "com.apple.Terminal",
+        framePoints: CaptureRect(x: 2000, y: 2000, width: 200, height: 100),
+        zRank: 0,
+        isOnScreen: false,
+        isMinimized: true
+      )
+    ]
+
+    OneContextWindowIndexer.annotateWindowGeometry(displays: [], windows: &windows)
+
+    XCTAssertNil(windows[0].displayID)
+    XCTAssertNil(windows[0].framePixels)
+    XCTAssertEqual(windows[0].visibleFractionEstimate ?? -1, 0, accuracy: 0.001)
+  }
+
+  func testWindowGeometryIgnoresTransparentSystemMinimizedAndOffscreenOccluders() {
+    var windows = [
+      window(
+        windowID: 50,
+        appPID: 50,
+        appName: "Overlay",
+        bundleID: "com.example.overlay",
+        framePoints: CaptureRect(x: 100, y: 100, width: 200, height: 100),
+        zRank: 0,
+        alpha: 0
+      ),
+      window(
+        windowID: 40,
+        appPID: 40,
+        appName: "SystemUIServer",
+        bundleID: "com.apple.systemuiserver",
+        framePoints: CaptureRect(x: 100, y: 100, width: 200, height: 100),
+        zRank: 1
+      ),
+      window(
+        windowID: 30,
+        appPID: 30,
+        appName: "Minimized",
+        bundleID: "com.example.minimized",
+        framePoints: CaptureRect(x: 100, y: 100, width: 200, height: 100),
+        zRank: 2,
+        isOnScreen: false,
+        isMinimized: true
+      ),
+      window(
+        windowID: 20,
+        appPID: 20,
+        appName: "Offscreen",
+        bundleID: "com.example.offscreen",
+        framePoints: CaptureRect(x: 100, y: 100, width: 200, height: 100),
+        zRank: 3,
+        isOnScreen: false
+      ),
+      window(
+        windowID: 10,
+        appPID: 10,
+        appName: "Terminal",
+        bundleID: "com.apple.Terminal",
+        framePoints: CaptureRect(x: 100, y: 100, width: 200, height: 100),
+        zRank: 4
+      )
+    ]
+
+    OneContextWindowIndexer.annotateWindowGeometry(displays: [
+      display(displayID: "main", framePoints: CaptureRect(x: 0, y: 0, width: 1000, height: 800))
+    ], windows: &windows)
+
+    XCTAssertEqual(windows[4].visibleFractionEstimate ?? -1, 1, accuracy: 0.001)
+  }
+
+  func testGeometryDoesNotRewriteFocusedWindowBehindTopCandidate() {
+    var windows = [
+      window(
+        windowID: 20,
+        appPID: 20,
+        appName: "Google Chrome",
+        bundleID: "com.google.Chrome",
+        framePoints: CaptureRect(x: 0, y: 0, width: 1280, height: 800),
+        zRank: 0
+      ),
+      window(
+        windowID: 10,
+        appPID: 10,
+        appName: "Terminal",
+        bundleID: "com.apple.Terminal",
+        framePoints: CaptureRect(x: 0, y: 0, width: 1280, height: 800),
+        zRank: 1,
+        isFocused: true
+      )
+    ]
+    let activeApplication = CaptureActiveApplication(
+      processID: 10,
+      bundleID: "com.apple.Terminal",
+      appName: "Terminal"
+    )
+
+    OneContextWindowIndexer.annotateWindowGeometry(displays: [
+      display(displayID: "main", framePoints: CaptureRect(x: 0, y: 0, width: 1280, height: 800))
+    ], windows: &windows)
+    let resolvedActive = OneContextWindowIndexer.reconcileActiveWindowMetadata(
+      activeApplication: activeApplication,
+      windows: &windows
+    )
+
+    XCTAssertEqual(windows.filter(\.isFocused).map(\.windowID), [10])
+    XCTAssertEqual(windows[1].visibleFractionEstimate ?? -1, 0, accuracy: 0.001)
+    XCTAssertEqual(resolvedActive?.processID, 10)
+  }
+
+  private func display(
+    displayID: String,
+    framePoints: CaptureRect,
+    scaleFactor: Double = 1,
+    isMain: Bool = false
+  ) -> CaptureDisplayState {
+    CaptureDisplayState(
+      displayID: displayID,
+      framePoints: framePoints,
+      scaleFactor: scaleFactor,
+      isMain: isMain
+    )
+  }
+
   private func window(
     windowID: UInt32,
     appPID: Int32,
     appName: String,
     bundleID: String?,
     title: String = "main",
+    framePoints: CaptureRect = CaptureRect(x: 0, y: 0, width: 1280, height: 800),
     zRank: Int,
+    layer: Int = 0,
+    alpha: Double? = 1,
     isFocused: Bool = false,
+    isOnScreen: Bool = true,
+    isMinimized: Bool = false,
     captureEligible: Bool = true,
     focusMetadata: CaptureWindowFocusMetadata? = nil
   ) -> CaptureWindowState {
@@ -310,13 +562,13 @@ final class WindowIndexerTests: XCTestCase {
       appName: appName,
       bundleID: bundleID,
       title: title,
-      framePoints: CaptureRect(x: 0, y: 0, width: 1280, height: 800),
+      framePoints: framePoints,
       zRank: zRank,
-      layer: 0,
-      alpha: 1,
+      layer: layer,
+      alpha: alpha,
       isFocused: isFocused,
-      isOnScreen: true,
-      isMinimized: false,
+      isOnScreen: isOnScreen,
+      isMinimized: isMinimized,
       captureEligible: captureEligible,
       source: "test",
       focusMetadata: focusMetadata

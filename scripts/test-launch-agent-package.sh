@@ -37,7 +37,9 @@ for executable in \
   "$APP/Contents/MacOS/1Context" \
   "$APP/Contents/MacOS/1context-cli" \
   "$APP/Contents/MacOS/1contextd" \
+  "$APP/Contents/MacOS/onecontext-memoryd" \
   "$APP/Contents/MacOS/onecontext-wiki" \
+  "$APP/Contents/MacOS/onecontext-agent-harness" \
   "$APP/Contents/Resources/1context-local-web-proxy" \
   "$APP/Contents/Resources/local-web/caddy/caddy"; do
   if [[ ! -x "$executable" ]]; then

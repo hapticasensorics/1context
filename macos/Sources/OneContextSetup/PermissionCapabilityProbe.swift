@@ -385,6 +385,7 @@ private final class ScreenSystemAudioCapabilityProof: NSObject, SCStreamOutput {
   private let stateQueue = DispatchQueue(label: "com.haptica.1context.permission-capability.screen-audio")
   private var screenFrameCount = 0
   private var audioSampleCount = 0
+  private var firstScreenFrameMetadata: [String: String] = [:]
 
   init(timeout: TimeInterval) {
     self.timeout = timeout
@@ -428,22 +429,28 @@ private final class ScreenSystemAudioCapabilityProof: NSObject, SCStreamOutput {
       throw permissionCapabilityError("ScreenCaptureKit started but did not deliver a system-audio sample.")
     }
 
-    let counts = stateQueue.sync {
-      (screenFrameCount, audioSampleCount)
+    let proofState = stateQueue.sync {
+      (screenFrameCount, audioSampleCount, firstScreenFrameMetadata)
     }
-    return [
+    var evidence = [
       "display_count": "\(content.displays.count)",
-      "screen_frame_count": "\(counts.0)",
-      "system_audio_sample_count": "\(counts.1)"
+      "screen_frame_count": "\(proofState.0)",
+      "system_audio_sample_count": "\(proofState.1)"
     ]
+    evidence.merge(proofState.2) { current, _ in current }
+    return evidence
   }
 
   func stream(_ stream: SCStream, didOutputSampleBuffer sampleBuffer: CMSampleBuffer, of type: SCStreamOutputType) {
     guard CMSampleBufferIsValid(sampleBuffer) else { return }
     switch type {
     case .screen:
+      let metadata = Self.screenFrameMetadataEvidence(sampleBuffer)
       let shouldSignal = stateQueue.sync { () -> Bool in
         screenFrameCount += 1
+        if screenFrameCount == 1 {
+          firstScreenFrameMetadata = metadata
+        }
         return screenFrameCount == 1
       }
       if shouldSignal {
@@ -487,6 +494,38 @@ private final class ScreenSystemAudioCapabilityProof: NSObject, SCStreamOutput {
         }
       }
     }
+  }
+
+  private static func screenFrameMetadataEvidence(_ sampleBuffer: CMSampleBuffer) -> [String: String] {
+    guard let attachmentsArray = CMSampleBufferGetSampleAttachmentsArray(sampleBuffer, createIfNecessary: false)
+      as? [[SCStreamFrameInfo: Any]],
+      let attachments = attachmentsArray.first
+    else {
+      return ["screen_first_frame_attachments": "missing"]
+    }
+
+    var evidence: [String: String] = ["screen_first_frame_attachments": "present"]
+    if let status = attachments[.status] as? NSNumber {
+      evidence["screen_first_frame_status_raw"] = "\(status.intValue)"
+    } else if let status = attachments[.status] as? Int {
+      evidence["screen_first_frame_status_raw"] = "\(status)"
+    }
+    if let displayTime = attachments[.displayTime] as? NSNumber {
+      evidence["screen_first_frame_display_time"] = "\(displayTime.uint64Value)"
+    }
+    if let scaleFactor = attachments[.scaleFactor] as? NSNumber {
+      evidence["screen_first_frame_scale_factor"] = "\(scaleFactor.doubleValue)"
+    }
+    if let contentScale = attachments[.contentScale] as? NSNumber {
+      evidence["screen_first_frame_content_scale"] = "\(contentScale.doubleValue)"
+    }
+    evidence["screen_first_frame_has_content_rect"] = attachments[.contentRect] == nil ? "false" : "true"
+    if let dirtyRects = attachments[.dirtyRects] as? [Any] {
+      evidence["screen_first_frame_dirty_rect_count"] = "\(dirtyRects.count)"
+    } else {
+      evidence["screen_first_frame_dirty_rect_count"] = attachments[.dirtyRects] == nil ? "" : "malformed"
+    }
+    return evidence
   }
 }
 

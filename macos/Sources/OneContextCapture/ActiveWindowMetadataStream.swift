@@ -23,11 +23,13 @@ public enum ActiveWindowMetadataStreamError: LocalizedError, Sendable {
 @available(macOS 13.0, *)
 public final class ActiveWindowMetadataStream: NSObject, @unchecked Sendable, SCStreamOutput {
   public typealias UXMotionHintsProvider = @Sendable () -> UXMotionHints?
+  public typealias FocusedContextHandler = @Sendable (CaptureAXFocusedContext) -> Void
 
   private let runtimePaths: RuntimePaths
   private let indexer: OneContextWindowIndexer
   private let parser: SCStreamFrameMetadataParser
   private let uxMotionHintsProvider: UXMotionHintsProvider?
+  private let focusedContextHandler: FocusedContextHandler?
   private let stateQueue = DispatchQueue(label: "com.haptica.1context.active-window-metadata")
   private let frameLimitSemaphore = DispatchSemaphore(value: 0)
   private var session: ActiveWindowMetadataSession?
@@ -36,12 +38,14 @@ public final class ActiveWindowMetadataStream: NSObject, @unchecked Sendable, SC
     runtimePaths: RuntimePaths,
     indexer: OneContextWindowIndexer = OneContextWindowIndexer(),
     parser: SCStreamFrameMetadataParser = SCStreamFrameMetadataParser(),
-    uxMotionHintsProvider: UXMotionHintsProvider? = nil
+    uxMotionHintsProvider: UXMotionHintsProvider? = nil,
+    focusedContextHandler: FocusedContextHandler? = nil
   ) {
     self.runtimePaths = runtimePaths
     self.indexer = indexer
     self.parser = parser
     self.uxMotionHintsProvider = uxMotionHintsProvider
+    self.focusedContextHandler = focusedContextHandler
   }
 
   public func sample(durationSeconds: TimeInterval = 3, maxFrames: Int = 30) async throws -> ActiveWindowMetadataSample {
@@ -64,6 +68,22 @@ public final class ActiveWindowMetadataStream: NSObject, @unchecked Sendable, SC
     let startedAt = SCStreamFrameMetadataParser.isoTimestamp()
     let store = OneContextCaptureLogStore(runtimePaths: runtimePaths)
     try store.prepare()
+    var initialPersistErrors: [String] = []
+    if let focusedContext = snapshot.focusedContext {
+      focusedContextHandler?(focusedContext)
+      do {
+        try store.appendEvent(
+          eventType: "capture.ax_focused_context",
+          durability: .lossless,
+          recordedAt: focusedContext.generatedAt,
+          payload: focusedContext
+        )
+      } catch {
+        initialPersistErrors.append("ax_focused_context: \(error.localizedDescription)")
+      }
+    }
+    var adaptiveController = ActiveWindowMetadataAdaptiveController()
+    let initialAdaptiveDecision = adaptiveController.start(target: target)
     stateQueue.sync {
       session = ActiveWindowMetadataSession(
         streamID: streamID,
@@ -73,12 +93,15 @@ public final class ActiveWindowMetadataStream: NSObject, @unchecked Sendable, SC
         target: target,
         parser: parser,
         uxMotionHintsProvider: uxMotionHintsProvider,
-        store: store
+        store: store,
+        adaptiveController: adaptiveController,
+        initialAdaptiveDecision: initialAdaptiveDecision
       )
+      session?.persistErrors.append(contentsOf: initialPersistErrors)
     }
 
     let filter = SCContentFilter(desktopIndependentWindow: scWindow)
-    let configuration = Self.configuration(for: target, durationSeconds: durationSeconds, maxFrames: maxFrames)
+    let configuration = Self.configuration(for: target, targetFPS: initialAdaptiveDecision.targetFPS)
     let stream = SCStream(filter: filter, configuration: configuration, delegate: nil)
     let queue = DispatchQueue(label: "com.haptica.1context.active-window-metadata.sck")
     try stream.addStreamOutput(self, type: .screen, sampleHandlerQueue: queue)
@@ -105,6 +128,11 @@ public final class ActiveWindowMetadataStream: NSObject, @unchecked Sendable, SC
         persistedEventCount: 0,
         persistErrors: [],
         uxMotionHintsFusedFrameCount: 0,
+        adaptiveDecisionCount: 0,
+        configurationUpdateDecisionCount: initialAdaptiveDecision.shouldUpdateStreamConfiguration ? 1 : 0,
+        configurationUpdateErrors: [],
+        initialAdaptiveDecision: initialAdaptiveDecision,
+        latestAdaptiveDecision: initialAdaptiveDecision,
         latestUXMotionHints: nil,
         latestFrame: nil,
         frames: []
@@ -118,21 +146,26 @@ public final class ActiveWindowMetadataStream: NSObject, @unchecked Sendable, SC
     of type: SCStreamOutputType
   ) {
     guard type == .screen, CMSampleBufferIsValid(sampleBuffer) else { return }
-    let reachedLimit = stateQueue.sync { () -> Bool in
-      guard var session else { return false }
-      let reached = session.record(sampleBuffer: sampleBuffer)
+    let result = stateQueue.sync { () -> ActiveWindowMetadataRecordResult in
+      guard var session else { return .inactive }
+      let result = session.record(sampleBuffer: sampleBuffer)
       self.session = session
-      return reached
+      return result
     }
-    if reachedLimit {
+    if let decision = result.configurationDecision,
+      decision.shouldUpdateStreamConfiguration,
+      let target = result.target
+    {
+      applyConfigurationUpdate(stream, target: target, decision: decision)
+    }
+    if result.reachedFrameLimit {
       frameLimitSemaphore.signal()
     }
   }
 
-  private static func configuration(
+  public static func configuration(
     for target: ActiveWindowMetadataTarget,
-    durationSeconds: TimeInterval,
-    maxFrames: Int
+    targetFPS: Int
   ) -> SCStreamConfiguration {
     let configuration = SCStreamConfiguration()
     let width = max(64, target.framePixels.map { Int($0.width.rounded()) } ?? Int(target.framePoints.width.rounded()))
@@ -141,14 +174,31 @@ public final class ActiveWindowMetadataStream: NSObject, @unchecked Sendable, SC
     let scale = min(1, Double(maxDimension) / Double(max(width, height)))
     configuration.width = max(64, Int((Double(width) * scale).rounded()))
     configuration.height = max(64, Int((Double(height) * scale).rounded()))
-    let requestedFPS = Double(maxFrames) / max(0.25, durationSeconds)
-    let cappedFPS = min(5, max(1, requestedFPS))
-    configuration.minimumFrameInterval = CMTime(seconds: 1 / cappedFPS, preferredTimescale: 600)
+    let cappedFPS = min(30, max(1, targetFPS))
+    configuration.minimumFrameInterval = CMTime(seconds: 1 / Double(cappedFPS), preferredTimescale: 600)
     configuration.queueDepth = 1
     configuration.showsCursor = false
     configuration.capturesAudio = false
     configuration.excludesCurrentProcessAudio = true
     return configuration
+  }
+
+  private func applyConfigurationUpdate(
+    _ stream: SCStream,
+    target: ActiveWindowMetadataTarget,
+    decision: ActiveWindowMetadataAdaptiveDecision
+  ) {
+    let configuration = Self.configuration(for: target, targetFPS: decision.targetFPS)
+    stream.updateConfiguration(configuration) { [weak self] error in
+      guard let error, let self else { return }
+      self.stateQueue.async {
+        guard var session = self.session else { return }
+        session.recordConfigurationUpdateError(
+          "target_fps=\(decision.targetFPS) reason=\(decision.updateReason.rawValue): \(error.localizedDescription)"
+        )
+        self.session = session
+      }
+    }
   }
 
   private func drainFrameLimitSemaphore() {
@@ -188,6 +238,18 @@ public final class ActiveWindowMetadataStream: NSObject, @unchecked Sendable, SC
   }
 }
 
+private struct ActiveWindowMetadataRecordResult {
+  var reachedFrameLimit: Bool
+  var target: ActiveWindowMetadataTarget?
+  var configurationDecision: ActiveWindowMetadataAdaptiveDecision?
+
+  static let inactive = ActiveWindowMetadataRecordResult(
+    reachedFrameLimit: false,
+    target: nil,
+    configurationDecision: nil
+  )
+}
+
 private struct ActiveWindowMetadataSession {
   var streamID: String
   var startedAt: String
@@ -197,16 +259,19 @@ private struct ActiveWindowMetadataSession {
   var parser: SCStreamFrameMetadataParser
   var uxMotionHintsProvider: ActiveWindowMetadataStream.UXMotionHintsProvider?
   var store: OneContextCaptureLogStore
+  var adaptiveController: ActiveWindowMetadataAdaptiveController
+  var initialAdaptiveDecision: ActiveWindowMetadataAdaptiveDecision
   var sequence = 0
   var previousWeightedCenterY: Double?
   var frames: [ActiveWindowFrameMetadata] = []
   var persistedEventCount = 0
   var persistErrors: [String] = []
+  var configurationUpdateErrors: [String] = []
 
-  mutating func record(sampleBuffer: CMSampleBuffer) -> Bool {
+  mutating func record(sampleBuffer: CMSampleBuffer) -> ActiveWindowMetadataRecordResult {
     sequence += 1
     let uxMotionHints = uxMotionHintsProvider?()
-    let metadata = parser.parse(
+    var metadata = parser.parse(
       sampleBuffer: sampleBuffer,
       streamID: streamID,
       sequence: sequence,
@@ -214,6 +279,8 @@ private struct ActiveWindowMetadataSession {
       previousWeightedCenterY: previousWeightedCenterY,
       uxMotionHints: uxMotionHints
     )
+    let adaptiveDecision = adaptiveController.update(frame: metadata)
+    metadata.adaptiveDecision = adaptiveDecision
     if metadata.frameStatus == .complete,
       let center = metadata.dirtyRectSummary.weightedCenterY
     {
@@ -226,7 +293,15 @@ private struct ActiveWindowMetadataSession {
     } catch {
       persistErrors.append(error.localizedDescription)
     }
-    return frames.count >= requestedMaxFrames
+    return ActiveWindowMetadataRecordResult(
+      reachedFrameLimit: frames.count >= requestedMaxFrames,
+      target: target,
+      configurationDecision: adaptiveDecision
+    )
+  }
+
+  mutating func recordConfigurationUpdateError(_ error: String) {
+    configurationUpdateErrors.append(error)
   }
 
   func summary(endedAt: String) -> ActiveWindowMetadataSample {
@@ -235,6 +310,10 @@ private struct ActiveWindowMetadataSession {
     let feed = frames.filter(\.feedsMotionClassifier).count
     let hintFused = frames.filter(\.uxMotionHintsFused).count
     let latestHints = frames.last(where: { $0.uxMotionHints != nil })?.uxMotionHints
+    let adaptiveDecisions = frames.compactMap(\.adaptiveDecision)
+    let latestAdaptiveDecision = adaptiveDecisions.last ?? initialAdaptiveDecision
+    let updateDecisionCount = adaptiveDecisions.filter(\.shouldUpdateStreamConfiguration).count
+      + (initialAdaptiveDecision.shouldUpdateStreamConfiguration ? 1 : 0)
     return ActiveWindowMetadataSample(
       streamID: streamID,
       startedAt: startedAt,
@@ -250,6 +329,11 @@ private struct ActiveWindowMetadataSession {
       persistedEventCount: persistedEventCount,
       persistErrors: persistErrors,
       uxMotionHintsFusedFrameCount: hintFused,
+      adaptiveDecisionCount: adaptiveDecisions.count,
+      configurationUpdateDecisionCount: updateDecisionCount,
+      configurationUpdateErrors: configurationUpdateErrors,
+      initialAdaptiveDecision: initialAdaptiveDecision,
+      latestAdaptiveDecision: latestAdaptiveDecision,
       latestUXMotionHints: latestHints,
       latestFrame: frames.last,
       frames: frames

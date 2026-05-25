@@ -199,22 +199,14 @@ final class WikiCoreProcessClientTests: XCTestCase {
     XCTAssertEqual(cleanStatus["next_action"] as? String, "none")
     XCTAssertEqual(cleanStatus["render_required"] as? Bool, false)
 
-    let agent = try client.call([
-      "agent-identify",
-      "--thread-id", "worker-ar-swift-bridge",
-      "--role", "role://topics.curator",
-      "--ttl-seconds", "3600"
-    ])
-    let agentID = try requireString(agent, "agent_id")
-    _ = try client.call(["page-watch", "topics", "--agent-id", agentID])
     let talk = try client.call([
       "talk-append",
       "--page", "topics",
       "--kind", "proposal",
       "--subject", "Swift bridge talk-only proof",
       "--from", "agent://worker-ar/swift-bridge",
-      "--to-role", "curator",
-      "--body", "Talk and mail changes should not dirty rendered page content."
+      "--to", "role://topics.curator",
+      "--body", "Talk changes should not dirty rendered page content."
     ])
     XCTAssertEqual(talk["render_required"] as? Bool, false)
     let afterTalkStatus = try client.call(["publish-status"])
@@ -264,16 +256,5 @@ final class WikiCoreProcessClientTests: XCTestCase {
     try ("#!/bin/sh\n" + body + "\n").write(to: executable, atomically: true, encoding: .utf8)
     try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: executable.path)
     return executable
-  }
-
-  private func requireString(_ object: [String: Any], _ key: String) throws -> String {
-    guard let value = object[key] as? String else {
-      throw NSError(
-        domain: "WikiCoreProcessClientTests",
-        code: 1,
-        userInfo: [NSLocalizedDescriptionKey: "Missing string key \(key) in \(object)"]
-      )
-    }
-    return value
   }
 }

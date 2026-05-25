@@ -294,9 +294,28 @@ The asset add operation copies the file into the page-local asset folder, applie
 safe filename rules, records hash/media metadata, appends a page-ledger event,
 and returns the markdown or
 download link the agent should insert. The renderer publishes page-local assets
-as route-sibling assets, for example `/topics.assets/hero.png`, and records them
-in the content index. Agents should not guess these paths from filesystem
-layout.
+as route-sibling assets, for example `/topics.assets/hero.png`, and records
+them in `.1context/reference-index.json` with hashes, media types,
+published hrefs, source markdown references, and stable `user-wiki://`
+citation URIs. Agents should not guess these paths from filesystem layout.
+
+Fenced Markdown code blocks are inline page resources too. They remain normal
+Markdown in source, render with deterministic HTML anchors, and appear in the
+reference index with language, source line, content hash, and citation URI.
+Source code files that should be downloaded or cited as files belong in the
+same page-local asset folder and should be added through `wiki.asset.add`.
+
+Wikipedia-style Markdown footnotes are also supported:
+
+```markdown
+This claim has a source.[^source]
+
+[^source]: Source details or a Markdown link.
+```
+
+The renderer turns footnote uses into superscript numbers, appends a References
+section at the bottom of the page, and publishes citation records in
+`.1context/reference-index.json` with stable `user-wiki://` citation URIs.
 
 Rules:
 
@@ -304,6 +323,8 @@ Rules:
 - Browser-visible output must not expose local absolute paths.
 - Images require useful alt text unless explicitly marked decorative.
 - Downloadable files should have a caption or label.
+- Source code files may be attached as page assets; fenced snippets may stay
+  inline in the Markdown body.
 - Page assets are reader content and can affect publish freshness.
 - Talk attachments are workflow/evidence content and do not make page source
   dirty unless a source page links to them intentionally.
@@ -352,36 +373,15 @@ Talk entry `kind` names should describe the message type: `conversation`,
 Talk entry `state` names should describe lifecycle: `open`, `accepted`,
 `rejected`, `resolved`, `withdrawn`, `superseded`, `blocked`, or `archived`.
 
-Inbox and notification state lives in `context-engine`, not beside every page:
+Current wiki V0 talk is page-local collaboration context. By default, `to` and
+`cc` are metadata labels only. Agent mail V0 may explicitly deliver addressed
+talk into `context-engine/mail`, but only when a caller requests mail delivery
+through the Agent Mail Protocol. Talk entry files and talk attachments remain
+the durable wiki discussion facts.
 
-```text
-context-engine/agents/directory/
-  agents.jsonl
-  current.json
-  leases.jsonl
-
-context-engine/mail/
-  subscriptions.toml
-  deliveries.jsonl
-  mailboxes/<address-key>/inbox.jsonl
-  claims.jsonl
-
-context-engine/notifications/
-  outbox.jsonl
-  attempts.jsonl
-  cursors/<agent-id>.json
-```
-
-The split is intentional:
-
-- talk folders are the source archive
-- delivery ledgers say which recipient needs which message
-- mailbox files are fast recipient views
-- notification files are live wakeup attempts
-
-Mailboxes and notifications may be regenerated or repaired from talk entries,
-subscriptions, and delivery ledgers. Talk entry files and delivery ledgers are
-the durable facts.
+Mail delivery is operational state. It must not make the static wiki require
+publication unless page source, page assets, tombstones, templates, or
+`wiki.toml` also changed.
 
 ## Templates
 
@@ -469,10 +469,6 @@ and backup-worthy, but it is not the clean static wiki export.
 ~/1Context/context-engine/
   agents/
     directory/
-    roles/
-    tools/
-    policies/
-    subscriptions/
 
   jobs/
 
@@ -480,16 +476,30 @@ and backup-worthy, but it is not the clean static wiki export.
     shared/
     e08-for-you/
 
-  inbox/
   mail/
-    subscriptions.toml
+    messages/
+    bodies/
     deliveries.jsonl
     mailboxes/
     claims.jsonl
+    idempotency.jsonl
+    injection-receipts.jsonl
+    control-events.jsonl
+    dead-letter.jsonl
+
   notifications/
     outbox.jsonl
     attempts.jsonl
     cursors/
+
+  agents/deferred/
+    roles/
+    tools/
+    policies/
+    subscriptions/
+  mail/deferred/
+    subscriptions.jsonl
+    lists.jsonl
   proposals/
   decisions/
   runs/
@@ -504,15 +514,22 @@ Directory meanings:
 | Directory | Stores |
 | --- | --- |
 | `agents/directory` | live and recently-live agent registrations, transport pointers, leases, and retirement events |
-| `agents/roles` | reusable role definitions |
-| `agents/tools` | tool contracts and allowlists |
-| `agents/policies` | operator-touched rules, safety policy, edit rules |
-| `agents/subscriptions` | durable role/list/page subscription policy when it is not page-local |
 | `jobs/` | reusable job definitions |
 | `prompts/` | global prompt files and prompt packs |
-| `inbox/` | legacy/simple machine-readable work requests and operator-created tasks |
-| `mail/` | talk-derived delivery records, recipient mailbox views, claims, and subscription indexes |
-| `notifications/` | wakeup outbox, push attempts, and cursors for live agents |
+| `mail/messages` | immutable accepted mail envelopes, partitioned by date |
+| `mail/bodies` | immutable accepted markdown bodies, partitioned by date |
+| `mail/deliveries.jsonl` | append-only delivery truth for each recipient |
+| `mail/mailboxes` | rebuildable recipient inbox indexes keyed by safe address encodings |
+| `mail/claims.jsonl` | append-only claim and mark events for individual deliveries |
+| `mail/idempotency.jsonl` | stable operation keys and payload fingerprints for safe retries |
+| `mail/injection-receipts.jsonl` | host-facing records that an authorized `wiki.mail.open` body was injected or failed to inject into a Codex thread |
+| `mail/control-events.jsonl` | hook, app-server, injection, and supervisor decisions that shape agent runtime behavior without becoming message truth |
+| `mail/dead-letter.jsonl` | inspectable failed or exhausted delivery attempts |
+| `notifications/outbox.jsonl` | durable wakeup hints for eligible agents; contains envelope metadata, not full bodies |
+| `notifications/attempts.jsonl` | dispatch attempts, steering outcomes, retry evidence, and failures |
+| `notifications/cursors` | optional per-agent notification cursors |
+| `agents/deferred` | later role/tool/policy/subscription shapes after V0 delivery is stable |
+| `mail/deferred` | later list and subscription indexes after V0 delivery is stable |
 | `proposals/` | immutable proposed changes and patch series |
 | `decisions/` | accepted, rejected, deferred, withdrawn, or superseded outcomes |
 | `runs/` | replay/debug records for agent work |
@@ -527,24 +544,18 @@ Canonical wiki publication happens only after accepted changes land in
 
 ## Context Engine File Classes
 
-Inbox task files are queued work requests. Claims should be lease-based and
-include target, input hash, expected outputs, and allowed paths.
+The current context engine folder is reserved for memory/runtime records that
+are not user-wiki source pages:
 
-Agent directory records are append-friendly. An agent registers when it is
-born, heartbeats while active, and retires when done. A registration may include
-transport pointers such as a Codex `thread_id`, but durable routing should
-prefer addresses such as `role://topics.curator`, `list://topics.watchers`,
-`page://topics`, or `thread://topics/infrastructure-taxonomy`.
+Agent mail V0 records are transport state, not wiki page source. Message
+envelopes and bodies are immutable once accepted. Delivery and claim state is
+append-only. Mailbox files are rebuildable indexes and may be regenerated from
+messages, deliveries, and claims. Address keys used in paths must be encoded by
+the Rust core; raw addresses are never trusted as path fragments.
 
-Mail records are recipient views over talk entries. The talk entry file is the
-message truth; delivery ledgers and mailbox files decide who needs to see it,
-who claimed it, and what state that recipient's copy is in. A missing mailbox
-view must be rebuildable from talk entries, subscriptions, and delivery
-ledgers.
-
-Notifications are wakeups, not memory. A notification tells a live transport
-that inbox state changed. Failed notification delivery must not lose mail,
-because the recipient can still call `wiki.mail.inbox`.
+Agent directory records map durable agent ids to live transport pointers such
+as Codex `thread_id`, requested/granted roles, capabilities, leases, and
+retirement state. A thread id is a transport locator, not the durable identity.
 
 Proposals are immutable suggested changes. New versions create new files rather
 than overwriting old versions. Decisions record whether a proposal is accepted,
@@ -553,8 +564,11 @@ rejected, deferred, withdrawn, or superseded.
 Runs are replay/debug records. Artifacts are outputs, not conversation.
 Observations are source material for memory work. Ledgers are append-only JSONL.
 
-Detailed write protocol, proposal promotion, route plans, and render requests
-belong to the publication contract.
+Detailed write protocol, proposal promotion, route plans, render requests,
+lists, and governance storage belong to their own contracts. Agent mail and
+notification wakeups are owned by the Agent Mail Protocol; do not add ad hoc
+wiki mail state under `context-engine` without first updating that protocol and
+this user-data spec.
 
 ## Indexes And Search
 
@@ -783,8 +797,9 @@ The first wiki integration only needs to prove the data shape:
 
 - initialize `user-wiki` and `context-engine`
 - create configured source-backed pages from templates through page lifecycle
-- register agents, route talk entries to mailboxes, and record notification
-  wakeups
+- register agents and route explicitly delivered talk entries to mailboxes
+- create notification wakeups through Agent Mail Protocol outbox, attempt,
+  poll, ack, and Codex steering semantics
 - preserve edited user files
 - respect tombstones
 - render accepted source into `user-wiki/site`

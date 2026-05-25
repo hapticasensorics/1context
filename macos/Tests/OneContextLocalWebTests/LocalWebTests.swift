@@ -20,6 +20,7 @@ final class LocalWebTests: XCTestCase {
     XCTAssertTrue(text.contains("https://wiki.1context.localhost:39191"))
     XCTAssertTrue(text.contains("bind 127.0.0.1"))
     XCTAssertTrue(text.contains("tls internal"))
+    XCTAssertTrue(text.contains("@memoryApi path /memory /api/memory/*"))
     XCTAssertFalse(text.contains("auto_https off"))
     XCTAssertTrue(text.contains(":39191"))
     XCTAssertEqual(config.url, "https://localhost/your-context")
@@ -45,6 +46,7 @@ final class LocalWebTests: XCTestCase {
     XCTAssertTrue(text.contains("http://localhost:39291"))
     XCTAssertTrue(text.contains("http://wiki-dev.1context.localhost:39291"))
     XCTAssertTrue(text.contains("bind 127.0.0.1"))
+    XCTAssertTrue(text.contains("@memoryApi path /memory /api/memory/*"))
     XCTAssertFalse(text.contains("tls internal"))
     XCTAssertEqual(config.url, "http://localhost:39291/your-context")
     XCTAssertEqual(config.healthURL.absoluteString, "http://127.0.0.1:39291/__1context/health")
@@ -408,6 +410,135 @@ final class LocalWebTests: XCTestCase {
     let oversized = Data(repeating: UInt8(ascii: "x"), count: WikiLocalAPIHandler.maxStateBodyBytes + 1)
     let rejected = handler.handle(WikiLocalAPIRequest(method: "POST", path: "/api/wiki/state", body: oversized))
     XCTAssertEqual(rejected.statusCode, 413)
+  }
+
+  func testMemoryViewerAndAPIRoutesUseInjectedProvider() throws {
+    let root = temporaryRoot()
+    let web = LocalWebPaths(runtimePaths: testRuntimePaths(root: root))
+    let handler = WikiLocalAPIHandler(
+      paths: web,
+      memoryStatus: {
+        [
+          "surface": "memory_daemon_status",
+          "running": true,
+          "viewport_path": root.appendingPathComponent("1Context/context-engine/memory-db/viewport/local-source-records.jsonl").path,
+          "status": ["elapsed_ms": 12]
+        ]
+      },
+      memoryViewport: { query in
+        [
+          "schema_version": 1,
+          "surface": "memory_viewport",
+          "protocol": "memory.queryViewport.v1",
+          "source": query["source"] ?? "all",
+          "record_count": 1,
+          "sources": ["codex.local_sessions"],
+          "records": [
+            [
+              "source": "codex.local_sessions",
+              "source_uri": root.appendingPathComponent(".codex/sessions/rollout.jsonl").path,
+              "record": [
+                "connector_key": "codex.local_sessions",
+                "source_uri": root.appendingPathComponent(".codex/sessions/rollout.jsonl").path,
+                "envelope": [
+                  "kind": "codex_message",
+                  "event_start": "2026-05-24T12:00:00Z",
+                  "event_end": "2026-05-24T12:00:01Z",
+                  "display_title": "Codex message",
+                  "display_text": "hello"
+                ],
+                "blob_uri": "file://\(root.appendingPathComponent("1Context/context-engine/blobs/blob-1.txt").path)"
+              ]
+            ]
+          ]
+        ]
+      },
+      memoryObject: { query in
+        [
+          "schema_version": 1,
+          "surface": "memory_object_hydration",
+          "protocol": "memory.hydrateObjects.v1",
+          "object_id": query["object_id"] ?? "",
+          "object": [
+            "object_id": query["object_id"] ?? "",
+            "source_uri": root.appendingPathComponent(".codex/sessions/rollout.jsonl").path,
+            "display_title": "Codex message detail"
+          ]
+        ]
+      },
+      memoryDensity: { _ in
+        [
+          "schema_version": 1,
+          "surface": "memory_density",
+          "protocol": "memory.queryDensity.v1",
+          "buckets": [
+            ["bucket_start": "2026-05-24T12:00:00Z", "object_count": 1]
+          ]
+        ]
+      },
+      memoryEdges: { query in
+        [
+          "schema_version": 1,
+          "surface": "memory_edges",
+          "protocol": "memory.queryEdges.v1",
+          "object_id": query["object_id"] ?? "",
+          "edges": []
+        ]
+      },
+      memorySearch: { query in
+        [
+          "schema_version": 1,
+          "surface": "memory_search",
+          "protocol": "memory.searchText.v1",
+          "query": query["q"] ?? query["query"] ?? "",
+          "objects": []
+        ]
+      }
+    )
+
+    let status = handler.handle(WikiLocalAPIRequest(method: "GET", path: "/api/memory/status"))
+    let viewport = handler.handle(WikiLocalAPIRequest(method: "GET", path: "/api/memory/viewport", query: ["source": "codex.local_sessions"]))
+    let object = handler.handle(WikiLocalAPIRequest(method: "GET", path: "/api/memory/object", query: ["object_id": "object-123"]))
+    let density = handler.handle(WikiLocalAPIRequest(method: "POST", path: "/api/memory/density", body: Data(#"{"source":"codex.local_sessions"}"#.utf8)))
+    let edges = handler.handle(WikiLocalAPIRequest(method: "GET", path: "/api/memory/edges", query: ["object_id": "object-123"]))
+    let memorySearch = handler.handle(WikiLocalAPIRequest(method: "GET", path: "/api/memory/search", query: ["q": "hello"]))
+    let removedRoute = handler.handle(WikiLocalAPIRequest(method: "GET", path: "/api/memory/traces"))
+    let viewer = handler.handle(WikiLocalAPIRequest(method: "GET", path: "/memory"))
+    let statusPayload = try XCTUnwrap(json(status))
+    let viewportPayload = try XCTUnwrap(json(viewport))
+    let objectPayload = try XCTUnwrap(json(object))
+    let densityPayload = try XCTUnwrap(json(density))
+    let edgesPayload = try XCTUnwrap(json(edges))
+    let memorySearchPayload = try XCTUnwrap(json(memorySearch))
+    let html = String(data: viewer.body, encoding: .utf8) ?? ""
+
+    XCTAssertEqual(status.statusCode, 200)
+    XCTAssertEqual(statusPayload["surface"] as? String, "memory_daemon_status")
+    XCTAssertEqual(viewport.statusCode, 200)
+    XCTAssertEqual(viewportPayload["surface"] as? String, "memory_viewport")
+    XCTAssertEqual(viewportPayload["protocol"] as? String, "memory.queryViewport.v1")
+    XCTAssertEqual(viewportPayload["source"] as? String, "codex.local_sessions")
+    XCTAssertEqual(viewportPayload["record_count"] as? Int, 1)
+    XCTAssertEqual(object.statusCode, 200)
+    XCTAssertEqual(objectPayload["protocol"] as? String, "memory.hydrateObjects.v1")
+    XCTAssertEqual(density.statusCode, 200)
+    XCTAssertEqual(densityPayload["protocol"] as? String, "memory.queryDensity.v1")
+    XCTAssertEqual(edges.statusCode, 200)
+    XCTAssertEqual(edgesPayload["protocol"] as? String, "memory.queryEdges.v1")
+    XCTAssertEqual(memorySearch.statusCode, 200)
+    XCTAssertEqual(memorySearchPayload["protocol"] as? String, "memory.searchText.v1")
+    XCTAssertEqual(removedRoute.statusCode, 404)
+    XCTAssertFalse((String(data: status.body + viewport.body + object.body + density.body + edges.body + memorySearch.body, encoding: .utf8) ?? "").contains(root.path))
+    XCTAssertFalse((String(data: viewport.body, encoding: .utf8) ?? "").contains("file://"))
+    XCTAssertEqual(viewer.statusCode, 200)
+    XCTAssertTrue(viewer.headers["Content-Type"]?.contains("text/html") == true)
+    XCTAssertTrue(html.contains("1Context Memory"))
+    XCTAssertTrue(html.contains("/api/memory/viewport"))
+    XCTAssertTrue(html.contains("/api/memory/object"))
+    XCTAssertTrue(html.contains("/api/memory/density"))
+    XCTAssertTrue(html.contains("protocolProblem"))
+    XCTAssertFalse(html.contains("/api/memory/traces"))
+    XCTAssertFalse(html.localizedCaseInsensitiveContains("trace"))
   }
 
   func testWikiLocalAPIRedactsBrowserVisibleLocalPaths() throws {

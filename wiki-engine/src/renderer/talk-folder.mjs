@@ -50,14 +50,29 @@ import { resolve, basename, join } from 'node:path';
 import matter from 'gray-matter';
 import yaml from 'js-yaml';
 import { Marked } from 'marked';
+import { stableCodeBlockId } from './references.mjs';
 
 const ESCAPE_MAP = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
 const escape = (s) => String(s).replace(/[&<>"']/g, (c) => ESCAPE_MAP[c]);
 
-function makeSafeMarked() {
+function codeLanguageClass(language) {
+  const firstToken = String(language || '').trim().split(/\s+/)[0] || '';
+  return firstToken.replace(/[^A-Za-z0-9_-]/g, '');
+}
+
+function makeSafeMarked({ codeContextSlug = 'talk' } = {}) {
   const marked = new Marked();
+  let codeSequence = 0;
   marked.use({
     renderer: {
+      code({ text, lang }) {
+        codeSequence += 1;
+        const language = codeLanguageClass(lang);
+        const id = stableCodeBlockId(codeContextSlug, codeSequence, language, text);
+        const languageAttr = language ? ` data-1context-language="${escape(language)}"` : '';
+        const codeClass = language ? ` class="language-${escape(language)}"` : '';
+        return `<pre id="${id}" class="opctx-code-block" data-1context-code-id="${id}"${languageAttr}><code${codeClass}>${escape(text)}</code></pre>\n`;
+      },
       html({ text, raw }) {
         return escape(text || raw || '');
       },
@@ -428,7 +443,7 @@ export function renderTalkFolder(folderPath) {
 
   const entries = readEntries(folderPath);
   const replyMap = buildReplyMap(entries);
-  const marked = makeSafeMarked();
+  const marked = makeSafeMarked({ codeContextSlug: frontmatter.slug || basename(folderPath) });
   const bodyHtml = composeBody(entries, replyMap, marked, lede, seeAlso, curatorMd, talkRoute);
 
   // Markdown twin — the assembled .md a reader/agent gets when they

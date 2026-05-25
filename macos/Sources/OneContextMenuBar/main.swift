@@ -370,6 +370,8 @@ private final class AppSetupWindowController: NSWindowController {
     let action: SetupRequirementRow.Action?
     if permission.ready {
       action = nil
+    } else if permission.status == .notRequired {
+      action = nil
     } else if let grantHandler {
       let title = permission.status == .needsRelaunch ? "Relaunch" : (actionTitle ?? "Grant")
       action = SetupRequirementRow.Action(title: title, handler: grantHandler)
@@ -382,6 +384,8 @@ private final class AppSetupWindowController: NSWindowController {
       status = .granted
     case .required:
       status = .required
+    case .notRequired:
+      status = .notRequired
     case .needsRelaunch:
       status = .working("Needs Relaunch")
     case .unavailable:

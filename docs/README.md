@@ -7,18 +7,32 @@ that operators and contributors should use.
 ## Start Here
 
 - [Wiki Publishing System API](wiki-publishing-system-api.md): canonical V0
-  contract for user data, RuntimeDefaults, page lifecycle, talk/mail,
-  notifications, the renderer boundary, portable publication, Local Web
-  serving, package evidence, and freeze boundaries.
+  contract for user data, RuntimeDefaults, page lifecycle, page assets, page
+  talk, the renderer boundary, portable publication, Local Web serving,
+  package evidence, and freeze boundaries.
 - [Wiki System Architecture](wiki-system-architecture.md): internal shape for
   the portable wiki core, inventory compiler, page ledger, lifecycle service,
-  agent directory, renderer, publisher, and host boundaries.
+  renderer, publisher, and host boundaries.
 - [Wiki Publishing System Runbook](wiki-publishing-system-runbook.md):
   operating guide for local fixtures, custom pages, RuntimeDefaults proofs,
   browser validation, memory agents, macOS startup, and release packaging.
 - [Wiki Agent Use Story](wiki-agent-use-story.md): narrative walkthrough of
-  how agents should identify, inspect mail, edit pages, add assets, publish,
-  validate, and leave evidence without path guessing.
+  how agents should inspect wiki state, edit pages, add assets, append talk,
+  publish, validate, and leave evidence without path guessing.
+- [Agent Tool Gateway](agent-tool-gateway.md): generic agent-facing tool
+  contract with one consolidated backend and two visible toolsets,
+  `toolset-mail` and `toolset-wiki`.
+- [1Context Codex Adapter Spec](1context-codex-adapter-spec.md): implementation
+  contract for the Codex-specific runtime bridge that owns app-server calls,
+  hook installation, wake dispatch, body injection, event mirroring, and
+  adapter proof.
+- [Codex Hook Control And Mail Wakeup Spec](codex-hook-control-spec.md):
+  control-plane contract for Codex steering, lifecycle hooks, notification
+  dispatch, and autonomous mail correctness.
+- [Agent Mail Protocol](agent-mail-protocol.md): design contract and V0 proof
+  surface for durable agent mail, async ready/valid semantics, backpressure,
+  talk-page inboxes, notifications, and governance workflows over proposals and
+  artifacts.
 - [Release Factory Goal](goals/1context-release-factory-goal.md): active
   priority for channel-aware dev, prototype, private, and official release
   builds with no backwards-compatible shims, no Homebrew dependency for
@@ -33,6 +47,44 @@ that operators and contributors should use.
 
 - [macOS App Architecture](macos-app-architecture.md): app-owned setup,
   permissions, update, install, and local-web boundaries.
+- [macOS Capture System](macos-capture-system.md): native window graph,
+  ScreenCaptureKit/CoreGraphics/AX capture spine, dynamic capture policy, and
+  current daemon/CLI snapshot surface.
+- [Capture System Implementation Spec](capture-system-implementation-spec.md):
+  implementation plan for the native capture runtime from macOS sensors through
+  short-lived READY capture bundles, stopping before attention filtering and
+  Timescale memory writes.
+- [Capture Window Bundle Spec](capture-window-bundle-spec.md): ephemeral
+  Application Support file-bundle contract for handing time-aligned capture
+  evidence to the attention-filter agent before durable selected output is
+  written to memory DB.
+- [Memory DB Design Spec](memory-db-design-spec.md): Postgres plus TimescaleDB
+  Perception DB temporal object store with `perception.objects` as the product
+  time spine.
+- [Perception DB Schema Layout](perception-db-schema-layout.md): canonical
+  schema layout where lanes are presentation, series are identity, objects are
+  temporal records, blobs are bytes, and edges are meaning.
+- [Memory DB API And Protocol Spec](memory-db-api-protocol-spec.md): canonical
+  Rust-owned read/write protocol for writers, viewers, agents, and local web
+  adapters.
+- [Memory DB Infra And Viewer Spec](memory-db-infra-viewer-spec.md):
+  infrastructure and viewer contract for local memory operation.
+- [Memory Source Connectors Spec](memory-source-connectors-spec.md): connector
+  discovery, access, cursoring, and source-record rules for app data imports.
+- [Coding Agent Ingest Spec](coding-agent-ingest-spec.md): Codex, Claude, and
+  future 1Context agent-session reduction into one compact Perception DB format.
+- [Semantic Observation System](semantic-observation-system.md): downstream
+  reconstruction layer for per-minute attention captures and seen-surface
+  composites.
+- [Semantic Observation Output Contract](semantic-observation-output-contract.md):
+  visual-first contract for attention-highlighted screenshots, full development
+  composites, and up to three attended items per minute.
+- [Attention Capture Mockup](attention-capture-mockup.html): standalone HTML
+  mockup of the per-minute final output and development/debug view.
+- [Attention Dashboard Skeleton Schema](attention-dashboard-skeleton-schema.md):
+  native Rust/egui judge dashboard contract for video-side review, attention
+  output inspection, timeline lanes, review labels, and four-agent
+  implementation split.
 - [Local Web Contract](local-web-contract.md): local HTTPS, Caddy, static wiki
   publication, daemon API, cloud compatibility, and user-wiki boundaries.
 - [User Data Spec](user-data-spec.md): filesystem and persisted-data contract

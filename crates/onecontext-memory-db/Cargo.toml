@@ -1,0 +1,24 @@
+[package]
+name = "onecontext-memory-db"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
+postgres = { version = "0.19", features = ["with-chrono-0_4", "with-serde_json-1", "with-uuid-1"] }
+regex = "1.11"
+rusqlite = { version = "0.32", features = ["bundled"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+sha2 = "0.10"
+uuid = "1"
+
+[[bin]]
+name = "onecontext-memory-db"
+path = "src/bin/onecontext-memory-db.rs"
+
+[[bin]]
+name = "onecontext-memoryd"
+path = "src/bin/onecontext-memoryd.rs"

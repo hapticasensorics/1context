@@ -113,3 +113,130 @@ public struct CaptureModeController: Sendable {
     }
   }
 }
+
+public struct ActiveWindowMetadataAdaptiveController: Sendable {
+  public var modeController: CaptureModeController
+  public var policy: ActiveWindowMetadataAdaptivePolicy
+  public private(set) var currentTargetFPS: Int?
+  public private(set) var lastConfigurationUpdateAt: Date
+  public private(set) var latestDecision: ActiveWindowMetadataAdaptiveDecision?
+
+  public init(
+    modeController: CaptureModeController = CaptureModeController(),
+    policy: ActiveWindowMetadataAdaptivePolicy = ActiveWindowMetadataAdaptivePolicy(),
+    currentTargetFPS: Int? = nil,
+    lastConfigurationUpdateAt: Date = .distantPast
+  ) {
+    self.modeController = modeController
+    self.policy = policy
+    self.currentTargetFPS = currentTargetFPS
+    self.lastConfigurationUpdateAt = lastConfigurationUpdateAt
+  }
+
+  public mutating func start(
+    target: ActiveWindowMetadataTarget,
+    now: Date = Date()
+  ) -> ActiveWindowMetadataAdaptiveDecision {
+    update(
+      features: .zero(focused: target.isFocused),
+      uxMotionHintsFused: false,
+      now: now,
+      forceConfigurationUpdate: true
+    )
+  }
+
+  public mutating func update(
+    frame metadata: ActiveWindowFrameMetadata,
+    now: Date = Date()
+  ) -> ActiveWindowMetadataAdaptiveDecision {
+    update(
+      features: metadata.motionFeatures,
+      uxMotionHintsFused: metadata.uxMotionHintsFused,
+      now: now
+    )
+  }
+
+  public mutating func update(
+    features: MotionFeatures,
+    uxMotionHintsFused: Bool,
+    now: Date = Date(),
+    forceConfigurationUpdate: Bool = false
+  ) -> ActiveWindowMetadataAdaptiveDecision {
+    let previousMode = modeController.currentMode
+    let previousTargetFPS = currentTargetFPS
+    let classifierMode = modeController.classifier.classify(features)
+    let policyDecision = modeController.update(features: features, now: now)
+    let proposedTargetFPS = policy.targetFPS(for: policyDecision, features: features)
+    let configurationDecision = decideConfigurationUpdate(
+      previousMode: previousMode,
+      controllerMode: policyDecision.mode,
+      previousTargetFPS: previousTargetFPS,
+      proposedTargetFPS: proposedTargetFPS,
+      now: now,
+      forceConfigurationUpdate: forceConfigurationUpdate
+    )
+
+    if configurationDecision.shouldUpdate {
+      currentTargetFPS = configurationDecision.targetFPS
+      lastConfigurationUpdateAt = now
+    }
+
+    let targetFPS = configurationDecision.targetFPS
+    let decision = ActiveWindowMetadataAdaptiveDecision(
+      classifierMode: classifierMode,
+      controllerMode: policyDecision.mode,
+      proposedTargetFPS: proposedTargetFPS,
+      targetFPS: targetFPS,
+      previousTargetFPS: previousTargetFPS,
+      targetAnalysisFPS: policyDecision.targetAnalysisFPS,
+      minimumFrameIntervalSeconds: policy.minimumFrameIntervalSeconds(for: targetFPS),
+      shouldUpdateStreamConfiguration: configurationDecision.shouldUpdate,
+      updateReason: configurationDecision.reason,
+      shouldStoreKeyframe: policyDecision.shouldStoreKeyframe,
+      shouldOCRDirtyRegions: policyDecision.shouldOCRDirtyRegions,
+      shouldEncodeVideoSegment: policyDecision.shouldEncodeVideoSegment,
+      dirtyRectCount: features.dirtyRectCount,
+      dirtyAreaRatio: features.dirtyAreaRatio,
+      changedTileRatio: features.changedTileRatio,
+      estimatedDY: features.estimatedDY,
+      scrollEventRecently: features.scrollEventRecently,
+      keyboardEventRecently: features.keyboardEventRecently,
+      uxMotionHintsFused: uxMotionHintsFused
+    )
+    latestDecision = decision
+    return decision
+  }
+
+  private func decideConfigurationUpdate(
+    previousMode: CaptureMode,
+    controllerMode: CaptureMode,
+    previousTargetFPS: Int?,
+    proposedTargetFPS: Int,
+    now: Date,
+    forceConfigurationUpdate: Bool
+  ) -> (targetFPS: Int, shouldUpdate: Bool, reason: ActiveWindowMetadataConfigurationUpdateReason) {
+    guard let previousTargetFPS else {
+      return (proposedTargetFPS, true, .initial)
+    }
+    if forceConfigurationUpdate {
+      return (proposedTargetFPS, true, .initial)
+    }
+    guard proposedTargetFPS != previousTargetFPS else {
+      return (previousTargetFPS, false, .unchanged)
+    }
+
+    if proposedTargetFPS > previousTargetFPS {
+      let reason: ActiveWindowMetadataConfigurationUpdateReason =
+        previousMode != controllerMode ? .modeChanged : .fpsIncrease
+      return (proposedTargetFPS, true, reason)
+    }
+
+    if now.timeIntervalSince(lastConfigurationUpdateAt) < policy.downgradeHysteresisSeconds {
+      return (previousTargetFPS, false, .hysteresisHold)
+    }
+
+    let reason: ActiveWindowMetadataConfigurationUpdateReason =
+      previousMode != controllerMode ? .modeChanged : .fpsDecrease
+    return (proposedTargetFPS, true, reason)
+  }
+}

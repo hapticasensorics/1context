@@ -15,6 +15,7 @@ import OneContextPlatform
 public enum OneContextRequiredPermissionStatus: String, Codable, Sendable {
   case granted
   case required
+  case notRequired
   case needsRelaunch
   case unavailable
 }
@@ -25,7 +26,7 @@ public struct OneContextRequiredPermissionSnapshot: Codable, Equatable, Sendable
   public let detail: String
 
   public var ready: Bool {
-    status == .granted
+    status == .granted || status == .notRequired
   }
 
   public var displayStatus: String {
@@ -34,6 +35,8 @@ public struct OneContextRequiredPermissionSnapshot: Codable, Equatable, Sendable
       return "Granted"
     case .required:
       return "Required"
+    case .notRequired:
+      return "Not Required Yet"
     case .needsRelaunch:
       return "Needs Relaunch"
     case .unavailable:
@@ -74,6 +77,17 @@ public struct OneContextRememberingPermissionsSnapshot: Codable, Equatable, Send
   }
 
   public var requiredPermissions: [OneContextRequiredPermissionSnapshot] {
+    [
+      screenRecording,
+      accessibility,
+      inputMonitoring,
+      microphone,
+      automation,
+      fullDiskAccess
+    ]
+  }
+
+  public var diagnosticPermissions: [OneContextRequiredPermissionSnapshot] {
     [
       screenRecording,
       accessibility,
@@ -130,8 +144,8 @@ public struct OneContextRememberingPermissionsSnapshot: Codable, Equatable, Send
       ),
       browserExtension: OneContextRequiredPermissionSnapshot(
         title: "Browser Extension Permissions",
-        status: browserExtensionGranted ? .granted : .required,
-        detail: "Required so 1Context can see URLs, tabs, page text, selection, and scroll state."
+        status: browserExtensionGranted ? .granted : .notRequired,
+        detail: "Optional until the 1Context browser extension ships."
       ),
       microphone: OneContextRequiredPermissionSnapshot(
         title: "Microphone",
@@ -352,7 +366,7 @@ public enum OneContextSystemPermissions {
       ),
       browserExtension: OneContextRequiredPermissionSnapshot(
         title: "Browser Extension Permissions",
-        status: browserExtensionGranted(preferencesPath: preferencesPath, subject: subject) ? .granted : .required,
+        status: browserExtensionGranted(preferencesPath: preferencesPath, subject: subject) ? .granted : .notRequired,
         detail: browserExtensionRequiredDetail(preferencesPath: preferencesPath, subject: subject)
       ),
       microphone: OneContextRequiredPermissionSnapshot(
@@ -874,11 +888,18 @@ public enum OneContextSystemPermissions {
     try stream.addStreamOutput(output, type: .audio, sampleHandlerQueue: queue)
 
     try await startCapture(stream)
+    let stimulus = ScreenSystemAudioProofStimulus()
+    stimulus.start()
     let screenFrameArrived = output.waitForScreenFrame(timeout: 3)
+    let audioSampleArrived = output.waitForAudioSample(timeout: 3)
+    stimulus.stop()
     try await stopCapture(stream)
 
     guard screenFrameArrived else {
       throw permissionError("ScreenCaptureKit started but did not produce a screen frame.")
+    }
+    guard audioSampleArrived else {
+      throw permissionError("ScreenCaptureKit started but did not produce a system-audio sample.")
     }
 
     try recordProof(
@@ -886,14 +907,20 @@ public enum OneContextSystemPermissions {
       method: "screencapturekit-screen-frame",
       subject: subject,
       preferencesPath: preferencesPath,
-      details: ["display_count": "\(content.displays.count)"]
+      details: [
+        "display_count": "\(content.displays.count)",
+        "screen_frame_count": "\(output.screenFrameCount)"
+      ]
     )
     try recordProof(
       systemAudioProofKey,
       method: "screencapturekit-system-audio-stream",
       subject: subject,
       preferencesPath: preferencesPath,
-      details: ["captures_audio": "true"]
+      details: [
+        "captures_audio": "true",
+        "system_audio_sample_count": "\(output.audioSampleCount)"
+      ]
     )
     try removePreferenceValue(screenCaptureRelaunchProofKey, preferencesPath: preferencesPath)
   }
@@ -989,7 +1016,7 @@ public enum OneContextSystemPermissions {
     if browserExtensionGranted(preferencesPath: preferencesPath, subject: subject) {
       return "Required so 1Context can prove the installed browser extension id, version, and granted URL/tab/DOM permissions."
     }
-    return "Required; no browser extension native-message proof has been received from this signed app yet."
+    return "Optional for now; the native proof lane will become useful once the 1Context browser extension ships."
   }
 
   private static func fullDiskAccessDetail(report: OneContextFullDiskAccessProbeReport) -> String {
@@ -1378,28 +1405,89 @@ public enum OneContextSystemPermissions {
 
 @available(macOS 13.0, *)
 private final class ScreenAndSystemAudioProofOutput: NSObject, SCStreamOutput {
-  private let semaphore = DispatchSemaphore(value: 0)
+  private let screenSemaphore = DispatchSemaphore(value: 0)
+  private let audioSemaphore = DispatchSemaphore(value: 0)
   private let stateQueue = DispatchQueue(label: "com.haptica.1context.permissions.screencapture-proof-output")
   private var screenFrameArrived = false
+  private var audioSampleArrived = false
+  private var screenFrames = 0
+  private var audioSamples = 0
+
+  var screenFrameCount: Int {
+    stateQueue.sync { screenFrames }
+  }
+
+  var audioSampleCount: Int {
+    stateQueue.sync { audioSamples }
+  }
 
   func waitForScreenFrame(timeout: TimeInterval) -> Bool {
     if stateQueue.sync(execute: { screenFrameArrived }) {
       return true
     }
-    return semaphore.wait(timeout: .now() + timeout) == .success
+    return screenSemaphore.wait(timeout: .now() + timeout) == .success
+  }
+
+  func waitForAudioSample(timeout: TimeInterval) -> Bool {
+    if stateQueue.sync(execute: { audioSampleArrived }) {
+      return true
+    }
+    return audioSemaphore.wait(timeout: .now() + timeout) == .success
   }
 
   func stream(_ stream: SCStream, didOutputSampleBuffer sampleBuffer: CMSampleBuffer, of type: SCStreamOutputType) {
-    guard type == .screen, CMSampleBufferIsValid(sampleBuffer) else { return }
-    let shouldSignal = stateQueue.sync { () -> Bool in
-      if screenFrameArrived {
-        return false
+    guard CMSampleBufferIsValid(sampleBuffer) else { return }
+    switch type {
+    case .screen:
+      let shouldSignal = stateQueue.sync { () -> Bool in
+        screenFrames += 1
+        if screenFrameArrived {
+          return false
+        }
+        screenFrameArrived = true
+        return true
       }
-      screenFrameArrived = true
-      return true
+      if shouldSignal {
+        screenSemaphore.signal()
+      }
+    case .audio:
+      guard CMSampleBufferGetNumSamples(sampleBuffer) > 0 else { return }
+      let shouldSignal = stateQueue.sync { () -> Bool in
+        audioSamples += CMSampleBufferGetNumSamples(sampleBuffer)
+        if audioSampleArrived {
+          return false
+        }
+        audioSampleArrived = true
+        return true
+      }
+      if shouldSignal {
+        audioSemaphore.signal()
+      }
+    default:
+      return
     }
-    if shouldSignal {
-      semaphore.signal()
+  }
+}
+
+private final class ScreenSystemAudioProofStimulus: @unchecked Sendable {
+  private let lock = NSLock()
+  private var active = false
+
+  func start() {
+    lock.withLock { active = true }
+    DispatchQueue.global(qos: .utility).async { [weak self] in
+      while self?.isActive == true {
+        NSSound.beep()
+        Thread.sleep(forTimeInterval: 0.5)
+      }
     }
+  }
+
+  func stop() {
+    lock.withLock { active = false }
+  }
+
+  private var isActive: Bool {
+    lock.withLock { active }
   }
 }

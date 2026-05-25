@@ -1,16 +1,30 @@
+mod codex_notify;
+
 use anyhow::{anyhow, Context, Result};
+use chrono::{Duration, SecondsFormat, Utc};
+use codex_notify::{
+    decide_codex_notification_dispatch, CodexDispatchRequest, CodexRuntimeStatus,
+    CodexSupervisorPolicy,
+};
 use onecontext_wiki_core::{
-    PageCreateOptions, TalkAppendRequest, TalkAttachmentInput, WikiCore, WikiInventory,
+    agent_mail::{
+        AgentGrantPolicy, AgentIdentifyRequest, AgentMailStore, AgentRecord, CodexSteeringPayload,
+        DeliveryAttemptStatus, DeliveryState, MailAddress, MailInjectionResult, MessageAcceptance,
+        MessageAttachmentRef, MessageBodyRef, MessageEnvelope, MessagePageRef,
+        NotificationAttemptStatus, SendMailOptions,
+    },
+    PageCreateOptions, TalkAppendRequest, TalkAttachmentInput, TalkDeliveryMode, WikiCore,
+    WikiInventory,
 };
 use serde_json::json;
 use std::collections::{BTreeMap, BTreeSet};
 use std::env;
-use std::fs;
+use std::fs::{self, File};
 use std::io::ErrorKind;
+use std::io::Write;
+use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
-use std::process::Command;
-
-const DEFAULT_TTL_SECONDS: i64 = 1800;
+use std::process::{Command, Stdio};
 
 fn main() {
     let args = env::args().skip(1).collect::<Vec<_>>();
@@ -207,6 +221,15 @@ fn run(mut args: Vec<String>) -> Result<()> {
             reject_extra_args("asset-list", &args)?;
             print_json(&core.list_page_assets(&page)?)
         }
+        "reference-list" => {
+            let page = if args.is_empty() {
+                None
+            } else {
+                Some(args.remove(0))
+            };
+            reject_extra_args("reference-list", &args)?;
+            print_json(&core.list_references(page.as_deref())?)
+        }
         "page-delete" => {
             let page = args
                 .first()
@@ -253,16 +276,46 @@ fn run(mut args: Vec<String>) -> Result<()> {
             }
             Ok(())
         }
-        "agent-register" => {
-            let thread_id = take_flag_value(&mut args, "agent-register", "--thread-id")?
-                .ok_or_else(|| anyhow!("agent-register requires --thread-id"))?;
-            let roles = take_repeated_flag_values(&mut args, "agent-register", "--role")?;
-            let capabilities =
-                take_repeated_flag_values(&mut args, "agent-register", "--capability")?;
-            let ttl = take_positive_i64_flag(&mut args, "agent-register", "--ttl-seconds")?
-                .unwrap_or(DEFAULT_TTL_SECONDS);
-            reject_extra_args("agent-register", &args)?;
-            print_json(&core.register_agent(&thread_id, roles, capabilities, ttl)?)
+        "agent-list" => {
+            reject_extra_args("agent-list", &args)?;
+            let store = AgentMailStore::new(root.join("context-engine"));
+            let agents = latest_agent_records_for_cli(&store)?;
+            print_json(&json!({
+                "schema_version": 1,
+                "status": "ok",
+                "operation": "wiki.agent.list",
+                "agent_count": agents.len(),
+                "agents": agents,
+            }))
+        }
+        "agent-whoami" => {
+            let agent_id = take_flag_value(&mut args, "agent-whoami", "--agent-id")?
+                .or_else(|| env::var("ONECONTEXT_AGENT_ID").ok());
+            let thread_id = take_flag_value(&mut args, "agent-whoami", "--thread-id")?
+                .or_else(|| env::var("ONECONTEXT_THREAD_ID").ok())
+                .or_else(|| env::var("CODEX_THREAD_ID").ok());
+            reject_extra_args("agent-whoami", &args)?;
+            let store = AgentMailStore::new(root.join("context-engine"));
+            let agent = if let Some(agent_id) = agent_id {
+                store.agent_status(&agent_id)?.record
+            } else if let Some(thread_id) = thread_id {
+                latest_agent_records_for_cli(&store)?
+                    .into_iter()
+                    .find(|agent| agent.transport.thread_id == thread_id)
+                    .ok_or_else(|| anyhow!("unknown agent for thread id {thread_id}"))?
+            } else {
+                return Err(anyhow!(
+                    "agent-whoami requires --agent-id, --thread-id, ONECONTEXT_AGENT_ID, ONECONTEXT_THREAD_ID, or CODEX_THREAD_ID"
+                ));
+            };
+            let status = store.agent_status(&agent.agent_id)?;
+            print_json(&json!({
+                "schema_version": 1,
+                "status": "ok",
+                "operation": "wiki.agent.whoami",
+                "agent": status.record,
+                "latest_lease": status.latest_lease,
+            }))
         }
         "agent-identify" => {
             let thread_id = take_flag_value(&mut args, "agent-identify", "--thread-id")?
@@ -270,10 +323,38 @@ fn run(mut args: Vec<String>) -> Result<()> {
             let roles = take_repeated_flag_values(&mut args, "agent-identify", "--role")?;
             let capabilities =
                 take_repeated_flag_values(&mut args, "agent-identify", "--capability")?;
-            let ttl = take_positive_i64_flag(&mut args, "agent-identify", "--ttl-seconds")?
-                .unwrap_or(DEFAULT_TTL_SECONDS);
+            let ttl_seconds =
+                take_i64_flag(&mut args, "agent-identify", "--ttl-seconds")?.unwrap_or(3600);
+            if ttl_seconds <= 0 {
+                return Err(anyhow!(
+                    "agent-identify requires --ttl-seconds to be a positive integer"
+                ));
+            }
             reject_extra_args("agent-identify", &args)?;
-            print_json(&core.identify_agent(&thread_id, roles, capabilities, ttl)?)
+            let now = now_rfc3339();
+            let lease_expires_at = (Utc::now() + Duration::seconds(ttl_seconds))
+                .to_rfc3339_opts(SecondsFormat::Secs, true);
+            let policy = AgentGrantPolicy {
+                allowed_roles: roles.iter().cloned().collect(),
+                allowed_capabilities: capabilities.iter().cloned().collect(),
+            };
+            let record = AgentMailStore::new(root.join("context-engine")).identify_agent(
+                &AgentIdentifyRequest {
+                    transport_kind: "codex".to_string(),
+                    thread_id,
+                    requested_roles: roles,
+                    requested_capabilities: capabilities,
+                    lease_expires_at,
+                    occurred_at: now,
+                },
+                &policy,
+            )?;
+            print_json(&json!({
+                "schema_version": 1,
+                "status": "ok",
+                "operation": "wiki.agent.identify",
+                "agent": record,
+            }))
         }
         "agent-heartbeat" => {
             let agent_id = args
@@ -281,10 +362,29 @@ fn run(mut args: Vec<String>) -> Result<()> {
                 .cloned()
                 .ok_or_else(|| anyhow!("agent-heartbeat requires <agent-id>"))?;
             args.remove(0);
-            let ttl = take_positive_i64_flag(&mut args, "agent-heartbeat", "--ttl-seconds")?
-                .unwrap_or(DEFAULT_TTL_SECONDS);
+            let ttl_seconds =
+                take_i64_flag(&mut args, "agent-heartbeat", "--ttl-seconds")?.unwrap_or(3600);
+            if ttl_seconds <= 0 {
+                return Err(anyhow!(
+                    "agent-heartbeat requires --ttl-seconds to be a positive integer"
+                ));
+            }
             reject_extra_args("agent-heartbeat", &args)?;
-            print_json(&core.heartbeat_agent(&agent_id, ttl)?)
+            let now = now_rfc3339();
+            let lease_expires_at = (Utc::now() + Duration::seconds(ttl_seconds))
+                .to_rfc3339_opts(SecondsFormat::Secs, true);
+            let lease = AgentMailStore::new(root.join("context-engine")).heartbeat_agent(
+                &agent_id,
+                &lease_expires_at,
+                &now,
+            )?;
+            print_json(&json!({
+                "schema_version": 1,
+                "status": "ok",
+                "operation": "wiki.agent.heartbeat",
+                "agent_id": agent_id,
+                "lease": lease,
+            }))
         }
         "agent-retire" => {
             let agent_id = args
@@ -292,16 +392,16 @@ fn run(mut args: Vec<String>) -> Result<()> {
                 .cloned()
                 .ok_or_else(|| anyhow!("agent-retire requires <agent-id>"))?;
             args.remove(0);
-            let reason = take_flag_value(&mut args, "agent-retire", "--reason")?
-                .unwrap_or_else(|| "completed".to_string());
             reject_extra_args("agent-retire", &args)?;
-            print_json(&core.retire_agent(&agent_id, &reason)?)
-        }
-        "agent-list" => {
-            let include_stale = take_bool_flag(&mut args, "--include-stale");
-            let include_retired = take_bool_flag(&mut args, "--include-retired");
-            reject_extra_args("agent-list", &args)?;
-            print_json(&core.agent_list(include_stale, include_retired)?)
+            let now = now_rfc3339();
+            let agent = AgentMailStore::new(root.join("context-engine"))
+                .retire_agent(&agent_id, &now, &now)?;
+            print_json(&json!({
+                "schema_version": 1,
+                "status": "ok",
+                "operation": "wiki.agent.retire",
+                "agent": agent,
+            }))
         }
         "agent-status" => {
             let agent_id = args
@@ -310,13 +410,522 @@ fn run(mut args: Vec<String>) -> Result<()> {
                 .ok_or_else(|| anyhow!("agent-status requires <agent-id>"))?;
             args.remove(0);
             reject_extra_args("agent-status", &args)?;
-            print_json(&core.agent_status(&agent_id)?)
+            let status =
+                AgentMailStore::new(root.join("context-engine")).agent_status(&agent_id)?;
+            print_json(&json!({
+                "schema_version": 1,
+                "status": "ok",
+                "operation": "wiki.agent.status",
+                "agent": status.record,
+                "latest_lease": status.latest_lease,
+            }))
         }
-        "whoami" => {
-            let thread_id = take_flag_value(&mut args, "whoami", "--thread-id")?;
-            let agent_id = take_flag_value(&mut args, "whoami", "--agent-id")?;
-            reject_extra_args("whoami", &args)?;
-            print_json(&core.agent_whoami(thread_id.as_deref(), agent_id.as_deref())?)
+        "agent-status-by-thread" => {
+            let flagged_thread_id =
+                take_flag_value(&mut args, "agent-status-by-thread", "--thread-id")?;
+            let thread_id = if let Some(thread_id) = flagged_thread_id {
+                thread_id
+            } else {
+                let thread_id = args.first().cloned().ok_or_else(|| {
+                    anyhow!("agent-status-by-thread requires <thread-id> or --thread-id")
+                })?;
+                args.remove(0);
+                thread_id
+            };
+            reject_extra_args("agent-status-by-thread", &args)?;
+            let snapshot = AgentMailStore::new(root.join("context-engine"))
+                .agent_status_by_thread(&thread_id, &now_rfc3339())?;
+            print_json(&json!({
+                "schema_version": 1,
+                "status": "ok",
+                "operation": "wiki.agent.status_by_thread",
+                "thread_id": snapshot.thread_id,
+                "agent_id": snapshot.agent_id,
+                "lease_state": snapshot.lease_state,
+                "agent": snapshot.agent,
+                "latest_lease": snapshot.latest_lease,
+                "active_delivery": snapshot.active_delivery,
+                "pending_notification_count": snapshot.pending_notifications.len(),
+                "pending_notifications": snapshot.pending_notifications,
+            }))
+        }
+        "agent-inbox" => {
+            let agent_id = args
+                .first()
+                .cloned()
+                .ok_or_else(|| anyhow!("agent-inbox requires <agent-id>"))?;
+            args.remove(0);
+            reject_extra_args("agent-inbox", &args)?;
+            let rows = AgentMailStore::new(root.join("context-engine")).agent_inbox(&agent_id)?;
+            print_json(&json!({
+                "schema_version": 1,
+                "status": "ok",
+                "operation": "wiki.agent.inbox",
+                "agent_id": agent_id,
+                "message_count": rows.len(),
+                "deliveries": rows,
+            }))
+        }
+        "mail-send" => {
+            let from = take_flag_value(&mut args, "mail-send", "--from")?
+                .ok_or_else(|| anyhow!("mail-send requires --from"))?;
+            let to = take_repeated_flag_values(&mut args, "mail-send", "--to")?;
+            if to.is_empty() {
+                return Err(anyhow!("mail-send requires at least one --to"));
+            }
+            let cc = take_repeated_flag_values(&mut args, "mail-send", "--cc")?;
+            let kind = take_flag_value(&mut args, "mail-send", "--kind")?
+                .unwrap_or_else(|| "message".to_string());
+            let subject = take_flag_value(&mut args, "mail-send", "--subject")?
+                .ok_or_else(|| anyhow!("mail-send requires --subject"))?;
+            let body_markdown = read_text_arg(&mut args, "mail-send", "--body", "--body-file")?
+                .ok_or_else(|| anyhow!("mail-send requires --body or --body-file"))?;
+            let body_sha256 = take_flag_value(&mut args, "mail-send", "--body-sha256")?
+                .unwrap_or_else(|| sha256_hex(body_markdown.as_bytes()));
+            let idempotency_key = take_flag_value(&mut args, "mail-send", "--idempotency-key")?
+                .unwrap_or_else(|| {
+                    stable_cli_id(
+                        "mailkey",
+                        &format!(
+                            "{from}\n{}\n{}\n{kind}\n{subject}\n{body_sha256}",
+                            to.join("\n"),
+                            cc.join("\n")
+                        ),
+                    )
+                });
+            let created_at = take_flag_value(&mut args, "mail-send", "--created-at")?
+                .unwrap_or_else(now_rfc3339);
+            let message_id = take_flag_value(&mut args, "mail-send", "--message-id")?
+                .unwrap_or_else(|| stable_cli_id("mailmsg", &idempotency_key));
+            let thread_id = take_flag_value(&mut args, "mail-send", "--thread-id")?
+                .unwrap_or_else(|| stable_cli_id("thread", &idempotency_key));
+            let reply_to = take_flag_value(&mut args, "mail-send", "--reply-to")?;
+            let page_id = take_flag_value(&mut args, "mail-send", "--page-id")?;
+            let page_route = take_flag_value(&mut args, "mail-send", "--page-route")?;
+            let attachment_refs =
+                take_repeated_flag_values(&mut args, "mail-send", "--attachment-ref-json")?;
+            let max_open_deliveries_per_recipient = take_i64_flag(
+                &mut args,
+                "mail-send",
+                "--max-open-deliveries-per-recipient",
+            )?;
+            if max_open_deliveries_per_recipient.is_some_and(|limit| limit < 0) {
+                return Err(anyhow!(
+                    "mail-send requires --max-open-deliveries-per-recipient to be zero or greater"
+                ));
+            }
+            reject_extra_args("mail-send", &args)?;
+
+            let page = match (page_id, page_route) {
+                (Some(id), Some(route)) => Some(MessagePageRef { id, route }),
+                (None, None) => None,
+                _ => {
+                    return Err(anyhow!(
+                        "mail-send requires --page-id and --page-route together"
+                    ))
+                }
+            };
+            let attachments = parse_attachment_refs(attachment_refs)?;
+            let envelope = MessageEnvelope {
+                schema_version: 1,
+                message_id,
+                idempotency_key,
+                kind,
+                subject,
+                from,
+                to,
+                cc,
+                page,
+                thread_id,
+                reply_to,
+                body: MessageBodyRef {
+                    format: "markdown".to_string(),
+                    sha256: body_sha256,
+                },
+                attachments,
+                created_at,
+            };
+            let options = SendMailOptions {
+                max_open_deliveries_per_recipient: max_open_deliveries_per_recipient
+                    .map(|limit| limit as usize),
+            };
+            let receipt = AgentMailStore::new(root.join("context-engine")).send_mail(
+                &envelope,
+                &body_markdown,
+                &options,
+            )?;
+            let acceptance = message_acceptance_value(&receipt.acceptance);
+            let attempts = receipt
+                .attempts
+                .into_iter()
+                .map(|attempt| {
+                    json!({
+                        "recipient": attempt.recipient,
+                        "delivery_id": attempt.delivery_id,
+                        "status": delivery_attempt_status_name(&attempt.status),
+                    })
+                })
+                .collect::<Vec<_>>();
+            print_json(&json!({
+                "schema_version": 1,
+                "status": "ok",
+                "operation": "wiki.mail.send",
+                "message": envelope,
+                "acceptance": acceptance,
+                "delivery_attempt_count": attempts.len(),
+                "delivery_attempts": attempts,
+                "next_action": "wiki.notify.dispatch",
+                "repair_hints": [],
+            }))
+        }
+        "mail-inbox" => {
+            let address = args
+                .first()
+                .cloned()
+                .ok_or_else(|| anyhow!("mail-inbox requires <address>"))?;
+            args.remove(0);
+            reject_extra_args("mail-inbox", &args)?;
+            let address = MailAddress::parse(&address)?;
+            let rows = AgentMailStore::new(root.join("context-engine")).mail_inbox(&address)?;
+            print_json(&json!({
+                "schema_version": 1,
+                "status": "ok",
+                "operation": "wiki.mail.inbox",
+                "recipient": address.canonical(),
+                "message_count": rows.len(),
+                "deliveries": rows,
+            }))
+        }
+        "mail-read" => {
+            let message_id = take_flag_value(&mut args, "mail-read", "--message-id")?;
+            let thread_id = take_flag_value(&mut args, "mail-read", "--thread-id")?;
+            reject_extra_args("mail-read", &args)?;
+            let store = AgentMailStore::new(root.join("context-engine"));
+            match (message_id, thread_id) {
+                (Some(message_id), None) => {
+                    let message = store.read_message(&message_id)?;
+                    print_json(&json!({
+                        "schema_version": 1,
+                        "status": "ok",
+                        "operation": "wiki.mail.read",
+                        "message": message,
+                    }))
+                }
+                (None, Some(thread_id)) => {
+                    let messages = store.read_thread(&thread_id)?;
+                    print_json(&json!({
+                        "schema_version": 1,
+                        "status": "ok",
+                        "operation": "wiki.mail.read",
+                        "thread_id": thread_id,
+                        "message_count": messages.len(),
+                        "messages": messages,
+                    }))
+                }
+                (Some(_), Some(_)) => Err(anyhow!(
+                    "mail-read accepts either --message-id or --thread-id, not both"
+                )),
+                (None, None) => Err(anyhow!("mail-read requires --message-id or --thread-id")),
+            }
+        }
+        "mail-open" => {
+            let delivery_id = args
+                .first()
+                .cloned()
+                .ok_or_else(|| anyhow!("mail-open requires <delivery-id>"))?;
+            args.remove(0);
+            let agent_id = take_flag_value(&mut args, "mail-open", "--agent-id")?
+                .ok_or_else(|| anyhow!("mail-open requires --agent-id"))?;
+            reject_extra_args("mail-open", &args)?;
+            let opened = AgentMailStore::new(root.join("context-engine"))
+                .open_delivery(&delivery_id, &agent_id)?;
+            print_json(&json!({
+                "schema_version": 1,
+                "status": "ok",
+                "operation": "wiki.mail.open",
+                "delivery": opened.delivery,
+                "message": opened.message,
+                "content_delivery": opened.content_delivery,
+            }))
+        }
+        "mail-record-injection" => {
+            let delivery_id = args
+                .first()
+                .cloned()
+                .ok_or_else(|| anyhow!("mail-record-injection requires <delivery-id>"))?;
+            args.remove(0);
+            let agent_id = take_flag_value(&mut args, "mail-record-injection", "--agent-id")?
+                .ok_or_else(|| anyhow!("mail-record-injection requires --agent-id"))?;
+            let result = parse_mail_injection_result(
+                take_flag_value(&mut args, "mail-record-injection", "--result")?
+                    .unwrap_or_else(|| "ok".to_string())
+                    .as_str(),
+            )?;
+            let thread_id = take_flag_value(&mut args, "mail-record-injection", "--thread-id")?;
+            let item_count =
+                take_i64_flag(&mut args, "mail-record-injection", "--item-count")?.unwrap_or(1);
+            if item_count < 0 {
+                return Err(anyhow!(
+                    "mail-record-injection requires --item-count to be non-negative"
+                ));
+            }
+            let error = take_flag_value(&mut args, "mail-record-injection", "--error")?;
+            reject_extra_args("mail-record-injection", &args)?;
+            let recorded = AgentMailStore::new(root.join("context-engine"))
+                .record_mail_injection_result(
+                    &delivery_id,
+                    &agent_id,
+                    thread_id.as_deref(),
+                    item_count as usize,
+                    result,
+                    &now_rfc3339(),
+                    error,
+                )?;
+            print_json(&json!({
+                "schema_version": 1,
+                "status": "ok",
+                "operation": "wiki.mail.record_injection",
+                "receipt": recorded.receipt,
+                "control_event": recorded.control_event,
+            }))
+        }
+        "mail-claim" => {
+            let delivery_id = args
+                .first()
+                .cloned()
+                .ok_or_else(|| anyhow!("mail-claim requires <delivery-id>"))?;
+            args.remove(0);
+            let agent_id = take_flag_value(&mut args, "mail-claim", "--agent-id")?
+                .ok_or_else(|| anyhow!("mail-claim requires --agent-id"))?;
+            reject_extra_args("mail-claim", &args)?;
+            let delivery = AgentMailStore::new(root.join("context-engine")).claim_delivery(
+                &delivery_id,
+                &agent_id,
+                &now_rfc3339(),
+            )?;
+            print_json(&json!({
+                "schema_version": 1,
+                "status": "ok",
+                "operation": "wiki.mail.claim",
+                "delivery": delivery,
+            }))
+        }
+        "mail-mark" => {
+            let delivery_id = args
+                .first()
+                .cloned()
+                .ok_or_else(|| anyhow!("mail-mark requires <delivery-id>"))?;
+            args.remove(0);
+            let agent_id = take_flag_value(&mut args, "mail-mark", "--agent-id")?
+                .ok_or_else(|| anyhow!("mail-mark requires --agent-id"))?;
+            let state = parse_delivery_state(
+                take_flag_value(&mut args, "mail-mark", "--state")?
+                    .ok_or_else(|| anyhow!("mail-mark requires --state"))?
+                    .as_str(),
+            )?;
+            reject_extra_args("mail-mark", &args)?;
+            let delivery = AgentMailStore::new(root.join("context-engine")).mark_delivery(
+                &delivery_id,
+                &agent_id,
+                state,
+                &now_rfc3339(),
+            )?;
+            print_json(&json!({
+                "schema_version": 1,
+                "status": "ok",
+                "operation": "wiki.mail.mark",
+                "delivery": delivery,
+            }))
+        }
+        "mail-mark-all" => {
+            let agent_id = args
+                .first()
+                .cloned()
+                .ok_or_else(|| anyhow!("mail-mark-all requires <agent-id>"))?;
+            args.remove(0);
+            let state = parse_delivery_state(
+                take_flag_value(&mut args, "mail-mark-all", "--state")?
+                    .ok_or_else(|| anyhow!("mail-mark-all requires --state"))?
+                    .as_str(),
+            )?;
+            let recipient = take_flag_value(&mut args, "mail-mark-all", "--recipient")?;
+            let dry_run = take_bool_flag(&mut args, "--dry-run");
+            reject_extra_args("mail-mark-all", &args)?;
+            let store = AgentMailStore::new(root.join("context-engine"));
+            let rows = store.agent_inbox(&agent_id)?;
+            let selected = rows
+                .into_iter()
+                .filter(|row| row.state != state)
+                .filter(|row| !row.state.is_terminal_for_cli())
+                .filter(|row| {
+                    recipient
+                        .as_ref()
+                        .map(|recipient| &row.recipient == recipient)
+                        .unwrap_or(true)
+                })
+                .collect::<Vec<_>>();
+            let mut deliveries = Vec::new();
+            if !dry_run {
+                let occurred_at = now_rfc3339();
+                for row in &selected {
+                    deliveries.push(store.mark_delivery(
+                        &row.delivery_id,
+                        &agent_id,
+                        state.clone(),
+                        &occurred_at,
+                    )?);
+                }
+            }
+            print_json(&json!({
+                "schema_version": 1,
+                "status": "ok",
+                "operation": "wiki.mail.mark_all",
+                "agent_id": agent_id,
+                "state": state,
+                "dry_run": dry_run,
+                "selected_count": selected.len(),
+                "selected_delivery_ids": selected.iter().map(|row| row.delivery_id.clone()).collect::<Vec<_>>(),
+                "updated_count": deliveries.len(),
+                "deliveries": deliveries,
+            }))
+        }
+        "mail-snooze" => {
+            let delivery_id = args
+                .first()
+                .cloned()
+                .ok_or_else(|| anyhow!("mail-snooze requires <delivery-id>"))?;
+            args.remove(0);
+            let agent_id = take_flag_value(&mut args, "mail-snooze", "--agent-id")?
+                .ok_or_else(|| anyhow!("mail-snooze requires --agent-id"))?;
+            let until = take_flag_value(&mut args, "mail-snooze", "--until")?
+                .ok_or_else(|| anyhow!("mail-snooze requires --until"))?;
+            reject_extra_args("mail-snooze", &args)?;
+            let delivery = AgentMailStore::new(root.join("context-engine")).snooze_delivery(
+                &delivery_id,
+                &agent_id,
+                &until,
+                &now_rfc3339(),
+            )?;
+            print_json(&json!({
+                "schema_version": 1,
+                "status": "ok",
+                "operation": "wiki.mail.snooze",
+                "delivery": delivery,
+            }))
+        }
+        "notify-poll" => {
+            let agent_id = args
+                .first()
+                .cloned()
+                .ok_or_else(|| anyhow!("notify-poll requires <agent-id>"))?;
+            args.remove(0);
+            let cursor = take_flag_value(&mut args, "notify-poll", "--cursor")?;
+            reject_extra_args("notify-poll", &args)?;
+            let notifications = AgentMailStore::new(root.join("context-engine"))
+                .notification_poll(&agent_id, cursor.as_deref(), &now_rfc3339())?;
+            print_json(&json!({
+                "schema_version": 1,
+                "status": "ok",
+                "operation": "wiki.notify.poll",
+                "agent_id": agent_id,
+                "notification_count": notifications.len(),
+                "notifications": notifications,
+            }))
+        }
+        "notify-ack" => {
+            let notification_id = args
+                .first()
+                .cloned()
+                .ok_or_else(|| anyhow!("notify-ack requires <notification-id>"))?;
+            args.remove(0);
+            let agent_id = take_flag_value(&mut args, "notify-ack", "--agent-id")?
+                .ok_or_else(|| anyhow!("notify-ack requires --agent-id"))?;
+            reject_extra_args("notify-ack", &args)?;
+            let notification = AgentMailStore::new(root.join("context-engine"))
+                .acknowledge_notification(&agent_id, &notification_id, &now_rfc3339())?;
+            print_json(&json!({
+                "schema_version": 1,
+                "status": "ok",
+                "operation": "wiki.notify.ack",
+                "notification": notification,
+            }))
+        }
+        "notify-dispatch" => {
+            let agent_id = args
+                .first()
+                .cloned()
+                .ok_or_else(|| anyhow!("notify-dispatch requires <agent-id>"))?;
+            args.remove(0);
+            let dry_run = take_bool_flag(&mut args, "--dry-run");
+            let steering_command =
+                take_flag_value(&mut args, "notify-dispatch", "--steering-command")?;
+            let steering_args =
+                take_repeated_flag_values(&mut args, "notify-dispatch", "--steering-arg")?;
+            let payload_format = take_flag_value(&mut args, "notify-dispatch", "--payload-format")?
+                .unwrap_or_else(|| "text".to_string());
+            let limit = take_i64_flag(&mut args, "notify-dispatch", "--limit")?
+                .unwrap_or(25)
+                .max(0) as usize;
+            reject_extra_args("notify-dispatch", &args)?;
+            let store = AgentMailStore::new(root.join("context-engine"));
+            let notifications =
+                store.notification_dispatch_queue(&agent_id, None, &now_rfc3339())?;
+            let mut attempts = Vec::new();
+            let mut dispatch_decisions = Vec::new();
+            for notification in notifications.into_iter().take(limit) {
+                let payload = store.codex_steering_payload(&notification)?;
+                let steering_text = store.codex_steering_text(&payload);
+                let occurred_at = now_rfc3339();
+                let decision = decide_codex_notification_dispatch(CodexDispatchRequest {
+                    payload: &payload,
+                    runtime_status: CodexRuntimeStatus::ActiveTurn {
+                        thread_id: payload.thread_id.clone(),
+                        turn_id: None,
+                    },
+                    policy: CodexSupervisorPolicy::default(),
+                })?;
+                let (status, error) = if !decision.is_dispatchable() {
+                    (
+                        NotificationAttemptStatus::Failed,
+                        Some(serde_json::to_string(&decision.evidence.terminal_error)?),
+                    )
+                } else if dry_run {
+                    (NotificationAttemptStatus::DryRun, None)
+                } else {
+                    let command = steering_command.as_ref().ok_or_else(|| {
+                        anyhow!("notify-dispatch requires --dry-run or --steering-command")
+                    })?;
+                    match send_steering_command(
+                        command,
+                        &steering_args,
+                        &payload_format,
+                        &payload,
+                        &steering_text,
+                    ) {
+                        Ok(()) => (NotificationAttemptStatus::Sent, None),
+                        Err(error) => (
+                            NotificationAttemptStatus::Failed,
+                            Some(format!("{error:#}")),
+                        ),
+                    }
+                };
+                dispatch_decisions.push(decision);
+                attempts.push(store.record_notification_attempt(
+                    &notification,
+                    status,
+                    &occurred_at,
+                    error,
+                )?);
+            }
+            print_json(&json!({
+                "schema_version": 1,
+                "status": "ok",
+                "operation": "wiki.notify.dispatch",
+                "agent_id": agent_id,
+                "attempt_count": attempts.len(),
+                "attempts": attempts,
+                "dispatch_decisions": dispatch_decisions,
+            }))
         }
         "talk-append" => {
             let page = take_flag_value(&mut args, "talk-append", "--page")?
@@ -327,29 +936,19 @@ fn run(mut args: Vec<String>) -> Result<()> {
                 .ok_or_else(|| anyhow!("talk-append requires --subject"))?;
             let thread_id = take_flag_value(&mut args, "talk-append", "--thread-id")?;
             let reply_to = take_flag_value(&mut args, "talk-append", "--reply-to")?;
+            let operation_id = take_flag_value(&mut args, "talk-append", "--operation-id")?;
+            let delivery_mode = parse_talk_delivery_mode(take_flag_value(
+                &mut args,
+                "talk-append",
+                "--delivery-mode",
+            )?)?;
             let from = take_flag_value(&mut args, "talk-append", "--from")?
                 .ok_or_else(|| anyhow!("talk-append requires --from"))?;
             let body_markdown =
                 read_text_arg(&mut args, "talk-append", "--body", "--body-file")?
                     .ok_or_else(|| anyhow!("talk-append requires --body or --body-file"))?;
-            let page_id = core.page_status(&page)?.id;
-            let mut to = take_repeated_flag_values(&mut args, "talk-append", "--to")?;
-            to.extend(
-                take_repeated_flag_values(&mut args, "talk-append", "--to-role")?
-                    .into_iter()
-                    .map(|role| role_address_for_page(&page_id, &role)),
-            );
-            if to.is_empty() {
-                return Err(anyhow!(
-                    "talk-append requires at least one --to or --to-role"
-                ));
-            }
-            let mut cc = take_repeated_flag_values(&mut args, "talk-append", "--cc")?;
-            cc.extend(
-                take_repeated_flag_values(&mut args, "talk-append", "--cc-role")?
-                    .into_iter()
-                    .map(|role| role_address_for_page(&page_id, &role)),
-            );
+            let to = take_repeated_flag_values(&mut args, "talk-append", "--to")?;
+            let cc = take_repeated_flag_values(&mut args, "talk-append", "--cc")?;
             let attachments = talk_attachment_inputs(
                 take_repeated_flag_values(&mut args, "talk-append", "--attachment")?,
                 take_repeated_flag_values(&mut args, "talk-append", "--attachment-filename")?,
@@ -362,6 +961,8 @@ fn run(mut args: Vec<String>) -> Result<()> {
                 page,
                 kind,
                 subject,
+                operation_id,
+                delivery_mode,
                 thread_id,
                 reply_to,
                 from,
@@ -372,228 +973,278 @@ fn run(mut args: Vec<String>) -> Result<()> {
                 allow_tombstoned,
             })?)
         }
-        "mail-inbox" => {
-            let recipient = args
-                .first()
-                .cloned()
-                .ok_or_else(|| anyhow!("mail-inbox requires <recipient>"))?;
-            args.remove(0);
-            let include_archived = take_bool_flag(&mut args, "--include-archived");
-            let include_snoozed = take_bool_flag(&mut args, "--include-snoozed");
-            reject_extra_args("mail-inbox", &args)?;
-            print_json(&core.inbox_with_options(&recipient, include_archived, include_snoozed)?)
-        }
-        "mail-read" => {
-            let message_id = take_flag_value(&mut args, "mail-read", "--message-id")?;
-            let thread_id = take_flag_value(&mut args, "mail-read", "--thread-id")?;
-            reject_extra_args("mail-read", &args)?;
-            print_json(&core.read_mail(message_id.as_deref(), thread_id.as_deref())?)
-        }
-        "mail-subscribe" => {
-            let agent_id = take_flag_value(&mut args, "mail-subscribe", "--agent-id")?
-                .ok_or_else(|| anyhow!("mail-subscribe requires --agent-id"))?;
-            let address = take_flag_value(&mut args, "mail-subscribe", "--address")?
-                .ok_or_else(|| anyhow!("mail-subscribe requires --address"))?;
-            let relation = take_flag_value(&mut args, "mail-subscribe", "--relation")?
-                .unwrap_or_else(|| "subscriber".to_string());
-            let kinds = take_repeated_flag_values(&mut args, "mail-subscribe", "--kind")?;
-            let ttl = take_positive_i64_flag(&mut args, "mail-subscribe", "--ttl-seconds")?
-                .unwrap_or(DEFAULT_TTL_SECONDS);
-            reject_extra_args("mail-subscribe", &args)?;
-            print_json(&core.subscribe_mail(&agent_id, &address, &relation, kinds, ttl)?)
-        }
-        "mail-unsubscribe" => {
-            let agent_id = take_flag_value(&mut args, "mail-unsubscribe", "--agent-id")?
-                .ok_or_else(|| anyhow!("mail-unsubscribe requires --agent-id"))?;
-            let address = take_flag_value(&mut args, "mail-unsubscribe", "--address")?
-                .ok_or_else(|| anyhow!("mail-unsubscribe requires --address"))?;
-            let relation = take_flag_value(&mut args, "mail-unsubscribe", "--relation")?;
-            let kinds = take_repeated_flag_values(&mut args, "mail-unsubscribe", "--kind")?;
-            reject_extra_args("mail-unsubscribe", &args)?;
-            print_json(&core.unsubscribe_mail(&agent_id, &address, relation.as_deref(), kinds)?)
-        }
-        "mail-subscriptions" => {
-            let agent_id = take_flag_value(&mut args, "mail-subscriptions", "--agent-id")?;
-            let address = take_flag_value(&mut args, "mail-subscriptions", "--address")?;
-            reject_extra_args("mail-subscriptions", &args)?;
-            print_json(&core.mail_subscriptions(agent_id.as_deref(), address.as_deref())?)
-        }
-        "page-watch" => {
-            let page = args
-                .first()
-                .cloned()
-                .ok_or_else(|| anyhow!("page-watch requires <page>"))?;
-            args.remove(0);
-            let agent_id = take_flag_value(&mut args, "page-watch", "--agent-id")?
-                .ok_or_else(|| anyhow!("page-watch requires --agent-id"))?;
-            let list_address = take_flag_value(&mut args, "page-watch", "--list")?;
-            let kinds = take_repeated_flag_values(&mut args, "page-watch", "--kind")?;
-            let ttl = take_positive_i64_flag(&mut args, "page-watch", "--ttl-seconds")?
-                .unwrap_or(DEFAULT_TTL_SECONDS);
-            reject_extra_args("page-watch", &args)?;
-            print_json(&core.watch_page(&page, &agent_id, list_address.as_deref(), kinds, ttl)?)
-        }
-        "page-unwatch" => {
-            let page = args
-                .first()
-                .cloned()
-                .ok_or_else(|| anyhow!("page-unwatch requires <page>"))?;
-            args.remove(0);
-            let agent_id = take_flag_value(&mut args, "page-unwatch", "--agent-id")?
-                .ok_or_else(|| anyhow!("page-unwatch requires --agent-id"))?;
-            let list_address = take_flag_value(&mut args, "page-unwatch", "--list")?;
-            let kinds = take_repeated_flag_values(&mut args, "page-unwatch", "--kind")?;
-            reject_extra_args("page-unwatch", &args)?;
-            print_json(&core.unwatch_page(&page, &agent_id, list_address.as_deref(), kinds)?)
-        }
-        "page-assign-role" => {
-            let page = args
-                .first()
-                .cloned()
-                .ok_or_else(|| anyhow!("page-assign-role requires <page>"))?;
-            args.remove(0);
-            let agent_id = take_flag_value(&mut args, "page-assign-role", "--agent-id")?
-                .ok_or_else(|| anyhow!("page-assign-role requires --agent-id"))?;
-            let role = take_flag_value(&mut args, "page-assign-role", "--role")?
-                .ok_or_else(|| anyhow!("page-assign-role requires --role"))?;
-            let kinds = take_repeated_flag_values(&mut args, "page-assign-role", "--kind")?;
-            let ttl = take_positive_i64_flag(&mut args, "page-assign-role", "--ttl-seconds")?
-                .unwrap_or(DEFAULT_TTL_SECONDS);
-            reject_extra_args("page-assign-role", &args)?;
-            print_json(&core.assign_page_role(&page, &agent_id, &role, kinds, ttl)?)
-        }
-        "list-create" => {
-            let address = take_flag_value(&mut args, "list-create", "--address")?
-                .ok_or_else(|| anyhow!("list-create requires --address"))?;
-            let title = take_flag_value(&mut args, "list-create", "--title")?;
-            let description = take_flag_value(&mut args, "list-create", "--description")?;
-            let page_id = take_flag_value(&mut args, "list-create", "--page")?
-                .map(|page| canonical_page_id(&core, page))
-                .transpose()?;
-            let owner = take_flag_value(&mut args, "list-create", "--owner")?;
-            reject_extra_args("list-create", &args)?;
-            print_json(&core.create_list(&address, title, description, page_id, owner)?)
-        }
-        "lists" => {
-            let page_id = take_flag_value(&mut args, "lists", "--page")?
-                .map(|page| canonical_page_id(&core, page))
-                .transpose()?;
-            let address = take_flag_value(&mut args, "lists", "--address")?;
-            reject_extra_args("lists", &args)?;
-            print_json(&core.mail_lists(page_id.as_deref(), address.as_deref())?)
-        }
-        "list-status" => {
-            let address = args
-                .first()
-                .cloned()
-                .ok_or_else(|| anyhow!("list-status requires <list-address>"))?;
-            args.remove(0);
-            let include_archived = take_bool_flag(&mut args, "--include-archived");
-            let include_snoozed = take_bool_flag(&mut args, "--include-snoozed");
-            reject_extra_args("list-status", &args)?;
-            print_json(&core.list_status_with_options(
-                &address,
-                include_archived,
-                include_snoozed,
-            )?)
-        }
-        "list-members" => {
-            let address = args
-                .first()
-                .cloned()
-                .ok_or_else(|| anyhow!("list-members requires <list-address>"))?;
-            args.remove(0);
-            reject_extra_args("list-members", &args)?;
-            print_json(&core.list_members(&address)?)
-        }
-        "agent-inbox" => {
-            let agent_id = args
-                .first()
-                .cloned()
-                .ok_or_else(|| anyhow!("agent-inbox requires <agent-id>"))?;
-            args.remove(0);
-            let include_archived = take_bool_flag(&mut args, "--include-archived");
-            let include_snoozed = take_bool_flag(&mut args, "--include-snoozed");
-            reject_extra_args("agent-inbox", &args)?;
-            print_json(&core.agent_inbox(&agent_id, include_archived, include_snoozed)?)
-        }
-        "agent-claim" => {
-            let agent_id = args
-                .first()
-                .cloned()
-                .ok_or_else(|| anyhow!("agent-claim requires <agent-id>"))?;
-            args.remove(0);
-            let message_id = args
-                .first()
-                .cloned()
-                .ok_or_else(|| anyhow!("agent-claim requires <message-id>"))?;
-            args.remove(0);
-            reject_extra_args("agent-claim", &args)?;
-            print_json(&core.claim_mail_for_agent(&message_id, &agent_id)?)
-        }
-        "mail-mark" => {
-            let message_id = args
-                .first()
-                .cloned()
-                .ok_or_else(|| anyhow!("mail-mark requires <message-id>"))?;
-            args.remove(0);
-            let recipient = take_flag_value(&mut args, "mail-mark", "--recipient")?
-                .ok_or_else(|| anyhow!("mail-mark requires --recipient"))?;
-            let state = take_flag_value(&mut args, "mail-mark", "--state")?
-                .ok_or_else(|| anyhow!("mail-mark requires --state"))?;
-            let until = take_flag_value(&mut args, "mail-mark", "--until")?;
-            reject_extra_args("mail-mark", &args)?;
-            print_json(&core.mark_mail(&message_id, &recipient, &state, until.as_deref())?)
-        }
-        "mail-mark-all" => {
-            let message_id = args
-                .first()
-                .cloned()
-                .ok_or_else(|| anyhow!("mail-mark-all requires <message-id>"))?;
-            args.remove(0);
-            let state = take_flag_value(&mut args, "mail-mark-all", "--state")?
-                .ok_or_else(|| anyhow!("mail-mark-all requires --state"))?;
-            let until = take_flag_value(&mut args, "mail-mark-all", "--until")?;
-            reject_extra_args("mail-mark-all", &args)?;
-            print_json(&core.mark_mail_all_deliveries(&message_id, &state, until.as_deref())?)
-        }
-        "mail-claim" => {
-            let message_id = args
-                .first()
-                .cloned()
-                .ok_or_else(|| anyhow!("mail-claim requires <message-id>"))?;
-            args.remove(0);
-            let recipient = take_flag_value(&mut args, "mail-claim", "--recipient")?
-                .ok_or_else(|| anyhow!("mail-claim requires --recipient"))?;
-            let agent_id = take_flag_value(&mut args, "mail-claim", "--agent-id")?
-                .ok_or_else(|| anyhow!("mail-claim requires --agent-id"))?;
-            reject_extra_args("mail-claim", &args)?;
-            print_json(&core.claim_mail(&message_id, &recipient, &agent_id)?)
-        }
-        "notify-poll" => {
-            let agent_id = args
-                .first()
-                .cloned()
-                .ok_or_else(|| anyhow!("notify-poll requires <agent-id>"))?;
-            args.remove(0);
-            reject_extra_args("notify-poll", &args)?;
-            print_json(&core.poll_notifications(&agent_id)?)
-        }
-        "notify-ack" => {
-            let notification_id = args
-                .first()
-                .cloned()
-                .ok_or_else(|| anyhow!("notify-ack requires <notification-id>"))?;
-            args.remove(0);
-            let agent_id = take_flag_value(&mut args, "notify-ack", "--agent-id")?
-                .ok_or_else(|| anyhow!("notify-ack requires --agent-id"))?;
-            let state = take_flag_value(&mut args, "notify-ack", "--state")?
-                .unwrap_or_else(|| "delivered".to_string());
-            reject_extra_args("notify-ack", &args)?;
-            print_json(&core.ack_notification(&agent_id, &notification_id, &state)?)
-        }
         _ => return Err(anyhow!("unknown command: {command}")),
     }
+}
+
+fn parse_talk_delivery_mode(value: Option<String>) -> Result<TalkDeliveryMode> {
+    match value.as_deref() {
+        None | Some("labels-only") | Some("labels_only") => Ok(TalkDeliveryMode::LabelsOnly),
+        Some("mail") => Ok(TalkDeliveryMode::Mail),
+        Some(other) => Err(anyhow!(
+            "invalid talk-append --delivery-mode {other:?}; expected labels-only or mail"
+        )),
+    }
+}
+
+fn parse_delivery_state(value: &str) -> Result<DeliveryState> {
+    match value {
+        "read" => Ok(DeliveryState::Read),
+        "done" => Ok(DeliveryState::Done),
+        "archived" => Ok(DeliveryState::Archived),
+        "rejected" => Ok(DeliveryState::Rejected),
+        other => Err(anyhow!(
+            "invalid mail-mark --state {other:?}; expected read, done, archived, or rejected"
+        )),
+    }
+}
+
+trait DeliveryStateCliExt {
+    fn is_terminal_for_cli(&self) -> bool;
+}
+
+impl DeliveryStateCliExt for DeliveryState {
+    fn is_terminal_for_cli(&self) -> bool {
+        matches!(
+            self,
+            Self::Done | Self::Archived | Self::Rejected | Self::DeadLetter
+        )
+    }
+}
+
+fn parse_attachment_refs(values: Vec<String>) -> Result<Vec<MessageAttachmentRef>> {
+    values
+        .into_iter()
+        .map(|value| {
+            serde_json::from_str::<MessageAttachmentRef>(&value)
+                .with_context(|| "parse --attachment-ref-json as MessageAttachmentRef")
+        })
+        .collect()
+}
+
+fn latest_agent_records_for_cli(store: &AgentMailStore) -> Result<Vec<AgentRecord>> {
+    let mut latest = BTreeMap::new();
+    for record in read_jsonl_for_cli::<AgentRecord>(&store.paths().agents_path())? {
+        latest.insert(record.agent_id.clone(), record);
+    }
+    Ok(latest.into_values().collect())
+}
+
+fn read_jsonl_for_cli<T>(path: &Path) -> Result<Vec<T>>
+where
+    T: serde::de::DeserializeOwned,
+{
+    let file = match File::open(path) {
+        Ok(file) => file,
+        Err(error) if error.kind() == ErrorKind::NotFound => return Ok(Vec::new()),
+        Err(error) => return Err(error).with_context(|| format!("open {}", path.display())),
+    };
+    BufReader::new(file)
+        .lines()
+        .enumerate()
+        .filter_map(|(index, line)| match line {
+            Ok(line) if line.trim().is_empty() => None,
+            Ok(line) => Some(
+                serde_json::from_str::<T>(&line)
+                    .with_context(|| format!("parse {} line {}", path.display(), index + 1)),
+            ),
+            Err(error) => Some(Err(error).with_context(|| format!("read {}", path.display()))),
+        })
+        .collect()
+}
+
+fn message_acceptance_value(acceptance: &MessageAcceptance) -> serde_json::Value {
+    match acceptance {
+        MessageAcceptance::Accepted => json!({
+            "status": "accepted",
+        }),
+        MessageAcceptance::DuplicateSamePayload { message_id } => json!({
+            "status": "duplicate_same_payload",
+            "message_id": message_id,
+        }),
+    }
+}
+
+fn delivery_attempt_status_name(status: &DeliveryAttemptStatus) -> &'static str {
+    match status {
+        DeliveryAttemptStatus::Delivered => "delivered",
+        DeliveryAttemptStatus::AlreadyDelivered => "already_delivered",
+        DeliveryAttemptStatus::DeferredCapacity => "deferred_capacity",
+    }
+}
+
+fn parse_mail_injection_result(value: &str) -> Result<MailInjectionResult> {
+    match value {
+        "ok" => Ok(MailInjectionResult::Ok),
+        "failed" => Ok(MailInjectionResult::Failed),
+        other => Err(anyhow!(
+            "invalid mail injection result {other:?}; expected ok or failed"
+        )),
+    }
+}
+
+fn stable_cli_id(prefix: &str, input: &str) -> String {
+    format!("{prefix}_{:016x}", fnv1a64(input.as_bytes()))
+}
+
+fn fnv1a64(bytes: &[u8]) -> u64 {
+    let mut hash = 0xcbf29ce484222325_u64;
+    for byte in bytes {
+        hash ^= u64::from(*byte);
+        hash = hash.wrapping_mul(0x100000001b3);
+    }
+    hash
+}
+
+fn sha256_hex(input: &[u8]) -> String {
+    const K: [u32; 64] = [
+        0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4,
+        0xab1c5ed5, 0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe,
+        0x9bdc06a7, 0xc19bf174, 0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc, 0x2de92c6f,
+        0x4a7484aa, 0x5cb0a9dc, 0x76f988da, 0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7,
+        0xc6e00bf3, 0xd5a79147, 0x06ca6351, 0x14292967, 0x27b70a85, 0x2e1b2138, 0x4d2c6dfc,
+        0x53380d13, 0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85, 0xa2bfe8a1, 0xa81a664b,
+        0xc24b8b70, 0xc76c51a3, 0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070, 0x19a4c116,
+        0x1e376c08, 0x2748774c, 0x34b0bcb5, 0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3,
+        0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7,
+        0xc67178f2,
+    ];
+    let mut h = [
+        0x6a09e667_u32,
+        0xbb67ae85,
+        0x3c6ef372,
+        0xa54ff53a,
+        0x510e527f,
+        0x9b05688c,
+        0x1f83d9ab,
+        0x5be0cd19,
+    ];
+    let bit_len = (input.len() as u64) * 8;
+    let mut padded = input.to_vec();
+    padded.push(0x80);
+    while padded.len() % 64 != 56 {
+        padded.push(0);
+    }
+    padded.extend_from_slice(&bit_len.to_be_bytes());
+
+    for chunk in padded.chunks_exact(64) {
+        let mut w = [0_u32; 64];
+        for (index, word) in w.iter_mut().take(16).enumerate() {
+            let offset = index * 4;
+            *word = u32::from_be_bytes([
+                chunk[offset],
+                chunk[offset + 1],
+                chunk[offset + 2],
+                chunk[offset + 3],
+            ]);
+        }
+        for index in 16..64 {
+            let s0 = w[index - 15].rotate_right(7)
+                ^ w[index - 15].rotate_right(18)
+                ^ (w[index - 15] >> 3);
+            let s1 = w[index - 2].rotate_right(17)
+                ^ w[index - 2].rotate_right(19)
+                ^ (w[index - 2] >> 10);
+            w[index] = w[index - 16]
+                .wrapping_add(s0)
+                .wrapping_add(w[index - 7])
+                .wrapping_add(s1);
+        }
+
+        let mut a = h[0];
+        let mut b = h[1];
+        let mut c = h[2];
+        let mut d = h[3];
+        let mut e = h[4];
+        let mut f = h[5];
+        let mut g = h[6];
+        let mut hh = h[7];
+
+        for index in 0..64 {
+            let s1 = e.rotate_right(6) ^ e.rotate_right(11) ^ e.rotate_right(25);
+            let ch = (e & f) ^ ((!e) & g);
+            let temp1 = hh
+                .wrapping_add(s1)
+                .wrapping_add(ch)
+                .wrapping_add(K[index])
+                .wrapping_add(w[index]);
+            let s0 = a.rotate_right(2) ^ a.rotate_right(13) ^ a.rotate_right(22);
+            let maj = (a & b) ^ (a & c) ^ (b & c);
+            let temp2 = s0.wrapping_add(maj);
+
+            hh = g;
+            g = f;
+            f = e;
+            e = d.wrapping_add(temp1);
+            d = c;
+            c = b;
+            b = a;
+            a = temp1.wrapping_add(temp2);
+        }
+
+        h[0] = h[0].wrapping_add(a);
+        h[1] = h[1].wrapping_add(b);
+        h[2] = h[2].wrapping_add(c);
+        h[3] = h[3].wrapping_add(d);
+        h[4] = h[4].wrapping_add(e);
+        h[5] = h[5].wrapping_add(f);
+        h[6] = h[6].wrapping_add(g);
+        h[7] = h[7].wrapping_add(hh);
+    }
+
+    h.iter().map(|word| format!("{word:08x}")).collect()
+}
+
+fn now_rfc3339() -> String {
+    Utc::now().to_rfc3339_opts(SecondsFormat::Secs, true)
+}
+
+fn send_steering_command(
+    command: &str,
+    args: &[String],
+    payload_format: &str,
+    payload: &CodexSteeringPayload,
+    steering_text: &str,
+) -> Result<()> {
+    let input = match payload_format {
+        "text" => steering_text.to_string(),
+        "json" => serde_json::to_string(&json!({
+            "payload": payload,
+            "steering_text": steering_text,
+        }))?,
+        other => {
+            return Err(anyhow!(
+                "invalid notify-dispatch --payload-format {other:?}; expected text or json"
+            ))
+        }
+    };
+    let mut child = Command::new(command)
+        .args(args)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .with_context(|| format!("spawn steering command {command}"))?;
+    child
+        .stdin
+        .as_mut()
+        .ok_or_else(|| anyhow!("steering command stdin unavailable"))?
+        .write_all(input.as_bytes())
+        .with_context(|| format!("write steering payload to {command}"))?;
+    let output = child
+        .wait_with_output()
+        .with_context(|| format!("wait for steering command {command}"))?;
+    if output.status.success() {
+        return Ok(());
+    }
+    let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+    let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    Err(anyhow!(
+        "steering command {command} failed with status {}; stderr={:?}; stdout={:?}",
+        output.status,
+        stderr,
+        stdout
+    ))
 }
 
 fn take_flag_value(args: &mut Vec<String>, command: &str, flag: &str) -> Result<Option<String>> {
@@ -637,22 +1288,6 @@ fn take_i64_flag(args: &mut Vec<String>, command: &str, flag: &str) -> Result<Op
     })
 }
 
-fn take_positive_i64_flag(
-    args: &mut Vec<String>,
-    command: &str,
-    flag: &str,
-) -> Result<Option<i64>> {
-    let Some(value) = take_i64_flag(args, command, flag)? else {
-        return Ok(None);
-    };
-    if value <= 0 {
-        return Err(anyhow!(
-            "invalid numeric flag {flag} for {command}: {value}; expected a positive integer"
-        ));
-    }
-    Ok(Some(value))
-}
-
 fn reject_extra_args(command: &str, args: &[String]) -> Result<()> {
     if args.is_empty() {
         Ok(())
@@ -662,18 +1297,6 @@ fn reject_extra_args(command: &str, args: &[String]) -> Result<()> {
             args.join(" ")
         ))
     }
-}
-
-fn role_address_for_page(page_id: &str, role: &str) -> String {
-    if role.starts_with("role://") {
-        role.to_string()
-    } else {
-        format!("role://{page_id}.{role}")
-    }
-}
-
-fn canonical_page_id(core: &WikiCore, page: String) -> Result<String> {
-    Ok(core.page_status(&page)?.id)
 }
 
 fn read_text_arg(
@@ -746,7 +1369,7 @@ fn command_name(args: &[String]) -> Option<&str> {
 }
 
 fn operation_for_command(command: &str) -> &'static str {
-    match canonical_command(command) {
+    match canonical_command(command).as_str() {
         "ensure" => "wiki.ensure",
         "status" => "wiki.status",
         "validate" => "wiki.validate",
@@ -759,51 +1382,47 @@ fn operation_for_command(command: &str) -> &'static str {
         "page-patch-body" => "wiki.page.patch_body",
         "asset-add" => "wiki.asset.add",
         "asset-list" => "wiki.asset.list",
+        "reference-list" => "wiki.reference.list",
         "page-delete" => "wiki.page.delete",
         "page-restore" => "wiki.page.restore",
         "publish-status" => "wiki.publish.status",
         "publish" => "wiki.publish",
-        "agent-register" => "wiki.agent.register",
+        "agent-list" => "wiki.agent.list",
+        "agent-whoami" => "wiki.agent.whoami",
         "agent-identify" => "wiki.agent.identify",
         "agent-heartbeat" => "wiki.agent.heartbeat",
         "agent-retire" => "wiki.agent.retire",
-        "agent-list" => "wiki.agent.list",
         "agent-status" => "wiki.agent.status",
-        "whoami" => "wiki.agent.whoami",
-        "agent-claim" => "wiki.agent.claim",
-        "talk-append" => "wiki.talk.append",
+        "agent-status-by-thread" => "wiki.agent.status_by_thread",
+        "agent-inbox" => "wiki.agent.inbox",
+        "mail-send" => "wiki.mail.send",
         "mail-inbox" => "wiki.mail.inbox",
         "mail-read" => "wiki.mail.read",
-        "mail-subscribe" => "wiki.mail.subscribe",
-        "mail-unsubscribe" => "wiki.mail.unsubscribe",
-        "mail-subscriptions" => "wiki.mail.subscriptions",
-        "page-watch" => "wiki.page.watch",
-        "page-unwatch" => "wiki.page.unwatch",
-        "page-assign-role" => "wiki.page.assign_role",
-        "list-create" => "wiki.list.create",
-        "lists" => "wiki.lists",
-        "list-status" => "wiki.list.status",
-        "list-members" => "wiki.list.members",
-        "agent-inbox" => "wiki.agent.inbox",
+        "mail-open" => "wiki.mail.open",
+        "mail-record-injection" => "wiki.mail.record_injection",
+        "mail-claim" => "wiki.mail.claim",
         "mail-mark" => "wiki.mail.mark",
         "mail-mark-all" => "wiki.mail.mark_all",
-        "mail-claim" => "wiki.mail.claim",
+        "mail-snooze" => "wiki.mail.snooze",
         "notify-poll" => "wiki.notify.poll",
         "notify-ack" => "wiki.notify.ack",
+        "notify-dispatch" => "wiki.notify.dispatch",
+        "talk-append" => "wiki.talk.append",
         _ => "wiki.unknown",
     }
 }
 
-fn canonical_command(command: &str) -> &str {
-    match command.strip_prefix("wiki-").unwrap_or(command) {
-        "identify" => "agent-identify",
-        "agent-whoami" | "agent-me" => "whoami",
-        "agents" => "agent-list",
-        "claim" => "agent-claim",
-        "mail-thread" | "talk-thread" => "mail-read",
-        "page-asset-add" => "asset-add",
-        "page-asset-list" => "asset-list",
-        other => other,
+fn canonical_command(command: &str) -> String {
+    let normalized = command.replace(['.', '_'], "-");
+    let stripped = normalized.strip_prefix("wiki-").unwrap_or(&normalized);
+    match stripped {
+        "page-asset-add" => "asset-add".to_string(),
+        "page-asset-list" => "asset-list".to_string(),
+        "references" => "reference-list".to_string(),
+        "agent-identity" => "agent-whoami".to_string(),
+        "agent-status-by-thread-id" => "agent-status-by-thread".to_string(),
+        "mail-injection-record" => "mail-record-injection".to_string(),
+        other => other.to_string(),
     }
 }
 
@@ -831,17 +1450,6 @@ fn error_code(message: &str) -> &'static str {
         "invalid_nav_section"
     } else if message.contains("page source path already exists") {
         "page_source_path_conflict"
-    } else if message.contains("agent ids are not mail addresses") {
-        "invalid_agent_address"
-    } else if message.contains("invalid address") {
-        "invalid_address"
-    } else if message.contains("invalid page recipient") {
-        "invalid_page_recipient"
-    } else if message.contains("invalid mail state") || message.contains("invalid mail mark state")
-    {
-        "invalid_mail_state"
-    } else if message.contains("invalid notification ack state") {
-        "invalid_notification_state"
     } else if message.contains("user-wiki/wiki.toml") && message.contains("TOML parse error") {
         "invalid_wiki_config"
     } else if message.contains("asset file not found")
@@ -855,10 +1463,6 @@ fn error_code(message: &str) -> &'static str {
         || message.contains("invalid attachment filename")
     {
         "invalid_attachment"
-    } else if message.contains("invalid mail subscription relation") {
-        "invalid_subscription_relation"
-    } else if message.contains("invalid page role") {
-        "invalid_page_role"
     } else if message.contains("page-create refused for tombstoned page")
         || message.contains("talk append refused for tombstoned page")
         || message.contains("page body edit refused for tombstoned page")
@@ -873,24 +1477,12 @@ fn error_code(message: &str) -> &'static str {
         "page_already_exists"
     } else if message.contains("route already exists:") {
         "route_already_exists"
-    } else if message.contains("agent already registered") {
-        "agent_already_registered"
-    } else if message.contains("already claimed by") {
-        "mail_already_claimed"
     } else if message.contains("generated site page") && message.contains("not source-backed") {
         "generated_site_page"
     } else if message.contains("unknown page") || message.contains("unknown configured page") {
         "unknown_page"
-    } else if message.contains("unknown list") {
-        "unknown_list"
     } else if message.contains("unexpected argument") {
         "unexpected_arguments"
-    } else if message.contains("agent lease expired") {
-        "stale_agent"
-    } else if message.contains("unknown active agent") {
-        "unknown_active_agent"
-    } else if message.contains("agent explicitly retired") {
-        "retired_agent"
     } else if message.contains("source hash mismatch") {
         "source_hash_mismatch"
     } else if message.contains("patch text not found") {
@@ -938,7 +1530,7 @@ fn repair_hints(message: &str) -> Vec<&'static str> {
     } else if message.contains("requires ") || message.contains("accepts either") {
         vec!["Run with --help and provide the required arguments."]
     } else if message.contains("invalid numeric flag") {
-        vec!["Use an integer value for numeric flags. TTL values such as --ttl-seconds must be positive seconds."]
+        vec!["Use an integer value for numeric flags."]
     } else if message.contains("invalid page route") {
         vec!["Use an absolute extensionless route such as /projects/example. Keep segments lowercase and unique."]
     } else if message.contains("invalid page slug") {
@@ -951,14 +1543,6 @@ fn repair_hints(message: &str) -> Vec<&'static str> {
         vec!["Use --nav-section primary, utility, or hidden."]
     } else if message.contains("page source path already exists") {
         vec!["Choose a unique --slug or --family-id so the new page does not share another page's source/talk path."]
-    } else if message.contains("agent ids are not mail addresses") {
-        vec!["Use agent_id for control commands and the returned primary_address or addresses[0] for direct mail delivery."]
-    } else if message.contains("invalid address") {
-        vec!["Use agent://, role://, list://, or mailbox:// addresses with no whitespace."]
-    } else if message.contains("invalid mail mark state") {
-        vec!["Use mail-claim or agent-claim to claim work; use mail-mark for unread, read, done, snoozed, or archived."]
-    } else if message.contains("invalid page recipient") {
-        vec!["Use page://<page-id-or-route> for page aliases, or mailbox://page/<page-id> for the durable page mailbox."]
     } else if message.contains("attachment not found")
         || message.contains("attachment filename missing")
         || message.contains("invalid attachment filename")
@@ -966,12 +1550,6 @@ fn repair_hints(message: &str) -> Vec<&'static str> {
         vec!["Pass --attachment with an existing file path. The copied talk attachment will use a safe filename under the talk folder."]
     } else if message.contains("unknown page") || message.contains("unknown configured page") {
         vec!["Run wiki.list to inspect configured pages or create the page first."]
-    } else if message.contains("unknown list") {
-        vec!["Run wiki.list.create before subscribing agents to a list address."]
-    } else if message.contains("invalid mail subscription relation") {
-        vec!["Use one of the supported subscription relations: watcher, member, assignee, or subscriber."]
-    } else if message.contains("invalid page role") {
-        vec!["Use a role token such as curator or a page-scoped role address like role://topics.curator."]
     } else if message.contains("user-wiki/wiki.toml") && message.contains("TOML parse error") {
         vec!["Repair user-wiki/wiki.toml before retrying. Run wiki.validate after fixing the TOML syntax."]
     } else if message.contains("page-create refused for tombstoned page") {
@@ -990,22 +1568,10 @@ fn repair_hints(message: &str) -> Vec<&'static str> {
         vec!["Run wiki.page.restore before editing, or choose an enabled replacement page for new content."]
     } else if message.contains("page body edit refused for disabled page") {
         vec!["Restore or re-enable the page before editing, or choose an enabled replacement page for new content."]
-    } else if message.contains("agent already registered") {
-        vec!["Use agent-identify to refresh the lease and merge any new roles or capabilities."]
-    } else if message.contains("already claimed by") {
-        vec!["Read agent-inbox or mail-inbox to see the current claimant before taking work."]
     } else if message.contains("generated site page") && message.contains("not source-backed") {
         vec!["Generated site pages are not editable source pages. Use wiki.publish/status or inspect user-wiki/site/.1context/route-manifest.json for their rendered routes."]
     } else if message.contains("unexpected argument") {
         vec!["Run with --help and remove unsupported trailing arguments."]
-    } else if message.contains("agent lease expired") {
-        vec![
-            "Call agent-identify with the same thread id to refresh the stale session, then renew any expired page or list watches if needed."
-        ]
-    } else if message.contains("unknown active agent") {
-        vec!["Use whoami or agent-status to inspect liveness. Stale sessions should call agent-identify; retired sessions need a new thread/session."]
-    } else if message.contains("agent explicitly retired") {
-        vec!["Start a new thread/session and call agent-identify with that new transport pointer."]
     } else if message.contains("source hash mismatch") {
         vec!["Run wiki.page.open again, read edit.expected_source_sha256, and retry with the current hash."]
     } else if message.contains("patch text not found") {
@@ -2119,43 +2685,38 @@ Usage:
   onecontext-wiki --root <1Context-root> page-create-all
   onecontext-wiki --root <1Context-root> page-write-body <page-id-or-route> (--body <markdown> | --body-file <path>) [--expected-source-sha256 <hash>]
   onecontext-wiki --root <1Context-root> page-patch-body <page-id-or-route> (--find <markdown> | --find-file <path>) (--replace <markdown> | --replace-file <path>) [--expected-source-sha256 <hash>]
-  onecontext-wiki --root <1Context-root> asset-add <page-id-or-route> --file <path> [--filename <name>] [--purpose inline_image|download|decorative] [--caption <text>] [--alt-text <text>]
+  onecontext-wiki --root <1Context-root> asset-add <page-id-or-route> --file <path> [--filename <name>] [--purpose inline_image|download|decorative|source_file] [--caption <text>] [--alt-text <text>]
   onecontext-wiki --root <1Context-root> asset-list <page-id-or-route>
+  onecontext-wiki --root <1Context-root> reference-list [page-id-or-route]
   onecontext-wiki --root <1Context-root> page-delete <page-id-or-route> [--mode tombstone]
   onecontext-wiki --root <1Context-root> page-restore <page-id-or-route>
   onecontext-wiki --root <1Context-root> publish-status
   onecontext-wiki --root <1Context-root> publish [--wiki-engine <dir>] [--node <node>] [--trigger <label>] [--force]
-  onecontext-wiki --root <1Context-root> agent-register --thread-id <id> [--role <addr>] [--capability <name>] [--ttl-seconds <n>]
-  onecontext-wiki --root <1Context-root> agent-identify --thread-id <id> [--role <addr>] [--capability <name>] [--ttl-seconds <n>]
-  onecontext-wiki --root <1Context-root> agent-heartbeat <agent-id> [--ttl-seconds <n>]
-  onecontext-wiki --root <1Context-root> agent-retire <agent-id> [--reason <text>]
-  onecontext-wiki --root <1Context-root> whoami (--thread-id <id> | --agent-id <id>)
-  onecontext-wiki --root <1Context-root> agent-list [--include-stale] [--include-retired]
+  onecontext-wiki --root <1Context-root> agent-list
+  onecontext-wiki --root <1Context-root> agent-whoami (--agent-id <agent-id> | --thread-id <codex-thread-id>)
+  onecontext-wiki --root <1Context-root> agent-identify --thread-id <codex-thread-id> [--role <address>]... [--capability <name>]... [--ttl-seconds <seconds>]
+  onecontext-wiki --root <1Context-root> agent-heartbeat <agent-id> [--ttl-seconds <seconds>]
+  onecontext-wiki --root <1Context-root> agent-retire <agent-id>
   onecontext-wiki --root <1Context-root> agent-status <agent-id>
-  onecontext-wiki --root <1Context-root> agent-claim <agent-id> <message-id>
-  onecontext-wiki --root <1Context-root> talk-append --page <id> --kind <kind> --subject <subject> --from <addr> (--to <addr> | --to-role <role>) (--body <markdown> | --body-file <path>) [--cc <addr>] [--cc-role <role>] [--thread-id <thread>] [--reply-to <message>] [--attachment <file>] [--attachment-filename <name>] [--attachment-caption <caption>] [--attachment-alt <text>] [--allow-tombstoned]
-  onecontext-wiki --root <1Context-root> mail-inbox <recipient> [--include-archived] [--include-snoozed]
-  onecontext-wiki --root <1Context-root> mail-read (--message-id <id> | --thread-id <id>)
-  onecontext-wiki --root <1Context-root> mail-subscribe --agent-id <id> --address <addr> [--relation watcher|member|assignee|subscriber] [--kind <kind>] [--ttl-seconds <n>]
-  onecontext-wiki --root <1Context-root> mail-unsubscribe --agent-id <id> --address <addr> [--relation watcher|member|assignee|subscriber] [--kind <kind>]
-  onecontext-wiki --root <1Context-root> mail-subscriptions [--agent-id <id>] [--address <addr>]
-  onecontext-wiki --root <1Context-root> page-watch <page-id-or-route> --agent-id <id> [--list <list://addr>] [--kind <kind>] [--ttl-seconds <n>]
-  onecontext-wiki --root <1Context-root> page-unwatch <page-id-or-route> --agent-id <id> [--list <list://addr>] [--kind <kind>]
-  onecontext-wiki --root <1Context-root> page-assign-role <page-id-or-route> --agent-id <id> --role <role|role://addr> [--kind <kind>] [--ttl-seconds <n>]
-  onecontext-wiki --root <1Context-root> list-create --address <list://addr> [--title <title>] [--description <text>] [--page <page-id-or-route>] [--owner <addr-or-agent-id>]
-  onecontext-wiki --root <1Context-root> lists [--page <page-id-or-route>] [--address <list://addr>]
-  onecontext-wiki --root <1Context-root> list-status <list-address> [--include-archived] [--include-snoozed]
-  onecontext-wiki --root <1Context-root> list-members <list-address>
-  onecontext-wiki --root <1Context-root> agent-inbox <agent-id> [--include-archived] [--include-snoozed]
-  onecontext-wiki --root <1Context-root> mail-mark <message-id> --recipient <addr> --state unread|read|done|snoozed|archived [--until <RFC3339>]
-  onecontext-wiki --root <1Context-root> mail-mark-all <message-id> --state unread|read|done|snoozed|archived [--until <RFC3339>]
-  onecontext-wiki --root <1Context-root> mail-claim <message-id> --recipient <addr> --agent-id <agent-id>
-  onecontext-wiki --root <1Context-root> notify-poll <agent-id>
+  onecontext-wiki --root <1Context-root> agent-status-by-thread <codex-thread-id>
+  onecontext-wiki --root <1Context-root> agent-inbox <agent-id>
+  onecontext-wiki --root <1Context-root> mail-send --from <address> --to <address>... --subject <text> (--body <markdown> | --body-file <path>) [--cc <address>]... [--kind <kind>] [--idempotency-key <key>] [--message-id <id>] [--thread-id <id>] [--reply-to <message-id>] [--page-id <id> --page-route <route>] [--body-sha256 <hash>] [--attachment-ref-json <json>]... [--max-open-deliveries-per-recipient <n>]
+  onecontext-wiki --root <1Context-root> mail-inbox <address>
+  onecontext-wiki --root <1Context-root> mail-read (--message-id <message-id> | --thread-id <thread-id>)
+  onecontext-wiki --root <1Context-root> mail-open <delivery-id> --agent-id <agent-id>
+  onecontext-wiki --root <1Context-root> mail-record-injection <delivery-id> --agent-id <agent-id> [--thread-id <thread-id>] [--result ok|failed] [--item-count <n>] [--error <text>]
+  onecontext-wiki --root <1Context-root> mail-claim <delivery-id> --agent-id <agent-id>
+  onecontext-wiki --root <1Context-root> mail-mark <delivery-id> --agent-id <agent-id> --state read|done|archived|rejected
+  onecontext-wiki --root <1Context-root> mail-mark-all <agent-id> --state read|done|archived|rejected [--recipient <address>] [--dry-run]
+  onecontext-wiki --root <1Context-root> mail-snooze <delivery-id> --agent-id <agent-id> --until <rfc3339>
+  onecontext-wiki --root <1Context-root> notify-poll <agent-id> [--cursor <cursor>]
   onecontext-wiki --root <1Context-root> notify-ack <notification-id> --agent-id <agent-id>
+  onecontext-wiki --root <1Context-root> notify-dispatch <agent-id> (--dry-run | --steering-command <command> [--steering-arg <arg>]...) [--payload-format text|json] [--limit <n>]
+  onecontext-wiki --root <1Context-root> talk-append --page <id> --kind <kind> --subject <subject> --from <actor> (--body <markdown> | --body-file <path>) [--to <label>] [--cc <label>] [--thread-id <thread>] [--reply-to <message>] [--operation-id <id>] [--delivery-mode labels-only|mail] [--attachment <file>] [--attachment-filename <name>] [--attachment-caption <caption>] [--attachment-alt <text>] [--allow-tombstoned]
 
-Aliases: command names may also be prefixed with wiki-, for example wiki-list
-or wiki-page-status. This keeps the CLI close to the API verb names agents see
-in receipts and docs.
+Aliases: command names may also use the dotted tool form or be prefixed with
+wiki-, for example wiki.mail.open, wiki-list, or wiki-page-status. This keeps
+the CLI close to the API verb names agents see in receipts and docs.
 "#
     );
 }
@@ -2165,6 +2726,40 @@ mod tests {
     use super::*;
     use std::thread;
     use tempfile::TempDir;
+
+    #[test]
+    fn dotted_tool_names_canonicalize_to_cli_commands() {
+        assert_eq!(canonical_command("wiki.mail.open"), "mail-open");
+        assert_eq!(canonical_command("wiki.notify.ack"), "notify-ack");
+        assert_eq!(
+            canonical_command("wiki.agent.status_by_thread"),
+            "agent-status-by-thread"
+        );
+        assert_eq!(
+            canonical_command("wiki.mail.record_injection"),
+            "mail-record-injection"
+        );
+        assert_eq!(
+            operation_for_command("wiki.mail.mark_all"),
+            "wiki.mail.mark_all"
+        );
+        assert_eq!(
+            operation_for_command("wiki.agent.status_by_thread"),
+            "wiki.agent.status_by_thread"
+        );
+        assert_eq!(
+            operation_for_command("wiki.mail.record_injection"),
+            "wiki.mail.record_injection"
+        );
+    }
+
+    #[test]
+    fn cli_sha256_matches_known_digest() {
+        assert_eq!(
+            sha256_hex(b"abc"),
+            "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
+        );
+    }
 
     #[test]
     fn source_hash_mismatch_error_has_structured_details() {
@@ -2195,18 +2790,6 @@ mod tests {
             repair_hints(message),
             vec![
                 "Run wiki.page.restore before editing, or choose an enabled replacement page for new content."
-            ]
-        );
-    }
-
-    #[test]
-    fn stale_agent_errors_are_actionable() {
-        let message = "agent lease expired: agent:abc; lease expired at 2026-05-20T20:00:00Z; call agent-identify with the same thread id to refresh the session before using this command";
-        assert_eq!(error_code(message), "stale_agent");
-        assert_eq!(
-            repair_hints(message),
-            vec![
-                "Call agent-identify with the same thread id to refresh the stale session, then renew any expired page or list watches if needed."
             ]
         );
     }
@@ -2540,6 +3123,7 @@ mod tests {
             vec!["page-create", "scratch", "--title", "Scratch", "unexpected"],
             vec!["page-create-all", "unexpected"],
             vec!["page-write-body", "topics", "--body", "body", "unexpected"],
+            vec!["reference-list", "topics", "unexpected"],
             vec![
                 "page-patch-body",
                 "topics",
@@ -2553,28 +3137,6 @@ mod tests {
             vec!["page-restore", "topics", "unexpected"],
             vec!["publish-status", "unexpected"],
             vec!["publish", "--force", "unexpected"],
-            vec![
-                "agent-register",
-                "--thread-id",
-                "thread-extra",
-                "unexpected",
-            ],
-            vec!["agent-heartbeat", "agent_extra", "unexpected"],
-            vec![
-                "agent-retire",
-                "agent_extra",
-                "--reason",
-                "done",
-                "unexpected",
-            ],
-            vec!["notify-poll", "agent_extra", "unexpected"],
-            vec![
-                "notify-ack",
-                "notification_extra",
-                "--agent-id",
-                "agent_extra",
-                "unexpected",
-            ],
             vec![
                 "talk-append",
                 "--page",
@@ -2619,66 +3181,6 @@ mod tests {
                 vec!["page-create", "scratch", "--nav-order"],
                 "page-create requires a value for --nav-order",
             ),
-            (
-                vec![
-                    "agent-register",
-                    "--thread-id",
-                    "thread-bad-ttl",
-                    "--ttl-seconds",
-                    "soon",
-                ],
-                "invalid numeric flag --ttl-seconds for agent-register",
-            ),
-            (
-                vec![
-                    "agent-identify",
-                    "--thread-id",
-                    "thread-zero-ttl",
-                    "--ttl-seconds",
-                    "0",
-                ],
-                "invalid numeric flag --ttl-seconds for agent-identify: 0; expected a positive integer",
-            ),
-            (
-                vec!["agent-heartbeat", "agent_bad", "--ttl-seconds", "-1"],
-                "invalid numeric flag --ttl-seconds for agent-heartbeat: -1; expected a positive integer",
-            ),
-            (
-                vec![
-                    "mail-subscribe",
-                    "--agent-id",
-                    "agent_bad",
-                    "--address",
-                    "mailbox://agent/bad",
-                    "--ttl-seconds",
-                    "later",
-                ],
-                "invalid numeric flag --ttl-seconds for mail-subscribe",
-            ),
-            (
-                vec![
-                    "page-watch",
-                    "topics",
-                    "--agent-id",
-                    "agent_bad",
-                    "--ttl-seconds",
-                    "-60",
-                ],
-                "invalid numeric flag --ttl-seconds for page-watch: -60; expected a positive integer",
-            ),
-            (
-                vec![
-                    "page-assign-role",
-                    "topics",
-                    "--agent-id",
-                    "agent_bad",
-                    "--role",
-                    "curator",
-                    "--ttl-seconds",
-                    "later",
-                ],
-                "invalid numeric flag --ttl-seconds for page-assign-role",
-            ),
         ] {
             let mut command = vec!["--root".to_string(), root_flag.clone()];
             command.extend(args.into_iter().map(String::from));
@@ -2693,18 +3195,6 @@ mod tests {
         assert!(
             !root.join("user-wiki/source/scratch.md").exists(),
             "invalid nav order must not create the page source"
-        );
-        assert!(
-            !root
-                .join("context-engine/agents/directory/agents.jsonl")
-                .exists(),
-            "invalid ttl must not register or identify an agent"
-        );
-        assert!(
-            !root
-                .join("context-engine/mail/subscriptions.jsonl")
-                .exists(),
-            "invalid ttl must not create subscriptions"
         );
     }
 
@@ -2829,39 +3319,6 @@ mod tests {
                 ],
                 "talk-append requires a value for --attachment-filename",
             ),
-            (
-                vec![
-                    "mail-subscribe",
-                    "--agent-id",
-                    "agent_missing",
-                    "--address",
-                    "page://topics",
-                    "--kind",
-                ],
-                "mail-subscribe requires a value for --kind",
-            ),
-            (
-                vec![
-                    "mail-mark",
-                    "message_missing",
-                    "--recipient",
-                    "page://topics",
-                    "--state",
-                    "snoozed",
-                    "--until",
-                ],
-                "mail-mark requires a value for --until",
-            ),
-            (
-                vec![
-                    "notify-ack",
-                    "notification_missing",
-                    "--agent-id",
-                    "agent_missing",
-                    "--state",
-                ],
-                "notify-ack requires a value for --state",
-            ),
         ] {
             let mut command = vec!["--root".to_string(), root_flag.clone()];
             command.extend(args.into_iter().map(String::from));
@@ -2889,19 +3346,6 @@ mod tests {
                 .exists(),
             "dangling talk flags must not append talk files"
         );
-        assert!(
-            !root
-                .join("context-engine/mail/subscriptions.jsonl")
-                .exists(),
-            "dangling --kind must not create subscriptions"
-        );
-        assert!(
-            !root
-                .join("context-engine/notifications/attempts.jsonl")
-                .exists(),
-            "dangling --state must not acknowledge notifications"
-        );
-
         for args in [vec!["--root"], vec!["status", "--root"]] {
             let command = args.into_iter().map(String::from).collect();
             let error = run(command).expect_err("dangling --root should fail");
@@ -2938,8 +3382,8 @@ mod tests {
             "Missing Body Before Lookup".to_string(),
             "--from".to_string(),
             "agent://worker-be".to_string(),
-            "--to-role".to_string(),
-            "curator".to_string(),
+            "--to".to_string(),
+            "role://topics.curator".to_string(),
         ])
         .expect_err("talk append should validate missing body before page lookup");
         let message = format!("{missing_body_unknown_page:#}");
@@ -2964,8 +3408,8 @@ mod tests {
             "Ambiguous Body Before Lookup".to_string(),
             "--from".to_string(),
             "agent://worker-be".to_string(),
-            "--to-role".to_string(),
-            "curator".to_string(),
+            "--to".to_string(),
+            "role://topics.curator".to_string(),
             "--body".to_string(),
             "inline".to_string(),
             "--body-file".to_string(),
@@ -3001,8 +3445,8 @@ mod tests {
             "Missing Body".to_string(),
             "--from".to_string(),
             "agent://worker-be".to_string(),
-            "--to-role".to_string(),
-            "curator".to_string(),
+            "--to".to_string(),
+            "role://topics.curator".to_string(),
         ])
         .expect_err("talk append should require a body source");
         let message = format!("{missing_body:#}");
@@ -3023,8 +3467,8 @@ mod tests {
             "Body File Proof".to_string(),
             "--from".to_string(),
             "agent://worker-be".to_string(),
-            "--to-role".to_string(),
-            "curator".to_string(),
+            "--to".to_string(),
+            "role://topics.curator".to_string(),
             "--body-file".to_string(),
             body_file.display().to_string(),
         ])
@@ -3059,8 +3503,8 @@ mod tests {
             "Ambiguous Body".to_string(),
             "--from".to_string(),
             "agent://worker-be".to_string(),
-            "--to-role".to_string(),
-            "curator".to_string(),
+            "--to".to_string(),
+            "role://topics.curator".to_string(),
             "--body".to_string(),
             "inline".to_string(),
             "--body-file".to_string(),
@@ -3112,43 +3556,6 @@ mod tests {
             .unwrap_err()
             .to_string();
         assert!(error.contains("metadata without a matching --attachment"));
-    }
-
-    #[test]
-    fn list_page_filters_canonicalize_route_references() {
-        let temp = TempDir::new().unwrap();
-        let root = temp.path().join("1Context");
-        seed_runtime(&root);
-        let root_flag = root.display().to_string();
-
-        run(vec![
-            "--root".to_string(),
-            root_flag.clone(),
-            "list-create".to_string(),
-            "--address".to_string(),
-            "list://topics.review".to_string(),
-            "--title".to_string(),
-            "Topics Review".to_string(),
-            "--page".to_string(),
-            "/topics".to_string(),
-        ])
-        .unwrap();
-
-        run(vec![
-            "--root".to_string(),
-            root_flag,
-            "lists".to_string(),
-            "--page".to_string(),
-            "/topics".to_string(),
-        ])
-        .unwrap();
-
-        let lists = WikiCore::new(&root)
-            .mail_lists(Some("topics"), None)
-            .unwrap();
-        assert_eq!(lists.list_count, 1);
-        assert_eq!(lists.lists[0].address, "list://topics.review");
-        assert_eq!(lists.lists[0].page_id.as_deref(), Some("topics"));
     }
 
     #[test]

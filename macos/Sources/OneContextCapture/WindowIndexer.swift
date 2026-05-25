@@ -47,6 +47,7 @@ public struct OneContextWindowIndexer {
     )
     var focusedContext: CaptureAXFocusedContext? = await focusedContextResult
     var merged = Self.merge(cgWindows: prelude.cgWindows, sckWindows: sckWindows)
+    Self.annotateWindowGeometry(displays: prelude.displays, windows: &merged)
     Self.applyFocusedContext(&focusedContext, to: &merged)
     Self.applyUXMotionHints(uxMotionHintsProvider(), to: &merged)
     let resolvedActive = Self.reconcileActiveWindowMetadata(activeApplication: prelude.activeApplication, windows: &merged)
@@ -238,6 +239,194 @@ public struct OneContextWindowIndexer {
     }
 
     return Array(mergedByID.values)
+  }
+
+  static func annotateWindowGeometry(displays: [CaptureDisplayState], windows: inout [CaptureWindowState]) {
+    let originalWindows = windows
+    for index in windows.indices {
+      let windowRect = windows[index].framePoints.cgRect.standardized
+      guard validArea(windowRect) > 0 else {
+        windows[index].displayID = nil
+        windows[index].framePixels = nil
+        windows[index].visibleFractionEstimate = 0
+        continue
+      }
+
+      if let match = bestDisplayMatch(for: windowRect, displays: displays) {
+        windows[index].displayID = match.display.displayID
+        windows[index].framePixels = displayPixelRect(
+          for: windowRect,
+          displayFrame: match.display.framePoints.cgRect.standardized,
+          scaleFactor: match.display.scaleFactor
+        )
+      } else {
+        windows[index].displayID = nil
+        windows[index].framePixels = nil
+      }
+
+      windows[index].visibleFractionEstimate = visibleFractionEstimate(
+        for: windows[index],
+        displays: displays,
+        windows: originalWindows
+      )
+    }
+  }
+
+  private static func bestDisplayMatch(
+    for windowRect: CGRect,
+    displays: [CaptureDisplayState]
+  ) -> DisplayIntersection? {
+    var bestMatch: DisplayIntersection?
+    for display in displays {
+      let displayRect = display.framePoints.cgRect.standardized
+      let intersection = positiveIntersection(windowRect, displayRect)
+      let area = intersection.map(validArea) ?? 0
+      guard area > 0 else {
+        continue
+      }
+
+      let match = DisplayIntersection(display: display, intersectionArea: area)
+      if let current = bestMatch {
+        if match.intersectionArea > current.intersectionArea
+          || (match.intersectionArea == current.intersectionArea && match.display.isMain && !current.display.isMain)
+          || (match.intersectionArea == current.intersectionArea
+            && match.display.isMain == current.display.isMain
+            && match.display.displayID < current.display.displayID)
+        {
+          bestMatch = match
+        }
+      } else {
+        bestMatch = match
+      }
+    }
+    return bestMatch
+  }
+
+  private static func displayPixelRect(
+    for windowRect: CGRect,
+    displayFrame: CGRect,
+    scaleFactor: Double
+  ) -> CaptureRect {
+    let scale = max(scaleFactor, 0)
+    return CaptureRect(
+      x: (windowRect.minX - displayFrame.minX) * scale,
+      y: (windowRect.minY - displayFrame.minY) * scale,
+      width: windowRect.width * scale,
+      height: windowRect.height * scale
+    )
+  }
+
+  private static func visibleFractionEstimate(
+    for target: CaptureWindowState,
+    displays: [CaptureDisplayState],
+    windows: [CaptureWindowState]
+  ) -> Double {
+    guard target.isOnScreen, !target.isMinimized else {
+      return 0
+    }
+
+    let targetRect = target.framePoints.cgRect.standardized
+    let targetArea = validArea(targetRect)
+    guard targetArea > 0 else {
+      return 0
+    }
+
+    var visibleRects = displays.compactMap { display -> CGRect? in
+      positiveIntersection(targetRect, display.framePoints.cgRect.standardized)
+    }
+    guard !visibleRects.isEmpty else {
+      return 0
+    }
+
+    if isWindowGeometryOcclusionTarget(target) {
+      let occluders = windows
+        .filter { occluder in
+          occluder.windowID != target.windowID
+            && zOrderPrecedes(occluder, target)
+            && isWindowGeometryOccluder(occluder)
+        }
+        .sorted(by: zOrderPrecedes)
+
+      for occluder in occluders {
+        let occluderRect = occluder.framePoints.cgRect.standardized
+        visibleRects = visibleRects.flatMap { subtract(occluderRect, from: $0) }
+        if visibleRects.isEmpty {
+          break
+        }
+      }
+    }
+
+    let visibleArea = visibleRects.reduce(0) { $0 + validArea($1) }
+    return min(1, max(0, visibleArea / targetArea))
+  }
+
+  private static func isWindowGeometryOcclusionTarget(_ window: CaptureWindowState) -> Bool {
+    window.isOnScreen
+      && !window.isMinimized
+      && window.layer == 0
+      && (window.alpha.map { $0 > 0.01 } ?? true)
+      && window.framePoints.width > 1
+      && window.framePoints.height > 1
+      && !isSystemWindow(window)
+  }
+
+  private static func isWindowGeometryOccluder(_ window: CaptureWindowState) -> Bool {
+    isWindowGeometryOcclusionTarget(window)
+  }
+
+  private static func positiveIntersection(_ lhs: CGRect, _ rhs: CGRect) -> CGRect? {
+    let intersection = lhs.intersection(rhs).standardized
+    guard !intersection.isNull, !intersection.isInfinite, validArea(intersection) > 0 else {
+      return nil
+    }
+    return intersection
+  }
+
+  private static func subtract(_ occluder: CGRect, from rect: CGRect) -> [CGRect] {
+    guard let intersection = positiveIntersection(rect, occluder) else {
+      return [rect]
+    }
+
+    let candidates = [
+      CGRect(
+        x: rect.minX,
+        y: rect.minY,
+        width: intersection.minX - rect.minX,
+        height: rect.height
+      ),
+      CGRect(
+        x: intersection.maxX,
+        y: rect.minY,
+        width: rect.maxX - intersection.maxX,
+        height: rect.height
+      ),
+      CGRect(
+        x: intersection.minX,
+        y: rect.minY,
+        width: intersection.width,
+        height: intersection.minY - rect.minY
+      ),
+      CGRect(
+        x: intersection.minX,
+        y: intersection.maxY,
+        width: intersection.width,
+        height: rect.maxY - intersection.maxY
+      )
+    ]
+
+    return candidates.filter { validArea($0) > 0 }
+  }
+
+  private static func validArea(_ rect: CGRect) -> Double {
+    guard !rect.isNull, !rect.isInfinite, rect.width > 0, rect.height > 0 else {
+      return 0
+    }
+    return rect.width * rect.height
+  }
+
+  private struct DisplayIntersection {
+    var display: CaptureDisplayState
+    var intersectionArea: Double
   }
 
   private static func promoteFrontmostWindowFallback(in windows: inout [CaptureWindowState], activePID: Int32?) {

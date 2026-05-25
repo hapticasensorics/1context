@@ -1,16 +1,16 @@
 use anyhow::{anyhow, Context, Result};
-use chrono::{DateTime, SecondsFormat, Utc};
+use chrono::{SecondsFormat, Utc};
 use fs2::FileExt;
 use serde::{Deserialize, Serialize};
-use serde_json::json;
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs::{self, File, OpenOptions};
-use std::io::{BufRead, BufReader, ErrorKind, Write};
+use std::io::{BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};
-use std::thread;
-use std::time::{Duration, Instant};
 use toml::Value;
+
+#[allow(dead_code)]
+pub mod agent_mail;
 
 #[derive(Clone, Debug)]
 pub struct RuntimePaths {
@@ -41,10 +41,6 @@ impl RuntimePaths {
         for path in [
             self.user_wiki.join(".1context"),
             self.source.join("families"),
-            self.context_engine.join("agents/directory"),
-            self.context_engine.join("agents/subscriptions"),
-            self.context_engine.join("mail/mailboxes"),
-            self.context_engine.join("notifications/cursors"),
             self.context_engine.join("ledgers"),
             self.context_engine.join("runs"),
             self.context_engine.join("artifacts"),
@@ -119,8 +115,6 @@ pub struct WikiInventory {
     pub source_page_count: usize,
     pub generated_page_count: usize,
     pub pages: Vec<WikiPageStatus>,
-    pub agents_summary: AgentsSummary,
-    pub mail_summary: MailSummary,
     pub publish_fingerprint: Option<String>,
 }
 
@@ -162,7 +156,6 @@ pub struct WikiPageStatus {
     pub talk_state: String,
     pub flags: PageFlags,
     pub handles: PageHandles,
-    pub mail: PageMailSummary,
     pub links: PageLinkSummary,
     pub validation: ValidationSummary,
     pub allowed_actions: Vec<String>,
@@ -198,7 +191,6 @@ pub struct PageHandles {
     pub talk: String,
     pub curator: String,
     pub conventions: String,
-    pub mailbox: String,
     pub published: String,
 }
 
@@ -222,7 +214,6 @@ pub struct PageOpenResult {
     pub flags: PageFlags,
     pub page_status: WikiPageStatus,
     pub handles: PageHandles,
-    pub mail: PageMailSummary,
     pub files: PageOpenFiles,
     pub hashes: PageOpenHashes,
     pub resources: Vec<PageOpenResource>,
@@ -283,6 +274,40 @@ pub struct PageAssetListResult {
 }
 
 #[derive(Clone, Debug, Serialize)]
+pub struct ReferenceListResult {
+    pub schema_version: u32,
+    pub status: String,
+    pub operation: String,
+    pub surface: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub page: Option<PageAssetPage>,
+    pub reference_index_path: String,
+    pub reference_count: usize,
+    pub asset_count: usize,
+    pub link_count: usize,
+    pub code_block_count: usize,
+    pub citation_count: usize,
+    pub assets: Vec<serde_json::Value>,
+    pub links: Vec<serde_json::Value>,
+    pub code_blocks: Vec<serde_json::Value>,
+    pub citations: Vec<serde_json::Value>,
+    pub next_action: String,
+    pub repair_hints: Vec<String>,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+struct ReferenceIndexFile {
+    #[serde(default)]
+    assets: Vec<serde_json::Value>,
+    #[serde(default)]
+    links: Vec<serde_json::Value>,
+    #[serde(default)]
+    code_blocks: Vec<serde_json::Value>,
+    #[serde(default)]
+    citations: Vec<serde_json::Value>,
+}
+
+#[derive(Clone, Debug, Serialize)]
 pub struct PageAssetPage {
     pub id: String,
     pub route: String,
@@ -292,6 +317,8 @@ pub struct PageAssetPage {
 #[derive(Clone, Debug, Serialize)]
 pub struct PageAssetRecord {
     pub id: String,
+    pub citation_uri: String,
+    pub kind: String,
     pub filename: String,
     pub media_type: String,
     pub sha256: String,
@@ -302,6 +329,7 @@ pub struct PageAssetRecord {
     pub source_relative_href: String,
     pub published_href: String,
     pub markdown: String,
+    pub content_role: String,
     pub purpose: String,
     pub caption: Option<String>,
     pub alt_text: Option<String>,
@@ -322,42 +350,6 @@ pub struct EditPreconditions {
     pub required_preconditions: Vec<String>,
     pub proposal_required: bool,
     pub policy_reason: String,
-    pub curator_address: String,
-    pub page_mailbox: String,
-}
-
-#[derive(Clone, Debug, Serialize)]
-pub struct PageMailSummary {
-    pub page_mailbox: String,
-    pub curator_address: String,
-    pub default_watchers_list: String,
-    pub associated_lists: Vec<MailListSummary>,
-    pub message_count: usize,
-    pub actionable_count: usize,
-    pub open_delivery_count: usize,
-    pub open_thread_count: usize,
-    pub unread_count: usize,
-    pub watcher_count: usize,
-    pub watcher_subscription_count: usize,
-    pub active_watcher_count: usize,
-    pub inactive_watcher_count: usize,
-    pub subscription_liveness_counts: SubscriptionLivenessCounts,
-    pub subscriptions: Vec<PageSubscriptionSummary>,
-}
-
-#[derive(Clone, Debug, Serialize)]
-pub struct PageSubscriptionSummary {
-    pub subscription_id: String,
-    pub agent_id: String,
-    pub subscriber: String,
-    pub address: String,
-    pub relation: String,
-    pub kinds: Vec<String>,
-    pub lease_expires_at: String,
-    pub agent_liveness: String,
-    pub agent_lease_expires_at: Option<String>,
-    pub agent_retired_at: Option<String>,
-    pub agent_retire_reason: Option<String>,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -393,19 +385,6 @@ pub struct ValidationSummary {
     pub warning_count: usize,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub highest_severity: Option<String>,
-}
-
-#[derive(Clone, Debug, Default, Serialize)]
-pub struct AgentsSummary {
-    pub active_count: usize,
-    pub stale_count: usize,
-}
-
-#[derive(Clone, Debug, Default, Serialize)]
-pub struct MailSummary {
-    pub delivery_count: usize,
-    pub unread_count: usize,
-    pub notification_count: usize,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -499,377 +478,11 @@ pub struct Evidence {
     pub status: String,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct AgentRecord {
-    pub schema_version: u32,
-    pub event: String,
-    pub agent_id: String,
-    pub at: String,
-    pub addresses: Vec<String>,
-    pub roles: Vec<String>,
-    pub capabilities: Vec<String>,
-    pub lease_expires_at: String,
-    pub transport: BTreeMap<String, String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub reason: Option<String>,
-}
-
-#[derive(Clone, Debug, Serialize)]
-pub struct AgentDirectorySummary {
-    pub agent_id: String,
-    pub liveness: String,
-    pub event: String,
-    pub registered_at: Option<String>,
-    pub last_seen_at: String,
-    pub lease_expires_at: String,
-    pub retired_at: Option<String>,
-    pub retire_reason: Option<String>,
-    pub primary_address: Option<String>,
-    pub addresses: Vec<String>,
-    pub roles: Vec<String>,
-    pub capabilities: Vec<String>,
-    pub transport: BTreeMap<String, String>,
-    pub owned_addresses: Vec<String>,
-    pub subscribed_addresses: Vec<String>,
-    pub active_subscription_count: usize,
-    pub mailbox_count: usize,
-    pub unread_count: usize,
-    pub actionable_count: usize,
-    pub next_action: String,
-}
-
-#[derive(Clone, Debug, Default, Serialize)]
-pub struct AgentDirectoryCounts {
-    pub active_count: usize,
-    pub stale_count: usize,
-    pub retired_count: usize,
-    pub total_count: usize,
-}
-
-#[derive(Clone, Debug, Serialize)]
-pub struct AgentListResult {
-    pub schema_version: u32,
-    pub status: String,
-    pub operation: String,
-    pub surface: String,
-    pub counts: AgentDirectoryCounts,
-    pub agents: Vec<AgentDirectorySummary>,
-}
-
-#[derive(Clone, Debug, Serialize)]
-pub struct AgentStatusResult {
-    pub schema_version: u32,
-    pub status: String,
-    pub operation: String,
-    pub surface: String,
-    pub exists: bool,
-    pub agent: Option<AgentDirectorySummary>,
-    pub mailboxes: Vec<MailboxCount>,
-    pub subscriptions: Vec<MailSubscriptionSummary>,
-    pub next_action: String,
-}
-
-#[derive(Clone, Debug, Serialize)]
-pub struct AgentIdentifyResult {
-    pub schema_version: u32,
-    pub status: String,
-    pub action: String,
-    pub operation: String,
-    pub agent_id: String,
-    pub thread_id: String,
-    pub primary_address: Option<String>,
-    pub addresses: Vec<String>,
-    pub liveness_before: Option<String>,
-    pub liveness_after: String,
-    pub agent: Option<AgentDirectorySummary>,
-    pub mailboxes: Vec<MailboxCount>,
-    pub subscriptions: Vec<MailSubscriptionSummary>,
-    pub evidence: Vec<Evidence>,
-    pub next_action: String,
-    pub repair_hints: Vec<String>,
-}
-
-#[derive(Clone, Debug, Serialize)]
-pub struct AgentWhoamiResult {
-    pub schema_version: u32,
-    pub status: String,
-    pub operation: String,
-    pub surface: String,
-    pub resolved_by: String,
-    pub thread_id: Option<String>,
-    pub agent_id: Option<String>,
-    pub matches: Vec<AgentDirectorySummary>,
-    pub next_action: String,
-}
-
-#[derive(Clone, Debug, Serialize)]
-pub struct AgentRegisterResult {
-    pub schema_version: u32,
-    pub status: String,
-    pub operation: String,
-    pub agent_id: String,
-    pub primary_address: String,
-    pub addresses: Vec<String>,
-    pub mailboxes: Vec<MailboxCount>,
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct MailSubscriptionRecord {
-    pub schema_version: u32,
-    pub event: String,
-    pub subscription_id: String,
-    pub agent_id: String,
-    pub subscriber: String,
-    pub address: String,
-    pub relation: String,
-    pub kinds: Vec<String>,
-    pub state: String,
-    pub created_at: String,
-    pub lease_expires_at: String,
-}
-
-#[derive(Clone, Debug, Default, Serialize)]
-pub struct SubscriptionLivenessCounts {
-    pub active_agent_count: usize,
-    pub stale_agent_count: usize,
-    pub retired_agent_count: usize,
-    pub unknown_agent_count: usize,
-    pub inactive_agent_count: usize,
-}
-
-#[derive(Clone, Debug, Serialize)]
-pub struct MailSubscriptionSummary {
-    pub schema_version: u32,
-    pub event: String,
-    pub subscription_id: String,
-    pub agent_id: String,
-    pub subscriber: String,
-    pub address: String,
-    pub relation: String,
-    pub kinds: Vec<String>,
-    pub state: String,
-    pub created_at: String,
-    pub lease_expires_at: String,
-    pub agent_liveness: String,
-    pub agent_lease_expires_at: Option<String>,
-    pub agent_retired_at: Option<String>,
-    pub agent_retire_reason: Option<String>,
-}
-
-#[derive(Clone, Debug, Serialize)]
-pub struct MailSubscribeResult {
-    pub schema_version: u32,
-    pub status: String,
-    pub operation: String,
-    pub subscription_id: String,
-    pub agent_id: String,
-    pub subscriber: String,
-    pub address: String,
-    pub relation: String,
-    pub kinds: Vec<String>,
-    pub lease_expires_at: String,
-    pub backfill: MailSubscribeBackfill,
-    pub deduplicated_count: usize,
-    pub evidence: Vec<Evidence>,
-    pub next_action: String,
-}
-
-#[derive(Clone, Debug, Serialize)]
-pub struct MailUnsubscribeResult {
-    pub schema_version: u32,
-    pub status: String,
-    pub operation: String,
-    pub agent_id: String,
-    pub address: String,
-    pub relation: Option<String>,
-    pub kinds: Vec<String>,
-    pub cancelled_count: usize,
-    pub remaining_count: usize,
-    pub cancelled: Vec<MailSubscriptionSummary>,
-    pub evidence: Vec<Evidence>,
-    pub next_action: String,
-}
-
-#[derive(Clone, Debug, Serialize)]
-pub struct MailSubscribeBackfill {
-    pub surfaced_message_count: usize,
-    pub surfaced_unread_count: usize,
-    pub notification_count: usize,
-    pub notification_policy: String,
-}
-
-#[derive(Clone, Debug, Serialize)]
-pub struct MailSubscriptionsResult {
-    pub schema_version: u32,
-    pub status: String,
-    pub operation: String,
-    pub surface: String,
-    pub subscription_count: usize,
-    pub liveness_counts: SubscriptionLivenessCounts,
-    pub subscriptions: Vec<MailSubscriptionSummary>,
-    pub next_action: String,
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct MailListRecord {
-    pub schema_version: u32,
-    pub event: String,
-    pub address: String,
-    pub title: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub description: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub page_id: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub owner: Option<String>,
-    pub state: String,
-    pub created_at: String,
-}
-
-#[derive(Clone, Debug, Serialize)]
-pub struct MailListSummary {
-    pub address: String,
-    pub title: String,
-    pub description: Option<String>,
-    pub page_id: Option<String>,
-    pub owner: Option<String>,
-    pub state: String,
-    pub created_at: String,
-    pub member_count: usize,
-    pub active_member_count: usize,
-    pub inactive_member_count: usize,
-    pub subscription_liveness_counts: SubscriptionLivenessCounts,
-}
-
-#[derive(Clone, Debug, Serialize)]
-pub struct MailListCreateResult {
-    pub schema_version: u32,
-    pub status: String,
-    pub operation: String,
-    pub list: MailListSummary,
-    pub evidence: Vec<Evidence>,
-}
-
-#[derive(Clone, Debug, Serialize)]
-pub struct MailListsResult {
-    pub schema_version: u32,
-    pub status: String,
-    pub operation: String,
-    pub surface: String,
-    pub list_count: usize,
-    pub lists: Vec<MailListSummary>,
-    pub next_action: String,
-}
-
-#[derive(Clone, Debug, Serialize)]
-pub struct MailListMembersResult {
-    pub schema_version: u32,
-    pub status: String,
-    pub operation: String,
-    pub surface: String,
-    pub exists: bool,
-    pub list: Option<MailListSummary>,
-    pub member_count: usize,
-    pub active_member_count: usize,
-    pub inactive_member_count: usize,
-    pub subscriptions: Vec<MailSubscriptionSummary>,
-    pub next_action: String,
-}
-
-#[derive(Clone, Debug, Serialize)]
-pub struct MailListStatusResult {
-    pub schema_version: u32,
-    pub status: String,
-    pub operation: String,
-    pub surface: String,
-    pub exists: bool,
-    pub include_archived: bool,
-    pub include_snoozed: bool,
-    pub list: Option<MailListSummary>,
-    pub member_count: usize,
-    pub active_member_count: usize,
-    pub inactive_member_count: usize,
-    pub mailbox: MailboxCount,
-    pub archived_count: usize,
-    pub snoozed_count: usize,
-    pub hidden_archived_count: usize,
-    pub hidden_snoozed_count: usize,
-    pub has_archived: bool,
-    pub has_snoozed: bool,
-    pub audit_flags: Vec<String>,
-    pub subscriptions: Vec<MailSubscriptionSummary>,
-    pub messages: Vec<DeliveryRecord>,
-    pub next_action: String,
-}
-
 #[derive(Clone, Debug, Serialize)]
 pub struct PageParticipantReference {
     pub id: String,
     pub title: String,
     pub route: String,
-}
-
-#[derive(Clone, Debug, Serialize)]
-pub struct PageWatchResult {
-    pub schema_version: u32,
-    pub status: String,
-    pub operation: String,
-    pub page: PageParticipantReference,
-    pub list_create_status: String,
-    pub list: MailListSummary,
-    pub subscription: MailSubscribeResult,
-    pub page_mailbox_subscription: MailSubscribeResult,
-    pub unsubscribe_plan: PageWatchUnsubscribePlan,
-    pub page_status: WikiPageStatus,
-}
-
-#[derive(Clone, Debug, Serialize)]
-pub struct PageWatchUnsubscribePlan {
-    pub operation: String,
-    pub agent_id: String,
-    pub page: String,
-    pub list_address: String,
-    pub page_mailbox_address: String,
-    pub relation: String,
-    pub kinds: Vec<String>,
-}
-
-#[derive(Clone, Debug, Serialize)]
-pub struct PageUnwatchResult {
-    pub schema_version: u32,
-    pub status: String,
-    pub operation: String,
-    pub page: PageParticipantReference,
-    pub agent_id: String,
-    pub list_address: String,
-    pub page_mailbox_address: String,
-    pub list_unsubscribe: MailUnsubscribeResult,
-    pub page_mailbox_unsubscribe: MailUnsubscribeResult,
-    pub cancelled_count: usize,
-    pub remaining_count: usize,
-    pub page_status: WikiPageStatus,
-    pub next_action: String,
-}
-
-#[derive(Clone, Debug, Serialize)]
-pub struct PageRoleAssignResult {
-    pub schema_version: u32,
-    pub status: String,
-    pub operation: String,
-    pub page: PageParticipantReference,
-    pub role_address: String,
-    pub subscription: MailSubscribeResult,
-    pub page_status: WikiPageStatus,
-}
-
-#[derive(Clone, Debug, Serialize)]
-pub struct MailboxCount {
-    pub address: String,
-    pub surface: String,
-    pub total_count: usize,
-    pub actionable_count: usize,
-    pub unread_count: usize,
-    pub archived_count: usize,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -878,10 +491,15 @@ pub struct TalkAppendRequest {
     pub kind: String,
     pub subject: String,
     #[serde(default)]
+    pub operation_id: Option<String>,
+    #[serde(default)]
+    pub delivery_mode: TalkDeliveryMode,
+    #[serde(default)]
     pub thread_id: Option<String>,
     #[serde(default)]
     pub reply_to: Option<String>,
     pub from: String,
+    #[serde(default)]
     pub to: Vec<String>,
     #[serde(default)]
     pub cc: Vec<String>,
@@ -890,6 +508,19 @@ pub struct TalkAppendRequest {
     pub attachments: Vec<TalkAttachmentInput>,
     #[serde(default)]
     pub allow_tombstoned: bool,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum TalkDeliveryMode {
+    LabelsOnly,
+    Mail,
+}
+
+impl Default for TalkDeliveryMode {
+    fn default() -> Self {
+        Self::LabelsOnly
+    }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -928,21 +559,14 @@ struct TalkMessageTarget {
     page_id: String,
 }
 
+#[cfg(test)]
 #[derive(Clone, Debug)]
 struct TalkFileMessage {
     message_id: String,
     thread_id: String,
     reply_to: Option<String>,
-    page_id: String,
-    route: String,
-    kind: String,
     subject: String,
-    excerpt: String,
     attachments: Vec<TalkAttachmentRecord>,
-    created_at: String,
-    source: String,
-    source_path: String,
-    body_markdown: String,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -961,282 +585,32 @@ pub struct TalkAppendResult {
     pub subject: String,
     pub created_at: String,
     pub source: String,
+    pub delivery_mode: TalkDeliveryMode,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub mail_delivery: Option<TalkMailDeliveryResult>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub attachments: Vec<TalkAttachmentRecord>,
     pub attachment_count: usize,
-    pub deliveries: Vec<DeliveryState>,
-    pub notifications: Vec<NotificationRecord>,
-    pub render_required: bool,
-    pub next_action: String,
-    pub repair_hints: Vec<String>,
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct DeliveryRecord {
-    pub schema_version: u32,
-    pub message_id: String,
-    pub thread_id: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub reply_to: Option<String>,
-    pub page_id: String,
-    pub route: String,
-    pub kind: String,
-    pub subject: String,
-    pub excerpt: String,
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub attachments: Vec<TalkAttachmentRecord>,
-    #[serde(default)]
-    pub attachment_count: usize,
-    pub recipient: String,
-    pub state: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub snoozed_until: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub claimed_by: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub claimed_at: Option<String>,
-    pub created_at: String,
-    pub source: String,
-}
-
-#[derive(Clone, Debug, Serialize)]
-pub struct MailClaimResult {
-    pub schema_version: u32,
-    pub status: String,
-    pub operation: String,
-    pub message_id: String,
-    pub recipient: String,
-    pub claimed_by: String,
-    pub state: String,
-    pub evidence: Vec<Evidence>,
     pub render_required: bool,
     pub next_action: String,
     pub repair_hints: Vec<String>,
 }
 
 #[derive(Clone, Debug, Serialize)]
-pub struct MailMarkResult {
-    pub schema_version: u32,
+pub struct TalkMailDeliveryResult {
     pub status: String,
-    pub operation: String,
-    pub message_id: String,
-    pub recipient: String,
-    pub state: String,
-    pub snoozed_until: Option<String>,
-    pub evidence: Vec<Evidence>,
-    pub render_required: bool,
-    pub next_action: String,
-    pub repair_hints: Vec<String>,
-}
-
-#[derive(Clone, Debug, Serialize)]
-pub struct MailMarkAllResult {
-    pub schema_version: u32,
-    pub status: String,
-    pub operation: String,
-    pub message_id: String,
-    pub state: String,
-    pub recipients: Vec<String>,
-    pub changed_delivery_count: usize,
-    pub before: MailMarkAllCounts,
-    pub after: MailMarkAllCounts,
-    pub evidence: Vec<Evidence>,
-    pub render_required: bool,
-    pub next_action: String,
-    pub repair_hints: Vec<String>,
-}
-
-#[derive(Clone, Debug, Serialize, Default)]
-pub struct MailMarkAllCounts {
-    pub delivery_count: usize,
-    pub unread_count: usize,
-    pub open_delivery_count: usize,
-    pub terminal_count: usize,
-}
-
-#[derive(Clone, Debug, Serialize)]
-pub struct DeliveryState {
-    pub recipient: String,
-    pub state: String,
-}
-
-#[derive(Clone, Debug, Serialize)]
-pub struct InboxResult {
-    pub schema_version: u32,
-    pub status: String,
-    pub operation: String,
-    pub surface: String,
-    pub message_count: usize,
-    pub actionable_count: usize,
-    pub unread_count: usize,
-    pub archived_count: usize,
-    pub mailbox: MailboxCount,
-    pub messages: Vec<DeliveryRecord>,
-    pub next_action: String,
-}
-
-#[derive(Clone, Debug, Serialize)]
-pub struct MailReadResult {
-    pub schema_version: u32,
-    pub status: String,
-    pub operation: String,
-    pub surface: String,
-    pub resolved_by: String,
+    pub acceptance: Option<String>,
+    pub attempt_count: usize,
+    pub attempts: Vec<TalkMailDeliveryAttempt>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub message_id: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub thread_id: Option<String>,
-    pub message_count: usize,
-    pub delivery_count: usize,
-    pub messages: Vec<MailReadMessage>,
-    pub next_action: String,
-    pub repair_hints: Vec<String>,
+    pub error: Option<String>,
 }
 
 #[derive(Clone, Debug, Serialize)]
-pub struct MailReadMessage {
-    pub message_id: String,
-    pub thread_id: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub reply_to: Option<String>,
-    pub page_id: String,
-    pub route: String,
-    pub kind: String,
-    pub subject: String,
-    pub excerpt: String,
-    pub attachments: Vec<TalkAttachmentRecord>,
-    pub attachment_count: usize,
-    pub created_at: String,
-    pub source: String,
-    pub source_path: String,
-    pub body_markdown: String,
-    pub deliveries: Vec<DeliveryState>,
-}
-
-#[derive(Clone, Debug, Serialize)]
-pub struct AgentInboxResult {
-    pub schema_version: u32,
-    pub status: String,
-    pub operation: String,
-    pub surface: String,
-    pub agent_id: String,
-    pub message_count: usize,
-    pub actionable_count: usize,
-    pub claimable_count: usize,
-    pub unread_count: usize,
-    pub thread_count: usize,
-    pub notification_count: usize,
-    pub pages_requiring_action: usize,
-    pub summary: AgentInboxSummary,
-    pub owned_addresses: Vec<String>,
-    pub subscribed_addresses: Vec<String>,
-    pub effective_mailboxes: Vec<String>,
-    pub addresses: Vec<String>,
-    pub subscriptions: Vec<MailSubscriptionSummary>,
-    pub mailboxes: Vec<MailboxCount>,
-    pub pages: Vec<AgentInboxPageSummary>,
-    pub threads: Vec<AgentInboxThreadSummary>,
-    pub messages: Vec<DeliveryRecord>,
-    pub notifications: Vec<NotificationRecord>,
-    pub next_action: String,
-}
-
-#[derive(Clone, Debug, Serialize)]
-pub struct AgentInboxSummary {
-    pub actionable_count: usize,
-    pub claimable_count: usize,
-    pub unread_count: usize,
-    pub message_count: usize,
-    pub thread_count: usize,
-    pub actionable_thread_count: usize,
-    pub claimable_thread_count: usize,
-    pub notification_count: usize,
-    pub notification_thread_count: usize,
-    pub pages_with_open_mail_count: usize,
-    pub pages_requiring_action: usize,
-}
-
-#[derive(Clone, Debug, Serialize)]
-pub struct AgentInboxPageSummary {
-    pub id: String,
-    pub title: String,
-    pub route: String,
-    pub state: String,
-    pub next_action: String,
-    pub actionable_count: usize,
-    pub claimable_count: usize,
-    pub unread_count: usize,
-    pub message_count: usize,
-}
-
-#[derive(Clone, Debug, Serialize)]
-pub struct AgentInboxThreadSummary {
-    pub thread_id: String,
-    pub message_id: String,
-    pub page_id: String,
-    pub route: String,
-    pub kind: String,
-    pub subject: String,
-    pub excerpt: String,
-    pub created_at: String,
-    pub delivery_count: usize,
-    pub actionable_delivery_count: usize,
-    pub claimable_delivery_count: usize,
-    pub unread_delivery_count: usize,
-    pub notification_count: usize,
-    pub attachment_count: usize,
-    pub recipients: Vec<DeliveryState>,
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct NotificationRecord {
-    pub schema_version: u32,
-    pub notification_id: String,
-    pub agent_id: String,
-    #[serde(default)]
+pub struct TalkMailDeliveryAttempt {
     pub recipient: String,
-    #[serde(default)]
-    pub agent_address: String,
-    #[serde(default)]
-    pub delivery_recipient: String,
-    pub mailbox: String,
-    pub message_id: String,
-    pub thread_id: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub reply_to: Option<String>,
-    pub page_id: String,
-    #[serde(default)]
-    pub route: String,
-    pub kind: String,
-    #[serde(default)]
-    pub subject: String,
-    #[serde(default)]
-    pub excerpt: String,
-    #[serde(default)]
-    pub attachment_count: usize,
-    pub urgency: String,
-    pub cursor: String,
-    pub created_at: String,
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct NotificationAttempt {
-    pub schema_version: u32,
-    pub agent_id: String,
-    pub notification_id: String,
-    pub state: String,
-    pub at: String,
-}
-
-#[derive(Clone, Debug, Serialize)]
-pub struct NotificationPollResult {
-    pub schema_version: u32,
+    pub delivery_id: String,
     pub status: String,
-    pub operation: String,
-    pub surface: String,
-    pub notification_count: usize,
-    pub notifications: Vec<NotificationRecord>,
-    pub next_action: String,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -1311,8 +685,6 @@ pub struct WikiStatusResult {
     pub page_count: usize,
     pub source_page_count: usize,
     pub generated_page_count: usize,
-    pub agents_summary: AgentsSummary,
-    pub mail_summary: MailSummary,
     pub publish: PublishStatus,
     pub validation: WikiStatusValidation,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -1373,13 +745,6 @@ impl WikiCore {
 
     pub fn ensure_runtime_dirs(&self) -> Result<()> {
         self.paths.ensure_v0_dirs()
-    }
-
-    fn acquire_mail_mutation_lock(&self) -> Result<FileMutationLock> {
-        acquire_file_mutation_lock(
-            &self.paths.context_engine.join("mail/.mutation.lock"),
-            "mail mutation",
-        )
     }
 
     pub fn pages(&self) -> Result<Vec<PageRecord>> {
@@ -1456,8 +821,6 @@ impl WikiCore {
             source_page_count,
             generated_page_count,
             pages,
-            agents_summary: self.agents_summary()?,
-            mail_summary: self.mail_summary()?,
             publish_fingerprint: fingerprint,
         })
     }
@@ -1569,7 +932,6 @@ impl WikiCore {
             flags: status.flags.clone(),
             page_status: status.clone(),
             handles: status.handles.clone(),
-            mail: status.mail.clone(),
             files: PageOpenFiles {
                 source: display_under_root(&source, &self.paths.root),
                 talk: display_under_root(&talk, &self.paths.root),
@@ -1645,8 +1007,6 @@ impl WikiCore {
                 },
                 proposal_required,
                 policy_reason,
-                curator_address: format!("role://{}.curator", record.id),
-                page_mailbox: format!("mailbox://page/{}", record.id),
             },
             allowed_actions: page_allowed_actions(&status.state, status.flags.rendered),
             next_action: status.next_action,
@@ -1821,6 +1181,79 @@ impl WikiCore {
             asset_count: assets.len(),
             next_action: next_action.to_string(),
             assets,
+        })
+    }
+
+    pub fn list_references(&self, reference: Option<&str>) -> Result<ReferenceListResult> {
+        self.ensure_runtime_dirs()?;
+        let reference_index_path = self.paths.site.join(".1context/reference-index.json");
+        let reference_index_display = display_under_root(&reference_index_path, &self.paths.root);
+        let page_status = reference.map(|page| self.page_status(page)).transpose()?;
+        let page = page_status.as_ref().map(|status| PageAssetPage {
+            id: status.id.clone(),
+            route: status.route.clone(),
+            title: status.title.clone(),
+        });
+
+        if !reference_index_path.is_file() {
+            return Ok(ReferenceListResult {
+                schema_version: 1,
+                status: "missing".to_string(),
+                operation: "wiki.reference.list".to_string(),
+                surface: "wiki_references".to_string(),
+                page,
+                reference_index_path: reference_index_display,
+                reference_count: 0,
+                asset_count: 0,
+                link_count: 0,
+                code_block_count: 0,
+                citation_count: 0,
+                assets: vec![],
+                links: vec![],
+                code_blocks: vec![],
+                citations: vec![],
+                next_action: "publish".to_string(),
+                repair_hints: vec![
+                    "Run wiki.publish to generate user-wiki/site/.1context/reference-index.json."
+                        .to_string(),
+                ],
+            });
+        }
+
+        let index: ReferenceIndexFile =
+            serde_json::from_slice(&fs::read(&reference_index_path)?)
+                .with_context(|| format!("parse {}", reference_index_path.display()))?;
+        let mut assets = index.assets;
+        let mut links = index.links;
+        let mut code_blocks = index.code_blocks;
+        let mut citations = index.citations;
+        if let Some(status) = &page_status {
+            assets.retain(|value| reference_record_matches_page(value, &status.id, &status.route));
+            links.retain(|value| reference_record_matches_page(value, &status.id, &status.route));
+            code_blocks
+                .retain(|value| reference_record_matches_page(value, &status.id, &status.route));
+            citations
+                .retain(|value| reference_record_matches_page(value, &status.id, &status.route));
+        }
+        let reference_count = assets.len() + links.len() + code_blocks.len() + citations.len();
+        Ok(ReferenceListResult {
+            schema_version: 1,
+            status: "ok".to_string(),
+            operation: "wiki.reference.list".to_string(),
+            surface: "wiki_references".to_string(),
+            page,
+            reference_index_path: reference_index_display,
+            reference_count,
+            asset_count: assets.len(),
+            link_count: links.len(),
+            code_block_count: code_blocks.len(),
+            citation_count: citations.len(),
+            assets,
+            links,
+            code_blocks,
+            citations,
+            next_action: "none".to_string(),
+            repair_hints: vec![],
         })
     }
 
@@ -2266,8 +1699,6 @@ impl WikiCore {
             page_count: inventory.page_count,
             source_page_count: inventory.source_page_count,
             generated_page_count: inventory.generated_page_count,
-            agents_summary: inventory.agents_summary,
-            mail_summary: inventory.mail_summary,
             publish,
             validation: WikiStatusValidation {
                 status: validation.status,
@@ -2801,1071 +2232,8 @@ impl WikiCore {
         })
     }
 
-    pub fn register_agent(
-        &self,
-        thread_id: &str,
-        roles: Vec<String>,
-        capabilities: Vec<String>,
-        ttl_seconds: i64,
-    ) -> Result<AgentRegisterResult> {
-        self.ensure_runtime_dirs()?;
-        validate_positive_ttl_seconds("agent", ttl_seconds)?;
-        let roles = roles
-            .into_iter()
-            .collect::<BTreeSet<_>>()
-            .into_iter()
-            .collect::<Vec<_>>();
-        let capabilities = capabilities
-            .into_iter()
-            .collect::<BTreeSet<_>>()
-            .into_iter()
-            .collect::<Vec<_>>();
-        for role in &roles {
-            validate_address(role)?;
-        }
-        let agent_id = agent_id_for_thread(thread_id);
-        if let Some(entry) = self.agent_directory_entries()?.get(&agent_id) {
-            match entry.liveness.state.as_str() {
-                "retired" => {
-                    return Err(anyhow!(
-                        "agent explicitly retired: {agent_id}; register a new thread/session instead of reviving a retired identity"
-                    ));
-                }
-                _ => {
-                    return Err(anyhow!(
-                        "agent already registered: {agent_id}; use agent-identify to refresh or merge roles and capabilities"
-                    ));
-                }
-            }
-        }
-        let primary = agent_primary_address(thread_id);
-        let mut addresses = vec![primary];
-        addresses.extend(roles.iter().cloned());
-        let record = AgentRecord {
-            schema_version: 1,
-            event: "agent.registered".to_string(),
-            agent_id: agent_id.clone(),
-            at: now_rfc3339(),
-            addresses: addresses.clone(),
-            roles,
-            capabilities,
-            lease_expires_at: (Utc::now() + chrono::Duration::seconds(ttl_seconds))
-                .to_rfc3339_opts(SecondsFormat::Secs, true),
-            transport: BTreeMap::from([
-                ("kind".to_string(), "codex-thread".to_string()),
-                ("thread_id".to_string(), thread_id.to_string()),
-            ]),
-            reason: None,
-        };
-        append_jsonl(&self.agent_events_path(), &record)?;
-        let current = self.current_agents()?;
-        write_json_pretty(&self.current_agents_path(), &current)?;
-        let mailboxes = addresses
-            .iter()
-            .map(|address| {
-                let messages = self.mailbox(address)?;
-                Ok(MailboxCount {
-                    address: address.clone(),
-                    surface: mailbox_surface(address),
-                    total_count: messages.len(),
-                    actionable_count: messages
-                        .iter()
-                        .filter(|message| mail_delivery_is_actionable(message))
-                        .count(),
-                    unread_count: messages
-                        .iter()
-                        .filter(|message| message.state == "unread")
-                        .count(),
-                    archived_count: messages
-                        .iter()
-                        .filter(|message| message.state == "archived")
-                        .count(),
-                })
-            })
-            .collect::<Result<Vec<_>>>()?;
-        Ok(AgentRegisterResult {
-            schema_version: 1,
-            status: "registered".to_string(),
-            operation: "wiki.agent.register".to_string(),
-            agent_id,
-            primary_address: addresses.first().cloned().unwrap_or_default(),
-            addresses,
-            mailboxes,
-        })
-    }
-
-    pub fn identify_agent(
-        &self,
-        thread_id: &str,
-        roles: Vec<String>,
-        capabilities: Vec<String>,
-        ttl_seconds: i64,
-    ) -> Result<AgentIdentifyResult> {
-        self.ensure_runtime_dirs()?;
-        validate_positive_ttl_seconds("agent", ttl_seconds)?;
-        for role in &roles {
-            validate_address(role)?;
-        }
-        let agent_id = agent_id_for_thread(thread_id);
-        let entries = self.agent_directory_entries()?;
-        let existing = entries.get(&agent_id).cloned();
-        let liveness_before = existing.as_ref().map(|entry| entry.liveness.state.clone());
-        if existing
-            .as_ref()
-            .is_some_and(|entry| entry.liveness.state == "retired")
-        {
-            let status = self.agent_status(&agent_id)?;
-            let addresses = status
-                .agent
-                .as_ref()
-                .map(|agent| agent.addresses.clone())
-                .unwrap_or_default();
-            let primary_address = status
-                .agent
-                .as_ref()
-                .and_then(|agent| agent.primary_address.clone());
-            return Ok(AgentIdentifyResult {
-                schema_version: 1,
-                status: "retired".to_string(),
-                action: "retired".to_string(),
-                operation: "wiki.agent.identify".to_string(),
-                agent_id,
-                thread_id: thread_id.to_string(),
-                primary_address,
-                addresses,
-                liveness_before,
-                liveness_after: "retired".to_string(),
-                agent: status.agent,
-                mailboxes: status.mailboxes,
-                subscriptions: status.subscriptions,
-                evidence: Vec::new(),
-                next_action: "agent_register_new_thread".to_string(),
-                repair_hints: vec![
-                    "This agent was explicitly retired; register a new thread/session instead of silently reviving it.".to_string(),
-                ],
-            });
-        }
-
-        let mut role_set = existing
-            .as_ref()
-            .map(|entry| entry.record.roles.iter().cloned().collect::<BTreeSet<_>>())
-            .unwrap_or_default();
-        role_set.extend(roles);
-        let roles = role_set.into_iter().collect::<Vec<_>>();
-        let mut capability_set = existing
-            .as_ref()
-            .map(|entry| {
-                entry
-                    .record
-                    .capabilities
-                    .iter()
-                    .cloned()
-                    .collect::<BTreeSet<_>>()
-            })
-            .unwrap_or_default();
-        capability_set.extend(capabilities);
-        let capabilities = capability_set.into_iter().collect::<Vec<_>>();
-        let mut addresses = vec![agent_primary_address(thread_id)];
-        addresses.extend(roles.iter().cloned());
-        let record = AgentRecord {
-            schema_version: 1,
-            event: if existing.is_some() {
-                "agent.identified".to_string()
-            } else {
-                "agent.registered".to_string()
-            },
-            agent_id: agent_id.clone(),
-            at: now_rfc3339(),
-            addresses,
-            roles,
-            capabilities,
-            lease_expires_at: (Utc::now() + chrono::Duration::seconds(ttl_seconds))
-                .to_rfc3339_opts(SecondsFormat::Secs, true),
-            transport: BTreeMap::from([
-                ("kind".to_string(), "codex-thread".to_string()),
-                ("thread_id".to_string(), thread_id.to_string()),
-            ]),
-            reason: None,
-        };
-        append_jsonl(&self.agent_events_path(), &record)?;
-        write_json_pretty(&self.current_agents_path(), &self.current_agents()?)?;
-        let status = self.agent_status(&agent_id)?;
-        let liveness_after = status
-            .agent
-            .as_ref()
-            .map(|agent| agent.liveness.clone())
-            .unwrap_or_else(|| "unknown".to_string());
-        let next_action = status.next_action.clone();
-        let action = match liveness_before.as_deref() {
-            None => "registered",
-            Some("stale") => "refreshed",
-            Some("active") => "identified",
-            _ => "updated",
-        }
-        .to_string();
-        let addresses = status
-            .agent
-            .as_ref()
-            .map(|agent| agent.addresses.clone())
-            .unwrap_or_default();
-        let primary_address = status
-            .agent
-            .as_ref()
-            .and_then(|agent| agent.primary_address.clone());
-        Ok(AgentIdentifyResult {
-            schema_version: 1,
-            status: action.clone(),
-            action,
-            operation: "wiki.agent.identify".to_string(),
-            agent_id,
-            thread_id: thread_id.to_string(),
-            primary_address,
-            addresses,
-            liveness_before,
-            liveness_after,
-            agent: status.agent,
-            mailboxes: status.mailboxes,
-            subscriptions: status.subscriptions,
-            evidence: vec![Evidence {
-                path: display_under_root(&self.agent_events_path(), &self.paths.root),
-                status: "appended".to_string(),
-            }],
-            next_action,
-            repair_hints: Vec::new(),
-        })
-    }
-
-    pub fn heartbeat_agent(
-        &self,
-        agent_id: &str,
-        lease_extend_seconds: i64,
-    ) -> Result<AgentRegisterResult> {
-        validate_positive_ttl_seconds("agent heartbeat", lease_extend_seconds)?;
-        let mut record = self.require_active_agent(agent_id)?;
-        record.event = "agent.heartbeat".to_string();
-        record.at = now_rfc3339();
-        record.lease_expires_at = (Utc::now() + chrono::Duration::seconds(lease_extend_seconds))
-            .to_rfc3339_opts(SecondsFormat::Secs, true);
-        append_jsonl(&self.agent_events_path(), &record)?;
-        write_json_pretty(&self.current_agents_path(), &self.current_agents()?)?;
-        Ok(AgentRegisterResult {
-            schema_version: 1,
-            status: "heartbeat".to_string(),
-            operation: "wiki.agent.heartbeat".to_string(),
-            agent_id: agent_id.to_string(),
-            primary_address: record.addresses.first().cloned().unwrap_or_default(),
-            addresses: record.addresses,
-            mailboxes: Vec::new(),
-        })
-    }
-
-    pub fn retire_agent(&self, agent_id: &str, reason: &str) -> Result<OperationReceipt> {
-        let mut current = self.current_agents_with_stale(true)?;
-        let mut record = current
-            .remove(agent_id)
-            .ok_or_else(|| anyhow!("unknown agent: {agent_id}"))?;
-        record.event = "agent.retired".to_string();
-        record.at = now_rfc3339();
-        record.reason = Some(reason.to_string());
-        append_jsonl(&self.agent_events_path(), &record)?;
-        write_json_pretty(&self.current_agents_path(), &self.current_agents()?)?;
-        Ok(OperationReceipt {
-            schema_version: 1,
-            status: "retired".to_string(),
-            operation: "wiki.agent.retire".to_string(),
-            id: agent_id.to_string(),
-            route: None,
-            page_type: None,
-            collection: None,
-            evidence: vec![Evidence {
-                path: display_under_root(&self.agent_events_path(), &self.paths.root),
-                status: "appended".to_string(),
-            }],
-            page_status: None,
-            edit: None,
-            hashes: None,
-            link_impact: None,
-            render_required: false,
-            next_action: "none".to_string(),
-            repair_hints: Vec::new(),
-        })
-    }
-
-    pub fn agent_list(
-        &self,
-        include_stale: bool,
-        include_retired: bool,
-    ) -> Result<AgentListResult> {
-        let subscriptions_by_agent = self.active_subscriptions_by_agent()?;
-        let mut agents = self
-            .agent_directory_entries()?
-            .into_values()
-            .filter(|entry| {
-                entry.liveness.state == "active"
-                    || (include_stale && entry.liveness.state == "stale")
-                    || (include_retired && entry.liveness.state == "retired")
-            })
-            .map(|entry| self.agent_directory_summary(entry, &subscriptions_by_agent))
-            .collect::<Result<Vec<_>>>()?;
-        agents.sort_by(|a, b| {
-            agent_liveness_sort_key(&a.liveness)
-                .cmp(&agent_liveness_sort_key(&b.liveness))
-                .then_with(|| b.last_seen_at.cmp(&a.last_seen_at))
-                .then_with(|| a.agent_id.cmp(&b.agent_id))
-        });
-        Ok(AgentListResult {
-            schema_version: 1,
-            status: "ok".to_string(),
-            operation: "wiki.agent.list".to_string(),
-            surface: "agent_list".to_string(),
-            counts: agent_directory_counts(&agents),
-            agents,
-        })
-    }
-
-    pub fn agent_status(&self, agent_id: &str) -> Result<AgentStatusResult> {
-        let subscriptions_by_agent = self.active_subscriptions_by_agent()?;
-        let subscriptions = subscriptions_by_agent
-            .get(agent_id)
-            .cloned()
-            .unwrap_or_default();
-        let agent_liveness = self.agent_liveness_index()?;
-        let enriched = subscriptions
-            .iter()
-            .cloned()
-            .map(|subscription| enrich_mail_subscription(subscription, &agent_liveness))
-            .collect::<Vec<_>>();
-        let entries = self.agent_directory_entries()?;
-        let Some(entry) = entries.get(agent_id).cloned() else {
-            return Ok(AgentStatusResult {
-                schema_version: 1,
-                status: "missing".to_string(),
-                operation: "wiki.agent.status".to_string(),
-                surface: "agent_status".to_string(),
-                exists: false,
-                agent: None,
-                mailboxes: Vec::new(),
-                subscriptions: enriched,
-                next_action: "agent_register".to_string(),
-            });
-        };
-        let summary = self.agent_directory_summary(entry, &subscriptions_by_agent)?;
-        let mailboxes = self.agent_mailbox_counts(&summary.owned_addresses, &subscriptions)?;
-        let next_action = summary.next_action.clone();
-        Ok(AgentStatusResult {
-            schema_version: 1,
-            status: "ok".to_string(),
-            operation: "wiki.agent.status".to_string(),
-            surface: "agent_status".to_string(),
-            exists: true,
-            agent: Some(summary),
-            mailboxes,
-            subscriptions: enriched,
-            next_action,
-        })
-    }
-
-    pub fn agent_whoami(
-        &self,
-        thread_id: Option<&str>,
-        agent_id: Option<&str>,
-    ) -> Result<AgentWhoamiResult> {
-        if thread_id.is_none() && agent_id.is_none() {
-            return Err(anyhow!("whoami requires --thread-id or --agent-id"));
-        }
-        let subscriptions_by_agent = self.active_subscriptions_by_agent()?;
-        let mut matches = self
-            .agent_directory_entries()?
-            .into_values()
-            .filter(|entry| {
-                agent_id.is_none_or(|agent_id| entry.record.agent_id == agent_id)
-                    && thread_id.is_none_or(|thread_id| {
-                        entry
-                            .record
-                            .transport
-                            .get("thread_id")
-                            .is_some_and(|candidate| candidate == thread_id)
-                    })
-            })
-            .map(|entry| self.agent_directory_summary(entry, &subscriptions_by_agent))
-            .collect::<Result<Vec<_>>>()?;
-        matches.sort_by(|a, b| {
-            agent_liveness_sort_key(&a.liveness)
-                .cmp(&agent_liveness_sort_key(&b.liveness))
-                .then_with(|| b.last_seen_at.cmp(&a.last_seen_at))
-        });
-        let next_action = matches
-            .first()
-            .map(|agent| agent.next_action.clone())
-            .unwrap_or_else(|| "agent_register".to_string());
-        Ok(AgentWhoamiResult {
-            schema_version: 1,
-            status: if matches.is_empty() { "missing" } else { "ok" }.to_string(),
-            operation: "wiki.agent.whoami".to_string(),
-            surface: "agent_whoami".to_string(),
-            resolved_by: if thread_id.is_some() {
-                "thread_id".to_string()
-            } else {
-                "agent_id".to_string()
-            },
-            thread_id: thread_id.map(ToString::to_string),
-            agent_id: agent_id.map(ToString::to_string),
-            matches,
-            next_action,
-        })
-    }
-
-    pub fn subscribe_mail(
-        &self,
-        agent_id: &str,
-        address: &str,
-        relation: &str,
-        kinds: Vec<String>,
-        ttl_seconds: i64,
-    ) -> Result<MailSubscribeResult> {
-        self.ensure_runtime_dirs()?;
-        let agent = self.require_active_agent(agent_id)?;
-        let address = self.normalize_mail_recipient(address)?;
-        let _lock = self.acquire_mail_mutation_lock()?;
-        if address.starts_with("list://") && self.mail_lists(None, Some(&address))?.lists.is_empty()
-        {
-            return Err(anyhow!(
-                "unknown list {address}; call wiki.list.create first"
-            ));
-        }
-        if !mail_subscription_relation_is_allowed(relation) {
-            return Err(anyhow!(
-                "invalid mail subscription relation {relation}; expected watcher, member, assignee, or subscriber"
-            ));
-        }
-        if ttl_seconds <= 0 {
-            return Err(anyhow!(
-                "invalid mail subscription ttl {ttl_seconds}; expected a positive number of seconds"
-            ));
-        }
-        let kinds = normalize_subscription_kinds(kinds)?;
-        let backfill_kind_filter = MailKindFilter::from_kinds(&kinds);
-        let existing_mail =
-            self.inbox_with_kind_filter(&address, false, false, Some(&backfill_kind_filter))?;
-        let created_at = now_rfc3339();
-        let subscriber = agent
-            .addresses
-            .first()
-            .cloned()
-            .unwrap_or_else(|| agent_id.to_string());
-        let lease_expires_at = (Utc::now() + chrono::Duration::seconds(ttl_seconds))
-            .to_rfc3339_opts(SecondsFormat::Secs, true);
-        let next_action = if existing_mail.mailbox.actionable_count > 0 {
-            "agent_inbox"
-        } else {
-            "none"
-        }
-        .to_string();
-
-        let mut existing_matches = self
-            .active_mail_subscriptions()?
-            .into_iter()
-            .filter(|subscription| {
-                subscription.agent_id == agent_id
-                    && subscription.address == address
-                    && subscription.relation == relation
-                    && subscription_kinds_equal(&subscription.kinds, &kinds)
-            })
-            .collect::<Vec<_>>();
-        existing_matches.sort_by(|a, b| {
-            a.created_at
-                .cmp(&b.created_at)
-                .then_with(|| a.subscription_id.cmp(&b.subscription_id))
-        });
-
-        let path = self.mail_subscriptions_path();
-        if let Some(mut record) = existing_matches.first().cloned() {
-            let deduplicated_count = existing_matches.len().saturating_sub(1);
-            for duplicate in existing_matches.iter().skip(1) {
-                let mut cancelled = duplicate.clone();
-                cancelled.event = "mail.subscription.cancelled".to_string();
-                cancelled.state = "cancelled".to_string();
-                cancelled.created_at = created_at.clone();
-                cancelled.lease_expires_at = created_at.clone();
-                append_jsonl(&path, &cancelled)?;
-            }
-            record.event = "mail.subscription.renewed".to_string();
-            record.subscriber = subscriber.clone();
-            record.kinds = kinds.clone();
-            record.created_at = created_at;
-            record.lease_expires_at = lease_expires_at.clone();
-            append_jsonl(&path, &record)?;
-            return Ok(MailSubscribeResult {
-                schema_version: 1,
-                status: "renewed".to_string(),
-                operation: "wiki.mail.subscribe".to_string(),
-                subscription_id: record.subscription_id,
-                agent_id: agent_id.to_string(),
-                subscriber,
-                address,
-                relation: relation.to_string(),
-                kinds,
-                lease_expires_at,
-                backfill: MailSubscribeBackfill {
-                    surfaced_message_count: existing_mail.mailbox.total_count,
-                    surfaced_unread_count: existing_mail.mailbox.unread_count,
-                    notification_count: 0,
-                    notification_policy: "future_deliveries_only".to_string(),
-                },
-                deduplicated_count,
-                evidence: vec![Evidence {
-                    path: display_under_root(&path, &self.paths.root),
-                    status: "appended".to_string(),
-                }],
-                next_action,
-            });
-        }
-
-        let id_stamp = now_file_stamp();
-        let kind_key = if kinds.is_empty() {
-            "all".to_string()
-        } else {
-            kinds.join(",")
-        };
-        let subscription_id = format!(
-            "sub_{}",
-            short_hash(&format!(
-                "{agent_id}:{subscriber}:{address}:{relation}:{kind_key}:{id_stamp}"
-            ))
-        );
-        let record = MailSubscriptionRecord {
-            schema_version: 1,
-            event: "mail.subscription.created".to_string(),
-            subscription_id: subscription_id.clone(),
-            agent_id: agent_id.to_string(),
-            subscriber: subscriber.clone(),
-            address: address.clone(),
-            relation: relation.to_string(),
-            kinds: kinds.clone(),
-            state: "active".to_string(),
-            created_at,
-            lease_expires_at: lease_expires_at.clone(),
-        };
-        append_jsonl(&path, &record)?;
-        Ok(MailSubscribeResult {
-            schema_version: 1,
-            status: "subscribed".to_string(),
-            operation: "wiki.mail.subscribe".to_string(),
-            subscription_id,
-            agent_id: agent_id.to_string(),
-            subscriber,
-            address,
-            relation: relation.to_string(),
-            kinds,
-            lease_expires_at,
-            backfill: MailSubscribeBackfill {
-                surfaced_message_count: existing_mail.mailbox.total_count,
-                surfaced_unread_count: existing_mail.mailbox.unread_count,
-                notification_count: 0,
-                notification_policy: "future_deliveries_only".to_string(),
-            },
-            deduplicated_count: 0,
-            evidence: vec![Evidence {
-                path: display_under_root(&path, &self.paths.root),
-                status: "appended".to_string(),
-            }],
-            next_action,
-        })
-    }
-
-    pub fn unsubscribe_mail(
-        &self,
-        agent_id: &str,
-        address: &str,
-        relation: Option<&str>,
-        kinds: Vec<String>,
-    ) -> Result<MailUnsubscribeResult> {
-        self.ensure_runtime_dirs()?;
-        self.require_active_agent(agent_id)?;
-        let address = self.normalize_mail_recipient(address)?;
-        let _lock = self.acquire_mail_mutation_lock()?;
-        if let Some(relation) = relation {
-            if !mail_subscription_relation_is_allowed(relation) {
-                return Err(anyhow!(
-                    "invalid mail subscription relation {relation}; expected watcher, member, assignee, or subscriber"
-                ));
-            }
-        }
-        let kinds = normalize_subscription_kinds(kinds)?;
-
-        let mut matches = self
-            .active_mail_subscriptions()?
-            .into_iter()
-            .filter(|subscription| {
-                subscription.agent_id == agent_id
-                    && subscription.address == address
-                    && relation.is_none_or(|relation| subscription.relation == relation)
-                    && (kinds.is_empty() || subscription_kinds_equal(&subscription.kinds, &kinds))
-            })
-            .collect::<Vec<_>>();
-        matches.sort_by(|a, b| a.created_at.cmp(&b.created_at));
-
-        let path = self.mail_subscriptions_path();
-        let cancelled_at = now_rfc3339();
-        for subscription in &matches {
-            let mut record = subscription.clone();
-            record.event = "mail.subscription.cancelled".to_string();
-            record.state = "cancelled".to_string();
-            record.created_at = cancelled_at.clone();
-            record.lease_expires_at = cancelled_at.clone();
-            append_jsonl(&path, &record)?;
-        }
-
-        let remaining_count = self
-            .active_mail_subscriptions()?
-            .into_iter()
-            .filter(|subscription| {
-                subscription.agent_id == agent_id && subscription.address == address
-            })
-            .count();
-        let agent_liveness = self.agent_liveness_index()?;
-        let cancelled = matches
-            .into_iter()
-            .map(|subscription| enrich_mail_subscription(subscription, &agent_liveness))
-            .collect::<Vec<_>>();
-        let cancelled_count = cancelled.len();
-
-        Ok(MailUnsubscribeResult {
-            schema_version: 1,
-            status: if cancelled_count == 0 {
-                "not_found".to_string()
-            } else {
-                "unsubscribed".to_string()
-            },
-            operation: "wiki.mail.unsubscribe".to_string(),
-            agent_id: agent_id.to_string(),
-            address,
-            relation: relation.map(ToString::to_string),
-            kinds,
-            cancelled_count,
-            remaining_count,
-            cancelled,
-            evidence: if cancelled_count == 0 {
-                vec![]
-            } else {
-                vec![Evidence {
-                    path: display_under_root(&path, &self.paths.root),
-                    status: "appended".to_string(),
-                }]
-            },
-            next_action: if remaining_count > 0 {
-                "mail_subscriptions".to_string()
-            } else if cancelled_count == 0 {
-                "mail_subscribe".to_string()
-            } else {
-                "none".to_string()
-            },
-        })
-    }
-
-    pub fn create_list(
-        &self,
-        address: &str,
-        title: Option<String>,
-        description: Option<String>,
-        page_id: Option<String>,
-        owner: Option<String>,
-    ) -> Result<MailListCreateResult> {
-        self.ensure_runtime_dirs()?;
-        validate_list_address(address)?;
-        let owner = owner
-            .as_deref()
-            .map(|owner| self.resolve_owner_address(owner))
-            .transpose()?;
-        let page_id = page_id
-            .map(|page_reference| self.find_page(&page_reference).map(|record| record.id))
-            .transpose()?;
-        let _lock = self.acquire_mail_mutation_lock()?;
-        if let Some(existing) = self
-            .current_mail_lists()?
-            .into_iter()
-            .find(|list| list.address == address)
-        {
-            let member_counts = self.subscription_liveness_counts_by_address()?;
-            return Ok(MailListCreateResult {
-                schema_version: 1,
-                status: "already_exists".to_string(),
-                operation: "wiki.list.create".to_string(),
-                list: mail_list_summary(existing, &member_counts),
-                evidence: vec![Evidence {
-                    path: display_under_root(&self.mail_lists_path(), &self.paths.root),
-                    status: "skipped_existing".to_string(),
-                }],
-            });
-        }
-        let record = MailListRecord {
-            schema_version: 1,
-            event: "mail.list.created".to_string(),
-            address: address.to_string(),
-            title: title.unwrap_or_else(|| title_case(&list_name(address))),
-            description,
-            page_id,
-            owner,
-            state: "active".to_string(),
-            created_at: now_rfc3339(),
-        };
-        let path = self.mail_lists_path();
-        append_jsonl(&path, &record)?;
-        let member_counts = self.subscription_liveness_counts_by_address()?;
-        Ok(MailListCreateResult {
-            schema_version: 1,
-            status: "created".to_string(),
-            operation: "wiki.list.create".to_string(),
-            list: mail_list_summary(record, &member_counts),
-            evidence: vec![Evidence {
-                path: display_under_root(&path, &self.paths.root),
-                status: "appended".to_string(),
-            }],
-        })
-    }
-
-    pub fn mail_lists(
-        &self,
-        page_id: Option<&str>,
-        address: Option<&str>,
-    ) -> Result<MailListsResult> {
-        let page_id = page_id
-            .map(|page_reference| self.find_page(page_reference).map(|record| record.id))
-            .transpose()?;
-        if let Some(address) = address {
-            validate_list_address(address)?;
-        }
-        let member_counts = self.subscription_liveness_counts_by_address()?;
-        let mut lists = self
-            .current_mail_lists()?
-            .into_iter()
-            .filter(|list| {
-                page_id
-                    .as_deref()
-                    .is_none_or(|page_id| list.page_id.as_deref() == Some(page_id))
-                    && address.is_none_or(|address| list.address == address)
-            })
-            .map(|record| mail_list_summary(record, &member_counts))
-            .collect::<Vec<_>>();
-        lists.sort_by(|a, b| a.address.cmp(&b.address));
-        let list_count = lists.len();
-        Ok(MailListsResult {
-            schema_version: 1,
-            status: "ok".to_string(),
-            operation: "wiki.lists".to_string(),
-            surface: "mail_lists".to_string(),
-            list_count,
-            lists,
-            next_action: if list_count == 0 {
-                "list_create".to_string()
-            } else {
-                "none".to_string()
-            },
-        })
-    }
-
-    pub fn list_members(&self, address: &str) -> Result<MailListMembersResult> {
-        validate_list_address(address)?;
-        let agent_liveness = self.agent_liveness_index()?;
-        let subscriptions = self
-            .active_mail_subscriptions()?
-            .into_iter()
-            .filter(|subscription| subscription.address == address)
-            .map(|subscription| enrich_mail_subscription(subscription, &agent_liveness))
-            .collect::<Vec<_>>();
-        let member_counts = self.subscription_liveness_counts_by_address()?;
-        let list = self
-            .current_mail_lists()?
-            .into_iter()
-            .find(|list| list.address == address)
-            .map(|record| mail_list_summary(record, &member_counts));
-        let exists = list.is_some();
-        let member_count = list.as_ref().map_or(0, |list| list.member_count);
-        let active_member_count = list.as_ref().map_or(0, |list| list.active_member_count);
-        let inactive_member_count = list.as_ref().map_or(0, |list| list.inactive_member_count);
-        Ok(MailListMembersResult {
-            schema_version: 1,
-            status: if exists { "ok" } else { "missing" }.to_string(),
-            operation: "wiki.list.members".to_string(),
-            surface: "mail_list_members".to_string(),
-            exists,
-            list,
-            member_count,
-            active_member_count,
-            inactive_member_count,
-            subscriptions,
-            next_action: if exists { "none" } else { "list_create" }.to_string(),
-        })
-    }
-
-    pub fn list_status(&self, address: &str) -> Result<MailListStatusResult> {
-        self.list_status_with_options(address, false, false)
-    }
-
-    pub fn list_status_with_options(
-        &self,
-        address: &str,
-        include_archived: bool,
-        include_snoozed: bool,
-    ) -> Result<MailListStatusResult> {
-        validate_list_address(address)?;
-        let recipient = self.normalize_mail_recipient(address)?;
-        let raw_messages = self.mailbox(&recipient)?;
-        let archived_count = raw_messages
-            .iter()
-            .filter(|message| message.state == "archived")
-            .count();
-        let snoozed_count = raw_messages
-            .iter()
-            .filter(|message| message.state == "snoozed")
-            .count();
-        let future_snoozed_count = raw_messages
-            .iter()
-            .filter(|message| mail_delivery_is_snoozed_until_future(message))
-            .count();
-        let hidden_archived_count = if include_archived { 0 } else { archived_count };
-        let hidden_snoozed_count = if include_snoozed {
-            0
-        } else {
-            future_snoozed_count
-        };
-        let mut audit_flags = Vec::new();
-        if hidden_archived_count > 0 {
-            audit_flags.push("archived_hidden".to_string());
-        }
-        if hidden_snoozed_count > 0 {
-            audit_flags.push("snoozed_hidden".to_string());
-        }
-        let inbox = self.inbox_with_options(&recipient, include_archived, include_snoozed)?;
-        let members = self.list_members(address)?;
-        let next_action = if !members.exists {
-            members.next_action.clone()
-        } else if inbox.actionable_count > 0 {
-            inbox.next_action.clone()
-        } else if hidden_archived_count > 0 || hidden_snoozed_count > 0 {
-            "include_hidden_mail".to_string()
-        } else {
-            "none".to_string()
-        };
-        Ok(MailListStatusResult {
-            schema_version: 1,
-            status: members.status.clone(),
-            operation: "wiki.list.status".to_string(),
-            surface: "mail_list_status".to_string(),
-            exists: members.exists,
-            include_archived,
-            include_snoozed,
-            list: members.list,
-            member_count: members.member_count,
-            active_member_count: members.active_member_count,
-            inactive_member_count: members.inactive_member_count,
-            mailbox: inbox.mailbox,
-            archived_count,
-            snoozed_count,
-            hidden_archived_count,
-            hidden_snoozed_count,
-            has_archived: archived_count > 0,
-            has_snoozed: snoozed_count > 0,
-            audit_flags,
-            subscriptions: members.subscriptions,
-            messages: inbox.messages,
-            next_action,
-        })
-    }
-
-    pub fn watch_page(
-        &self,
-        page: &str,
-        agent_id: &str,
-        list_address: Option<&str>,
-        kinds: Vec<String>,
-        ttl_seconds: i64,
-    ) -> Result<PageWatchResult> {
-        let page_status = self.page_status(page)?;
-        let agent = self.require_active_agent(agent_id)?;
-        let address = list_address
-            .map(str::to_string)
-            .unwrap_or_else(|| format!("list://{}.watchers", page_status.id));
-        validate_list_address(&address)?;
-        let owner = agent.addresses.first().cloned();
-        let list = self.create_list(
-            &address,
-            Some(format!("{} Watchers", page_status.title)),
-            Some(format!("Agents watching {}.", page_status.title)),
-            Some(page_status.id.clone()),
-            owner,
-        )?;
-        let subscription =
-            self.subscribe_mail(agent_id, &address, "watcher", kinds.clone(), ttl_seconds)?;
-        let page_mailbox = format!("mailbox://page/{}", page_status.id);
-        let page_mailbox_subscription = self.subscribe_mail(
-            agent_id,
-            &page_mailbox,
-            "watcher",
-            kinds.clone(),
-            ttl_seconds,
-        )?;
-        let refreshed = self.page_status(&page_status.id)?;
-        let refreshed_list = self
-            .mail_lists(None, Some(&address))?
-            .lists
-            .into_iter()
-            .next()
-            .unwrap_or(list.list);
-        Ok(PageWatchResult {
-            schema_version: 1,
-            status: "watching".to_string(),
-            operation: "wiki.page.watch".to_string(),
-            page: PageParticipantReference {
-                id: page_status.id.clone(),
-                title: page_status.title.clone(),
-                route: page_status.route.clone(),
-            },
-            list_create_status: list.status,
-            list: refreshed_list,
-            subscription,
-            page_mailbox_subscription,
-            unsubscribe_plan: PageWatchUnsubscribePlan {
-                operation: "wiki.page.unwatch".to_string(),
-                agent_id: agent_id.to_string(),
-                page: page_status.id,
-                list_address: address,
-                page_mailbox_address: page_mailbox,
-                relation: "watcher".to_string(),
-                kinds,
-            },
-            page_status: refreshed,
-        })
-    }
-
-    pub fn unwatch_page(
-        &self,
-        page: &str,
-        agent_id: &str,
-        list_address: Option<&str>,
-        kinds: Vec<String>,
-    ) -> Result<PageUnwatchResult> {
-        let page_status = self.page_status(page)?;
-        self.require_active_agent(agent_id)?;
-        let address = list_address
-            .map(str::to_string)
-            .unwrap_or_else(|| format!("list://{}.watchers", page_status.id));
-        validate_list_address(&address)?;
-        let page_mailbox = format!("mailbox://page/{}", page_status.id);
-
-        let list_unsubscribe =
-            self.unsubscribe_mail(agent_id, &address, Some("watcher"), kinds.clone())?;
-        let page_mailbox_unsubscribe =
-            self.unsubscribe_mail(agent_id, &page_mailbox, Some("watcher"), kinds)?;
-        let cancelled_count =
-            list_unsubscribe.cancelled_count + page_mailbox_unsubscribe.cancelled_count;
-        let remaining_count =
-            list_unsubscribe.remaining_count + page_mailbox_unsubscribe.remaining_count;
-        let refreshed = self.page_status(&page_status.id)?;
-        let next_action = if remaining_count > 0 {
-            "mail_subscriptions"
-        } else if cancelled_count == 0 {
-            "page_watch"
-        } else {
-            "none"
-        };
-        Ok(PageUnwatchResult {
-            schema_version: 1,
-            status: if cancelled_count == 0 {
-                "not_found".to_string()
-            } else {
-                "unwatched".to_string()
-            },
-            operation: "wiki.page.unwatch".to_string(),
-            page: PageParticipantReference {
-                id: page_status.id,
-                title: page_status.title,
-                route: page_status.route,
-            },
-            agent_id: agent_id.to_string(),
-            list_address: address,
-            page_mailbox_address: page_mailbox,
-            list_unsubscribe,
-            page_mailbox_unsubscribe,
-            cancelled_count,
-            remaining_count,
-            page_status: refreshed,
-            next_action: next_action.to_string(),
-        })
-    }
-
-    pub fn assign_page_role(
-        &self,
-        page: &str,
-        agent_id: &str,
-        role: &str,
-        kinds: Vec<String>,
-        ttl_seconds: i64,
-    ) -> Result<PageRoleAssignResult> {
-        let page_status = self.page_status(page)?;
-        self.require_active_agent(agent_id)?;
-        let role_address = page_role_address(&page_status.id, role)?;
-        let subscription =
-            self.subscribe_mail(agent_id, &role_address, "assignee", kinds, ttl_seconds)?;
-        let refreshed = self.page_status(&page_status.id)?;
-        Ok(PageRoleAssignResult {
-            schema_version: 1,
-            status: "assigned".to_string(),
-            operation: "wiki.page.assign_role".to_string(),
-            page: PageParticipantReference {
-                id: page_status.id,
-                title: page_status.title,
-                route: page_status.route,
-            },
-            role_address,
-            subscription,
-            page_status: refreshed,
-        })
-    }
-
-    pub fn mail_subscriptions(
-        &self,
-        agent_id: Option<&str>,
-        address: Option<&str>,
-    ) -> Result<MailSubscriptionsResult> {
-        let address = address
-            .map(|address| self.normalize_mail_recipient(address))
-            .transpose()?;
-        let mut subscriptions = self.active_mail_subscriptions()?;
-        if let Some(agent_id) = agent_id {
-            subscriptions.retain(|subscription| subscription.agent_id == agent_id);
-        }
-        if let Some(address) = address.as_deref() {
-            subscriptions.retain(|subscription| subscription.address == address);
-        }
-        let agent_liveness = self.agent_liveness_index()?;
-        let mut subscriptions = subscriptions
-            .into_iter()
-            .map(|subscription| enrich_mail_subscription(subscription, &agent_liveness))
-            .collect::<Vec<_>>();
-        subscriptions.sort_by(|a, b| b.created_at.cmp(&a.created_at));
-        let subscription_count = subscriptions.len();
-        let liveness_counts = mail_subscription_summary_liveness_counts(&subscriptions);
-        Ok(MailSubscriptionsResult {
-            schema_version: 1,
-            status: "ok".to_string(),
-            operation: "wiki.mail.subscriptions".to_string(),
-            surface: "mail_subscriptions".to_string(),
-            subscription_count,
-            liveness_counts,
-            subscriptions,
-            next_action: if subscription_count == 0 {
-                "mail_subscribe".to_string()
-            } else {
-                "none".to_string()
-            },
-        })
-    }
-
     pub fn append_talk(&self, request: TalkAppendRequest) -> Result<TalkAppendResult> {
         self.ensure_runtime_dirs()?;
-        let _mail_lock = self.acquire_mail_mutation_lock()?;
-        validate_address(&request.from)?;
         let record = self
             .pages()?
             .into_iter()
@@ -3886,14 +2254,26 @@ impl WikiCore {
                 record.id
             ));
         }
-        let created_at = now_rfc3339();
-        let stamp = now_file_stamp();
         let subject_slug = slugify(&request.subject);
-        let message_id = format!(
-            "talkmsg_{}_{}",
-            stamp.replace('-', ""),
-            short_hash(&request.subject)
-        );
+        let operation_id = request
+            .operation_id
+            .as_deref()
+            .map(|value| validate_talk_target_id(value, "--operation-id"))
+            .transpose()?;
+        let stamp = operation_id
+            .as_deref()
+            .map(|id| format!("op-{}", short_hash(id)))
+            .unwrap_or_else(now_file_stamp);
+        let message_id = operation_id
+            .as_deref()
+            .map(|id| format!("talkmsg_op_{}", short_hash(id)))
+            .unwrap_or_else(|| {
+                format!(
+                    "talkmsg_{}_{}",
+                    stamp.replace('-', ""),
+                    short_hash(&request.subject)
+                )
+            });
         let default_thread_id = format!("thread_{}_{}", record.id, subject_slug);
         let thread_target =
             self.resolve_talk_thread_target(&record, &request, default_thread_id)?;
@@ -3901,21 +2281,30 @@ impl WikiCore {
         let reply_to = thread_target.reply_to;
         let filename = format!("{stamp}.{}.{}.md", request.kind, subject_slug);
         let source_path = talk_dir.join(filename);
+        let created_at = existing_talk_created_at(&source_path)?.unwrap_or_else(now_rfc3339);
         let mut recipients = request
             .to
             .iter()
             .chain(request.cc.iter())
-            .map(|recipient| self.normalize_talk_recipient(recipient))
-            .collect::<Result<Vec<_>>>()?;
+            .map(|recipient| recipient.trim().to_string())
+            .filter(|recipient| !recipient.is_empty())
+            .collect::<Vec<_>>();
         recipients.sort();
         recipients.dedup();
         let attachments =
             self.copy_talk_attachments(&talk_dir, &record.id, &message_id, &request.attachments)?;
-        let frontmatter_recipients = recipients
-            .iter()
-            .map(|recipient| format!("  - \"{recipient}\""))
-            .collect::<Vec<_>>()
-            .join("\n");
+        let frontmatter_recipients = if recipients.is_empty() {
+            "recipients: []".to_string()
+        } else {
+            format!(
+                "recipients:\n{}",
+                recipients
+                    .iter()
+                    .map(|recipient| format!("  - \"{}\"", escape_yaml(recipient)))
+                    .collect::<Vec<_>>()
+                    .join("\n")
+            )
+        };
         let frontmatter_attachments = if attachments.is_empty() {
             "attachments: []".to_string()
         } else {
@@ -3949,6 +2338,10 @@ impl WikiCore {
             .as_ref()
             .map(|target| format!("reply_to: \"{}\"\n", escape_yaml(target)))
             .unwrap_or_default();
+        let frontmatter_operation_id = operation_id
+            .as_ref()
+            .map(|target| format!("operation_id: \"{}\"\n", escape_yaml(target)))
+            .unwrap_or_default();
         let attachment_section = if attachments.is_empty() {
             String::new()
         } else {
@@ -3975,8 +2368,9 @@ impl WikiCore {
             )
         };
         let body = format!(
-            "---\nid: \"{}\"\nkind: \"{}\"\nauthor: \"{}\"\ncreated: \"{}\"\ntalk_for: \"page://{}\"\nthread: \"{}\"\n{}subject: \"{}\"\nstate: open\nrecipients:\n{}\n{}\n---\n\n## {}\n\n{}{}\n",
+            "---\nid: \"{}\"\n{}kind: \"{}\"\nauthor: \"{}\"\ncreated: \"{}\"\ntalk_for: \"page://{}\"\nthread: \"{}\"\n{}subject: \"{}\"\nstate: open\n{}\n{}\n---\n\n## {}\n\n{}{}\n",
             message_id,
+            frontmatter_operation_id,
             request.kind,
             request.from,
             created_at,
@@ -3990,47 +2384,55 @@ impl WikiCore {
             request.body_markdown,
             attachment_section
         );
-        write_new(&source_path, body)?;
+        if source_path.exists() && operation_id.is_some() {
+            // Stable operation ids are idempotent for retry-after-talk-write cases.
+        } else {
+            write_new(&source_path, body)?;
+        }
 
         let source_handle = format!(
             "user-wiki://page/{}/talk/messages/{}",
             record.id, message_id
         );
-        let excerpt = excerpt(&request.body_markdown);
-        let deliveries = recipients
-            .iter()
-            .map(|recipient| DeliveryRecord {
-                schema_version: 1,
-                message_id: message_id.clone(),
-                thread_id: thread_id.clone(),
-                reply_to: reply_to.clone(),
-                page_id: record.id.clone(),
-                route: record.route.clone(),
-                kind: request.kind.clone(),
-                subject: request.subject.clone(),
-                excerpt: excerpt.clone(),
-                attachments: attachments.clone(),
-                attachment_count: attachments.len(),
-                recipient: recipient.clone(),
-                state: "unread".to_string(),
-                snoozed_until: None,
-                claimed_by: None,
-                claimed_at: None,
-                created_at: created_at.clone(),
-                source: source_handle.clone(),
-            })
-            .collect::<Vec<_>>();
-        for delivery in &deliveries {
-            append_jsonl(&self.deliveries_path(), delivery)?;
-            append_jsonl(&self.mailbox_path(&delivery.recipient), delivery)?;
-        }
-
-        let notifications = self.enqueue_notifications(&deliveries)?;
+        let (status, mail_delivery, repair_hints) = if request.delivery_mode
+            == TalkDeliveryMode::Mail
+        {
+            let mail_result = self.send_talk_mail(
+                &request,
+                &record,
+                &message_id,
+                &thread_id,
+                reply_to.as_deref(),
+                &created_at,
+                operation_id.as_deref(),
+                &attachments,
+                &talk_dir,
+            );
+            match mail_result {
+                Ok(delivery) => ("appended".to_string(), Some(delivery), Vec::new()),
+                Err(error) => (
+                    "appended_delivery_failed".to_string(),
+                    Some(TalkMailDeliveryResult {
+                        status: "failed".to_string(),
+                        acceptance: None,
+                        attempt_count: 0,
+                        attempts: Vec::new(),
+                        error: Some(format!("{error:#}")),
+                    }),
+                    vec![
+                        "Talk source was preserved; repair the mail request and retry explicit delivery."
+                            .to_string(),
+                    ],
+                ),
+            }
+        } else {
+            ("appended".to_string(), None, Vec::new())
+        };
         Ok(TalkAppendResult {
             schema_version: 1,
-            status: "appended".to_string(),
+            status,
             operation: "wiki.talk.append".to_string(),
-            surface: "page_talk_mailbox".to_string(),
+            surface: "page_talk".to_string(),
             message_id,
             thread_id,
             reply_to,
@@ -4040,19 +2442,96 @@ impl WikiCore {
             subject: request.subject,
             created_at,
             source: source_handle,
+            delivery_mode: request.delivery_mode,
+            mail_delivery,
             attachment_count: attachments.len(),
             attachments,
-            deliveries: deliveries
-                .iter()
-                .map(|d| DeliveryState {
-                    recipient: d.recipient.clone(),
-                    state: d.state.clone(),
-                })
-                .collect(),
-            notifications,
             render_required: false,
             next_action: "none".to_string(),
-            repair_hints: Vec::new(),
+            repair_hints,
+        })
+    }
+
+    fn send_talk_mail(
+        &self,
+        request: &TalkAppendRequest,
+        record: &PageRecord,
+        message_id: &str,
+        thread_id: &str,
+        reply_to: Option<&str>,
+        created_at: &str,
+        operation_id: Option<&str>,
+        attachments: &[TalkAttachmentRecord],
+        talk_dir: &Path,
+    ) -> Result<TalkMailDeliveryResult> {
+        let mail_attachments = attachments
+            .iter()
+            .map(|attachment| {
+                let path = talk_dir.join(&attachment.path);
+                Ok(agent_mail::MessageAttachmentRef {
+                    filename: attachment.filename.clone(),
+                    media_type: attachment.media_type.clone(),
+                    sha256: sha256_file(&path)?,
+                    handle: attachment.handle.clone(),
+                })
+            })
+            .collect::<Result<Vec<_>>>()?;
+        let envelope = agent_mail::MessageEnvelope {
+            schema_version: 1,
+            message_id: message_id.to_string(),
+            idempotency_key: operation_id
+                .map(ToString::to_string)
+                .unwrap_or_else(|| message_id.to_string()),
+            kind: request.kind.clone(),
+            subject: request.subject.clone(),
+            from: request.from.clone(),
+            to: request.to.clone(),
+            cc: request.cc.clone(),
+            page: Some(agent_mail::MessagePageRef {
+                id: record.id.clone(),
+                route: record.route.clone(),
+            }),
+            thread_id: thread_id.to_string(),
+            reply_to: reply_to.map(ToString::to_string),
+            body: agent_mail::MessageBodyRef {
+                format: "markdown".to_string(),
+                sha256: sha256_bytes(request.body_markdown.as_bytes()),
+            },
+            attachments: mail_attachments,
+            created_at: created_at.to_string(),
+        };
+        let receipt = agent_mail::AgentMailStore::new(&self.paths.context_engine).send_mail(
+            &envelope,
+            &request.body_markdown,
+            &agent_mail::SendMailOptions::default(),
+        )?;
+        Ok(TalkMailDeliveryResult {
+            status: "delivered".to_string(),
+            acceptance: Some(match receipt.acceptance {
+                agent_mail::MessageAcceptance::Accepted => "accepted".to_string(),
+                agent_mail::MessageAcceptance::DuplicateSamePayload { .. } => {
+                    "duplicate_same_payload".to_string()
+                }
+            }),
+            attempt_count: receipt.attempts.len(),
+            attempts: receipt
+                .attempts
+                .into_iter()
+                .map(|attempt| TalkMailDeliveryAttempt {
+                    recipient: attempt.recipient,
+                    delivery_id: attempt.delivery_id,
+                    status: match attempt.status {
+                        agent_mail::DeliveryAttemptStatus::Delivered => "delivered".to_string(),
+                        agent_mail::DeliveryAttemptStatus::AlreadyDelivered => {
+                            "already_delivered".to_string()
+                        }
+                        agent_mail::DeliveryAttemptStatus::DeferredCapacity => {
+                            "deferred_capacity".to_string()
+                        }
+                    },
+                })
+                .collect(),
+            error: None,
         })
     }
 
@@ -4081,12 +2560,12 @@ impl WikiCore {
         }
 
         let targets = self.all_talk_message_targets()?;
-        let parent = if let Some(reply_to) = reply_to {
+        let parent = if let Some(reply_to) = reply_to.as_ref() {
             let parent = targets
                 .iter()
-                .find(|target| target.message_id == reply_to)
+                .find(|target| target.message_id == reply_to.as_str())
                 .ok_or_else(|| {
-                    anyhow!("talk reply target not found in mailbox or talk files: {reply_to}")
+                    anyhow!("talk reply target not found in page talk files: {reply_to}")
                 })?;
             if parent.page_id != record.id {
                 return Err(anyhow!(
@@ -4132,25 +2611,12 @@ impl WikiCore {
 
         Ok(TalkThreadTarget {
             thread_id,
-            reply_to: reply_to.map(ToString::to_string),
+            reply_to,
         })
     }
 
     fn all_talk_message_targets(&self) -> Result<Vec<TalkMessageTarget>> {
         let mut targets = BTreeMap::<String, TalkMessageTarget>::new();
-        for delivery in self.all_mailbox_messages()? {
-            if talk_target_id_is_valid(&delivery.message_id)
-                && talk_target_id_is_valid(&delivery.thread_id)
-            {
-                targets
-                    .entry(delivery.message_id.clone())
-                    .or_insert_with(|| TalkMessageTarget {
-                        message_id: delivery.message_id,
-                        thread_id: delivery.thread_id,
-                        page_id: delivery.page_id,
-                    });
-            }
-        }
         for record in self.pages()? {
             for target in self.file_talk_message_targets(&record)? {
                 targets.entry(target.message_id.clone()).or_insert(target);
@@ -4160,17 +2626,41 @@ impl WikiCore {
     }
 
     fn file_talk_message_targets(&self, record: &PageRecord) -> Result<Vec<TalkMessageTarget>> {
-        Ok(self
-            .file_talk_messages(record)?
-            .into_iter()
-            .map(|message| TalkMessageTarget {
-                message_id: message.message_id,
-                thread_id: message.thread_id,
-                page_id: message.page_id,
-            })
-            .collect())
+        let talk_dir = self.talk_dir(record);
+        if !talk_dir.is_dir() {
+            return Ok(Vec::new());
+        }
+
+        let mut targets = Vec::new();
+        for entry in fs::read_dir(&talk_dir)? {
+            let entry = entry?;
+            let path = entry.path();
+            if path.extension().and_then(|extension| extension.to_str()) != Some("md") {
+                continue;
+            }
+            let text = fs::read_to_string(&path)
+                .with_context(|| format!("read talk message {}", path.display()))?;
+            let fields = match parse_simple_frontmatter_fields(&text) {
+                Ok(fields) => fields,
+                Err(_) => continue,
+            };
+            let Some(message_id) = fields.get("id").filter(|id| talk_target_id_is_valid(id)) else {
+                continue;
+            };
+            let (_, body) = match split_markdown_frontmatter(&text) {
+                Ok(parts) => parts,
+                Err(_) => continue,
+            };
+            targets.push(TalkMessageTarget {
+                message_id: message_id.clone(),
+                thread_id: talk_file_thread_id(record, &fields, body, message_id),
+                page_id: record.id.clone(),
+            });
+        }
+        Ok(targets)
     }
 
+    #[cfg(test)]
     fn file_talk_messages(&self, record: &PageRecord) -> Result<Vec<TalkFileMessage>> {
         let talk_dir = self.talk_dir(record);
         if !talk_dir.is_dir() {
@@ -4197,7 +2687,6 @@ impl WikiCore {
                 Ok(parts) => parts,
                 Err(_) => continue,
             };
-            let body_markdown = body.trim_start_matches(['\n', '\r']).to_string();
             let subject = talk_file_subject(&fields, body, message_id);
             let reply_to = fields
                 .get("reply_to")
@@ -4207,55 +2696,11 @@ impl WikiCore {
                 message_id: message_id.clone(),
                 thread_id: talk_file_thread_id(record, &fields, body, message_id),
                 reply_to,
-                page_id: record.id.clone(),
-                route: record.route.clone(),
-                kind: fields
-                    .get("kind")
-                    .map(|kind| kind.trim().to_string())
-                    .filter(|kind| !kind.is_empty())
-                    .unwrap_or_else(|| "talk".to_string()),
-                excerpt: excerpt(&body_markdown),
                 subject,
                 attachments: parse_talk_file_attachments(&text)?,
-                created_at: fields
-                    .get("created")
-                    .or_else(|| fields.get("created_at"))
-                    .cloned()
-                    .unwrap_or_default(),
-                source: format!(
-                    "user-wiki://page/{}/talk/messages/{}",
-                    record.id, message_id
-                ),
-                source_path: display_under_root(&path, &self.paths.root),
-                body_markdown,
             });
         }
         Ok(messages)
-    }
-
-    fn normalize_talk_recipient(&self, recipient: &str) -> Result<String> {
-        self.normalize_mail_recipient(recipient)
-    }
-
-    fn normalize_mail_recipient(&self, recipient: &str) -> Result<String> {
-        if let Some(reference) = recipient.strip_prefix("page://") {
-            if reference.trim() != reference
-                || reference.is_empty()
-                || reference.chars().any(char::is_whitespace)
-            {
-                return Err(anyhow!(
-                    "invalid page recipient {recipient}; expected page://<page-id-or-route>"
-                ));
-            }
-            let page = self.find_page(reference).with_context(|| {
-                format!(
-                    "invalid page recipient {recipient}; expected page://<page-id-or-route> for a configured page"
-                )
-            })?;
-            return Ok(format!("mailbox://page/{}", page.id));
-        }
-        validate_address(recipient)?;
-        Ok(recipient.to_string())
     }
 
     fn copy_talk_attachments(
@@ -4324,959 +2769,6 @@ impl WikiCore {
         }
 
         Ok(pending.into_iter().map(|(_, _, record)| record).collect())
-    }
-
-    pub fn inbox(&self, recipient: &str) -> Result<InboxResult> {
-        self.inbox_with_options(recipient, false, false)
-    }
-
-    pub fn read_mail(
-        &self,
-        message_id: Option<&str>,
-        thread_id: Option<&str>,
-    ) -> Result<MailReadResult> {
-        if message_id.is_none() && thread_id.is_none() {
-            return Err(anyhow!("mail-read requires --message-id or --thread-id"));
-        }
-        if message_id.is_some() && thread_id.is_some() {
-            return Err(anyhow!(
-                "mail-read accepts either --message-id or --thread-id, not both"
-            ));
-        }
-
-        let deliveries = self
-            .all_mailbox_messages()?
-            .into_iter()
-            .filter(|message| {
-                message_id.is_some_and(|id| message.message_id == id)
-                    || thread_id.is_some_and(|id| message.thread_id == id)
-            })
-            .collect::<Vec<_>>();
-        let delivery_count = deliveries.len();
-        let mut messages_by_id = BTreeMap::<String, MailReadMessage>::new();
-
-        let mut deliveries = deliveries;
-        deliveries.sort_by(|a, b| {
-            a.message_id
-                .cmp(&b.message_id)
-                .then_with(|| a.recipient.cmp(&b.recipient))
-        });
-
-        let mut grouped = BTreeMap::<String, Vec<DeliveryRecord>>::new();
-        for delivery in deliveries {
-            grouped
-                .entry(delivery.message_id.clone())
-                .or_default()
-                .push(delivery);
-        }
-
-        for (_message_id, mut group) in grouped {
-            group.sort_by(|a, b| a.recipient.cmp(&b.recipient));
-            let first = group
-                .first()
-                .cloned()
-                .ok_or_else(|| anyhow!("mail read group unexpectedly empty"))?;
-            let (source_path, body_markdown) =
-                self.read_talk_message_source(&first.page_id, &first.message_id)?;
-            let attachment_count = first.attachments.len();
-            let message = MailReadMessage {
-                message_id: first.message_id,
-                thread_id: first.thread_id,
-                reply_to: first.reply_to,
-                page_id: first.page_id,
-                route: first.route,
-                kind: first.kind,
-                subject: first.subject,
-                excerpt: first.excerpt,
-                attachments: first.attachments,
-                attachment_count,
-                created_at: first.created_at,
-                source: first.source,
-                source_path,
-                body_markdown,
-                deliveries: group
-                    .iter()
-                    .map(|delivery| DeliveryState {
-                        recipient: delivery.recipient.clone(),
-                        state: delivery.state.clone(),
-                    })
-                    .collect(),
-            };
-            messages_by_id.insert(message.message_id.clone(), message);
-        }
-
-        for record in self.pages()? {
-            for file_message in self.file_talk_messages(&record)? {
-                let matches_target = message_id.is_some_and(|id| file_message.message_id == id)
-                    || thread_id.is_some_and(|id| file_message.thread_id == id);
-                if matches_target && !messages_by_id.contains_key(&file_message.message_id) {
-                    messages_by_id.insert(
-                        file_message.message_id.clone(),
-                        MailReadMessage {
-                            message_id: file_message.message_id,
-                            thread_id: file_message.thread_id,
-                            reply_to: file_message.reply_to,
-                            page_id: file_message.page_id,
-                            route: file_message.route,
-                            kind: file_message.kind,
-                            subject: file_message.subject,
-                            excerpt: file_message.excerpt,
-                            attachment_count: file_message.attachments.len(),
-                            attachments: file_message.attachments,
-                            created_at: file_message.created_at,
-                            source: file_message.source,
-                            source_path: file_message.source_path,
-                            body_markdown: file_message.body_markdown,
-                            deliveries: Vec::new(),
-                        },
-                    );
-                }
-            }
-        }
-
-        if messages_by_id.is_empty() {
-            let target = message_id.or(thread_id).unwrap_or_default();
-            return Err(anyhow!("mail read target not found: {target}"));
-        }
-
-        let mut messages = messages_by_id.into_values().collect::<Vec<_>>();
-        messages.sort_by(|a, b| {
-            a.created_at
-                .cmp(&b.created_at)
-                .then_with(|| a.message_id.cmp(&b.message_id))
-        });
-
-        let resolved_by = if message_id.is_some() {
-            "message_id"
-        } else {
-            "thread_id"
-        };
-        Ok(MailReadResult {
-            schema_version: 1,
-            status: "ok".to_string(),
-            operation: "wiki.mail.read".to_string(),
-            surface: "mail_thread".to_string(),
-            resolved_by: resolved_by.to_string(),
-            message_id: message_id.map(ToString::to_string),
-            thread_id: thread_id.map(ToString::to_string),
-            message_count: messages.len(),
-            delivery_count,
-            messages,
-            next_action: "none".to_string(),
-            repair_hints: Vec::new(),
-        })
-    }
-
-    fn read_talk_message_source(
-        &self,
-        page_id: &str,
-        message_id: &str,
-    ) -> Result<(String, String)> {
-        let record = self
-            .pages()?
-            .into_iter()
-            .find(|page| page.id == page_id)
-            .ok_or_else(|| anyhow!("mail read page not found: {page_id}"))?;
-        let talk_dir = self.talk_dir(&record);
-        if !talk_dir.is_dir() {
-            return Err(anyhow!("talk folder missing for page {page_id}"));
-        }
-        for entry in fs::read_dir(&talk_dir)? {
-            let entry = entry?;
-            let path = entry.path();
-            if path.extension().and_then(|extension| extension.to_str()) != Some("md") {
-                continue;
-            }
-            let text = fs::read_to_string(&path)
-                .with_context(|| format!("read talk message {}", path.display()))?;
-            let fields = match parse_simple_frontmatter_fields(&text) {
-                Ok(fields) => fields,
-                Err(_) => continue,
-            };
-            if fields.get("id").is_some_and(|id| id == message_id) {
-                let (_, body) = split_markdown_frontmatter(&text)?;
-                return Ok((
-                    display_under_root(&path, &self.paths.root),
-                    body.trim_start_matches(['\n', '\r']).to_string(),
-                ));
-            }
-        }
-        Err(anyhow!(
-            "talk message source not found for message {message_id}"
-        ))
-    }
-
-    pub fn inbox_with_archived(
-        &self,
-        recipient: &str,
-        include_archived: bool,
-    ) -> Result<InboxResult> {
-        self.inbox_with_options(recipient, include_archived, false)
-    }
-
-    pub fn inbox_with_options(
-        &self,
-        recipient: &str,
-        include_archived: bool,
-        include_snoozed: bool,
-    ) -> Result<InboxResult> {
-        self.inbox_with_kind_filter(recipient, include_archived, include_snoozed, None)
-    }
-
-    fn inbox_with_kind_filter(
-        &self,
-        recipient: &str,
-        include_archived: bool,
-        include_snoozed: bool,
-        kind_filter: Option<&MailKindFilter>,
-    ) -> Result<InboxResult> {
-        let recipient = self.normalize_mail_recipient(recipient)?;
-        let mut messages = self.mailbox(&recipient)?;
-        if let Some(kind_filter) = kind_filter {
-            messages.retain(|message| kind_filter.accepts(&message.kind));
-        }
-        let total_count = messages.len();
-        let archived_count = messages
-            .iter()
-            .filter(|message| message.state == "archived")
-            .count();
-        if !include_archived {
-            messages.retain(|message| message.state != "archived");
-        }
-        if !include_snoozed {
-            messages.retain(|message| !mail_delivery_is_snoozed_until_future(message));
-        }
-        messages.sort_by(|a, b| b.created_at.cmp(&a.created_at));
-        let unread_count = messages
-            .iter()
-            .filter(|message| message.state == "unread")
-            .count();
-        let actionable_count = messages
-            .iter()
-            .filter(|message| mail_delivery_is_actionable(message))
-            .count();
-        let message_count = messages.len();
-        Ok(InboxResult {
-            schema_version: 1,
-            status: "ok".to_string(),
-            operation: "wiki.mail.inbox".to_string(),
-            surface: mailbox_surface(&recipient),
-            message_count,
-            actionable_count,
-            unread_count,
-            archived_count,
-            mailbox: MailboxCount {
-                address: recipient.to_string(),
-                surface: mailbox_surface(&recipient),
-                total_count,
-                actionable_count,
-                unread_count,
-                archived_count,
-            },
-            messages,
-            next_action: if actionable_count > 0 {
-                "mail_claim_or_mark".to_string()
-            } else {
-                "none".to_string()
-            },
-        })
-    }
-
-    pub fn agent_inbox(
-        &self,
-        agent_id: &str,
-        include_archived: bool,
-        include_snoozed: bool,
-    ) -> Result<AgentInboxResult> {
-        let agent = self.require_active_agent(agent_id)?;
-        let agent_liveness = self.agent_liveness_index()?;
-        let subscriptions = self
-            .active_mail_subscriptions()?
-            .into_iter()
-            .filter(|subscription| subscription.agent_id == agent_id)
-            .collect::<Vec<_>>();
-        let enriched_subscriptions = subscriptions
-            .iter()
-            .cloned()
-            .map(|subscription| enrich_mail_subscription(subscription, &agent_liveness))
-            .collect::<Vec<_>>();
-        let owned_addresses = agent.addresses.clone();
-        let subscribed_addresses = subscriptions
-            .iter()
-            .map(|subscription| subscription.address.clone())
-            .collect::<BTreeSet<_>>()
-            .into_iter()
-            .collect::<Vec<_>>();
-        let effective_mailboxes = owned_addresses
-            .iter()
-            .chain(
-                subscriptions
-                    .iter()
-                    .map(|subscription| &subscription.address),
-            )
-            .cloned()
-            .collect::<BTreeSet<_>>()
-            .into_iter()
-            .collect::<Vec<_>>();
-        let owned_address_set = owned_addresses.iter().cloned().collect::<BTreeSet<_>>();
-        let subscription_kind_filters = mail_kind_filters_by_address(&subscriptions);
-        let mut mailboxes = Vec::new();
-        let mut messages = Vec::new();
-        let mut seen = BTreeSet::new();
-        for address in &effective_mailboxes {
-            let kind_filter = if owned_address_set.contains(address) {
-                None
-            } else {
-                subscription_kind_filters.get(address)
-            };
-            let mailbox = self.inbox_with_kind_filter(
-                address,
-                include_archived,
-                include_snoozed,
-                kind_filter,
-            )?;
-            mailboxes.push(mailbox.mailbox.clone());
-            for message in mailbox.messages {
-                let key = format!("{}:{}", message.message_id, message.recipient);
-                if seen.insert(key) {
-                    messages.push(message);
-                }
-            }
-        }
-        messages.sort_by(|a, b| b.created_at.cmp(&a.created_at));
-        let actionable_message_ids = messages
-            .iter()
-            .filter(|message| mail_delivery_is_actionable(message))
-            .map(|message| message.message_id.clone())
-            .collect::<BTreeSet<_>>();
-        let notifications = self
-            .poll_notifications(agent_id)?
-            .notifications
-            .into_iter()
-            .filter(|notification| actionable_message_ids.contains(&notification.message_id))
-            .collect::<Vec<_>>();
-        let threads = agent_inbox_threads(&messages, &notifications, agent_id);
-        let page_counts = messages.iter().fold(
-            BTreeMap::<String, (usize, usize, usize, usize)>::new(),
-            |mut counts, message| {
-                let entry = counts
-                    .entry(message.page_id.clone())
-                    .or_insert((0, 0, 0, 0));
-                entry.0 += 1;
-                if message.state == "unread" {
-                    entry.1 += 1;
-                }
-                if mail_delivery_is_actionable(message) {
-                    entry.2 += 1;
-                }
-                if mail_delivery_is_claimable_by(message, agent_id) {
-                    entry.3 += 1;
-                }
-                counts
-            },
-        );
-        let mut pages = Vec::new();
-        for (page_id, (message_count, unread_count, actionable_count, claimable_count)) in
-            page_counts
-        {
-            if let Ok(status) = self.page_status(&page_id) {
-                pages.push(AgentInboxPageSummary {
-                    id: status.id,
-                    title: status.title,
-                    route: status.route,
-                    state: status.state,
-                    next_action: status.next_action,
-                    actionable_count,
-                    claimable_count,
-                    unread_count,
-                    message_count,
-                });
-            }
-        }
-        let unread_count = messages
-            .iter()
-            .filter(|message| message.state == "unread")
-            .count();
-        let actionable_count = messages
-            .iter()
-            .filter(|message| mail_delivery_is_actionable(message))
-            .count();
-        let claimable_count = messages
-            .iter()
-            .filter(|message| mail_delivery_is_claimable_by(message, agent_id))
-            .count();
-        let actionable_thread_count = threads
-            .iter()
-            .filter(|thread| thread.actionable_delivery_count > 0)
-            .count();
-        let claimable_thread_count = threads
-            .iter()
-            .filter(|thread| thread.claimable_delivery_count > 0)
-            .count();
-        let notification_thread_count = threads
-            .iter()
-            .filter(|thread| thread.notification_count > 0)
-            .count();
-        let pages_with_open_mail_count = pages
-            .iter()
-            .filter(|page| page.actionable_count > 0)
-            .count();
-        let pages_requiring_action = pages_with_open_mail_count;
-        let summary = AgentInboxSummary {
-            actionable_count,
-            claimable_count,
-            unread_count,
-            message_count: messages.len(),
-            thread_count: threads.len(),
-            actionable_thread_count,
-            claimable_thread_count,
-            notification_count: notifications.len(),
-            notification_thread_count,
-            pages_with_open_mail_count,
-            pages_requiring_action,
-        };
-        Ok(AgentInboxResult {
-            schema_version: 1,
-            status: "ok".to_string(),
-            operation: "wiki.agent.inbox".to_string(),
-            surface: "agent_inbox".to_string(),
-            agent_id: agent_id.to_string(),
-            message_count: summary.message_count,
-            actionable_count: summary.actionable_count,
-            claimable_count: summary.claimable_count,
-            unread_count: summary.unread_count,
-            thread_count: summary.thread_count,
-            notification_count: summary.notification_count,
-            pages_requiring_action: summary.pages_requiring_action,
-            summary,
-            owned_addresses,
-            subscribed_addresses,
-            effective_mailboxes: effective_mailboxes.clone(),
-            addresses: effective_mailboxes,
-            subscriptions: enriched_subscriptions,
-            mailboxes,
-            pages,
-            threads,
-            messages,
-            notifications,
-            next_action: if claimable_count > 0 {
-                "mail_read_or_claim".to_string()
-            } else if actionable_count > 0 {
-                "mail_read_or_watch_claim".to_string()
-            } else {
-                "none".to_string()
-            },
-        })
-    }
-
-    pub fn claim_mail_for_agent(
-        &self,
-        message_id: &str,
-        agent_id: &str,
-    ) -> Result<MailClaimResult> {
-        let inbox = self.agent_inbox(agent_id, false, false)?;
-        let relation_by_address = inbox
-            .subscriptions
-            .iter()
-            .map(|subscription| (subscription.address.clone(), subscription.relation.clone()))
-            .collect::<BTreeMap<_, _>>();
-        let owned_addresses = inbox.owned_addresses.into_iter().collect::<BTreeSet<_>>();
-        let mut candidates = inbox
-            .messages
-            .into_iter()
-            .filter(|message| {
-                message.message_id == message_id && mail_delivery_is_claimable_by(message, agent_id)
-            })
-            .collect::<Vec<_>>();
-        if candidates.is_empty() {
-            return Err(anyhow!(
-                "message {message_id} not found in claimable inbox for agent {agent_id}"
-            ));
-        }
-        candidates.sort_by_key(|message| {
-            agent_claim_recipient_priority(
-                &message.recipient,
-                &owned_addresses,
-                &relation_by_address,
-            )
-        });
-        let recipient = candidates
-            .first()
-            .map(|message| message.recipient.clone())
-            .ok_or_else(|| {
-                anyhow!("message {message_id} not found in actionable inbox for agent {agent_id}")
-            })?;
-        let mut receipt = self.claim_mail(message_id, &recipient, agent_id)?;
-        receipt.operation = "wiki.agent.claim".to_string();
-        Ok(receipt)
-    }
-
-    pub fn mark_mail(
-        &self,
-        message_id: &str,
-        recipient: &str,
-        state: &str,
-        snoozed_until: Option<&str>,
-    ) -> Result<MailMarkResult> {
-        let requested_recipient = self.normalize_mail_recipient(recipient)?;
-        validate_mail_mark_state(state)?;
-        let snoozed_until = validate_snooze_until(state, snoozed_until)?;
-        let _lock = self.acquire_mail_mutation_lock()?;
-        let recipient = if self.mailbox_contains_message(&requested_recipient, message_id)? {
-            requested_recipient
-        } else {
-            self.resolve_agent_inbox_delivery_recipient(
-                message_id,
-                &requested_recipient,
-                None,
-                false,
-            )?
-            .unwrap_or(requested_recipient)
-        };
-        let path = self.mailbox_path(&recipient);
-        let mut messages = self.mailbox_file_records(&recipient)?;
-        let mut found = false;
-        let mut changed = false;
-        for message in &mut messages {
-            if message.message_id == message_id && message.recipient == recipient {
-                found = true;
-                if message.state != state || message.snoozed_until != snoozed_until {
-                    message.state = state.to_string();
-                    message.snoozed_until = snoozed_until.clone();
-                    changed = true;
-                }
-            }
-        }
-        if !found {
-            return Err(anyhow!(
-                "message {message_id} not found in mailbox {recipient}"
-            ));
-        }
-        if changed {
-            write_jsonl(&path, &messages)?;
-            append_jsonl(
-                &self.paths.context_engine.join("mail/claims.jsonl"),
-                &json!({
-                    "schema_version": 1,
-                    "message_id": message_id,
-                    "recipient": recipient,
-                    "state": state,
-                    "snoozed_until": snoozed_until,
-                    "at": now_rfc3339()
-                }),
-            )?;
-        }
-        Ok(MailMarkResult {
-            schema_version: 1,
-            status: if changed { "ok" } else { "unchanged" }.to_string(),
-            operation: "wiki.mail.mark".to_string(),
-            message_id: message_id.to_string(),
-            recipient,
-            state: state.to_string(),
-            snoozed_until,
-            evidence: vec![Evidence {
-                path: display_under_root(&path, &self.paths.root),
-                status: if changed {
-                    "updated"
-                } else {
-                    "skipped_existing"
-                }
-                .to_string(),
-            }],
-            render_required: false,
-            next_action: "none".to_string(),
-            repair_hints: Vec::new(),
-        })
-    }
-
-    pub fn mark_mail_all_deliveries(
-        &self,
-        message_id: &str,
-        state: &str,
-        snoozed_until: Option<&str>,
-    ) -> Result<MailMarkAllResult> {
-        validate_mail_mark_state(state)?;
-        let snoozed_until = validate_snooze_until(state, snoozed_until)?;
-        let _lock = self.acquire_mail_mutation_lock()?;
-        let mailbox_root = self.paths.context_engine.join("mail/mailboxes");
-        let mut evidence = Vec::new();
-        let mut recipients = BTreeSet::new();
-        let mut before = MailMarkAllCounts::default();
-        let mut after = MailMarkAllCounts::default();
-        let mut found = false;
-        let mut changed_delivery_count = 0;
-        if mailbox_root.exists() {
-            for entry in fs::read_dir(&mailbox_root)? {
-                let entry = entry?;
-                let inbox = entry.path().join("inbox.jsonl");
-                if !inbox.is_file() {
-                    continue;
-                }
-                let mut messages = read_jsonl::<DeliveryRecord>(&inbox)?;
-                refresh_delivery_attachment_counts(&mut messages);
-                let mut matched = false;
-                let mut changed = false;
-                for message in &mut messages {
-                    if message.message_id == message_id {
-                        found = true;
-                        matched = true;
-                        count_mail_mark_all_delivery(&mut before, message);
-                        if message.state != state || message.snoozed_until != snoozed_until {
-                            message.state = state.to_string();
-                            message.snoozed_until = snoozed_until.clone();
-                            changed = true;
-                            changed_delivery_count += 1;
-                        }
-                        count_mail_mark_all_delivery(&mut after, message);
-                        recipients.insert(message.recipient.clone());
-                    }
-                }
-                if changed {
-                    write_jsonl(&inbox, &messages)?;
-                    evidence.push(Evidence {
-                        path: display_under_root(&inbox, &self.paths.root),
-                        status: "updated".to_string(),
-                    });
-                } else if matched {
-                    evidence.push(Evidence {
-                        path: display_under_root(&inbox, &self.paths.root),
-                        status: "unchanged".to_string(),
-                    });
-                }
-            }
-        }
-        if !found {
-            return Err(anyhow!("message {message_id} not found in any mailbox"));
-        }
-        let recipients = recipients.into_iter().collect::<Vec<_>>();
-        if changed_delivery_count > 0 {
-            append_jsonl(
-                &self.paths.context_engine.join("mail/claims.jsonl"),
-                &json!({
-                    "schema_version": 1,
-                    "message_id": message_id,
-                    "recipient": "*",
-                    "recipients": recipients,
-                    "state": state,
-                    "snoozed_until": snoozed_until,
-                    "at": now_rfc3339()
-                }),
-            )?;
-        }
-        Ok(MailMarkAllResult {
-            schema_version: 1,
-            status: "ok".to_string(),
-            operation: "wiki.mail.mark_all".to_string(),
-            message_id: message_id.to_string(),
-            state: state.to_string(),
-            changed_delivery_count,
-            recipients,
-            before,
-            after,
-            evidence,
-            render_required: false,
-            next_action: "none".to_string(),
-            repair_hints: Vec::new(),
-        })
-    }
-
-    pub fn claim_mail(
-        &self,
-        message_id: &str,
-        recipient: &str,
-        agent_id: &str,
-    ) -> Result<MailClaimResult> {
-        let requested_recipient = self.normalize_mail_recipient(recipient)?;
-        self.require_active_agent(agent_id)?;
-        let _lock = self.acquire_mail_mutation_lock()?;
-        let recipient = if self.mailbox_contains_message(&requested_recipient, message_id)? {
-            requested_recipient
-        } else {
-            self.resolve_agent_inbox_delivery_recipient(
-                message_id,
-                &requested_recipient,
-                Some(agent_id),
-                true,
-            )?
-            .unwrap_or(requested_recipient)
-        };
-        let path = self.mailbox_path(&recipient);
-        let mut messages = self.mailbox_file_records(&recipient)?;
-        let claimed_at = now_rfc3339();
-        let mut found = false;
-        let mut changed = false;
-        let mut status = "claimed".to_string();
-        for message in &mut messages {
-            if message.message_id == message_id && message.recipient == recipient {
-                found = true;
-                if message.state == "claimed"
-                    && message
-                        .claimed_by
-                        .as_deref()
-                        .is_some_and(|claimant| claimant != agent_id)
-                {
-                    return Err(anyhow!(
-                        "message {message_id} in mailbox {recipient} already claimed by {}",
-                        message.claimed_by.as_deref().unwrap_or("unknown")
-                    ));
-                }
-                if message.state == "claimed" && message.claimed_by.as_deref() == Some(agent_id) {
-                    status = "already_claimed".to_string();
-                }
-                if mail_delivery_state_is_terminal(message.state.as_str()) {
-                    return Err(anyhow!(
-                        "message {message_id} in mailbox {recipient} is {} and not claimable",
-                        message.state
-                    ));
-                }
-                if status != "already_claimed" {
-                    message.state = "claimed".to_string();
-                    message.snoozed_until = None;
-                    message.claimed_by = Some(agent_id.to_string());
-                    message.claimed_at = Some(claimed_at.clone());
-                    changed = true;
-                }
-            }
-        }
-        if !found {
-            return Err(anyhow!(
-                "message {message_id} not found in mailbox {recipient}"
-            ));
-        }
-        if changed {
-            write_jsonl(&path, &messages)?;
-            append_jsonl(
-                &self.paths.context_engine.join("mail/claims.jsonl"),
-                &json!({
-                    "schema_version": 1,
-                    "message_id": message_id,
-                    "recipient": recipient,
-                    "state": "claimed",
-                    "claimed_by": agent_id,
-                    "at": claimed_at
-                }),
-            )?;
-        }
-        Ok(MailClaimResult {
-            schema_version: 1,
-            status,
-            operation: "wiki.mail.claim".to_string(),
-            message_id: message_id.to_string(),
-            recipient,
-            claimed_by: agent_id.to_string(),
-            state: "claimed".to_string(),
-            evidence: vec![Evidence {
-                path: display_under_root(&path, &self.paths.root),
-                status: if changed {
-                    "updated"
-                } else {
-                    "skipped_existing"
-                }
-                .to_string(),
-            }],
-            render_required: false,
-            next_action: "none".to_string(),
-            repair_hints: Vec::new(),
-        })
-    }
-
-    fn resolve_agent_inbox_delivery_recipient(
-        &self,
-        message_id: &str,
-        requested_recipient: &str,
-        agent_id: Option<&str>,
-        claimable_only: bool,
-    ) -> Result<Option<String>> {
-        let agents = if let Some(agent_id) = agent_id {
-            let agent = self.require_active_agent(agent_id)?;
-            if !agent
-                .addresses
-                .iter()
-                .any(|address| address == requested_recipient)
-            {
-                return Ok(None);
-            }
-            vec![(agent_id.to_string(), agent)]
-        } else {
-            self.current_agents()?
-                .into_iter()
-                .filter(|(_, agent)| {
-                    agent
-                        .addresses
-                        .iter()
-                        .any(|address| address == requested_recipient)
-                })
-                .collect::<Vec<_>>()
-        };
-
-        if agents.is_empty() {
-            return Ok(None);
-        }
-        if agents.len() > 1 {
-            return Err(anyhow!(
-                "mail recipient {requested_recipient} belongs to multiple active agents; use agent-claim or the canonical mailbox recipient"
-            ));
-        }
-
-        let (agent_id, _) = agents.into_iter().next().unwrap();
-        let inbox = self.agent_inbox(&agent_id, true, true)?;
-        let relation_by_address = inbox
-            .subscriptions
-            .iter()
-            .map(|subscription| (subscription.address.clone(), subscription.relation.clone()))
-            .collect::<BTreeMap<_, _>>();
-        let owned_addresses = inbox.owned_addresses.into_iter().collect::<BTreeSet<_>>();
-        let mut candidates = inbox
-            .messages
-            .into_iter()
-            .filter(|message| {
-                message.message_id == message_id
-                    && (!claimable_only || mail_delivery_is_claimable_by(message, &agent_id))
-            })
-            .collect::<Vec<_>>();
-        if candidates.is_empty() {
-            return Ok(None);
-        }
-        candidates.sort_by_key(|message| {
-            agent_claim_recipient_priority(
-                &message.recipient,
-                &owned_addresses,
-                &relation_by_address,
-            )
-        });
-        Ok(candidates.first().map(|message| message.recipient.clone()))
-    }
-
-    pub fn poll_notifications(&self, agent_id: &str) -> Result<NotificationPollResult> {
-        let agent = self.require_active_agent(agent_id)?;
-        let owned_addresses = agent.addresses.into_iter().collect::<BTreeSet<_>>();
-        let active_subscriptions = self
-            .active_mail_subscriptions()?
-            .into_iter()
-            .filter(|subscription| subscription.agent_id == agent_id)
-            .collect::<Vec<_>>();
-        let subscription_kind_filters = mail_kind_filters_by_address(&active_subscriptions);
-        let acknowledged = read_jsonl::<NotificationAttempt>(&self.notifications_attempts_path())?
-            .into_iter()
-            .filter(|attempt| {
-                attempt.agent_id == agent_id && notification_ack_state_is_terminal(&attempt.state)
-            })
-            .map(|attempt| attempt.notification_id)
-            .collect::<std::collections::BTreeSet<_>>();
-        let notifications: Vec<NotificationRecord> =
-            read_jsonl::<NotificationRecord>(&self.notifications_outbox_path())?
-                .into_iter()
-                .filter(|notification| {
-                    notification.agent_id == agent_id
-                        && !acknowledged.contains(&notification.notification_id)
-                        && (owned_addresses.contains(&notification.mailbox)
-                            || subscription_kind_filters
-                                .get(&notification.mailbox)
-                                .is_some_and(|filter| filter.accepts(&notification.kind)))
-                        && self
-                            .notification_delivery_is_actionable(notification)
-                            .unwrap_or(false)
-                })
-                .collect();
-        let notification_count = notifications.len();
-        Ok(NotificationPollResult {
-            schema_version: 1,
-            status: "ok".to_string(),
-            operation: "wiki.notify.poll".to_string(),
-            surface: "agent_notification_queue".to_string(),
-            notification_count,
-            notifications,
-            next_action: if notification_count > 0 {
-                "notify_ack".to_string()
-            } else {
-                "none".to_string()
-            },
-        })
-    }
-
-    pub fn ack_notification(
-        &self,
-        agent_id: &str,
-        notification_id: &str,
-        state: &str,
-    ) -> Result<OperationReceipt> {
-        if !notification_ack_state_is_allowed(state) {
-            return Err(anyhow!(
-                "invalid notification ack state {state}; expected delivered, claimed, read, dismissed, archived, or failed"
-            ));
-        }
-        self.require_active_agent(agent_id)?;
-        let _lock = self.acquire_mail_mutation_lock()?;
-        let notification_exists =
-            read_jsonl::<NotificationRecord>(&self.notifications_outbox_path())?
-                .into_iter()
-                .any(|notification| {
-                    notification.agent_id == agent_id
-                        && notification.notification_id == notification_id
-                });
-        if !notification_exists {
-            return Err(anyhow!(
-                "notification {notification_id} not found for active agent {agent_id}"
-            ));
-        }
-        let already_acknowledged =
-            read_jsonl::<NotificationAttempt>(&self.notifications_attempts_path())?
-                .into_iter()
-                .any(|attempt| {
-                    attempt.agent_id == agent_id
-                        && attempt.notification_id == notification_id
-                        && notification_ack_state_is_terminal(&attempt.state)
-                });
-        if already_acknowledged {
-            return Ok(OperationReceipt {
-                schema_version: 1,
-                status: "already_acknowledged".to_string(),
-                operation: "wiki.notify.ack".to_string(),
-                id: notification_id.to_string(),
-                route: None,
-                page_type: None,
-                collection: None,
-                evidence: vec![Evidence {
-                    path: display_under_root(&self.notifications_attempts_path(), &self.paths.root),
-                    status: "skipped_existing".to_string(),
-                }],
-                page_status: None,
-                edit: None,
-                hashes: None,
-                link_impact: None,
-                render_required: false,
-                next_action: "none".to_string(),
-                repair_hints: Vec::new(),
-            });
-        }
-        let attempt = NotificationAttempt {
-            schema_version: 1,
-            agent_id: agent_id.to_string(),
-            notification_id: notification_id.to_string(),
-            state: state.to_string(),
-            at: now_rfc3339(),
-        };
-        append_jsonl(&self.notifications_attempts_path(), &attempt)?;
-        Ok(OperationReceipt {
-            schema_version: 1,
-            status: "ok".to_string(),
-            operation: "wiki.notify.ack".to_string(),
-            id: notification_id.to_string(),
-            route: None,
-            page_type: None,
-            collection: None,
-            evidence: vec![Evidence {
-                path: display_under_root(&self.notifications_attempts_path(), &self.paths.root),
-                status: "appended".to_string(),
-            }],
-            page_status: None,
-            edit: None,
-            hashes: None,
-            link_impact: None,
-            render_required: false,
-            next_action: "none".to_string(),
-            repair_hints: Vec::new(),
-        })
     }
 
     fn page_status_from_record(
@@ -5366,85 +2858,6 @@ impl WikiCore {
         let blocking_count = 0;
         let link_issue_count = links.broken_internal_count;
         let issue_count = state_issue_count + link_issue_count;
-        let page_mailbox = format!("mailbox://page/{}", record.id);
-        let associated_lists = self
-            .mail_lists(Some(&record.id), None)
-            .map(|result| result.lists)
-            .unwrap_or_default();
-        let associated_list_addresses = associated_lists
-            .iter()
-            .map(|list| list.address.clone())
-            .collect::<BTreeSet<_>>();
-        let page_messages = self
-            .all_mailbox_messages()
-            .unwrap_or_default()
-            .into_iter()
-            .filter(|message| {
-                message.page_id == record.id
-                    && (page_subscription_is_related(&record.id, &page_mailbox, &message.recipient)
-                        || associated_list_addresses.contains(&message.recipient))
-            })
-            .map(|message| {
-                (
-                    format!("{}:{}", message.message_id, message.recipient),
-                    message,
-                )
-            })
-            .collect::<BTreeMap<_, _>>()
-            .into_values()
-            .collect::<Vec<_>>();
-        let unread_count = page_messages
-            .iter()
-            .filter(|message| message.state == "unread")
-            .count();
-        let open_delivery_count = page_messages
-            .iter()
-            .filter(|message| mail_delivery_is_actionable(message))
-            .count();
-        let open_thread_count = page_messages
-            .iter()
-            .filter(|message| mail_delivery_is_actionable(message))
-            .map(|message| message.thread_id.clone())
-            .collect::<BTreeSet<_>>()
-            .len();
-        let agent_liveness = self.agent_liveness_index().unwrap_or_default();
-        let page_subscriptions = self
-            .active_mail_subscriptions()
-            .unwrap_or_default()
-            .into_iter()
-            .filter(|subscription| {
-                page_subscription_is_related(&record.id, &page_mailbox, &subscription.address)
-                    || associated_list_addresses.contains(&subscription.address)
-            })
-            .map(|subscription| page_subscription_summary(subscription, &agent_liveness))
-            .collect::<Vec<_>>();
-        let watcher_agents = page_subscriptions
-            .iter()
-            .filter(|subscription| subscription.relation == "watcher")
-            .map(|subscription| {
-                (
-                    subscription.agent_id.clone(),
-                    subscription.agent_liveness.clone(),
-                )
-            })
-            .collect::<BTreeMap<_, _>>();
-        let watcher_count = watcher_agents.len();
-        let active_watcher_count = watcher_agents
-            .values()
-            .filter(|liveness| liveness.as_str() == "active")
-            .count();
-        let inactive_watcher_count = watcher_count.saturating_sub(active_watcher_count);
-        let watcher_subscription_count = page_subscriptions
-            .iter()
-            .filter(|subscription| subscription.relation == "watcher")
-            .count();
-        let subscription_liveness_counts =
-            subscription_liveness_counts(page_subscriptions.iter().map(|subscription| {
-                (
-                    subscription.agent_id.as_str(),
-                    subscription.agent_liveness.as_str(),
-                )
-            }));
         Ok(WikiPageStatus {
             schema_version: 1,
             status: "ok".to_string(),
@@ -5483,25 +2896,7 @@ impl WikiCore {
                 talk: format!("user-wiki://page/{}/talk", record.id),
                 curator: format!("user-wiki://page/{}/curator", record.id),
                 conventions: format!("user-wiki://page/{}/conventions", record.id),
-                mailbox: format!("mailbox://page/{}", record.id),
                 published: format!("app-support://wiki{}", record.route),
-            },
-            mail: PageMailSummary {
-                page_mailbox: page_mailbox.clone(),
-                curator_address: format!("role://{}.curator", record.id),
-                default_watchers_list: format!("list://{}.watchers", record.id),
-                associated_lists,
-                message_count: page_messages.len(),
-                actionable_count: open_delivery_count,
-                open_delivery_count,
-                open_thread_count,
-                unread_count,
-                watcher_count,
-                watcher_subscription_count,
-                active_watcher_count,
-                inactive_watcher_count,
-                subscription_liveness_counts,
-                subscriptions: page_subscriptions,
             },
             links,
             validation: ValidationSummary {
@@ -5588,25 +2983,7 @@ impl WikiCore {
                 talk: "not_applicable".to_string(),
                 curator: "not_applicable".to_string(),
                 conventions: "not_applicable".to_string(),
-                mailbox: format!("mailbox://site-page/{}", record.id),
                 published: format!("app-support://wiki{}", record.route),
-            },
-            mail: PageMailSummary {
-                page_mailbox: format!("mailbox://site-page/{}", record.id),
-                curator_address: "not_applicable".to_string(),
-                default_watchers_list: "not_applicable".to_string(),
-                associated_lists: Vec::new(),
-                message_count: 0,
-                actionable_count: 0,
-                open_delivery_count: 0,
-                open_thread_count: 0,
-                unread_count: 0,
-                watcher_count: 0,
-                watcher_subscription_count: 0,
-                active_watcher_count: 0,
-                inactive_watcher_count: 0,
-                subscription_liveness_counts: SubscriptionLivenessCounts::default(),
-                subscriptions: Vec::new(),
             },
             links: PageLinkSummary {
                 status: "unknown".to_string(),
@@ -5676,6 +3053,7 @@ impl WikiCore {
             .ok_or_else(|| anyhow!("invalid page asset path: {}", path.display()))?
             .to_string();
         let media_type = infer_media_type(&filename).to_string();
+        let kind = page_asset_kind(&filename, &media_type).to_string();
         let sha256 = sha256_file(path)?;
         let bytes = path.metadata()?.len();
         let source_relative_href = format!("./{}.assets/{}", record.slug, filename);
@@ -5696,22 +3074,26 @@ impl WikiCore {
             let label = caption.unwrap_or(&filename);
             format!("[{}]({})", label, source_relative_href)
         };
+        let handle = format!(
+            "user-wiki://page/{}/assets/{}",
+            record.id,
+            path.file_name().unwrap().to_string_lossy()
+        );
         Ok(PageAssetRecord {
             id: format!("asset_{}_{}", record.id, slug_token(&filename)),
+            citation_uri: handle.clone(),
+            kind,
             filename,
             media_type,
             sha256,
             bytes,
-            handle: format!(
-                "user-wiki://page/{}/assets/{}",
-                record.id,
-                path.file_name().unwrap().to_string_lossy()
-            ),
+            handle,
             source_path: display_under_root(path, &self.paths.root),
             absolute_path: path.display().to_string(),
             source_relative_href,
             published_href,
             markdown,
+            content_role: purpose.to_string(),
             purpose: purpose.to_string(),
             caption: caption.map(str::to_string),
             alt_text: alt_text.map(str::to_string),
@@ -6441,18 +3823,6 @@ impl WikiCore {
         })
     }
 
-    fn agent_events_path(&self) -> PathBuf {
-        self.paths
-            .context_engine
-            .join("agents/directory/agents.jsonl")
-    }
-
-    fn current_agents_path(&self) -> PathBuf {
-        self.paths
-            .context_engine
-            .join("agents/directory/current.json")
-    }
-
     fn last_publish_receipt_path(&self) -> PathBuf {
         self.paths
             .context_engine
@@ -6544,468 +3914,6 @@ impl WikiCore {
             repair_tasks: link_repair_tasks_for_page(record, &issues),
             issues,
         })
-    }
-
-    fn current_agents(&self) -> Result<BTreeMap<String, AgentRecord>> {
-        self.current_agents_with_stale(false)
-    }
-
-    fn agent_directory_entries(&self) -> Result<BTreeMap<String, AgentDirectoryEntry>> {
-        let mut current = BTreeMap::<String, AgentDirectoryEntry>::new();
-        for event in read_jsonl::<AgentRecord>(&self.agent_events_path())? {
-            let registered_at = current
-                .get(&event.agent_id)
-                .and_then(|entry| entry.registered_at.clone())
-                .or_else(|| {
-                    if event.event == "agent.registered" {
-                        Some(event.at.clone())
-                    } else {
-                        None
-                    }
-                });
-            let liveness = if event.event == "agent.retired" {
-                AgentLiveness {
-                    state: "retired".to_string(),
-                    lease_expires_at: Some(event.lease_expires_at.clone()),
-                    retired_at: Some(event.at.clone()),
-                    retire_reason: event.reason.clone(),
-                }
-            } else {
-                AgentLiveness {
-                    state: if agent_lease_is_active(&event) {
-                        "active".to_string()
-                    } else {
-                        "stale".to_string()
-                    },
-                    lease_expires_at: Some(event.lease_expires_at.clone()),
-                    retired_at: None,
-                    retire_reason: None,
-                }
-            };
-            current.insert(
-                event.agent_id.clone(),
-                AgentDirectoryEntry {
-                    record: event,
-                    liveness,
-                    registered_at,
-                },
-            );
-        }
-        Ok(current)
-    }
-
-    fn active_subscriptions_by_agent(
-        &self,
-    ) -> Result<BTreeMap<String, Vec<MailSubscriptionRecord>>> {
-        let mut by_agent = BTreeMap::<String, Vec<MailSubscriptionRecord>>::new();
-        for subscription in self.active_mail_subscriptions()? {
-            by_agent
-                .entry(subscription.agent_id.clone())
-                .or_default()
-                .push(subscription);
-        }
-        Ok(by_agent)
-    }
-
-    fn agent_directory_summary(
-        &self,
-        entry: AgentDirectoryEntry,
-        subscriptions_by_agent: &BTreeMap<String, Vec<MailSubscriptionRecord>>,
-    ) -> Result<AgentDirectorySummary> {
-        let subscriptions = subscriptions_by_agent
-            .get(&entry.record.agent_id)
-            .cloned()
-            .unwrap_or_default();
-        let owned_addresses = entry.record.addresses.clone();
-        let subscribed_addresses = subscriptions
-            .iter()
-            .map(|subscription| subscription.address.clone())
-            .collect::<BTreeSet<_>>()
-            .into_iter()
-            .collect::<Vec<_>>();
-        let mailbox_counts = self.agent_mailbox_counts(&owned_addresses, &subscriptions)?;
-        let mailbox_count = mailbox_counts
-            .iter()
-            .map(|mailbox| mailbox.total_count)
-            .sum();
-        let unread_count = mailbox_counts
-            .iter()
-            .map(|mailbox| mailbox.unread_count)
-            .sum();
-        let actionable_count = mailbox_counts
-            .iter()
-            .map(|mailbox| mailbox.actionable_count)
-            .sum();
-        let next_action = match entry.liveness.state.as_str() {
-            "active" if actionable_count > 0 => "check_inbox",
-            "active" => "none",
-            "stale" => "agent_identify",
-            "retired" => "agent_register_new_thread",
-            _ => "agent_register",
-        };
-        Ok(AgentDirectorySummary {
-            primary_address: entry.record.addresses.first().cloned(),
-            agent_id: entry.record.agent_id,
-            liveness: entry.liveness.state,
-            event: entry.record.event,
-            registered_at: entry.registered_at,
-            last_seen_at: entry.record.at,
-            lease_expires_at: entry.record.lease_expires_at,
-            retired_at: entry.liveness.retired_at,
-            retire_reason: entry.liveness.retire_reason,
-            addresses: entry.record.addresses,
-            roles: entry.record.roles,
-            capabilities: entry.record.capabilities,
-            transport: entry.record.transport,
-            owned_addresses,
-            subscribed_addresses,
-            active_subscription_count: subscriptions.len(),
-            mailbox_count,
-            unread_count,
-            actionable_count,
-            next_action: next_action.to_string(),
-        })
-    }
-
-    fn agent_mailbox_counts(
-        &self,
-        owned_addresses: &[String],
-        subscriptions: &[MailSubscriptionRecord],
-    ) -> Result<Vec<MailboxCount>> {
-        let mut addresses = owned_addresses.iter().cloned().collect::<BTreeSet<_>>();
-        addresses.extend(
-            subscriptions
-                .iter()
-                .map(|subscription| subscription.address.clone()),
-        );
-        let owned_address_set = owned_addresses.iter().cloned().collect::<BTreeSet<_>>();
-        let subscription_kind_filters = mail_kind_filters_by_address(subscriptions);
-        addresses
-            .into_iter()
-            .map(|address| {
-                let kind_filter = if owned_address_set.contains(&address) {
-                    None
-                } else {
-                    subscription_kind_filters.get(&address)
-                };
-                Ok(self
-                    .inbox_with_kind_filter(&address, true, true, kind_filter)?
-                    .mailbox)
-            })
-            .collect()
-    }
-
-    fn current_agents_with_stale(
-        &self,
-        include_stale: bool,
-    ) -> Result<BTreeMap<String, AgentRecord>> {
-        let mut current = BTreeMap::new();
-        for event in read_jsonl::<AgentRecord>(&self.agent_events_path())? {
-            if event.event == "agent.retired" {
-                current.remove(&event.agent_id);
-            } else {
-                current.insert(event.agent_id.clone(), event);
-            }
-        }
-        if !include_stale {
-            current.retain(|_, agent| agent_lease_is_active(agent));
-        }
-        Ok(current)
-    }
-
-    fn agent_liveness_index(&self) -> Result<BTreeMap<String, AgentLiveness>> {
-        let mut current = BTreeMap::new();
-        for event in read_jsonl::<AgentRecord>(&self.agent_events_path())? {
-            if event.event == "agent.retired" {
-                current.insert(
-                    event.agent_id.clone(),
-                    AgentLiveness {
-                        state: "retired".to_string(),
-                        lease_expires_at: Some(event.lease_expires_at.clone()),
-                        retired_at: Some(event.at.clone()),
-                        retire_reason: event.reason.clone(),
-                    },
-                );
-            } else {
-                current.insert(
-                    event.agent_id.clone(),
-                    AgentLiveness {
-                        state: if agent_lease_is_active(&event) {
-                            "active".to_string()
-                        } else {
-                            "stale".to_string()
-                        },
-                        lease_expires_at: Some(event.lease_expires_at.clone()),
-                        retired_at: None,
-                        retire_reason: None,
-                    },
-                );
-            }
-        }
-        Ok(current)
-    }
-
-    fn require_active_agent(&self, agent_id: &str) -> Result<AgentRecord> {
-        if let Some(agent) = self.current_agents()?.remove(agent_id) {
-            return Ok(agent);
-        }
-        if let Some(liveness) = self.agent_liveness_index()?.get(agent_id) {
-            if liveness.state == "retired" {
-                return Err(anyhow!(
-                    "agent explicitly retired: {agent_id}; register a new thread/session instead of using a retired identity"
-                ));
-            }
-            if liveness.state == "stale" {
-                let lease = liveness
-                    .lease_expires_at
-                    .as_deref()
-                    .unwrap_or("an earlier time");
-                return Err(anyhow!(
-                    "agent lease expired: {agent_id}; lease expired at {lease}; call agent-identify with the same thread id to refresh the session before using this command"
-                ));
-            }
-        }
-        Err(anyhow!("unknown active agent: {agent_id}"))
-    }
-
-    fn resolve_owner_address(&self, owner: &str) -> Result<String> {
-        if validate_address(owner).is_ok() {
-            return Ok(owner.to_string());
-        }
-        let agent = self.require_active_agent(owner)?;
-        agent
-            .addresses
-            .first()
-            .cloned()
-            .ok_or_else(|| anyhow!("agent {owner} has no address to own this list"))
-    }
-
-    fn deliveries_path(&self) -> PathBuf {
-        self.paths.context_engine.join("mail/deliveries.jsonl")
-    }
-
-    fn mail_subscriptions_path(&self) -> PathBuf {
-        self.paths.context_engine.join("mail/subscriptions.jsonl")
-    }
-
-    fn mail_lists_path(&self) -> PathBuf {
-        self.paths.context_engine.join("mail/lists.jsonl")
-    }
-
-    fn current_mail_lists(&self) -> Result<Vec<MailListRecord>> {
-        let mut current = BTreeMap::new();
-        for event in read_jsonl::<MailListRecord>(&self.mail_lists_path())? {
-            if event.event == "mail.list.deleted" || event.state == "deleted" {
-                current.remove(&event.address);
-            } else {
-                current.insert(event.address.clone(), event);
-            }
-        }
-        Ok(current
-            .into_values()
-            .filter(|list| list.state == "active")
-            .collect())
-    }
-
-    fn subscription_liveness_counts_by_address(
-        &self,
-    ) -> Result<BTreeMap<String, SubscriptionLivenessCounts>> {
-        let agent_liveness = self.agent_liveness_index()?;
-        let mut agents_by_address = BTreeMap::<String, BTreeMap<String, String>>::new();
-        for subscription in self.active_mail_subscriptions()? {
-            let liveness = agent_liveness
-                .get(&subscription.agent_id)
-                .map(|liveness| liveness.state.clone())
-                .unwrap_or_else(|| "unknown".to_string());
-            agents_by_address
-                .entry(subscription.address)
-                .or_default()
-                .insert(subscription.agent_id, liveness);
-        }
-        Ok(agents_by_address
-            .into_iter()
-            .map(|(address, agents)| {
-                let counts = subscription_liveness_counts(
-                    agents
-                        .iter()
-                        .map(|(agent_id, liveness)| (agent_id.as_str(), liveness.as_str())),
-                );
-                (address, counts)
-            })
-            .collect())
-    }
-
-    fn active_mail_subscriptions(&self) -> Result<Vec<MailSubscriptionRecord>> {
-        let mut current = BTreeMap::new();
-        for event in read_jsonl::<MailSubscriptionRecord>(&self.mail_subscriptions_path())? {
-            if event.event == "mail.subscription.cancelled" || event.state == "cancelled" {
-                current.remove(&event.subscription_id);
-            } else {
-                current.insert(event.subscription_id.clone(), event);
-            }
-        }
-        Ok(current
-            .into_values()
-            .filter(mail_subscription_lease_is_active)
-            .collect())
-    }
-
-    fn mailbox_path(&self, recipient: &str) -> PathBuf {
-        self.paths
-            .context_engine
-            .join("mail/mailboxes")
-            .join(address_key(recipient))
-            .join("inbox.jsonl")
-    }
-
-    fn mailbox(&self, recipient: &str) -> Result<Vec<DeliveryRecord>> {
-        Ok(self
-            .mailbox_file_records(recipient)?
-            .into_iter()
-            .filter(|delivery| delivery.recipient == recipient)
-            .collect())
-    }
-
-    fn mailbox_contains_message(&self, recipient: &str, message_id: &str) -> Result<bool> {
-        Ok(self
-            .mailbox_file_records(recipient)?
-            .iter()
-            .any(|delivery| delivery.message_id == message_id && delivery.recipient == recipient))
-    }
-
-    fn mailbox_file_records(&self, recipient: &str) -> Result<Vec<DeliveryRecord>> {
-        let mut messages = read_jsonl(&self.mailbox_path(recipient))?;
-        refresh_delivery_attachment_counts(&mut messages);
-        Ok(messages)
-    }
-
-    fn notifications_outbox_path(&self) -> PathBuf {
-        self.paths.context_engine.join("notifications/outbox.jsonl")
-    }
-
-    fn notifications_attempts_path(&self) -> PathBuf {
-        self.paths
-            .context_engine
-            .join("notifications/attempts.jsonl")
-    }
-
-    fn enqueue_notifications(
-        &self,
-        deliveries: &[DeliveryRecord],
-    ) -> Result<Vec<NotificationRecord>> {
-        let current = self.current_agents()?;
-        let subscriptions = self.active_mail_subscriptions()?;
-        let mut notifications = Vec::new();
-        let mut seen = BTreeSet::new();
-        for delivery in deliveries {
-            for (agent_id, agent) in &current {
-                let directly_addressed = agent
-                    .addresses
-                    .iter()
-                    .any(|address| address == &delivery.recipient);
-                let subscribed = subscriptions.iter().any(|subscription| {
-                    subscription.agent_id == *agent_id
-                        && subscription.address == delivery.recipient
-                        && subscription_accepts_kind(subscription, &delivery.kind)
-                });
-                if !directly_addressed && !subscribed {
-                    continue;
-                }
-                let delivery_key = format!(
-                    "{}:{}:{}",
-                    delivery.message_id, agent_id, delivery.recipient
-                );
-                if !seen.insert(delivery_key.clone()) {
-                    continue;
-                }
-                let agent_address = agent
-                    .addresses
-                    .first()
-                    .cloned()
-                    .unwrap_or_else(|| agent_id.clone());
-                let notification = NotificationRecord {
-                    schema_version: 1,
-                    notification_id: format!(
-                        "notif_{}_{}",
-                        now_file_stamp().replace('-', ""),
-                        short_hash(&delivery_key)
-                    ),
-                    agent_id: agent_id.clone(),
-                    recipient: agent_address.clone(),
-                    agent_address,
-                    delivery_recipient: delivery.recipient.clone(),
-                    mailbox: delivery.recipient.clone(),
-                    message_id: delivery.message_id.clone(),
-                    thread_id: delivery.thread_id.clone(),
-                    reply_to: delivery.reply_to.clone(),
-                    page_id: delivery.page_id.clone(),
-                    route: delivery.route.clone(),
-                    kind: delivery.kind.clone(),
-                    subject: delivery.subject.clone(),
-                    excerpt: delivery.excerpt.clone(),
-                    attachment_count: delivery.attachments.len(),
-                    urgency: "normal".to_string(),
-                    cursor: format!("notifcur_{}", now_file_stamp().replace('-', "")),
-                    created_at: now_rfc3339(),
-                };
-                append_jsonl(&self.notifications_outbox_path(), &notification)?;
-                notifications.push(notification);
-            }
-        }
-        Ok(notifications)
-    }
-
-    fn notification_delivery_is_actionable(
-        &self,
-        notification: &NotificationRecord,
-    ) -> Result<bool> {
-        Ok(self.mailbox(&notification.mailbox)?.iter().any(|delivery| {
-            delivery.message_id == notification.message_id && mail_delivery_is_actionable(delivery)
-        }))
-    }
-
-    fn agents_summary(&self) -> Result<AgentsSummary> {
-        let active_count = self.current_agents()?.len();
-        let all_current_count = self.current_agents_with_stale(true)?.len();
-        Ok(AgentsSummary {
-            active_count,
-            stale_count: all_current_count.saturating_sub(active_count),
-        })
-    }
-
-    fn mail_summary(&self) -> Result<MailSummary> {
-        let deliveries = self.all_mailbox_messages()?;
-        let notifications = read_jsonl::<NotificationRecord>(&self.notifications_outbox_path())?;
-        Ok(MailSummary {
-            delivery_count: deliveries.len(),
-            unread_count: deliveries
-                .iter()
-                .filter(|delivery| delivery.state == "unread")
-                .count(),
-            notification_count: notifications.len(),
-        })
-    }
-
-    fn all_mailbox_messages(&self) -> Result<Vec<DeliveryRecord>> {
-        let mailbox_root = self.paths.context_engine.join("mail/mailboxes");
-        if !mailbox_root.exists() {
-            return Ok(Vec::new());
-        }
-        let mut messages = Vec::new();
-        for entry in fs::read_dir(mailbox_root)? {
-            let entry = entry?;
-            let inbox = entry.path().join("inbox.jsonl");
-            let mut inbox_messages = read_jsonl::<DeliveryRecord>(&inbox)?;
-            refresh_delivery_attachment_counts(&mut inbox_messages);
-            messages.extend(inbox_messages);
-        }
-        Ok(messages)
-    }
-}
-
-fn refresh_delivery_attachment_counts(messages: &mut [DeliveryRecord]) {
-    for message in messages {
-        message.attachment_count = message.attachments.len();
     }
 }
 
@@ -7140,6 +4048,16 @@ fn write_new(path: &Path, content: String) -> Result<()> {
         .with_context(|| format!("write {}", path.display()))
 }
 
+fn existing_talk_created_at(path: &Path) -> Result<Option<String>> {
+    if !path.is_file() {
+        return Ok(None);
+    }
+    let text = fs::read_to_string(path).with_context(|| format!("read {}", path.display()))?;
+    Ok(parse_simple_frontmatter_fields(&text)
+        .ok()
+        .and_then(|fields| fields.get("created").cloned()))
+}
+
 fn write_text_atomic(path: &Path, content: &str) -> Result<()> {
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent)?;
@@ -7169,73 +4087,6 @@ fn append_jsonl<T: Serialize>(path: &Path, value: &T) -> Result<()> {
     Ok(())
 }
 
-struct FileMutationLock {
-    file: File,
-}
-
-impl Drop for FileMutationLock {
-    fn drop(&mut self) {
-        let _ = self.file.unlock();
-    }
-}
-
-fn acquire_file_mutation_lock(path: &Path, label: &str) -> Result<FileMutationLock> {
-    const LOCK_TIMEOUT: Duration = Duration::from_secs(10);
-
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent)?;
-    }
-
-    let mut file = OpenOptions::new()
-        .create(true)
-        .read(true)
-        .write(true)
-        .open(path)
-        .with_context(|| format!("open {label} lock at {}", path.display()))?;
-    let started = Instant::now();
-    loop {
-        match file.try_lock_exclusive() {
-            Ok(()) => {
-                file.set_len(0)
-                    .with_context(|| format!("truncate {label} lock at {}", path.display()))?;
-                writeln!(
-                    file,
-                    "pid={} acquired_at={}",
-                    std::process::id(),
-                    now_rfc3339()
-                )
-                .with_context(|| format!("write {label} lock at {}", path.display()))?;
-                return Ok(FileMutationLock { file });
-            }
-            Err(error) if error.kind() == ErrorKind::WouldBlock => {
-                if started.elapsed() >= LOCK_TIMEOUT {
-                    return Err(anyhow!(
-                        "timed out waiting for {label} lock at {}",
-                        path.display()
-                    ));
-                }
-                thread::sleep(Duration::from_millis(5));
-            }
-            Err(error) => {
-                return Err(error)
-                    .with_context(|| format!("acquire {label} lock at {}", path.display()));
-            }
-        }
-    }
-}
-
-fn write_jsonl<T: Serialize>(path: &Path, values: &[T]) -> Result<()> {
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent)?;
-    }
-    let mut file = File::create(path)?;
-    for value in values {
-        serde_json::to_writer(&mut file, value)?;
-        file.write_all(b"\n")?;
-    }
-    Ok(())
-}
-
 fn read_jsonl<T: for<'de> Deserialize<'de>>(path: &Path) -> Result<Vec<T>> {
     if !path.exists() {
         return Ok(Vec::new());
@@ -7252,14 +4103,6 @@ fn read_jsonl<T: for<'de> Deserialize<'de>>(path: &Path) -> Result<Vec<T>> {
         );
     }
     Ok(values)
-}
-
-fn write_json_pretty<T: Serialize>(path: &Path, value: &T) -> Result<()> {
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent)?;
-    }
-    fs::write(path, serde_json::to_vec_pretty(value)?)?;
-    Ok(())
 }
 
 fn read_optional_string(path: &Path) -> Result<Option<String>> {
@@ -7317,6 +4160,7 @@ fn parse_simple_frontmatter_fields(text: &str) -> Result<BTreeMap<String, String
     Ok(fields)
 }
 
+#[cfg(test)]
 fn parse_talk_file_attachments(text: &str) -> Result<Vec<TalkAttachmentRecord>> {
     let (frontmatter, _) = split_markdown_frontmatter(text)?;
     let mut attachments = Vec::new();
@@ -7363,6 +4207,7 @@ fn parse_talk_file_attachments(text: &str) -> Result<Vec<TalkAttachmentRecord>> 
     Ok(attachments)
 }
 
+#[cfg(test)]
 fn push_talk_attachment_record(
     attachments: &mut Vec<TalkAttachmentRecord>,
     fields: &mut BTreeMap<String, String>,
@@ -7398,6 +4243,66 @@ fn push_talk_attachment_record(
         caption,
         alt_text,
     });
+}
+
+fn validate_talk_target_id(value: &str, flag: &str) -> Result<String> {
+    let trimmed = value.trim();
+    if talk_target_id_is_valid(trimmed) {
+        Ok(trimmed.to_string())
+    } else {
+        Err(anyhow!(
+            "invalid talk target id for {flag}: {value:?}; expected a non-empty id without whitespace or control characters"
+        ))
+    }
+}
+
+fn talk_target_id_is_valid(value: &str) -> bool {
+    let trimmed = value.trim();
+    !trimmed.is_empty()
+        && trimmed.len() <= 200
+        && trimmed == value
+        && !trimmed
+            .chars()
+            .any(|ch| ch.is_whitespace() || ch.is_control())
+}
+
+fn talk_file_subject(fields: &BTreeMap<String, String>, body: &str, message_id: &str) -> String {
+    if let Some(subject) = fields
+        .get("subject")
+        .map(|value| value.trim())
+        .filter(|value| !value.is_empty())
+    {
+        return subject.to_string();
+    }
+    body.lines()
+        .find_map(|line| {
+            line.trim()
+                .strip_prefix("## ")
+                .map(str::trim)
+                .filter(|value| !value.is_empty())
+                .map(ToString::to_string)
+        })
+        .unwrap_or_else(|| message_id.to_string())
+}
+
+fn talk_file_thread_id(
+    record: &PageRecord,
+    fields: &BTreeMap<String, String>,
+    body: &str,
+    message_id: &str,
+) -> String {
+    if let Some(thread_id) = fields
+        .get("thread")
+        .map(|value| value.trim())
+        .filter(|value| talk_target_id_is_valid(value))
+    {
+        return thread_id.to_string();
+    }
+    format!(
+        "thread_{}_{}",
+        record.id,
+        slugify(&talk_file_subject(fields, body, message_id))
+    )
 }
 
 fn unquote_frontmatter_value(value: &str) -> String {
@@ -7556,139 +4461,6 @@ fn page_allowed_actions(state: &str, rendered: bool) -> Vec<String> {
         ],
     };
     actions.into_iter().map(str::to_string).collect()
-}
-
-fn notification_ack_state_is_terminal(state: &str) -> bool {
-    matches!(
-        state,
-        "delivered" | "claimed" | "read" | "dismissed" | "archived" | "failed"
-    )
-}
-
-fn notification_ack_state_is_allowed(state: &str) -> bool {
-    notification_ack_state_is_terminal(state)
-}
-
-fn mail_delivery_state_is_allowed(state: &str) -> bool {
-    matches!(
-        state,
-        "unread" | "read" | "claimed" | "done" | "snoozed" | "archived"
-    )
-}
-
-fn mail_delivery_state_is_terminal(state: &str) -> bool {
-    matches!(state, "done" | "archived")
-}
-
-fn mail_delivery_is_actionable(delivery: &DeliveryRecord) -> bool {
-    !mail_delivery_state_is_terminal(delivery.state.as_str())
-        && !mail_delivery_is_snoozed_until_future(delivery)
-}
-
-fn mail_delivery_is_claimable_by(delivery: &DeliveryRecord, agent_id: &str) -> bool {
-    mail_delivery_is_actionable(delivery)
-        && delivery
-            .claimed_by
-            .as_deref()
-            .map_or(true, |claimant| claimant == agent_id)
-}
-
-fn agent_claim_recipient_priority(
-    recipient: &str,
-    owned_addresses: &BTreeSet<String>,
-    relation_by_address: &BTreeMap<String, String>,
-) -> (u8, String) {
-    let priority = if owned_addresses.contains(recipient) {
-        0
-    } else {
-        match relation_by_address.get(recipient).map(String::as_str) {
-            Some("assignee") => 1,
-            Some("member") => 2,
-            Some("subscriber") => 3,
-            Some("watcher") => 4,
-            _ if recipient.starts_with("role://") => 5,
-            _ if recipient.starts_with("list://") => 6,
-            _ if recipient.starts_with("mailbox://page/") => 7,
-            _ => 8,
-        }
-    };
-    (priority, recipient.to_string())
-}
-
-fn mail_delivery_is_snoozed_until_future(delivery: &DeliveryRecord) -> bool {
-    delivery.state == "snoozed"
-        && delivery
-            .snoozed_until
-            .as_deref()
-            .and_then(|until| DateTime::parse_from_rfc3339(until).ok())
-            .is_some_and(|until| until.with_timezone(&Utc) > Utc::now())
-}
-
-fn validate_snooze_until(state: &str, snoozed_until: Option<&str>) -> Result<Option<String>> {
-    if state == "snoozed" {
-        let until = snoozed_until
-            .ok_or_else(|| anyhow!("mail state snoozed requires --until <RFC3339 timestamp>"))?;
-        let parsed = DateTime::parse_from_rfc3339(until)
-            .with_context(|| format!("invalid snooze until timestamp: {until}"))?
-            .with_timezone(&Utc);
-        if parsed <= Utc::now() {
-            return Err(anyhow!(
-                "snooze until timestamp must be in the future: {until}"
-            ));
-        }
-        Ok(Some(parsed.to_rfc3339_opts(SecondsFormat::Secs, true)))
-    } else {
-        Ok(None)
-    }
-}
-
-fn validate_mail_mark_state(state: &str) -> Result<()> {
-    if !mail_delivery_state_is_allowed(state) {
-        return Err(anyhow!(
-            "invalid mail state {state}; expected unread, read, done, snoozed, or archived"
-        ));
-    }
-    if state == "claimed" {
-        return Err(anyhow!(
-            "invalid mail mark state claimed; use wiki.mail.claim or wiki.agent.claim so the claim records an agent_id"
-        ));
-    }
-    Ok(())
-}
-
-fn validate_positive_ttl_seconds(label: &str, ttl_seconds: i64) -> Result<()> {
-    if ttl_seconds <= 0 {
-        return Err(anyhow!(
-            "invalid {label} ttl {ttl_seconds}; expected a positive number of seconds"
-        ));
-    }
-    Ok(())
-}
-
-fn count_mail_mark_all_delivery(counts: &mut MailMarkAllCounts, delivery: &DeliveryRecord) {
-    counts.delivery_count += 1;
-    if delivery.state == "unread" {
-        counts.unread_count += 1;
-    }
-    if mail_delivery_state_is_terminal(delivery.state.as_str()) {
-        counts.terminal_count += 1;
-    } else if mail_delivery_is_actionable(delivery) {
-        counts.open_delivery_count += 1;
-    }
-}
-
-fn mail_subscription_relation_is_allowed(relation: &str) -> bool {
-    matches!(relation, "watcher" | "member" | "assignee" | "subscriber")
-}
-
-fn validate_kind(kind: &str) -> Result<()> {
-    if !kind.is_empty() && kind.trim() == kind && !kind.chars().any(char::is_whitespace) {
-        Ok(())
-    } else {
-        Err(anyhow!(
-            "invalid kind {kind}; expected a non-empty token with no whitespace"
-        ))
-    }
 }
 
 fn validate_page_slug(slug: &str) -> Result<()> {
@@ -8031,436 +4803,6 @@ fn talk_route_for_route(route: &str) -> String {
     }
 }
 
-fn normalize_subscription_kinds(kinds: Vec<String>) -> Result<Vec<String>> {
-    let mut normalized = BTreeSet::new();
-    for kind in kinds {
-        validate_kind(&kind)?;
-        normalized.insert(kind);
-    }
-    Ok(normalized.into_iter().collect())
-}
-
-fn subscription_kinds_equal(left: &[String], right: &[String]) -> bool {
-    left.iter().collect::<BTreeSet<_>>() == right.iter().collect::<BTreeSet<_>>()
-}
-
-fn validate_address(address: &str) -> Result<()> {
-    if address
-        .strip_prefix("agent://")
-        .is_some_and(|suffix| suffix.starts_with("agent_"))
-    {
-        return Err(anyhow!(
-            "invalid agent address {address}; agent ids are not mail addresses. Use the agent primary_address or addresses[0] value, such as agent://codex/<thread-id>"
-        ));
-    }
-    let valid_prefixes = ["agent://", "role://", "list://", "mailbox://"];
-    let has_valid_prefix = valid_prefixes
-        .iter()
-        .any(|prefix| address.starts_with(prefix) && address.len() > prefix.len());
-    if address.trim() == address && has_valid_prefix && !address.chars().any(char::is_whitespace) {
-        Ok(())
-    } else {
-        Err(anyhow!(
-            "invalid address {address}; expected agent://, role://, list://, or mailbox:// address"
-        ))
-    }
-}
-
-fn talk_file_thread_id(
-    record: &PageRecord,
-    fields: &BTreeMap<String, String>,
-    body: &str,
-    message_id: &str,
-) -> String {
-    if let Some(thread_id) = fields
-        .get("thread")
-        .filter(|thread_id| talk_target_id_is_valid(thread_id))
-    {
-        return thread_id.clone();
-    }
-
-    format!(
-        "thread_{}_{}",
-        record.id,
-        slugify(&talk_file_subject(fields, body, message_id)).if_empty("message")
-    )
-}
-
-fn talk_file_subject(fields: &BTreeMap<String, String>, body: &str, message_id: &str) -> String {
-    fields
-        .get("subject")
-        .map(|subject| subject.trim().to_string())
-        .filter(|subject| !subject.is_empty())
-        .or_else(|| first_markdown_heading(body))
-        .unwrap_or_else(|| message_id.to_string())
-}
-
-fn first_markdown_heading(markdown: &str) -> Option<String> {
-    markdown.lines().find_map(|line| {
-        let trimmed = line.trim_start();
-        let heading = trimmed.strip_prefix('#')?;
-        let title = heading.trim_start_matches('#').trim();
-        if title.is_empty() {
-            None
-        } else {
-            Some(title.to_string())
-        }
-    })
-}
-
-fn talk_target_id_is_valid(value: &str) -> bool {
-    value.trim() == value && !value.is_empty() && !value.chars().any(char::is_whitespace)
-}
-
-fn validate_talk_target_id<'a>(value: &'a str, flag: &str) -> Result<&'a str> {
-    if talk_target_id_is_valid(value) {
-        Ok(value)
-    } else {
-        Err(anyhow!(
-            "invalid talk target {value}; expected {flag} with a message or thread id"
-        ))
-    }
-}
-
-fn agent_lease_is_active(agent: &AgentRecord) -> bool {
-    DateTime::parse_from_rfc3339(&agent.lease_expires_at)
-        .map(|expires_at| expires_at > Utc::now())
-        .unwrap_or(true)
-}
-
-fn mail_subscription_lease_is_active(subscription: &MailSubscriptionRecord) -> bool {
-    subscription.state == "active"
-        && DateTime::parse_from_rfc3339(&subscription.lease_expires_at)
-            .map(|expires_at| expires_at > Utc::now())
-            .unwrap_or(true)
-}
-
-fn validate_list_address(address: &str) -> Result<()> {
-    validate_address(address)?;
-    if address.starts_with("list://") {
-        Ok(())
-    } else {
-        Err(anyhow!(
-            "invalid list address {address}; expected list:// address"
-        ))
-    }
-}
-
-fn page_role_address(page_id: &str, role: &str) -> Result<String> {
-    let address = if role.starts_with("role://") {
-        let role_name = role.trim_start_matches("role://");
-        if !role_name.contains(['.', '/'])
-            && role_name.trim() == role_name
-            && !role_name.is_empty()
-            && !role_name.chars().any(char::is_whitespace)
-        {
-            format!("role://{page_id}.{role_name}")
-        } else {
-            role.to_string()
-        }
-    } else if role.trim() == role && !role.is_empty() && !role.chars().any(char::is_whitespace) {
-        format!("role://{page_id}.{role}")
-    } else {
-        return Err(anyhow!(
-            "invalid page role {role}; expected a role token or role://{page_id}.<role>"
-        ));
-    };
-    validate_address(&address)?;
-    if page_subscription_is_related(page_id, &format!("mailbox://page/{page_id}"), &address) {
-        Ok(address)
-    } else {
-        Err(anyhow!(
-            "invalid page role {address}; expected role://{page_id}.<role> or role://{page_id}/<role>"
-        ))
-    }
-}
-
-fn list_name(address: &str) -> String {
-    address
-        .trim_start_matches("list://")
-        .replace(['/', '.', '_'], "-")
-}
-
-#[derive(Clone, Debug)]
-struct AgentLiveness {
-    state: String,
-    lease_expires_at: Option<String>,
-    retired_at: Option<String>,
-    retire_reason: Option<String>,
-}
-
-#[derive(Clone, Debug)]
-struct AgentDirectoryEntry {
-    record: AgentRecord,
-    liveness: AgentLiveness,
-    registered_at: Option<String>,
-}
-
-#[derive(Clone, Debug, Default)]
-struct MailKindFilter {
-    all: bool,
-    kinds: BTreeSet<String>,
-}
-
-impl MailKindFilter {
-    fn from_kinds(kinds: &[String]) -> Self {
-        let mut filter = Self::default();
-        filter.add(kinds);
-        filter
-    }
-
-    fn add(&mut self, kinds: &[String]) {
-        if self.all {
-            return;
-        }
-        if kinds.is_empty() {
-            self.all = true;
-            self.kinds.clear();
-        } else {
-            self.kinds.extend(kinds.iter().cloned());
-        }
-    }
-
-    fn accepts(&self, kind: &str) -> bool {
-        self.all || self.kinds.contains(kind)
-    }
-}
-
-fn subscription_accepts_kind(subscription: &MailSubscriptionRecord, kind: &str) -> bool {
-    MailKindFilter::from_kinds(&subscription.kinds).accepts(kind)
-}
-
-fn mail_kind_filters_by_address(
-    subscriptions: &[MailSubscriptionRecord],
-) -> BTreeMap<String, MailKindFilter> {
-    let mut filters = BTreeMap::<String, MailKindFilter>::new();
-    for subscription in subscriptions {
-        filters
-            .entry(subscription.address.clone())
-            .or_default()
-            .add(&subscription.kinds);
-    }
-    filters
-}
-
-fn enrich_mail_subscription(
-    record: MailSubscriptionRecord,
-    agent_liveness: &BTreeMap<String, AgentLiveness>,
-) -> MailSubscriptionSummary {
-    let liveness = agent_liveness
-        .get(&record.agent_id)
-        .cloned()
-        .unwrap_or_else(|| AgentLiveness {
-            state: "unknown".to_string(),
-            lease_expires_at: None,
-            retired_at: None,
-            retire_reason: None,
-        });
-    MailSubscriptionSummary {
-        schema_version: record.schema_version,
-        event: record.event,
-        subscription_id: record.subscription_id,
-        agent_id: record.agent_id,
-        subscriber: record.subscriber,
-        address: record.address,
-        relation: record.relation,
-        kinds: record.kinds,
-        state: record.state,
-        created_at: record.created_at,
-        lease_expires_at: record.lease_expires_at,
-        agent_liveness: liveness.state,
-        agent_lease_expires_at: liveness.lease_expires_at,
-        agent_retired_at: liveness.retired_at,
-        agent_retire_reason: liveness.retire_reason,
-    }
-}
-
-fn agent_inbox_threads(
-    messages: &[DeliveryRecord],
-    notifications: &[NotificationRecord],
-    agent_id: &str,
-) -> Vec<AgentInboxThreadSummary> {
-    let mut notification_counts = BTreeMap::<String, usize>::new();
-    for notification in notifications {
-        *notification_counts
-            .entry(notification.thread_id.clone())
-            .or_insert(0) += 1;
-    }
-    let mut threads = BTreeMap::<String, AgentInboxThreadSummary>::new();
-    let mut thread_attachment_keys = BTreeMap::<String, BTreeSet<String>>::new();
-    for message in messages {
-        let attachment_count = {
-            let keys = thread_attachment_keys
-                .entry(message.thread_id.clone())
-                .or_default();
-            for attachment in &message.attachments {
-                keys.insert(format!("{}:{}", message.message_id, attachment.path));
-            }
-            keys.len()
-        };
-        let thread =
-            threads
-                .entry(message.thread_id.clone())
-                .or_insert_with(|| AgentInboxThreadSummary {
-                    thread_id: message.thread_id.clone(),
-                    message_id: message.message_id.clone(),
-                    page_id: message.page_id.clone(),
-                    route: message.route.clone(),
-                    kind: message.kind.clone(),
-                    subject: message.subject.clone(),
-                    excerpt: message.excerpt.clone(),
-                    created_at: message.created_at.clone(),
-                    delivery_count: 0,
-                    actionable_delivery_count: 0,
-                    claimable_delivery_count: 0,
-                    unread_delivery_count: 0,
-                    notification_count: 0,
-                    attachment_count: 0,
-                    recipients: Vec::new(),
-                });
-        thread.attachment_count = attachment_count;
-        thread.delivery_count += 1;
-        if mail_delivery_is_actionable(message) {
-            thread.actionable_delivery_count += 1;
-        }
-        if mail_delivery_is_claimable_by(message, agent_id) {
-            thread.claimable_delivery_count += 1;
-        }
-        if message.state == "unread" {
-            thread.unread_delivery_count += 1;
-        }
-        thread.recipients.push(DeliveryState {
-            recipient: message.recipient.clone(),
-            state: message.state.clone(),
-        });
-    }
-    let mut threads = threads
-        .into_iter()
-        .map(|(thread_id, mut thread)| {
-            thread.notification_count = notification_counts.get(&thread_id).copied().unwrap_or(0);
-            thread
-        })
-        .collect::<Vec<_>>();
-    threads.sort_by(|a, b| {
-        b.created_at
-            .cmp(&a.created_at)
-            .then_with(|| a.thread_id.cmp(&b.thread_id))
-    });
-    threads
-}
-
-fn page_subscription_summary(
-    record: MailSubscriptionRecord,
-    agent_liveness: &BTreeMap<String, AgentLiveness>,
-) -> PageSubscriptionSummary {
-    let summary = enrich_mail_subscription(record, agent_liveness);
-    PageSubscriptionSummary {
-        subscription_id: summary.subscription_id,
-        agent_id: summary.agent_id,
-        subscriber: summary.subscriber,
-        address: summary.address,
-        relation: summary.relation,
-        kinds: summary.kinds,
-        lease_expires_at: summary.lease_expires_at,
-        agent_liveness: summary.agent_liveness,
-        agent_lease_expires_at: summary.agent_lease_expires_at,
-        agent_retired_at: summary.agent_retired_at,
-        agent_retire_reason: summary.agent_retire_reason,
-    }
-}
-
-fn agent_liveness_sort_key(liveness: &str) -> u8 {
-    match liveness {
-        "active" => 0,
-        "stale" => 1,
-        "retired" => 2,
-        _ => 3,
-    }
-}
-
-fn agent_directory_counts(agents: &[AgentDirectorySummary]) -> AgentDirectoryCounts {
-    let mut counts = AgentDirectoryCounts::default();
-    for agent in agents {
-        match agent.liveness.as_str() {
-            "active" => counts.active_count += 1,
-            "stale" => counts.stale_count += 1,
-            "retired" => counts.retired_count += 1,
-            _ => {}
-        }
-    }
-    counts.total_count = agents.len();
-    counts
-}
-
-fn subscription_liveness_counts<'a>(
-    agents: impl IntoIterator<Item = (&'a str, &'a str)>,
-) -> SubscriptionLivenessCounts {
-    let mut unique = BTreeMap::new();
-    for (agent_id, liveness) in agents {
-        unique.insert(agent_id.to_string(), liveness.to_string());
-    }
-    let mut counts = SubscriptionLivenessCounts::default();
-    for liveness in unique.values() {
-        match liveness.as_str() {
-            "active" => counts.active_agent_count += 1,
-            "stale" => counts.stale_agent_count += 1,
-            "retired" => counts.retired_agent_count += 1,
-            _ => counts.unknown_agent_count += 1,
-        }
-    }
-    counts.inactive_agent_count =
-        counts.stale_agent_count + counts.retired_agent_count + counts.unknown_agent_count;
-    counts
-}
-
-fn mail_subscription_summary_liveness_counts(
-    subscriptions: &[MailSubscriptionSummary],
-) -> SubscriptionLivenessCounts {
-    subscription_liveness_counts(subscriptions.iter().map(|subscription| {
-        (
-            subscription.agent_id.as_str(),
-            subscription.agent_liveness.as_str(),
-        )
-    }))
-}
-
-fn mail_list_summary(
-    record: MailListRecord,
-    member_counts: &BTreeMap<String, SubscriptionLivenessCounts>,
-) -> MailListSummary {
-    let counts = member_counts
-        .get(&record.address)
-        .cloned()
-        .unwrap_or_default();
-    let member_count = counts.active_agent_count
-        + counts.stale_agent_count
-        + counts.retired_agent_count
-        + counts.unknown_agent_count;
-    MailListSummary {
-        address: record.address,
-        title: record.title,
-        description: record.description,
-        page_id: record.page_id,
-        owner: record.owner,
-        state: record.state,
-        created_at: record.created_at,
-        member_count,
-        active_member_count: counts.active_agent_count,
-        inactive_member_count: counts.inactive_agent_count,
-        subscription_liveness_counts: counts,
-    }
-}
-
-fn page_subscription_is_related(page_id: &str, page_mailbox: &str, address: &str) -> bool {
-    address == page_mailbox
-        || address.starts_with(&format!("role://{page_id}."))
-        || address.starts_with(&format!("role://{page_id}/"))
-        || address == format!("list://{page_id}")
-        || address.starts_with(&format!("list://{page_id}."))
-        || address.starts_with(&format!("list://{page_id}/"))
-        || address.starts_with(&format!("list://page/{page_id}"))
-}
-
 fn collect_files(root: &Path, files: &mut Vec<PathBuf>) -> Result<()> {
     if !root.exists() {
         return Ok(());
@@ -8594,20 +4936,6 @@ fn short_hash(value: &str) -> String {
     sha256_bytes(value.as_bytes()).chars().take(10).collect()
 }
 
-fn agent_id_for_thread(thread_id: &str) -> String {
-    format!(
-        "agent_codex_{}",
-        sha256_bytes(thread_id.as_bytes())
-            .chars()
-            .take(16)
-            .collect::<String>()
-    )
-}
-
-fn agent_primary_address(thread_id: &str) -> String {
-    format!("agent://codex/{thread_id}")
-}
-
 fn now_rfc3339() -> String {
     Utc::now().to_rfc3339_opts(SecondsFormat::Secs, true)
 }
@@ -8626,20 +4954,6 @@ fn slugify(value: &str) -> String {
         }
     }
     out.trim_matches('-').chars().take(64).collect::<String>()
-}
-
-fn address_key(address: &str) -> String {
-    slugify(address).if_empty("mailbox")
-}
-
-fn mailbox_surface(address: &str) -> String {
-    if address.starts_with("mailbox://page/") {
-        "page_thread".to_string()
-    } else if address.starts_with("role://") || address.starts_with("agent://") {
-        "agent_action_queue".to_string()
-    } else {
-        "mailbox".to_string()
-    }
 }
 
 fn link_repair_tasks_for_page(
@@ -8973,14 +5287,6 @@ impl IfEmpty for String {
     }
 }
 
-fn excerpt(markdown: &str) -> String {
-    markdown
-        .split_whitespace()
-        .take(32)
-        .collect::<Vec<_>>()
-        .join(" ")
-}
-
 fn safe_attachment_filename(value: &str) -> Result<String> {
     let trimmed = value.trim();
     if trimmed.is_empty()
@@ -9065,11 +5371,49 @@ fn infer_media_type(filename: &str) -> &'static str {
         Some("json") => "application/json",
         Some("md") | Some("markdown") => "text/markdown",
         Some("eml") => "text/plain",
-        Some("txt") => "text/plain",
+        Some("css") => "text/css",
+        Some("html") => "text/html",
+        Some("js") | Some("mjs") | Some("jsx") | Some("ts") | Some("tsx") => "text/javascript",
+        Some("toml") => "text/toml",
+        Some("yaml") | Some("yml") => "text/yaml",
+        Some("txt") | Some("log") | Some("rs") | Some("swift") | Some("py") | Some("go")
+        | Some("java") | Some("kt") | Some("sh") | Some("sql") | Some("c") | Some("h")
+        | Some("cc") | Some("cpp") | Some("hpp") | Some("m") | Some("mm") | Some("rb") => {
+            "text/plain"
+        }
         Some("csv") => "text/csv",
         Some("pdf") => "application/pdf",
         _ => "application/octet-stream",
     }
+}
+
+fn page_asset_kind(filename: &str, media_type: &str) -> &'static str {
+    if media_type.starts_with("image/") {
+        return "image";
+    }
+    match filename
+        .rsplit_once('.')
+        .map(|(_, extension)| extension.to_ascii_lowercase())
+        .as_deref()
+    {
+        Some("c") | Some("cc") | Some("cpp") | Some("css") | Some("go") | Some("h")
+        | Some("hpp") | Some("html") | Some("java") | Some("js") | Some("jsx") | Some("kt")
+        | Some("m") | Some("mm") | Some("mjs") | Some("py") | Some("rb") | Some("rs")
+        | Some("sh") | Some("sql") | Some("swift") | Some("toml") | Some("ts") | Some("tsx")
+        | Some("xml") | Some("yaml") | Some("yml") => "code_file",
+        _ => "file",
+    }
+}
+
+fn reference_record_matches_page(value: &serde_json::Value, page_id: &str, route: &str) -> bool {
+    value
+        .get("page_id")
+        .and_then(serde_json::Value::as_str)
+        .is_some_and(|value| value == page_id)
+        || value
+            .get("route")
+            .and_then(serde_json::Value::as_str)
+            .is_some_and(|value| value == route)
 }
 
 fn escape_yaml(value: &str) -> String {
@@ -9136,165 +5480,6 @@ fn title_case(value: &str) -> String {
 mod tests {
     use super::*;
     use tempfile::TempDir;
-
-    #[test]
-    fn page_create_inventory_and_mail_loop_work_from_files() {
-        let temp = TempDir::new().unwrap();
-        let root = temp.path().join("1Context");
-        seed_fixture(&root);
-        let core = WikiCore::new(&root);
-
-        let before = core.page_status("topics").unwrap();
-        assert_eq!(before.state, "source_missing");
-
-        let receipt = core
-            .create_page(
-                "topics",
-                Some(Actor {
-                    kind: "test".to_string(),
-                    name: Some("unit".to_string()),
-                }),
-            )
-            .unwrap();
-        assert_eq!(receipt.status, "ok");
-        assert!(root
-            .join("user-wiki/source/families/reference/topics/source/topics.md")
-            .exists());
-        assert!(root
-            .join("user-wiki/source/families/reference/topics/talk/topics.talk/_curator.md")
-            .exists());
-
-        let thread_id = "019e3f72-3471-7da1-92a8-56e5d25aaa01";
-        let agent = core
-            .register_agent(
-                thread_id,
-                vec!["role://topics.curator".to_string()],
-                vec!["wiki.mail".to_string()],
-                1800,
-            )
-            .unwrap();
-        assert_eq!(agent.status, "registered");
-        let duplicate_error = core
-            .register_agent(thread_id, Vec::new(), Vec::new(), 1800)
-            .unwrap_err()
-            .to_string();
-        assert!(duplicate_error.contains("agent already registered"));
-        let identified = core
-            .identify_agent(
-                thread_id,
-                Vec::new(),
-                vec!["wiki.curator.apply".to_string()],
-                1800,
-            )
-            .unwrap();
-        assert_eq!(identified.status, "identified");
-        assert!(identified
-            .agent
-            .as_ref()
-            .unwrap()
-            .roles
-            .contains(&"role://topics.curator".to_string()));
-        assert!(identified
-            .agent
-            .as_ref()
-            .unwrap()
-            .capabilities
-            .contains(&"wiki.mail".to_string()));
-        assert!(identified
-            .agent
-            .as_ref()
-            .unwrap()
-            .capabilities
-            .contains(&"wiki.curator.apply".to_string()));
-        let whoami = core.agent_whoami(Some(thread_id), None).unwrap();
-        assert_eq!(whoami.status, "ok");
-        assert_eq!(whoami.matches[0].agent_id, agent.agent_id);
-
-        let talk = core
-            .append_talk(TalkAppendRequest {
-                page: "topics".to_string(),
-                kind: "proposal".to_string(),
-                subject: "Add Rust core topic".to_string(),
-                thread_id: None,
-                reply_to: None,
-                from: agent.addresses[0].clone(),
-                to: vec!["role://topics.curator".to_string()],
-                cc: vec![],
-                body_markdown: "Rust core should own wiki semantics.".to_string(),
-                attachments: vec![],
-                allow_tombstoned: false,
-            })
-            .unwrap();
-        assert_eq!(talk.deliveries.len(), 1);
-        assert_eq!(talk.notifications.len(), 1);
-
-        let inbox = core.inbox("role://topics.curator").unwrap();
-        assert_eq!(inbox.mailbox.unread_count, 1);
-        assert_eq!(inbox.messages[0].subject, "Add Rust core topic");
-
-        let notifications = core.poll_notifications(&agent.agent_id).unwrap();
-        assert_eq!(notifications.notifications.len(), 1);
-        core.ack_notification(
-            &agent.agent_id,
-            &notifications.notifications[0].notification_id,
-            "delivered",
-        )
-        .unwrap();
-        let notifications_after_ack = core.poll_notifications(&agent.agent_id).unwrap();
-        assert_eq!(notifications_after_ack.notifications.len(), 0);
-
-        let snoozed_until = (Utc::now() + chrono::Duration::seconds(300))
-            .to_rfc3339_opts(SecondsFormat::Secs, true);
-        core.mark_mail(
-            &talk.message_id,
-            "role://topics.curator",
-            "snoozed",
-            Some(&snoozed_until),
-        )
-        .unwrap();
-        let snoozed_inbox = core.inbox("role://topics.curator").unwrap();
-        assert_eq!(snoozed_inbox.messages.len(), 0);
-        let snoozed_audit = core
-            .inbox_with_options("role://topics.curator", false, true)
-            .unwrap();
-        assert_eq!(
-            snoozed_audit.messages[0].snoozed_until.as_deref(),
-            Some(snoozed_until.as_str())
-        );
-
-        core.claim_mail(&talk.message_id, "role://topics.curator", &agent.agent_id)
-            .unwrap();
-        let inbox = core.inbox("role://topics.curator").unwrap();
-        assert_eq!(inbox.mailbox.unread_count, 0);
-
-        let agent_status = core.agent_status(&agent.agent_id).unwrap();
-        assert_eq!(agent_status.status, "ok");
-        assert_eq!(agent_status.agent.as_ref().unwrap().liveness, "active");
-        assert_eq!(agent_status.agent.as_ref().unwrap().actionable_count, 1);
-        let agent_list = core.agent_list(false, false).unwrap();
-        assert_eq!(agent_list.counts.active_count, 1);
-
-        let publish = core.publish_status().unwrap();
-        assert!(publish.render_required);
-        assert_eq!(publish.next_action, "publish");
-
-        core.retire_agent(&agent.agent_id, "unit done").unwrap();
-        let retired_error = core
-            .register_agent(thread_id, Vec::new(), Vec::new(), 1800)
-            .unwrap_err()
-            .to_string();
-        assert!(retired_error.contains("agent explicitly retired"));
-        let retired_poll_error = core
-            .poll_notifications(&agent.agent_id)
-            .unwrap_err()
-            .to_string();
-        assert!(retired_poll_error.contains("agent explicitly retired"));
-        let retired_heartbeat_error = core
-            .heartbeat_agent(&agent.agent_id, 1800)
-            .unwrap_err()
-            .to_string();
-        assert!(retired_heartbeat_error.contains("agent explicitly retired"));
-    }
 
     #[test]
     fn fresh_configured_pages_point_agents_at_publish() {
@@ -9482,14 +5667,7 @@ mod tests {
         seed_fixture(&root);
         let core = WikiCore::new(&root);
         core.create_page("topics", None).unwrap();
-        let agent = core
-            .register_agent(
-                "same-subject-burst-thread",
-                vec!["role://topics.curator".to_string()],
-                Vec::new(),
-                1800,
-            )
-            .unwrap();
+        let sender = "agent://codex/same-subject-burst-thread".to_string();
 
         let first = core
             .append_talk(TalkAppendRequest {
@@ -9498,12 +5676,14 @@ mod tests {
                 subject: "Same subject burst".to_string(),
                 thread_id: None,
                 reply_to: None,
-                from: agent.addresses[0].clone(),
+                from: sender.clone(),
                 to: vec!["role://topics.curator".to_string()],
                 cc: vec![],
                 body_markdown: "First message.".to_string(),
                 attachments: vec![],
                 allow_tombstoned: false,
+                operation_id: None,
+                delivery_mode: TalkDeliveryMode::LabelsOnly,
             })
             .unwrap();
         let second = core
@@ -9513,12 +5693,14 @@ mod tests {
                 subject: "Same subject burst".to_string(),
                 thread_id: None,
                 reply_to: None,
-                from: agent.addresses[0].clone(),
+                from: sender.clone(),
                 to: vec!["role://topics.curator".to_string()],
                 cc: vec![],
                 body_markdown: "Second message.".to_string(),
                 attachments: vec![],
                 allow_tombstoned: false,
+                operation_id: None,
+                delivery_mode: TalkDeliveryMode::LabelsOnly,
             })
             .unwrap();
         let explicit_reply = core
@@ -9528,12 +5710,14 @@ mod tests {
                 subject: "Changed subject should stay in parent thread".to_string(),
                 thread_id: None,
                 reply_to: Some(first.message_id.clone()),
-                from: agent.addresses[0].clone(),
+                from: sender.clone(),
                 to: vec!["role://topics.curator".to_string()],
                 cc: vec![],
                 body_markdown: "Explicit parent reply.".to_string(),
                 attachments: vec![],
                 allow_tombstoned: false,
+                operation_id: None,
+                delivery_mode: TalkDeliveryMode::LabelsOnly,
             })
             .unwrap();
         let explicit_thread = core
@@ -9543,12 +5727,14 @@ mod tests {
                 subject: "Explicit thread target".to_string(),
                 thread_id: Some(first.thread_id.clone()),
                 reply_to: None,
-                from: agent.addresses[0].clone(),
+                from: sender.clone(),
                 to: vec!["role://topics.curator".to_string()],
                 cc: vec![],
                 body_markdown: "Explicit thread id reply.".to_string(),
                 attachments: vec![],
                 allow_tombstoned: false,
+                operation_id: None,
+                delivery_mode: TalkDeliveryMode::LabelsOnly,
             })
             .unwrap();
 
@@ -9561,16 +5747,247 @@ mod tests {
         );
         assert_eq!(explicit_thread.thread_id, first.thread_id);
         assert_eq!(explicit_thread.reply_to, None);
-        let thread = core.read_mail(None, Some(&first.thread_id)).unwrap();
-        assert_eq!(thread.messages.len(), 4);
-        let explicit_reply_read = thread
-            .messages
+        let record = core.find_page("topics").unwrap();
+        let messages = core.file_talk_messages(&record).unwrap();
+        assert_eq!(messages.len(), 4);
+        let explicit_reply_read = messages
             .iter()
             .find(|message| message.message_id == explicit_reply.message_id)
             .unwrap();
         assert_eq!(
             explicit_reply_read.reply_to.as_deref(),
             Some(first.message_id.as_str())
+        );
+    }
+
+    #[test]
+    fn talk_append_defaults_to_labels_only_without_mail_delivery() {
+        let temp = TempDir::new().unwrap();
+        let root = temp.path().join("1Context");
+        seed_fixture(&root);
+        let core = WikiCore::new(&root);
+        core.create_page("topics", None).unwrap();
+        let before_publish = core.publish_status().unwrap();
+
+        let talk = core
+            .append_talk(TalkAppendRequest {
+                page: "topics".to_string(),
+                kind: "proposal".to_string(),
+                subject: "Labels only".to_string(),
+                operation_id: None,
+                delivery_mode: TalkDeliveryMode::LabelsOnly,
+                thread_id: None,
+                reply_to: None,
+                from: "agent://codex/labels-only".to_string(),
+                to: vec!["role://topics.curator".to_string()],
+                cc: vec![],
+                body_markdown: "This should not create mail.".to_string(),
+                attachments: vec![],
+                allow_tombstoned: false,
+            })
+            .unwrap();
+
+        let after_publish = core.publish_status().unwrap();
+        assert_eq!(talk.delivery_mode, TalkDeliveryMode::LabelsOnly);
+        assert!(talk.mail_delivery.is_none());
+        assert!(!root.join("context-engine/mail/deliveries.jsonl").exists());
+        assert_eq!(before_publish.status, after_publish.status);
+        assert_eq!(
+            before_publish.render_required,
+            after_publish.render_required
+        );
+        assert_eq!(
+            before_publish.pages_needing_publish,
+            after_publish.pages_needing_publish
+        );
+    }
+
+    #[test]
+    fn talk_append_explicit_mail_creates_message_and_delivery_rows() {
+        let temp = TempDir::new().unwrap();
+        let root = temp.path().join("1Context");
+        seed_fixture(&root);
+        let core = WikiCore::new(&root);
+        core.create_page("topics", None).unwrap();
+
+        let talk = core
+            .append_talk(TalkAppendRequest {
+                page: "topics".to_string(),
+                kind: "proposal".to_string(),
+                subject: "Mail delivery".to_string(),
+                operation_id: Some("talk-mail-delivery-001".to_string()),
+                delivery_mode: TalkDeliveryMode::Mail,
+                thread_id: None,
+                reply_to: None,
+                from: "agent://codex/talk-mail".to_string(),
+                to: vec!["role://topics.curator".to_string()],
+                cc: vec![],
+                body_markdown: "This should create a mail delivery.".to_string(),
+                attachments: vec![],
+                allow_tombstoned: false,
+            })
+            .unwrap();
+
+        let delivery = talk.mail_delivery.as_ref().unwrap();
+        assert_eq!(delivery.status, "delivered");
+        assert_eq!(delivery.acceptance.as_deref(), Some("accepted"));
+        assert_eq!(delivery.attempt_count, 1);
+        assert_eq!(delivery.attempts[0].recipient, "role://topics.curator");
+        let store = agent_mail::AgentMailStore::new(root.join("context-engine"));
+        let recipient = agent_mail::MailAddress::parse("role://topics.curator").unwrap();
+        assert_eq!(
+            store
+                .recipient_summary(&recipient)
+                .unwrap()
+                .open_delivery_count,
+            1
+        );
+        assert_eq!(
+            store
+                .read_message(&talk.message_id)
+                .unwrap()
+                .envelope
+                .page
+                .unwrap()
+                .id,
+            "topics"
+        );
+    }
+
+    #[test]
+    fn talk_append_mail_retry_uses_stable_operation_id() {
+        let temp = TempDir::new().unwrap();
+        let root = temp.path().join("1Context");
+        seed_fixture(&root);
+        let core = WikiCore::new(&root);
+        core.create_page("topics", None).unwrap();
+        let request = TalkAppendRequest {
+            page: "topics".to_string(),
+            kind: "proposal".to_string(),
+            subject: "Mail retry".to_string(),
+            operation_id: Some("talk-mail-retry-001".to_string()),
+            delivery_mode: TalkDeliveryMode::Mail,
+            thread_id: None,
+            reply_to: None,
+            from: "agent://codex/talk-mail-retry".to_string(),
+            to: vec!["role://topics.curator".to_string()],
+            cc: vec![],
+            body_markdown: "Retry should not duplicate delivery.".to_string(),
+            attachments: vec![],
+            allow_tombstoned: false,
+        };
+
+        let first = core.append_talk(request.clone()).unwrap();
+        let retry = core.append_talk(request).unwrap();
+
+        assert_eq!(first.message_id, retry.message_id);
+        let retry_delivery = retry.mail_delivery.as_ref().unwrap();
+        assert_eq!(
+            retry_delivery.acceptance.as_deref(),
+            Some("duplicate_same_payload")
+        );
+        assert_eq!(retry_delivery.attempts[0].status, "already_delivered");
+        let record = core.find_page("topics").unwrap();
+        let messages = core.file_talk_messages(&record).unwrap();
+        assert_eq!(messages.len(), 1);
+    }
+
+    #[test]
+    fn talk_append_delivery_failure_preserves_talk_source() {
+        let temp = TempDir::new().unwrap();
+        let root = temp.path().join("1Context");
+        seed_fixture(&root);
+        let core = WikiCore::new(&root);
+        core.create_page("topics", None).unwrap();
+
+        let talk = core
+            .append_talk(TalkAppendRequest {
+                page: "topics".to_string(),
+                kind: "proposal".to_string(),
+                subject: "Bad mail recipient".to_string(),
+                operation_id: Some("talk-mail-failure-001".to_string()),
+                delivery_mode: TalkDeliveryMode::Mail,
+                thread_id: None,
+                reply_to: None,
+                from: "agent://codex/talk-mail-failure".to_string(),
+                to: vec!["not-an-address".to_string()],
+                cc: vec![],
+                body_markdown: "Talk should remain even when delivery fails.".to_string(),
+                attachments: vec![],
+                allow_tombstoned: false,
+            })
+            .unwrap();
+
+        assert_eq!(talk.status, "appended_delivery_failed");
+        assert_eq!(talk.mail_delivery.as_ref().unwrap().status, "failed");
+        assert!(!talk.repair_hints.is_empty());
+        let record = core.find_page("topics").unwrap();
+        let messages = core.file_talk_messages(&record).unwrap();
+        assert_eq!(messages.len(), 1);
+        assert_eq!(messages[0].message_id, talk.message_id);
+    }
+
+    #[test]
+    fn mail_mark_changes_do_not_change_publish_status() {
+        let temp = TempDir::new().unwrap();
+        let root = temp.path().join("1Context");
+        seed_fixture(&root);
+        let core = WikiCore::new(&root);
+        core.create_page("topics", None).unwrap();
+        let talk = core
+            .append_talk(TalkAppendRequest {
+                page: "topics".to_string(),
+                kind: "proposal".to_string(),
+                subject: "Mark without publish".to_string(),
+                operation_id: Some("talk-mail-mark-001".to_string()),
+                delivery_mode: TalkDeliveryMode::Mail,
+                thread_id: None,
+                reply_to: None,
+                from: "agent://codex/talk-mail-mark".to_string(),
+                to: vec!["role://topics.curator".to_string()],
+                cc: vec![],
+                body_markdown: "Marking this mail should stay outside publish inputs.".to_string(),
+                attachments: vec![],
+                allow_tombstoned: false,
+            })
+            .unwrap();
+        let before_mark = core.publish_status().unwrap();
+
+        let delivery_id = talk.mail_delivery.as_ref().unwrap().attempts[0]
+            .delivery_id
+            .clone();
+        let store = agent_mail::AgentMailStore::new(root.join("context-engine"));
+        let agent = store
+            .identify_agent(
+                &agent_mail::AgentIdentifyRequest {
+                    transport_kind: "codex".to_string(),
+                    thread_id: "mark-without-publish-agent".to_string(),
+                    requested_roles: vec!["role://topics.curator".to_string()],
+                    requested_capabilities: vec!["wiki.mail".to_string()],
+                    lease_expires_at: "2026-05-21T10:00:00Z".to_string(),
+                    occurred_at: "2026-05-21T09:00:00Z".to_string(),
+                },
+                &agent_mail::AgentGrantPolicy::allow_exact(
+                    &["role://topics.curator"],
+                    &["wiki.mail"],
+                ),
+            )
+            .unwrap();
+        store
+            .mark_delivery(
+                &delivery_id,
+                &agent.agent_id,
+                agent_mail::DeliveryState::Read,
+                "2026-05-21T09:00:00Z",
+            )
+            .unwrap();
+        let after_mark = core.publish_status().unwrap();
+
+        assert_eq!(before_mark.status, after_mark.status);
+        assert_eq!(before_mark.render_required, after_mark.render_required);
+        assert_eq!(
+            before_mark.pages_needing_publish,
+            after_mark.pages_needing_publish
         );
     }
 
@@ -9597,14 +6014,6 @@ mod tests {
         seed_fixture(&root);
         let core = WikiCore::new(&root);
         core.create_page("topics", None).unwrap();
-        let agent = core
-            .register_agent(
-                "explicit-new-talk-thread",
-                vec!["role://topics.curator".to_string()],
-                Vec::new(),
-                1800,
-            )
-            .unwrap();
         let thread_id = "agent-chosen-thread-123";
 
         let started = core
@@ -9614,20 +6023,23 @@ mod tests {
                 subject: "Agent chosen thread".to_string(),
                 thread_id: Some(thread_id.to_string()),
                 reply_to: None,
-                from: agent.addresses[0].clone(),
+                from: "agent://codex/explicit-new-talk-thread".to_string(),
                 to: vec!["role://topics.curator".to_string()],
                 cc: vec![],
                 body_markdown: "A sender can choose a new correlation id.".to_string(),
                 attachments: vec![],
                 allow_tombstoned: false,
+                operation_id: None,
+                delivery_mode: TalkDeliveryMode::LabelsOnly,
             })
             .unwrap();
 
         assert_eq!(started.thread_id, thread_id);
         assert_eq!(started.reply_to, None);
-        let read = core.read_mail(None, Some(thread_id)).unwrap();
-        assert_eq!(read.message_count, 1);
-        assert_eq!(read.messages[0].message_id, started.message_id);
+        let record = core.find_page("topics").unwrap();
+        let messages = core.file_talk_messages(&record).unwrap();
+        assert_eq!(messages.len(), 1);
+        assert_eq!(messages[0].message_id, started.message_id);
     }
 
     #[test]
@@ -9637,14 +6049,7 @@ mod tests {
         seed_fixture(&root);
         let core = WikiCore::new(&root);
         core.create_page("topics", None).unwrap();
-        let agent = core
-            .register_agent(
-                "file-only-talk-target-thread",
-                vec!["role://topics.curator".to_string()],
-                Vec::new(),
-                1800,
-            )
-            .unwrap();
+        let sender = "agent://codex/file-only-talk-target-thread".to_string();
         let talk_dir = root.join("user-wiki/source/families/reference/topics/talk/topics.talk");
         let parent_id = "talkmsg_file_only_parent";
         let parent_thread = "thread_topics_file_only_parent";
@@ -9672,13 +6077,6 @@ mod tests {
             ),
         )
         .unwrap();
-        assert!(core
-            .all_mailbox_messages()
-            .unwrap()
-            .iter()
-            .all(
-                |delivery| delivery.message_id != parent_id && delivery.thread_id != direct_thread
-            ));
 
         let reply = core
             .append_talk(TalkAppendRequest {
@@ -9687,12 +6085,14 @@ mod tests {
                 subject: "Changed subject file-only reply".to_string(),
                 thread_id: None,
                 reply_to: Some(parent_id.to_string()),
-                from: agent.addresses[0].clone(),
+                from: sender.clone(),
                 to: vec!["role://topics.curator".to_string()],
                 cc: vec![],
                 body_markdown: "Reply should inherit the file-only parent thread.".to_string(),
                 attachments: vec![],
                 allow_tombstoned: false,
+                operation_id: None,
+                delivery_mode: TalkDeliveryMode::LabelsOnly,
             })
             .unwrap();
         let direct = core
@@ -9702,12 +6102,14 @@ mod tests {
                 subject: "Direct file-only thread target".to_string(),
                 thread_id: Some(direct_thread.to_string()),
                 reply_to: None,
-                from: agent.addresses[0].clone(),
+                from: sender,
                 to: vec!["role://topics.curator".to_string()],
                 cc: vec![],
                 body_markdown: "Explicit thread target should resolve from talk files.".to_string(),
                 attachments: vec![],
                 allow_tombstoned: false,
+                operation_id: None,
+                delivery_mode: TalkDeliveryMode::LabelsOnly,
             })
             .unwrap();
 
@@ -9716,17 +6118,20 @@ mod tests {
         assert_eq!(direct.thread_id, direct_thread);
         assert_eq!(direct.reply_to, None);
 
-        let parent_thread_read = core.read_mail(None, Some(parent_thread)).unwrap();
-        assert_eq!(parent_thread_read.message_count, 2);
-        assert_eq!(parent_thread_read.delivery_count, 1);
-        let hydrated_parent = parent_thread_read
-            .messages
+        let record = core.find_page("topics").unwrap();
+        let messages = core.file_talk_messages(&record).unwrap();
+        let parent_thread_messages = messages
             .iter()
+            .filter(|message| message.thread_id == parent_thread)
+            .collect::<Vec<_>>();
+        assert_eq!(parent_thread_messages.len(), 2);
+        let hydrated_parent = parent_thread_messages
+            .iter()
+            .copied()
             .find(|message| message.message_id == parent_id)
             .unwrap();
         assert_eq!(hydrated_parent.thread_id, parent_thread);
         assert_eq!(hydrated_parent.subject, "File only parent");
-        assert_eq!(hydrated_parent.attachment_count, 1);
         assert_eq!(hydrated_parent.attachments.len(), 1);
         assert_eq!(hydrated_parent.attachments[0].filename, "legacy-note.txt");
         assert_eq!(hydrated_parent.attachments[0].media_type, "text/plain");
@@ -9746,25 +6151,18 @@ mod tests {
             hydrated_parent.attachments[0].alt_text.as_deref(),
             Some("Legacy note alt")
         );
-        assert!(hydrated_parent.deliveries.is_empty());
-        assert!(parent_thread_read
-            .messages
+        assert!(messages
             .iter()
             .any(|message| message.message_id == reply.message_id));
-
-        let parent_message_read = core.read_mail(Some(parent_id), None).unwrap();
-        assert_eq!(parent_message_read.message_count, 1);
-        assert_eq!(parent_message_read.delivery_count, 0);
-        assert_eq!(parent_message_read.messages[0].attachment_count, 1);
-
-        let direct_thread_read = core.read_mail(None, Some(direct_thread)).unwrap();
-        assert_eq!(direct_thread_read.message_count, 2);
-        assert!(direct_thread_read
-            .messages
+        let direct_thread_messages = messages
+            .iter()
+            .filter(|message| message.thread_id == direct_thread)
+            .collect::<Vec<_>>();
+        assert_eq!(direct_thread_messages.len(), 2);
+        assert!(direct_thread_messages
             .iter()
             .any(|message| message.message_id == "talkmsg_file_only_direct"));
-        assert!(direct_thread_read
-            .messages
+        assert!(direct_thread_messages
             .iter()
             .any(|message| message.message_id == direct.message_id));
     }
@@ -9797,7 +6195,6 @@ mod tests {
         let status = core.page_status("topics").unwrap();
         assert_eq!(status.state, "rendered");
         assert_eq!(status.validation.status, "ok");
-        assert_eq!(status.mail.open_delivery_count, 0);
         assert_eq!(status.next_action, "none");
         assert!(status
             .allowed_actions
@@ -9896,7 +6293,7 @@ mod tests {
     }
 
     #[test]
-    fn page_assets_are_agent_addable_listable_and_embed_ready() {
+    fn page_assets_are_addable_listable_and_embed_ready() {
         let temp = TempDir::new().unwrap();
         let root = temp.path().join("1Context");
         seed_fixture(&root);
@@ -9920,6 +6317,12 @@ mod tests {
         assert_eq!(added.next_action, "insert_markdown");
         assert!(added.render_required);
         assert_eq!(added.asset.filename, "topic-map.png");
+        assert_eq!(
+            added.asset.citation_uri,
+            "user-wiki://page/topics/assets/topic-map.png"
+        );
+        assert_eq!(added.asset.kind, "image");
+        assert_eq!(added.asset.content_role, "inline_image");
         assert_eq!(added.asset.media_type, "image/png");
         assert_eq!(added.asset.purpose, "inline_image");
         assert_eq!(
@@ -9951,6 +6354,135 @@ mod tests {
         assert_eq!(listed.assets[0].filename, "topic-map.png");
         assert!(listed.assets[0].referenced);
         assert!(!listed.assets[0].published);
+    }
+
+    #[test]
+    fn page_assets_classify_source_code_files() {
+        let temp = TempDir::new().unwrap();
+        let root = temp.path().join("1Context");
+        seed_fixture(&root);
+        let core = WikiCore::new(&root);
+        core.create_page("topics", None).unwrap();
+
+        let input = temp.path().join("Renderer.swift");
+        fs::write(
+            &input,
+            b"let status = try await wiki.publish(trigger: \"agent\")\n",
+        )
+        .unwrap();
+
+        let added = core
+            .add_page_asset(
+                "topics",
+                &input,
+                None,
+                Some("source_file"),
+                Some("Renderer source excerpt"),
+                None,
+            )
+            .unwrap();
+        assert_eq!(added.asset.kind, "code_file");
+        assert_eq!(added.asset.content_role, "source_file");
+        assert_eq!(added.asset.media_type, "text/plain");
+        assert_eq!(
+            added.asset.citation_uri,
+            "user-wiki://page/topics/assets/Renderer.swift"
+        );
+        assert_eq!(
+            added.asset.markdown,
+            "[Renderer source excerpt](./topics.assets/Renderer.swift)"
+        );
+    }
+
+    #[test]
+    fn reference_list_reads_published_reference_index_and_filters_page_scope() {
+        let temp = TempDir::new().unwrap();
+        let root = temp.path().join("1Context");
+        seed_fixture(&root);
+        let core = WikiCore::new(&root);
+
+        let missing = core.list_references(None).unwrap();
+        assert_eq!(missing.status, "missing");
+        assert_eq!(missing.next_action, "publish");
+
+        core.create_page("topics", None).unwrap();
+        let metadata_dir = root.join("user-wiki/site/.1context");
+        fs::create_dir_all(&metadata_dir).unwrap();
+        fs::write(
+            metadata_dir.join("reference-index.json"),
+            serde_json::to_vec_pretty(&serde_json::json!({
+                "schema_version": "wiki.reference-index.v1",
+                "assets": [
+                    {
+                        "kind": "image",
+                        "page_id": "topics",
+                        "route": "/topics",
+                        "citation_uri": "user-wiki://page/topics/assets/topic-map.png"
+                    },
+                    {
+                        "kind": "file",
+                        "page_id": "other",
+                        "route": "/other",
+                        "citation_uri": "user-wiki://page/other/assets/data.csv"
+                    }
+                ],
+                "links": [
+                    {
+                        "kind": "link",
+                        "page_id": "topics",
+                        "route": "/topics",
+                        "href": "https://example.com"
+                    },
+                    {
+                        "kind": "link",
+                        "page_id": "other",
+                        "route": "/other",
+                        "href": "/topics"
+                    }
+                ],
+                "code_blocks": [
+                    {
+                        "kind": "code_block",
+                        "page_id": "topics",
+                        "route": "/topics",
+                        "id": "code-topics-001"
+                    }
+                ],
+                "citations": [
+                    {
+                        "kind": "citation",
+                        "page_id": "topics",
+                        "route": "/topics",
+                        "id": "cite-note-topics-1",
+                        "citation_uri": "user-wiki://page/topics/citations/cite-note-topics-1"
+                    }
+                ]
+            }))
+            .unwrap(),
+        )
+        .unwrap();
+
+        let all = core.list_references(None).unwrap();
+        assert_eq!(all.status, "ok");
+        assert_eq!(all.reference_count, 6);
+        assert_eq!(all.asset_count, 2);
+        assert_eq!(all.link_count, 2);
+        assert_eq!(all.code_block_count, 1);
+        assert_eq!(all.citation_count, 1);
+
+        let topics = core.list_references(Some("/topics")).unwrap();
+        assert_eq!(topics.page.as_ref().unwrap().id, "topics");
+        assert_eq!(topics.reference_count, 4);
+        assert_eq!(topics.asset_count, 1);
+        assert_eq!(topics.link_count, 1);
+        assert_eq!(topics.code_block_count, 1);
+        assert_eq!(topics.citation_count, 1);
+        assert_eq!(
+            topics.assets[0]
+                .get("citation_uri")
+                .and_then(serde_json::Value::as_str),
+            Some("user-wiki://page/topics/assets/topic-map.png")
+        );
     }
 
     #[test]
@@ -10138,229 +6670,6 @@ talk_curator_template = "talk/curators/topics.md"
     }
 
     #[test]
-    fn page_status_liveness_counts_include_page_linked_list_members() {
-        let temp = TempDir::new().unwrap();
-        let root = temp.path().join("1Context");
-        seed_fixture(&root);
-        let core = WikiCore::new(&root);
-        core.create_page("topics", None).unwrap();
-
-        let active = core
-            .register_agent("page-status-active", Vec::new(), Vec::new(), 1800)
-            .unwrap();
-        let stale = core
-            .register_agent("page-status-stale", Vec::new(), Vec::new(), 1800)
-            .unwrap();
-        let retired = core
-            .register_agent("page-status-retired", Vec::new(), Vec::new(), 1800)
-            .unwrap();
-        let list = "list://wiki.reviewers";
-        core.create_list(
-            list,
-            Some("Wiki Reviewers".to_string()),
-            None,
-            Some("topics".to_string()),
-            None,
-        )
-        .unwrap();
-        for agent in [&active, &stale, &retired] {
-            core.subscribe_mail(&agent.agent_id, list, "member", Vec::new(), 1800)
-                .unwrap();
-        }
-
-        let mut stale_record = core
-            .current_agents_with_stale(true)
-            .unwrap()
-            .remove(&stale.agent_id)
-            .unwrap();
-        stale_record.event = "agent.heartbeat".to_string();
-        stale_record.at = now_rfc3339();
-        stale_record.lease_expires_at =
-            (Utc::now() - chrono::Duration::seconds(30)).to_rfc3339_opts(SecondsFormat::Secs, true);
-        append_jsonl(&core.agent_events_path(), &stale_record).unwrap();
-
-        core.retire_agent(&retired.agent_id, "unit done").unwrap();
-
-        let status = core.page_status("topics").unwrap();
-        assert_eq!(status.mail.watcher_count, 0);
-        assert_eq!(
-            status.mail.subscription_liveness_counts.active_agent_count,
-            1
-        );
-        assert_eq!(
-            status.mail.subscription_liveness_counts.stale_agent_count,
-            1
-        );
-        assert_eq!(
-            status.mail.subscription_liveness_counts.retired_agent_count,
-            1
-        );
-        assert_eq!(
-            status
-                .mail
-                .subscription_liveness_counts
-                .inactive_agent_count,
-            2
-        );
-    }
-
-    #[test]
-    fn stale_agent_can_be_explicitly_retired() {
-        let temp = TempDir::new().unwrap();
-        let root = temp.path().join("1Context");
-        seed_fixture(&root);
-        let core = WikiCore::new(&root);
-
-        let agent = core
-            .register_agent("stale-retire-agent", Vec::new(), Vec::new(), 1800)
-            .unwrap();
-        let mut stale_record = core
-            .current_agents_with_stale(true)
-            .unwrap()
-            .remove(&agent.agent_id)
-            .unwrap();
-        stale_record.event = "agent.heartbeat".to_string();
-        stale_record.at = now_rfc3339();
-        stale_record.lease_expires_at =
-            (Utc::now() - chrono::Duration::seconds(30)).to_rfc3339_opts(SecondsFormat::Secs, true);
-        append_jsonl(&core.agent_events_path(), &stale_record).unwrap();
-
-        let stale_status = core.agent_status(&agent.agent_id).unwrap();
-        assert_eq!(stale_status.agent.as_ref().unwrap().liveness, "stale");
-
-        let retired = core.retire_agent(&agent.agent_id, "stale cleanup").unwrap();
-        assert_eq!(retired.status, "retired");
-        let whoami = core.agent_whoami(Some("stale-retire-agent"), None).unwrap();
-        assert_eq!(whoami.matches[0].liveness, "retired");
-        assert_eq!(whoami.next_action, "agent_register_new_thread");
-
-        let active_error = core
-            .poll_notifications(&agent.agent_id)
-            .unwrap_err()
-            .to_string();
-        assert!(active_error.contains("agent explicitly retired"));
-    }
-
-    #[test]
-    fn stale_agent_control_commands_require_identify_refresh() {
-        let temp = TempDir::new().unwrap();
-        let root = temp.path().join("1Context");
-        seed_fixture(&root);
-        let core = WikiCore::new(&root);
-
-        let thread_id = "stale-refresh-agent";
-        let agent = core
-            .register_agent(thread_id, Vec::new(), Vec::new(), 1800)
-            .unwrap();
-        let mut stale_record = core
-            .current_agents_with_stale(true)
-            .unwrap()
-            .remove(&agent.agent_id)
-            .unwrap();
-        stale_record.event = "agent.heartbeat".to_string();
-        stale_record.at = now_rfc3339();
-        stale_record.lease_expires_at =
-            (Utc::now() - chrono::Duration::seconds(30)).to_rfc3339_opts(SecondsFormat::Secs, true);
-        append_jsonl(&core.agent_events_path(), &stale_record).unwrap();
-
-        let stale_status = core.agent_status(&agent.agent_id).unwrap();
-        assert_eq!(stale_status.agent.as_ref().unwrap().liveness, "stale");
-        assert_eq!(stale_status.next_action, "agent_identify");
-
-        for error in [
-            core.agent_inbox(&agent.agent_id, false, false)
-                .unwrap_err()
-                .to_string(),
-            core.poll_notifications(&agent.agent_id)
-                .unwrap_err()
-                .to_string(),
-            core.heartbeat_agent(&agent.agent_id, 1800)
-                .unwrap_err()
-                .to_string(),
-        ] {
-            assert!(error.contains("agent lease expired"));
-            assert!(error.contains("call agent-identify"));
-        }
-
-        let refreshed = core
-            .identify_agent(thread_id, Vec::new(), Vec::new(), 1800)
-            .unwrap();
-        assert_eq!(refreshed.status, "refreshed");
-        assert_eq!(refreshed.liveness_before.as_deref(), Some("stale"));
-        assert_eq!(refreshed.liveness_after, "active");
-        core.agent_inbox(&agent.agent_id, false, false).unwrap();
-    }
-
-    #[test]
-    fn agent_lifecycle_rejects_non_positive_ttls_in_core() {
-        let temp = TempDir::new().unwrap();
-        let root = temp.path().join("1Context");
-        seed_fixture(&root);
-        let core = WikiCore::new(&root);
-
-        let register_error = core
-            .register_agent("bad-register-ttl", Vec::new(), Vec::new(), 0)
-            .unwrap_err()
-            .to_string();
-        assert!(register_error.contains("invalid agent ttl 0"));
-
-        let identify_error = core
-            .identify_agent("bad-identify-ttl", Vec::new(), Vec::new(), -1)
-            .unwrap_err()
-            .to_string();
-        assert!(identify_error.contains("invalid agent ttl -1"));
-    }
-
-    #[test]
-    fn mail_lists_canonicalize_page_route_references_in_core() {
-        let temp = TempDir::new().unwrap();
-        let root = temp.path().join("1Context");
-        seed_fixture(&root);
-        let core = WikiCore::new(&root);
-        core.create_page("topics", None).unwrap();
-
-        let route_list = core
-            .create_list(
-                "list://topics.route-review",
-                Some("Topics Route Review".to_string()),
-                None,
-                Some("/topics".to_string()),
-                None,
-            )
-            .unwrap();
-        assert_eq!(route_list.list.page_id.as_deref(), Some("topics"));
-
-        let id_list = core
-            .create_list(
-                "list://topics.id-review",
-                Some("Topics Id Review".to_string()),
-                None,
-                Some("topics".to_string()),
-                None,
-            )
-            .unwrap();
-        assert_eq!(id_list.list.page_id.as_deref(), Some("topics"));
-
-        let route_created_by_id = core
-            .mail_lists(Some("topics"), Some("list://topics.route-review"))
-            .unwrap();
-        assert_eq!(route_created_by_id.list_count, 1);
-        assert_eq!(
-            route_created_by_id.lists[0].page_id.as_deref(),
-            Some("topics")
-        );
-
-        let id_created_by_route = core
-            .mail_lists(Some("/topics"), Some("list://topics.id-review"))
-            .unwrap();
-        assert_eq!(id_created_by_route.list_count, 1);
-        assert_eq!(
-            id_created_by_route.lists[0].page_id.as_deref(),
-            Some("topics")
-        );
-    }
-
-    #[test]
     fn inventory_and_status_include_generated_site_pages() {
         let temp = TempDir::new().unwrap();
         let root = temp.path().join("1Context");
@@ -10418,1082 +6727,6 @@ template = "site/e08/open-questions.md"
     }
 
     #[test]
-    fn mail_list_summaries_expose_created_at() {
-        let temp = TempDir::new().unwrap();
-        let root = temp.path().join("1Context");
-        seed_fixture(&root);
-        let core = WikiCore::new(&root);
-        core.create_page("topics", None).unwrap();
-        let agent = core
-            .register_agent("list-created-at-agent", Vec::new(), Vec::new(), 1800)
-            .unwrap();
-        let address = "list://topics.created-at";
-        let created = core
-            .create_list(
-                address,
-                Some("Topics Created At".to_string()),
-                None,
-                Some("/topics".to_string()),
-                Some(agent.agent_id.clone()),
-            )
-            .unwrap();
-        let created_at = created.list.created_at.clone();
-        assert!(!created_at.is_empty());
-
-        let existing = core
-            .create_list(
-                address,
-                Some("Ignored Title".to_string()),
-                None,
-                Some("topics".to_string()),
-                None,
-            )
-            .unwrap();
-        assert_eq!(existing.status, "already_exists");
-        assert_eq!(existing.list.created_at, created_at);
-
-        let listed = core.mail_lists(Some("topics"), Some(address)).unwrap();
-        assert_eq!(listed.lists[0].created_at, created_at);
-
-        let members = core.list_members(address).unwrap();
-        assert_eq!(members.list.unwrap().created_at, created_at);
-
-        let status = core.list_status(address).unwrap();
-        assert_eq!(status.list.unwrap().created_at, created_at);
-    }
-
-    #[test]
-    fn page_recipient_alias_normalizes_across_talk_and_mail() {
-        let temp = TempDir::new().unwrap();
-        let root = temp.path().join("1Context");
-        seed_fixture(&root);
-        let core = WikiCore::new(&root);
-        core.create_page("topics", None).unwrap();
-        let agent = core
-            .register_agent(
-                "probe-b-addressing-agent",
-                Vec::new(),
-                vec!["probe-b".to_string()],
-                1800,
-            )
-            .unwrap();
-
-        let subscription = core
-            .subscribe_mail(
-                &agent.agent_id,
-                "page://topics",
-                "watcher",
-                Vec::new(),
-                1800,
-            )
-            .unwrap();
-        assert_eq!(subscription.address, "mailbox://page/topics");
-        let subscriptions = core
-            .mail_subscriptions(None, Some("page://topics"))
-            .unwrap();
-        assert_eq!(subscriptions.subscription_count, 1);
-        assert_eq!(
-            subscriptions.subscriptions[0].address,
-            "mailbox://page/topics"
-        );
-
-        let talk = core
-            .append_talk(TalkAppendRequest {
-                page: "topics".to_string(),
-                kind: "review".to_string(),
-                subject: "Page alias recipient".to_string(),
-                thread_id: None,
-                reply_to: None,
-                from: agent.addresses[0].clone(),
-                to: vec!["page://topics".to_string()],
-                cc: vec![],
-                body_markdown: "Page aliases should behave like page mailboxes.".to_string(),
-                attachments: vec![],
-                allow_tombstoned: false,
-            })
-            .unwrap();
-        assert_eq!(talk.deliveries[0].recipient, "mailbox://page/topics");
-
-        let inbox = core.inbox("page://topics").unwrap();
-        assert_eq!(inbox.mailbox.address, "mailbox://page/topics");
-        assert_eq!(inbox.message_count, 1);
-        assert_eq!(inbox.messages[0].message_id, talk.message_id);
-
-        let claim = core
-            .claim_mail(&talk.message_id, "page://topics", &agent.agent_id)
-            .unwrap();
-        assert_eq!(claim.recipient, "mailbox://page/topics");
-
-        let mark = core
-            .mark_mail(&talk.message_id, "page://topics", "done", None)
-            .unwrap();
-        assert_eq!(mark.recipient, "mailbox://page/topics");
-        assert_eq!(mark.state, "done");
-        let inbox = core
-            .inbox_with_options("mailbox://page/topics", true, true)
-            .unwrap();
-        assert_eq!(inbox.messages[0].state, "done");
-    }
-
-    #[test]
-    fn mail_subscribe_renews_duplicate_and_reports_backfill_action() {
-        let temp = TempDir::new().unwrap();
-        let root = temp.path().join("1Context");
-        seed_fixture(&root);
-        let core = WikiCore::new(&root);
-        core.create_page("topics", None).unwrap();
-        let agent = core
-            .register_agent("subscribe-renew-agent", Vec::new(), Vec::new(), 1800)
-            .unwrap();
-        let list = "list://wiki.reviewers";
-        core.create_list(
-            list,
-            Some("Wiki Reviewers".to_string()),
-            None,
-            Some("topics".to_string()),
-            Some(agent.primary_address.clone()),
-        )
-        .unwrap();
-        core.append_talk(TalkAppendRequest {
-            page: "topics".to_string(),
-            kind: "proposal".to_string(),
-            subject: "Backfill before subscribe".to_string(),
-            thread_id: None,
-            reply_to: None,
-            from: agent.primary_address.clone(),
-            to: vec![list.to_string()],
-            cc: vec![],
-            body_markdown: "A late subscriber should know there is visible list mail.".to_string(),
-            attachments: vec![],
-            allow_tombstoned: false,
-        })
-        .unwrap();
-
-        let first = core
-            .subscribe_mail(
-                &agent.agent_id,
-                list,
-                "member",
-                vec!["review".to_string(), "proposal".to_string()],
-                1800,
-            )
-            .unwrap();
-        assert_eq!(first.status, "subscribed");
-        assert_eq!(first.kinds, vec!["proposal", "review"]);
-        assert_eq!(first.backfill.surfaced_message_count, 1);
-        assert_eq!(first.backfill.surfaced_unread_count, 1);
-        assert_eq!(first.next_action, "agent_inbox");
-        let first_expires = DateTime::parse_from_rfc3339(&first.lease_expires_at).unwrap();
-
-        let renewed = core
-            .subscribe_mail(
-                &agent.agent_id,
-                list,
-                "member",
-                vec![
-                    "proposal".to_string(),
-                    "review".to_string(),
-                    "proposal".to_string(),
-                ],
-                3600,
-            )
-            .unwrap();
-        assert_eq!(renewed.status, "renewed");
-        assert_eq!(renewed.subscription_id, first.subscription_id);
-        assert_eq!(renewed.kinds, vec!["proposal", "review"]);
-        assert_eq!(renewed.deduplicated_count, 0);
-        assert_eq!(renewed.next_action, "agent_inbox");
-        let renewed_expires = DateTime::parse_from_rfc3339(&renewed.lease_expires_at).unwrap();
-        assert!(renewed_expires > first_expires);
-
-        let mut duplicate = core.active_mail_subscriptions().unwrap()[0].clone();
-        duplicate.subscription_id = "sub_manual_duplicate".to_string();
-        duplicate.created_at = now_rfc3339();
-        append_jsonl(&core.mail_subscriptions_path(), &duplicate).unwrap();
-        assert_eq!(
-            core.mail_subscriptions(Some(&agent.agent_id), Some(list))
-                .unwrap()
-                .subscription_count,
-            2
-        );
-
-        let deduplicated = core
-            .subscribe_mail(
-                &agent.agent_id,
-                list,
-                "member",
-                vec!["review".to_string(), "proposal".to_string()],
-                3600,
-            )
-            .unwrap();
-        assert_eq!(deduplicated.status, "renewed");
-        assert_eq!(deduplicated.subscription_id, first.subscription_id);
-        assert_eq!(deduplicated.deduplicated_count, 1);
-
-        let subscriptions = core
-            .mail_subscriptions(Some(&agent.agent_id), Some(list))
-            .unwrap();
-        assert_eq!(subscriptions.subscription_count, 1);
-        assert_eq!(
-            subscriptions.subscriptions[0].subscription_id,
-            first.subscription_id
-        );
-        assert_eq!(
-            subscriptions.subscriptions[0].kinds,
-            vec!["proposal", "review"]
-        );
-
-        let members = core.list_members(list).unwrap();
-        assert_eq!(members.member_count, 1);
-        assert_eq!(members.active_member_count, 1);
-        assert_eq!(members.subscriptions.len(), 1);
-    }
-
-    #[test]
-    fn agent_inbox_applies_subscription_kind_filters_without_narrowing_mailbox() {
-        let temp = TempDir::new().unwrap();
-        let root = temp.path().join("1Context");
-        seed_fixture(&root);
-        let core = WikiCore::new(&root);
-        core.create_page("topics", None).unwrap();
-        let agent = core
-            .register_agent("subscription-kind-agent", Vec::new(), Vec::new(), 1800)
-            .unwrap();
-        let list = "list://wiki.reviewers";
-        core.create_list(
-            list,
-            Some("Wiki Reviewers".to_string()),
-            None,
-            Some("topics".to_string()),
-            Some(agent.primary_address.clone()),
-        )
-        .unwrap();
-
-        core.append_talk(TalkAppendRequest {
-            page: "topics".to_string(),
-            kind: "proposal".to_string(),
-            subject: "Proposal before scoped subscribe".to_string(),
-            thread_id: None,
-            reply_to: None,
-            from: agent.primary_address.clone(),
-            to: vec![list.to_string()],
-            cc: vec![],
-            body_markdown: "This should stay durable in the list mailbox.".to_string(),
-            attachments: vec![],
-            allow_tombstoned: false,
-        })
-        .unwrap();
-
-        let subscription = core
-            .subscribe_mail(
-                &agent.agent_id,
-                list,
-                "member",
-                vec!["review".to_string()],
-                1800,
-            )
-            .unwrap();
-        assert_eq!(subscription.backfill.surfaced_message_count, 0);
-        assert_eq!(subscription.next_action, "none");
-
-        let before_review = core.agent_inbox(&agent.agent_id, false, false).unwrap();
-        assert_eq!(before_review.message_count, 0);
-        assert_eq!(
-            before_review
-                .mailboxes
-                .iter()
-                .find(|mailbox| mailbox.address == list)
-                .unwrap()
-                .total_count,
-            0
-        );
-
-        core.append_talk(TalkAppendRequest {
-            page: "topics".to_string(),
-            kind: "review".to_string(),
-            subject: "Review after scoped subscribe".to_string(),
-            thread_id: None,
-            reply_to: None,
-            from: agent.primary_address.clone(),
-            to: vec![list.to_string()],
-            cc: vec![],
-            body_markdown: "This should reach the review subscriber.".to_string(),
-            attachments: vec![],
-            allow_tombstoned: false,
-        })
-        .unwrap();
-
-        let list_inbox = core.inbox(list).unwrap();
-        assert_eq!(list_inbox.message_count, 2);
-        assert_eq!(
-            list_inbox
-                .messages
-                .iter()
-                .map(|message| message.kind.as_str())
-                .collect::<BTreeSet<_>>(),
-            BTreeSet::from(["proposal", "review"])
-        );
-
-        let agent_inbox = core.agent_inbox(&agent.agent_id, false, false).unwrap();
-        assert_eq!(agent_inbox.message_count, 1);
-        assert_eq!(
-            agent_inbox
-                .mailboxes
-                .iter()
-                .find(|mailbox| mailbox.address == list)
-                .unwrap()
-                .total_count,
-            1
-        );
-        assert_eq!(agent_inbox.notifications.len(), 1);
-        assert_eq!(agent_inbox.messages[0].kind, "review");
-        assert_eq!(
-            agent_inbox.messages[0].subject,
-            "Review after scoped subscribe"
-        );
-
-        let status = core.agent_status(&agent.agent_id).unwrap();
-        assert_eq!(status.agent.as_ref().unwrap().actionable_count, 1);
-        assert_eq!(
-            status
-                .mailboxes
-                .iter()
-                .find(|mailbox| mailbox.address == list)
-                .unwrap()
-                .total_count,
-            1
-        );
-    }
-
-    #[test]
-    fn notify_poll_ignores_expired_subscription_wakeups() {
-        let temp = TempDir::new().unwrap();
-        let root = temp.path().join("1Context");
-        seed_fixture(&root);
-        let core = WikiCore::new(&root);
-        core.create_page("topics", None).unwrap();
-        let agent = core
-            .register_agent("expired-subscription-agent", Vec::new(), Vec::new(), 1800)
-            .unwrap();
-        let list = "list://wiki.reviewers";
-        core.create_list(
-            list,
-            Some("Wiki Reviewers".to_string()),
-            None,
-            Some("topics".to_string()),
-            Some(agent.primary_address.clone()),
-        )
-        .unwrap();
-        core.subscribe_mail(&agent.agent_id, list, "member", Vec::new(), 1800)
-            .unwrap();
-
-        core.append_talk(TalkAppendRequest {
-            page: "topics".to_string(),
-            kind: "proposal".to_string(),
-            subject: "Proposal before subscription expiry".to_string(),
-            thread_id: None,
-            reply_to: None,
-            from: agent.primary_address.clone(),
-            to: vec![list.to_string()],
-            cc: vec![],
-            body_markdown: "This wakeup should disappear when the subscription expires."
-                .to_string(),
-            attachments: vec![],
-            allow_tombstoned: false,
-        })
-        .unwrap();
-        assert_eq!(
-            core.poll_notifications(&agent.agent_id)
-                .unwrap()
-                .notification_count,
-            1
-        );
-
-        let mut expired = core.active_mail_subscriptions().unwrap()[0].clone();
-        expired.event = "mail.subscription.renewed".to_string();
-        expired.created_at = now_rfc3339();
-        expired.lease_expires_at =
-            (Utc::now() - chrono::Duration::seconds(30)).to_rfc3339_opts(SecondsFormat::Secs, true);
-        append_jsonl(&core.mail_subscriptions_path(), &expired).unwrap();
-
-        assert_eq!(
-            core.mail_subscriptions(Some(&agent.agent_id), Some(list))
-                .unwrap()
-                .subscription_count,
-            0
-        );
-        assert_eq!(
-            core.agent_inbox(&agent.agent_id, false, false)
-                .unwrap()
-                .message_count,
-            0
-        );
-        assert_eq!(
-            core.poll_notifications(&agent.agent_id)
-                .unwrap()
-                .notification_count,
-            0
-        );
-    }
-
-    #[test]
-    fn mail_unsubscribe_cancels_matching_active_subscriptions() {
-        let temp = TempDir::new().unwrap();
-        let root = temp.path().join("1Context");
-        seed_fixture(&root);
-        let core = WikiCore::new(&root);
-        let agent = core
-            .register_agent("unsubscribe-agent", Vec::new(), Vec::new(), 1800)
-            .unwrap();
-        core.create_list(
-            "list://wiki.reviewers",
-            Some("Wiki Reviewers".to_string()),
-            None,
-            None,
-            None,
-        )
-        .unwrap();
-
-        let proposal = core
-            .subscribe_mail(
-                &agent.agent_id,
-                "list://wiki.reviewers",
-                "member",
-                vec!["proposal".to_string()],
-                1800,
-            )
-            .unwrap();
-        let review = core
-            .subscribe_mail(
-                &agent.agent_id,
-                "list://wiki.reviewers",
-                "member",
-                vec!["review".to_string()],
-                1800,
-            )
-            .unwrap();
-        assert_ne!(proposal.subscription_id, review.subscription_id);
-        assert_eq!(
-            core.mail_subscriptions(Some(&agent.agent_id), None)
-                .unwrap()
-                .subscription_count,
-            2
-        );
-
-        let cancelled = core
-            .unsubscribe_mail(
-                &agent.agent_id,
-                "list://wiki.reviewers",
-                Some("member"),
-                vec!["proposal".to_string()],
-            )
-            .unwrap();
-        assert_eq!(cancelled.operation, "wiki.mail.unsubscribe");
-        assert_eq!(cancelled.status, "unsubscribed");
-        assert_eq!(cancelled.cancelled_count, 1);
-        assert_eq!(cancelled.remaining_count, 1);
-        assert_eq!(cancelled.next_action, "mail_subscriptions");
-        assert_eq!(
-            cancelled.cancelled[0].subscription_id,
-            proposal.subscription_id
-        );
-
-        let subscriptions = core
-            .mail_subscriptions(Some(&agent.agent_id), Some("list://wiki.reviewers"))
-            .unwrap();
-        assert_eq!(subscriptions.subscription_count, 1);
-        assert_eq!(
-            subscriptions.subscriptions[0].subscription_id,
-            review.subscription_id
-        );
-        assert_eq!(subscriptions.subscriptions[0].kinds, vec!["review"]);
-
-        let not_found = core
-            .unsubscribe_mail(
-                &agent.agent_id,
-                "list://wiki.reviewers",
-                Some("watcher"),
-                Vec::new(),
-            )
-            .unwrap();
-        assert_eq!(not_found.status, "not_found");
-        assert_eq!(not_found.cancelled_count, 0);
-        assert_eq!(not_found.remaining_count, 1);
-        assert_eq!(not_found.next_action, "mail_subscriptions");
-
-        let cancelled_rest = core
-            .unsubscribe_mail(
-                &agent.agent_id,
-                "list://wiki.reviewers",
-                Some("member"),
-                Vec::new(),
-            )
-            .unwrap();
-        assert_eq!(cancelled_rest.status, "unsubscribed");
-        assert_eq!(cancelled_rest.cancelled_count, 1);
-        assert_eq!(cancelled_rest.remaining_count, 0);
-        assert_eq!(cancelled_rest.next_action, "none");
-    }
-
-    #[test]
-    fn page_unwatch_cleans_up_page_watch_surfaces() {
-        let temp = TempDir::new().unwrap();
-        let root = temp.path().join("1Context");
-        seed_fixture(&root);
-        let core = WikiCore::new(&root);
-        core.create_page("topics", None).unwrap();
-        let agent = core
-            .register_agent("page-unwatch-agent", Vec::new(), Vec::new(), 1800)
-            .unwrap();
-
-        let watch = core
-            .watch_page(
-                "topics",
-                &agent.agent_id,
-                None,
-                vec!["proposal".to_string()],
-                1800,
-            )
-            .unwrap();
-        assert_eq!(watch.operation, "wiki.page.watch");
-        assert_eq!(watch.unsubscribe_plan.operation, "wiki.page.unwatch");
-        assert_eq!(watch.unsubscribe_plan.page, "topics");
-        assert_eq!(
-            watch.unsubscribe_plan.list_address,
-            "list://topics.watchers"
-        );
-        assert_eq!(
-            watch.unsubscribe_plan.page_mailbox_address,
-            "mailbox://page/topics"
-        );
-        assert_eq!(watch.subscription.address, "list://topics.watchers");
-        assert_eq!(
-            watch.page_mailbox_subscription.address,
-            "mailbox://page/topics"
-        );
-
-        core.subscribe_mail(
-            &agent.agent_id,
-            "mailbox://page/topics",
-            "watcher",
-            vec!["proposal".to_string(), "question".to_string()],
-            1800,
-        )
-        .unwrap();
-        assert_eq!(
-            core.mail_subscriptions(Some(&agent.agent_id), None)
-                .unwrap()
-                .subscription_count,
-            3
-        );
-
-        let scoped = core
-            .unwatch_page(
-                "topics",
-                &agent.agent_id,
-                None,
-                vec!["proposal".to_string()],
-            )
-            .unwrap();
-        assert_eq!(scoped.operation, "wiki.page.unwatch");
-        assert_eq!(scoped.status, "unwatched");
-        assert_eq!(scoped.cancelled_count, 2);
-        assert_eq!(scoped.remaining_count, 1);
-        assert_eq!(scoped.next_action, "mail_subscriptions");
-        assert_eq!(scoped.list_unsubscribe.cancelled_count, 1);
-        assert_eq!(scoped.page_mailbox_unsubscribe.cancelled_count, 1);
-        assert_eq!(scoped.page_mailbox_unsubscribe.remaining_count, 1);
-
-        let remaining = core
-            .mail_subscriptions(Some(&agent.agent_id), Some("mailbox://page/topics"))
-            .unwrap();
-        assert_eq!(remaining.subscription_count, 1);
-        assert_eq!(
-            remaining.subscriptions[0].kinds,
-            vec!["proposal", "question"]
-        );
-
-        let broad = core
-            .unwatch_page("topics", &agent.agent_id, None, Vec::new())
-            .unwrap();
-        assert_eq!(broad.status, "unwatched");
-        assert_eq!(broad.cancelled_count, 1);
-        assert_eq!(broad.remaining_count, 0);
-        assert_eq!(broad.next_action, "none");
-        assert_eq!(
-            core.mail_subscriptions(Some(&agent.agent_id), None)
-                .unwrap()
-                .subscription_count,
-            0
-        );
-        assert_eq!(
-            broad
-                .page_status
-                .mail
-                .subscriptions
-                .iter()
-                .filter(|subscription| subscription.agent_id == agent.agent_id)
-                .count(),
-            0
-        );
-    }
-
-    #[test]
-    fn list_status_points_at_mail_actions_for_open_list_work() {
-        let temp = TempDir::new().unwrap();
-        let root = temp.path().join("1Context");
-        seed_fixture(&root);
-        let core = WikiCore::new(&root);
-        core.create_page("topics", None).unwrap();
-        let agent = core
-            .register_agent("list-status-agent", Vec::new(), Vec::new(), 1800)
-            .unwrap();
-        core.create_list(
-            "list://topics.reviewers",
-            Some("Topics Reviewers".to_string()),
-            None,
-            Some("topics".to_string()),
-            Some(agent.primary_address.clone()),
-        )
-        .unwrap();
-        core.subscribe_mail(
-            &agent.agent_id,
-            "list://topics.reviewers",
-            "member",
-            vec!["proposal".to_string()],
-            1800,
-        )
-        .unwrap();
-        let talk = core
-            .append_talk(TalkAppendRequest {
-                page: "topics".to_string(),
-                kind: "proposal".to_string(),
-                subject: "List status action".to_string(),
-                thread_id: None,
-                reply_to: None,
-                from: agent.primary_address.clone(),
-                to: vec!["list://topics.reviewers".to_string()],
-                cc: vec![],
-                body_markdown: "List status should tell agents what to do next.".to_string(),
-                attachments: vec![],
-                allow_tombstoned: false,
-            })
-            .unwrap();
-
-        let open = core.list_status("list://topics.reviewers").unwrap();
-        assert_eq!(open.mailbox.actionable_count, 1);
-        assert_eq!(open.next_action, "mail_claim_or_mark");
-
-        core.claim_mail(&talk.message_id, "list://topics.reviewers", &agent.agent_id)
-            .unwrap();
-        let claimed = core.list_status("list://topics.reviewers").unwrap();
-        assert_eq!(claimed.mailbox.actionable_count, 1);
-        assert_eq!(claimed.next_action, "mail_claim_or_mark");
-
-        let snoozed_until = (Utc::now() + chrono::Duration::seconds(300))
-            .to_rfc3339_opts(SecondsFormat::Secs, true);
-        core.mark_mail(
-            &talk.message_id,
-            "list://topics.reviewers",
-            "snoozed",
-            Some(&snoozed_until),
-        )
-        .unwrap();
-        let snoozed = core.list_status("list://topics.reviewers").unwrap();
-        assert_eq!(snoozed.mailbox.actionable_count, 0);
-        assert!(snoozed.has_snoozed);
-        assert_eq!(snoozed.snoozed_count, 1);
-        assert_eq!(snoozed.hidden_snoozed_count, 1);
-        assert_eq!(snoozed.audit_flags, vec!["snoozed_hidden"]);
-        assert!(snoozed.messages.is_empty());
-        assert_eq!(snoozed.next_action, "include_hidden_mail");
-
-        let snoozed_audit = core
-            .list_status_with_options("list://topics.reviewers", false, true)
-            .unwrap();
-        assert_eq!(snoozed_audit.hidden_snoozed_count, 0);
-        assert_eq!(snoozed_audit.messages.len(), 1);
-        assert_eq!(snoozed_audit.messages[0].state, "snoozed");
-
-        core.mark_mail(
-            &talk.message_id,
-            "list://topics.reviewers",
-            "archived",
-            None,
-        )
-        .unwrap();
-        let archived = core.list_status("list://topics.reviewers").unwrap();
-        assert!(archived.has_archived);
-        assert_eq!(archived.archived_count, 1);
-        assert_eq!(archived.hidden_archived_count, 1);
-        assert_eq!(archived.audit_flags, vec!["archived_hidden"]);
-        assert!(archived.messages.is_empty());
-        assert_eq!(archived.next_action, "include_hidden_mail");
-
-        let archived_audit = core
-            .list_status_with_options("list://topics.reviewers", true, false)
-            .unwrap();
-        assert_eq!(archived_audit.hidden_archived_count, 0);
-        assert_eq!(archived_audit.messages.len(), 1);
-        assert_eq!(archived_audit.messages[0].state, "archived");
-    }
-
-    #[test]
-    fn mail_claim_and_mark_accept_agent_primary_address_for_visible_subscription_delivery() {
-        let temp = TempDir::new().unwrap();
-        let root = temp.path().join("1Context");
-        seed_fixture(&root);
-        let core = WikiCore::new(&root);
-        core.create_page("topics", None).unwrap();
-        let agent = core
-            .register_agent("primary-mail-agent", Vec::new(), Vec::new(), 1800)
-            .unwrap();
-        let list_address = "list://topics.reviewers";
-        core.create_list(
-            list_address,
-            Some("Topics Reviewers".to_string()),
-            None,
-            Some("topics".to_string()),
-            Some(agent.primary_address.clone()),
-        )
-        .unwrap();
-        core.subscribe_mail(
-            &agent.agent_id,
-            list_address,
-            "member",
-            vec!["proposal".to_string()],
-            1800,
-        )
-        .unwrap();
-
-        let claim_talk = core
-            .append_talk(TalkAppendRequest {
-                page: "topics".to_string(),
-                kind: "proposal".to_string(),
-                subject: "Primary claim should resolve".to_string(),
-                thread_id: None,
-                reply_to: None,
-                from: agent.primary_address.clone(),
-                to: vec![list_address.to_string()],
-                cc: vec![],
-                body_markdown: "This is visible in agent-inbox through a list.".to_string(),
-                attachments: vec![],
-                allow_tombstoned: false,
-            })
-            .unwrap();
-
-        assert_eq!(core.inbox(&agent.primary_address).unwrap().message_count, 0);
-        let agent_inbox = core.agent_inbox(&agent.agent_id, false, false).unwrap();
-        assert_eq!(agent_inbox.message_count, 1);
-        assert_eq!(agent_inbox.messages[0].recipient, list_address);
-
-        let claim = core
-            .claim_mail(
-                &claim_talk.message_id,
-                &agent.primary_address,
-                &agent.agent_id,
-            )
-            .unwrap();
-        assert_eq!(claim.recipient, list_address);
-        assert_eq!(claim.status, "claimed");
-        let after_claim = core.inbox(list_address).unwrap();
-        let claimed = after_claim
-            .messages
-            .iter()
-            .find(|message| message.message_id == claim_talk.message_id)
-            .unwrap();
-        assert_eq!(claimed.claimed_by.as_deref(), Some(agent.agent_id.as_str()));
-
-        let mark_talk = core
-            .append_talk(TalkAppendRequest {
-                page: "topics".to_string(),
-                kind: "proposal".to_string(),
-                subject: "Primary mark should resolve".to_string(),
-                thread_id: None,
-                reply_to: None,
-                from: agent.primary_address.clone(),
-                to: vec![list_address.to_string()],
-                cc: vec![],
-                body_markdown: "This should be markable from the same agent-facing inbox."
-                    .to_string(),
-                attachments: vec![],
-                allow_tombstoned: false,
-            })
-            .unwrap();
-        let mark = core
-            .mark_mail(&mark_talk.message_id, &agent.primary_address, "done", None)
-            .unwrap();
-        assert_eq!(mark.recipient, list_address);
-        assert_eq!(mark.status, "ok");
-        let after_mark = core.inbox(list_address).unwrap();
-        let marked = after_mark
-            .messages
-            .iter()
-            .find(|message| message.message_id == mark_talk.message_id)
-            .unwrap();
-        assert_eq!(marked.state, "done");
-    }
-
-    #[test]
-    fn concurrent_claims_have_one_winner_per_delivery() {
-        let temp = TempDir::new().unwrap();
-        let root = temp.path().join("1Context");
-        seed_fixture(&root);
-        let core = WikiCore::new(&root);
-        core.create_page("topics", None).unwrap();
-        let agent_a = core
-            .register_agent("concurrent-claim-a", Vec::new(), Vec::new(), 1800)
-            .unwrap();
-        let agent_b = core
-            .register_agent("concurrent-claim-b", Vec::new(), Vec::new(), 1800)
-            .unwrap();
-        let list_address = "list://topics.concurrent";
-        core.create_list(
-            list_address,
-            Some("Topics Concurrent".to_string()),
-            None,
-            Some("topics".to_string()),
-            Some(agent_a.primary_address.clone()),
-        )
-        .unwrap();
-        for agent in [&agent_a, &agent_b] {
-            core.subscribe_mail(
-                &agent.agent_id,
-                list_address,
-                "member",
-                vec!["proposal".to_string()],
-                1800,
-            )
-            .unwrap();
-        }
-
-        let mut message_ids = Vec::new();
-        for index in 0..20 {
-            let talk = core
-                .append_talk(TalkAppendRequest {
-                    page: "topics".to_string(),
-                    kind: "proposal".to_string(),
-                    subject: format!("Concurrent claim {index}"),
-                    thread_id: None,
-                    reply_to: None,
-                    from: agent_a.primary_address.clone(),
-                    to: vec![list_address.to_string()],
-                    cc: Vec::new(),
-                    body_markdown: "Only one competing agent should win this delivery.".to_string(),
-                    attachments: vec![],
-                    allow_tombstoned: false,
-                })
-                .unwrap();
-            let message_id = talk.message_id.clone();
-            message_ids.push(message_id.clone());
-
-            let barrier = std::sync::Arc::new(std::sync::Barrier::new(2));
-            let first = {
-                let barrier = barrier.clone();
-                let root = root.clone();
-                let message_id = message_id.clone();
-                let agent_id = agent_a.agent_id.clone();
-                std::thread::spawn(move || {
-                    barrier.wait();
-                    WikiCore::new(root)
-                        .claim_mail(&message_id, list_address, &agent_id)
-                        .map(|receipt| receipt.claimed_by)
-                        .map_err(|error| error.to_string())
-                })
-            };
-            let second = {
-                let barrier = barrier.clone();
-                let root = root.clone();
-                let message_id = message_id.clone();
-                let agent_id = agent_b.agent_id.clone();
-                std::thread::spawn(move || {
-                    barrier.wait();
-                    WikiCore::new(root)
-                        .claim_mail(&message_id, list_address, &agent_id)
-                        .map(|receipt| receipt.claimed_by)
-                        .map_err(|error| error.to_string())
-                })
-            };
-
-            let results = vec![first.join().unwrap(), second.join().unwrap()];
-            let winners = results
-                .iter()
-                .filter_map(|result| result.as_ref().ok())
-                .collect::<Vec<_>>();
-            assert_eq!(winners.len(), 1, "{results:?}");
-            let loser = results
-                .iter()
-                .filter_map(|result| result.as_ref().err())
-                .next()
-                .unwrap();
-            assert!(loser.contains("already claimed by"), "{loser}");
-
-            let inbox = core.inbox_with_options(list_address, true, true).unwrap();
-            let delivery = inbox
-                .messages
-                .iter()
-                .find(|message| message.message_id == message_id)
-                .unwrap();
-            assert_eq!(delivery.state, "claimed");
-            assert_eq!(delivery.claimed_by.as_deref(), Some(winners[0].as_str()));
-        }
-
-        let claim_events =
-            read_jsonl::<serde_json::Value>(&root.join("context-engine/mail/claims.jsonl"))
-                .unwrap();
-        for message_id in message_ids {
-            let claim_count = claim_events
-                .iter()
-                .filter(|event| {
-                    event.get("message_id").and_then(serde_json::Value::as_str)
-                        == Some(message_id.as_str())
-                        && event.get("recipient").and_then(serde_json::Value::as_str)
-                            == Some(list_address)
-                        && event.get("state").and_then(serde_json::Value::as_str) == Some("claimed")
-                })
-                .count();
-            assert_eq!(claim_count, 1, "{message_id}");
-        }
-    }
-
-    #[test]
-    fn concurrent_duplicate_list_and_watch_operations_leave_one_active_record() {
-        let temp = TempDir::new().unwrap();
-        let root = temp.path().join("1Context");
-        seed_fixture(&root);
-        let core = WikiCore::new(&root);
-        core.create_page("topics", None).unwrap();
-        let agent = core
-            .register_agent("duplicate-watch-agent", Vec::new(), Vec::new(), 1800)
-            .unwrap();
-
-        let list_address = "list://topics.duplicate-watch";
-        let barrier = std::sync::Arc::new(std::sync::Barrier::new(12));
-        let mut workers = Vec::new();
-        for _ in 0..12 {
-            let barrier = barrier.clone();
-            let root = root.clone();
-            let owner = agent.primary_address.clone();
-            workers.push(std::thread::spawn(move || {
-                barrier.wait();
-                WikiCore::new(root)
-                    .create_list(
-                        list_address,
-                        Some("Duplicate Watch".to_string()),
-                        None,
-                        Some("topics".to_string()),
-                        Some(owner),
-                    )
-                    .map(|receipt| receipt.status)
-                    .map_err(|error| error.to_string())
-            }));
-        }
-        let statuses = workers
-            .into_iter()
-            .map(|worker| worker.join().unwrap().unwrap())
-            .collect::<Vec<_>>();
-        assert_eq!(
-            statuses
-                .iter()
-                .filter(|status| status.as_str() == "created")
-                .count(),
-            1
-        );
-        assert_eq!(
-            statuses
-                .iter()
-                .filter(|status| status.as_str() == "already_exists")
-                .count(),
-            11
-        );
-        let list_events =
-            read_jsonl::<serde_json::Value>(&root.join("context-engine/mail/lists.jsonl")).unwrap();
-        assert_eq!(
-            list_events
-                .iter()
-                .filter(|event| {
-                    event.get("address").and_then(serde_json::Value::as_str) == Some(list_address)
-                        && event.get("event").and_then(serde_json::Value::as_str)
-                            == Some("mail.list.created")
-                })
-                .count(),
-            1
-        );
-
-        let barrier = std::sync::Arc::new(std::sync::Barrier::new(12));
-        let mut workers = Vec::new();
-        for _ in 0..12 {
-            let barrier = barrier.clone();
-            let root = root.clone();
-            let agent_id = agent.agent_id.clone();
-            workers.push(std::thread::spawn(move || {
-                barrier.wait();
-                WikiCore::new(root)
-                    .watch_page(
-                        "topics",
-                        &agent_id,
-                        Some(list_address),
-                        vec!["proposal".to_string()],
-                        1800,
-                    )
-                    .map(|receipt| {
-                        (
-                            receipt.subscription.status,
-                            receipt.page_mailbox_subscription.status,
-                        )
-                    })
-                    .map_err(|error| error.to_string())
-            }));
-        }
-        for worker in workers {
-            worker.join().unwrap().unwrap();
-        }
-        let subscriptions = core
-            .mail_subscriptions(Some(&agent.agent_id), None)
-            .unwrap();
-        let active_by_address = subscriptions
-            .subscriptions
-            .iter()
-            .map(|subscription| subscription.address.clone())
-            .collect::<Vec<_>>();
-        assert_eq!(
-            active_by_address
-                .iter()
-                .filter(|address| address.as_str() == list_address)
-                .count(),
-            1
-        );
-        assert_eq!(
-            active_by_address
-                .iter()
-                .filter(|address| address.as_str() == "mailbox://page/topics")
-                .count(),
-            1
-        );
-
-        let unwatch = core
-            .unwatch_page(
-                "topics",
-                &agent.agent_id,
-                Some(list_address),
-                vec!["proposal".to_string()],
-            )
-            .unwrap();
-        assert_eq!(unwatch.status, "unwatched");
-        assert_eq!(unwatch.cancelled_count, 2);
-        let repeated = core
-            .unwatch_page(
-                "topics",
-                &agent.agent_id,
-                Some(list_address),
-                vec!["proposal".to_string()],
-            )
-            .unwrap();
-        assert_eq!(repeated.status, "not_found");
-        assert_eq!(repeated.cancelled_count, 0);
-    }
-
-    #[test]
     fn page_write_expected_hash_is_checked_under_lifecycle_lock() {
         let temp = TempDir::new().unwrap();
         let root = temp.path().join("1Context");
@@ -11541,219 +6774,6 @@ template = "site/e08/open-questions.md"
             .next()
             .unwrap();
         assert!(stale.contains("source hash mismatch"), "{stale}");
-    }
-
-    #[test]
-    fn repeated_mail_claim_mark_and_notification_ack_are_idempotent() {
-        let temp = TempDir::new().unwrap();
-        let root = temp.path().join("1Context");
-        seed_fixture(&root);
-        let core = WikiCore::new(&root);
-        core.create_page("topics", None).unwrap();
-        let agent = core
-            .register_agent(
-                "idempotent-mail-agent",
-                vec!["role://topics.curator".to_string()],
-                Vec::new(),
-                1800,
-            )
-            .unwrap();
-        let talk = core
-            .append_talk(TalkAppendRequest {
-                page: "topics".to_string(),
-                kind: "proposal".to_string(),
-                subject: "Idempotent mail".to_string(),
-                thread_id: None,
-                reply_to: None,
-                from: agent.primary_address.clone(),
-                to: vec!["role://topics.curator".to_string()],
-                cc: Vec::new(),
-                body_markdown: "Retries should not duplicate durable state.".to_string(),
-                attachments: vec![],
-                allow_tombstoned: false,
-            })
-            .unwrap();
-
-        let notification = core
-            .poll_notifications(&agent.agent_id)
-            .unwrap()
-            .notifications
-            .into_iter()
-            .next()
-            .unwrap();
-        let first_ack = core
-            .ack_notification(&agent.agent_id, &notification.notification_id, "delivered")
-            .unwrap();
-        let second_ack = core
-            .ack_notification(&agent.agent_id, &notification.notification_id, "delivered")
-            .unwrap();
-        assert_eq!(first_ack.status, "ok");
-        assert_eq!(second_ack.status, "already_acknowledged");
-
-        let first_claim = core
-            .claim_mail(&talk.message_id, "role://topics.curator", &agent.agent_id)
-            .unwrap();
-        let second_claim = core
-            .claim_mail(&talk.message_id, "role://topics.curator", &agent.agent_id)
-            .unwrap();
-        assert_eq!(first_claim.status, "claimed");
-        assert_eq!(second_claim.status, "already_claimed");
-        assert_eq!(second_claim.evidence[0].status, "skipped_existing");
-
-        let first_mark = core
-            .mark_mail(&talk.message_id, "role://topics.curator", "done", None)
-            .unwrap();
-        let second_mark = core
-            .mark_mail(&talk.message_id, "role://topics.curator", "done", None)
-            .unwrap();
-        assert_eq!(first_mark.status, "ok");
-        assert_eq!(second_mark.status, "unchanged");
-        let repeated_mark_all = core
-            .mark_mail_all_deliveries(&talk.message_id, "done", None)
-            .unwrap();
-        assert_eq!(repeated_mark_all.changed_delivery_count, 0);
-
-        let claim_events =
-            read_jsonl::<serde_json::Value>(&root.join("context-engine/mail/claims.jsonl"))
-                .unwrap();
-        assert_eq!(
-            claim_events
-                .iter()
-                .filter(|event| {
-                    event.get("message_id").and_then(serde_json::Value::as_str)
-                        == Some(talk.message_id.as_str())
-                        && event.get("state").and_then(serde_json::Value::as_str) == Some("claimed")
-                })
-                .count(),
-            1
-        );
-        assert_eq!(
-            claim_events
-                .iter()
-                .filter(|event| {
-                    event.get("message_id").and_then(serde_json::Value::as_str)
-                        == Some(talk.message_id.as_str())
-                        && event.get("state").and_then(serde_json::Value::as_str) == Some("done")
-                })
-                .count(),
-            1
-        );
-        let attempts = read_jsonl::<serde_json::Value>(
-            &root.join("context-engine/notifications/attempts.jsonl"),
-        )
-        .unwrap();
-        assert_eq!(
-            attempts
-                .iter()
-                .filter(|event| {
-                    event
-                        .get("notification_id")
-                        .and_then(serde_json::Value::as_str)
-                        == Some(notification.notification_id.as_str())
-                })
-                .count(),
-            1
-        );
-    }
-
-    #[test]
-    fn mail_mark_cannot_create_unowned_claims() {
-        let temp = TempDir::new().unwrap();
-        let root = temp.path().join("1Context");
-        seed_fixture(&root);
-        let core = WikiCore::new(&root);
-        core.create_page("topics", None).unwrap();
-        let agent = core
-            .register_agent("mark-claimed-agent", Vec::new(), Vec::new(), 1800)
-            .unwrap();
-        let talk = core
-            .append_talk(TalkAppendRequest {
-                page: "topics".to_string(),
-                kind: "proposal".to_string(),
-                subject: "Claim must name an agent".to_string(),
-                thread_id: None,
-                reply_to: None,
-                from: agent.primary_address.clone(),
-                to: vec!["role://topics.curator".to_string()],
-                cc: vec![],
-                body_markdown: "Generic mark must not leave a claimed message without claimed_by."
-                    .to_string(),
-                attachments: vec![],
-                allow_tombstoned: false,
-            })
-            .unwrap();
-
-        let error = core
-            .mark_mail(&talk.message_id, "role://topics.curator", "claimed", None)
-            .unwrap_err()
-            .to_string();
-        assert!(error.contains("invalid mail mark state claimed"));
-        let before_claim = core.inbox("role://topics.curator").unwrap();
-        assert_eq!(before_claim.messages[0].state, "unread");
-        assert!(before_claim.messages[0].claimed_by.is_none());
-
-        let claim = core
-            .claim_mail(&talk.message_id, "role://topics.curator", &agent.agent_id)
-            .unwrap();
-        assert_eq!(claim.status, "claimed");
-        let after_claim = core.inbox("role://topics.curator").unwrap();
-        assert_eq!(
-            after_claim.messages[0].claimed_by.as_deref(),
-            Some(agent.agent_id.as_str())
-        );
-    }
-
-    #[test]
-    fn duplicate_role_assignment_and_register_inputs_are_deduplicated() {
-        let temp = TempDir::new().unwrap();
-        let root = temp.path().join("1Context");
-        seed_fixture(&root);
-        let core = WikiCore::new(&root);
-        core.create_page("topics", None).unwrap();
-        let agent = core
-            .register_agent(
-                "duplicate-role-agent",
-                vec![
-                    "role://topics.curator".to_string(),
-                    "role://topics.curator".to_string(),
-                ],
-                vec!["wiki.mail".to_string(), "wiki.mail".to_string()],
-                1800,
-            )
-            .unwrap();
-        assert_eq!(
-            agent
-                .addresses
-                .iter()
-                .filter(|address| address.as_str() == "role://topics.curator")
-                .count(),
-            1
-        );
-
-        let first = core
-            .assign_page_role(
-                "topics",
-                &agent.agent_id,
-                "curator",
-                vec!["proposal".to_string()],
-                1800,
-            )
-            .unwrap();
-        let second = core
-            .assign_page_role(
-                "topics",
-                &agent.agent_id,
-                "curator",
-                vec!["proposal".to_string()],
-                1800,
-            )
-            .unwrap();
-        assert_eq!(first.subscription.status, "subscribed");
-        assert_eq!(second.subscription.status, "renewed");
-        let subscriptions = core
-            .mail_subscriptions(Some(&agent.agent_id), Some("role://topics.curator"))
-            .unwrap();
-        assert_eq!(subscriptions.subscription_count, 1);
     }
 
     #[test]
@@ -11808,60 +6828,12 @@ template = "site/e08/open-questions.md"
     }
 
     #[test]
-    fn mail_claim_does_not_reopen_terminal_delivery() {
-        let temp = TempDir::new().unwrap();
-        let root = temp.path().join("1Context");
-        seed_fixture(&root);
-        let core = WikiCore::new(&root);
-        core.create_page("topics", None).unwrap();
-        let agent = core
-            .register_agent("terminal-claim-agent", Vec::new(), Vec::new(), 1800)
-            .unwrap();
-        let talk = core
-            .append_talk(TalkAppendRequest {
-                page: "topics".to_string(),
-                kind: "proposal".to_string(),
-                subject: "Terminal delivery".to_string(),
-                thread_id: None,
-                reply_to: None,
-                from: agent.primary_address.clone(),
-                to: vec!["role://topics.curator".to_string()],
-                cc: Vec::new(),
-                body_markdown: "Done mail must stay done.".to_string(),
-                attachments: vec![],
-                allow_tombstoned: false,
-            })
-            .unwrap();
-
-        core.mark_mail_all_deliveries(&talk.message_id, "done", None)
-            .unwrap();
-        let error = core
-            .claim_mail(&talk.message_id, "role://topics.curator", &agent.agent_id)
-            .unwrap_err()
-            .to_string();
-        assert!(error.contains("not claimable"), "{error}");
-        let inbox = core
-            .inbox_with_options("role://topics.curator", true, true)
-            .unwrap();
-        assert_eq!(inbox.messages[0].state, "done");
-        assert!(inbox.messages[0].claimed_by.is_none());
-    }
-
-    #[test]
     fn talk_attachments_copy_media_and_duplicate_names() {
         let temp = TempDir::new().unwrap();
         let root = temp.path().join("1Context");
         seed_fixture(&root);
         let core = WikiCore::new(&root);
         core.create_page("topics", None).unwrap();
-        let agent = core
-            .register_agent(
-                "probe-c-agent",
-                vec!["role://topics.curator".to_string()],
-                vec!["probe-c".to_string()],
-                1800,
-            )
-            .unwrap();
 
         let inputs = temp.path().join("inputs");
         fs::create_dir_all(inputs.join("a")).unwrap();
@@ -11885,7 +6857,7 @@ template = "site/e08/open-questions.md"
                 subject: "Attachment edge success".to_string(),
                 thread_id: None,
                 reply_to: None,
-                from: agent.addresses[0].clone(),
+                from: "agent://codex/probe-c-agent".to_string(),
                 to: vec!["role://topics.curator".to_string()],
                 cc: vec![],
                 body_markdown: "Probe C success body.".to_string(),
@@ -11899,6 +6871,8 @@ template = "site/e08/open-questions.md"
                     attachment_input(inputs.join("bad name#?.txt")),
                 ],
                 allow_tombstoned: false,
+                operation_id: None,
+                delivery_mode: TalkDeliveryMode::LabelsOnly,
             })
             .unwrap();
 
@@ -11937,27 +6911,7 @@ template = "site/e08/open-questions.md"
             talk.attachments[0].alt_text.as_deref(),
             Some("Agent-facing alt text")
         );
-        assert_eq!(talk.notifications[0].attachment_count, 7);
-
-        let inbox = core.inbox("role://topics.curator").unwrap();
-        assert_eq!(inbox.messages[0].attachment_count, 7);
-        assert_eq!(inbox.messages[0].attachments.len(), 7);
-        assert_eq!(
-            inbox.messages[0].attachments[0].filename,
-            "agent-facing-note.txt"
-        );
-        assert_eq!(
-            inbox.messages[0].attachments[0].caption.as_deref(),
-            Some("Agent-facing caption")
-        );
-        assert_eq!(
-            inbox.messages[0].attachments[0].alt_text.as_deref(),
-            Some("Agent-facing alt text")
-        );
-        assert_eq!(inbox.messages[0].attachments[5].filename, "duplicate-2.txt");
-        let agent_inbox = core.agent_inbox(&agent.agent_id, false, false).unwrap();
-        assert_eq!(agent_inbox.threads[0].attachment_count, 7);
-        assert_eq!(agent_inbox.messages[0].attachment_count, 7);
+        assert_eq!(talk.attachment_count, 7);
 
         let talk_dir = root.join("user-wiki/source/families/reference/topics/talk/topics.talk");
         for attachment in &talk.attachments {
@@ -12005,6 +6959,8 @@ template = "site/e08/open-questions.md"
                 body_markdown: "Should fail missing.".to_string(),
                 attachments: vec![attachment_input(temp.path().join("missing.txt"))],
                 allow_tombstoned: false,
+                operation_id: None,
+                delivery_mode: TalkDeliveryMode::LabelsOnly,
             })
             .unwrap_err()
             .to_string();
@@ -12028,104 +6984,13 @@ template = "site/e08/open-questions.md"
                 body_markdown: "Should fail unsafe.".to_string(),
                 attachments: vec![attachment_input(unsafe_path)],
                 allow_tombstoned: false,
+                operation_id: None,
+                delivery_mode: TalkDeliveryMode::LabelsOnly,
             })
             .unwrap_err()
             .to_string();
         assert!(unsafe_error.contains("invalid attachment filename"));
         assert!(!attachments_dir.exists());
-    }
-
-    #[test]
-    fn invalid_talk_recipient_with_attachment_leaves_no_orphan_files() {
-        let temp = TempDir::new().unwrap();
-        let root = temp.path().join("1Context");
-        seed_fixture(&root);
-        let core = WikiCore::new(&root);
-        core.create_page("topics", None).unwrap();
-        let attachment = temp.path().join("proof.txt");
-        fs::write(&attachment, "attachment should not be staged\n").unwrap();
-        let talk_dir = root.join("user-wiki/source/families/reference/topics/talk/topics.talk");
-        let attachments_dir = talk_dir.join("attachments");
-
-        let error = core
-            .append_talk(TalkAppendRequest {
-                page: "topics".to_string(),
-                kind: "proposal".to_string(),
-                subject: "Invalid recipient before attachment copy".to_string(),
-                thread_id: None,
-                reply_to: None,
-                from: "agent://worker-cy.sender".to_string(),
-                to: vec!["bad address".to_string()],
-                cc: vec![],
-                body_markdown: "Invalid recipients must fail before attachment staging."
-                    .to_string(),
-                attachments: vec![attachment_input(attachment)],
-                allow_tombstoned: false,
-            })
-            .unwrap_err()
-            .to_string();
-
-        assert!(error.contains("invalid address"), "{error}");
-        assert!(!attachments_dir.exists());
-    }
-
-    #[test]
-    fn mailbox_address_key_collisions_do_not_cross_mark_or_claim() {
-        let temp = TempDir::new().unwrap();
-        let root = temp.path().join("1Context");
-        seed_fixture(&root);
-        let core = WikiCore::new(&root);
-        core.create_page("topics", None).unwrap();
-        let agent = core
-            .register_agent("mailbox-collision-agent", Vec::new(), Vec::new(), 1800)
-            .unwrap();
-        let dot_recipient = "role://worker-cy.alpha";
-        let slash_recipient = "role://worker-cy/alpha";
-
-        let talk = core
-            .append_talk(TalkAppendRequest {
-                page: "topics".to_string(),
-                kind: "proposal".to_string(),
-                subject: "Mailbox collision".to_string(),
-                thread_id: None,
-                reply_to: None,
-                from: agent.primary_address.clone(),
-                to: vec![dot_recipient.to_string(), slash_recipient.to_string()],
-                cc: vec![],
-                body_markdown: "These recipients share an address_key but not a mailbox identity."
-                    .to_string(),
-                attachments: vec![],
-                allow_tombstoned: false,
-            })
-            .unwrap();
-
-        let dot_before = core.inbox(dot_recipient).unwrap();
-        let slash_before = core.inbox(slash_recipient).unwrap();
-        assert_eq!(dot_before.messages.len(), 1);
-        assert_eq!(slash_before.messages.len(), 1);
-        assert_eq!(dot_before.messages[0].recipient, dot_recipient);
-        assert_eq!(slash_before.messages[0].recipient, slash_recipient);
-
-        core.mark_mail(&talk.message_id, dot_recipient, "done", None)
-            .unwrap();
-        let dot_after = core.inbox(dot_recipient).unwrap();
-        let slash_after = core.inbox(slash_recipient).unwrap();
-        assert_eq!(dot_after.messages[0].state, "done");
-        assert_eq!(slash_after.messages[0].state, "unread");
-
-        let slash_claim = core
-            .claim_mail(&talk.message_id, slash_recipient, &agent.agent_id)
-            .unwrap();
-        assert_eq!(slash_claim.status, "claimed");
-        assert_eq!(
-            core.inbox(slash_recipient).unwrap().messages[0]
-                .claimed_by
-                .as_deref(),
-            Some(agent.agent_id.as_str())
-        );
-        assert!(core.inbox(dot_recipient).unwrap().messages[0]
-            .claimed_by
-            .is_none());
     }
 
     #[test]

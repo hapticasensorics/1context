@@ -37,7 +37,7 @@ function usage() {
   console.log(`Usage: node scripts/test-wiki-core-dogfood.mjs [--build] [--keep-runtime] [--leave-published]
 
 Runs a disposable live-daemon wiki dogfood loop:
-  create/edit/list/watch/role/publish/talk/mail/notify/http/delete.
+  create/edit/list/publish/talk/http/delete.
 
 Use --leave-published --keep-runtime when you want rendered files to remain
 available for manual or in-app browser inspection. The script still stops its
@@ -258,7 +258,6 @@ async function main() {
 
   const pageId = `dogfood-harness-${shortStamp}`;
   const route = `/${pageId}`;
-  const listAddress = `list://${pageId}.reviewers`;
   const inputDir = join(evidenceDir, 'inputs');
   await mkdir(inputDir, { recursive: true });
   const bodyFile = join(inputDir, 'page-body.md');
@@ -279,7 +278,7 @@ async function main() {
   await writeFile(findFile, 'Patch anchor: pending.');
   await writeFile(replaceFile, 'Patch anchor: replaced by hash-checked patch.');
   await writeFile(talkBodyFile, [
-    'The reusable dogfood runner is checking page creation, mail delivery, talk rendering, and deletion.',
+    'The reusable dogfood runner is checking page creation, talk rendering, and deletion.',
     '',
     'This message should be visible on the rendered talk route after a force publish.',
     '',
@@ -300,7 +299,6 @@ async function main() {
     runtime_root: runtimeRoot,
     page_id: pageId,
     route,
-    list_address: listAddress,
     results: {},
     expected_errors: {},
   };
@@ -364,7 +362,7 @@ async function main() {
   summary.expected_errors.missing_talk_body = await expectError(
     'missing talk body',
     'wiki.talk.append',
-    { page: 'missing-page', kind: 'proposal', subject: 'Missing body', from: 'agent://dogfood', toRole: 'curator' },
+    { page: 'missing-page', kind: 'proposal', subject: 'Missing body', from: 'agent://dogfood' },
     'body'
   );
   summary.expected_errors.invalid_template = await expectError(
@@ -373,19 +371,6 @@ async function main() {
     { id: `${pageId}-bad`, title: 'Bad Template', route: `${route}-bad`, template: '../bad.md' },
     'template path escapes templates/'
   );
-
-  const author = result(await call('wiki.agent.identify', {
-    threadId: `thread-${pageId}-author`,
-    role: 'role://dogfood-author',
-    capability: 'dogfood',
-  }));
-  const curator = result(await call('wiki.agent.identify', {
-    threadId: `thread-${pageId}-curator`,
-    role: 'role://curator',
-    capability: 'review',
-  }));
-  summary.results.author = author;
-  summary.results.curator = curator;
 
   summary.results.page_create = result(await call('wiki.page.create', {
     id: pageId,
@@ -428,87 +413,19 @@ async function main() {
     replaceFile,
     expectedSourceSha256: opened.edit.expected_source_sha256,
   }));
-  summary.results.list_create = result(await call('wiki.list-create', {
-    address: listAddress,
-    title: 'Dogfood Harness Reviewers',
-    description: 'Disposable review list for dogfood proof.',
-    page: route,
-    owner: author.agent_id,
-  }));
-  summary.results.lists_by_route = result(await call('wiki.lists', { page: route }));
-  summary.results.lists_by_id = result(await call('wiki.lists', { page: pageId }));
-  if (summary.results.lists_by_route.list_count !== 1 || summary.results.lists_by_id.list_count !== 1) {
-    throw new Error(`List route/id canonicalization proof failed for ${pageId}`);
-  }
-  summary.results.assign_role = result(await call('wiki.page-assign-role', {
-    page: route,
-    agentId: curator.agent_id,
-    role: 'curator',
-    kind: 'proposal',
-  }));
-  summary.results.watch = result(await call('wiki.page-watch', {
-    page: route,
-    agentId: author.agent_id,
-    list: listAddress,
-    kind: 'proposal',
-  }));
-  summary.results.list_status = result(await call('wiki.list-status', { list: listAddress }));
-  summary.results.list_members = result(await call('wiki.list-members', { list: listAddress }));
-  const listCreatedAt = summary.results.list_create.list?.created_at;
-  if (
-    !listCreatedAt ||
-    summary.results.lists_by_route.lists?.[0]?.created_at !== listCreatedAt ||
-    summary.results.lists_by_id.lists?.[0]?.created_at !== listCreatedAt ||
-    summary.results.list_status.list?.created_at !== listCreatedAt ||
-    summary.results.list_members.list?.created_at !== listCreatedAt
-  ) {
-    throw new Error(`List created_at summary proof failed for ${listAddress}`);
-  }
   summary.results.publish = result(await call('wiki.publish', { trigger: 'wiki-core-dogfood-script', force: true }));
   summary.results.talk_append = result(await call('wiki.talk-append', {
     page: route,
     message: {
       kind: 'proposal',
       subject: 'Dogfood harness review',
-      fromAddress: author.primary_address,
-      toRoles: ['curator'],
-      cc: [listAddress],
+      fromAddress: 'agent://dogfood-harness',
+      to: ['role://dogfood.curator'],
       bodyFile: talkBodyFile,
       attachments: [{ path: attachmentFile }],
     },
   }));
   summary.results.publish_status_after_talk = result(await call('wiki.publish.status'));
-  summary.results.curator_inbox = result(await call('wiki.agent.inbox', { agentId: curator.agent_id }));
-  summary.results.list_inbox = result(await call('wiki.mail-inbox', { recipient: listAddress }));
-  summary.results.mail_read = result(await call('wiki.mail-read', { messageId: summary.results.talk_append.message_id }));
-  summary.results.notify_poll = result(await call('wiki.notify-poll', { agentId: curator.agent_id }));
-  if (
-    summary.results.curator_inbox.threads?.[0]?.attachment_count !== 1 ||
-    summary.results.curator_inbox.messages?.[0]?.attachments?.length !== 1
-  ) {
-    throw new Error(`Agent inbox attachment summary proof failed: ${JSON.stringify(summary.results.curator_inbox.threads?.[0])}`);
-  }
-  const notification = summary.results.notify_poll.notifications?.[0];
-  if (notification?.attachment_count !== 1) {
-    throw new Error(`Notification attachment summary proof failed: ${JSON.stringify(notification)}`);
-  }
-  const notificationId = notification?.notification_id;
-  if (!notificationId) {
-    throw new Error(`Notification id missing from poll result: ${JSON.stringify(notification)}`);
-  }
-  summary.results.notify_ack = result(await call('wiki.notify-ack', { agentId: curator.agent_id, notificationId }));
-  summary.results.notify_poll_after_ack = result(await call('wiki.notify-poll', { agentId: curator.agent_id }));
-  if (summary.results.notify_poll_after_ack.notification_count !== 0) {
-    throw new Error(`Notification ack did not clear curator wakeup: ${JSON.stringify(summary.results.notify_poll_after_ack)}`);
-  }
-  summary.results.claim = result(await call('wiki.agent.claim', {
-    agentId: curator.agent_id,
-    messageId: summary.results.talk_append.message_id,
-  }));
-  summary.results.mark_all = result(await call('wiki.mail-mark-all', {
-    messageId: summary.results.talk_append.message_id,
-    state: 'done',
-  }));
   summary.results.publish_after_talk = result(await call('wiki.publish', {
     trigger: 'wiki-core-dogfood-script-talk-render',
     force: true,

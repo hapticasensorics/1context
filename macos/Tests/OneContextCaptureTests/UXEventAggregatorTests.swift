@@ -104,6 +104,8 @@ final class UXEventAggregatorTests: XCTestCase {
     XCTAssertEqual(UXEventAnchorKind.pointer.captureEventType, "capture.ux.pointer.v1")
     XCTAssertEqual(UXEventAnchorKind.keyboardActivity.captureEventType, "capture.ux.keyboard_activity.v1")
     XCTAssertEqual(UXEventAnchorKind.modifiers.captureEventType, "capture.ux.modifiers.v1")
+    XCTAssertEqual(UXEventAnchorKind.shortcut.captureEventType, "capture.ux.shortcut.v1")
+    XCTAssertEqual(UXEventAnchorKind.focusTransition.captureEventType, "capture.ux.focus_transition.v1")
   }
 
   func testScrollEventsAggregateIntoOneBurst() throws {
@@ -283,14 +285,100 @@ final class UXEventAggregatorTests: XCTestCase {
     XCTAssertFalse(json.contains("\"y\""))
   }
 
-  func testPrimitiveCapturesOnlyTargetPIDMetadataFromCGEvent() throws {
+  func testShortcutAnchorsAggregatePrivacySafeModifierAndActionCategories() throws {
+    let base = Date(timeIntervalSince1970: 1_779_552_425)
+    let aggregator = UXEventAggregator(keyboardBurstGap: 0.05, shortcutBurstGap: 0.05)
+    let anchors = aggregator.ingest(
+      [
+        UXEventPrimitive(
+          time: base,
+          kind: .keyDown,
+          modifierFlagsRaw: CGEventFlags.maskCommand.rawValue,
+          targetProcessID: 42,
+          shortcutCategory: .editing
+        ),
+        UXEventPrimitive(
+          time: base.addingTimeInterval(0.01),
+          kind: .keyDown,
+          modifierFlagsRaw: CGEventFlags.maskCommand.rawValue | CGEventFlags.maskShift.rawValue,
+          isAutoRepeat: true,
+          targetProcessID: 42,
+          shortcutCategory: .document
+        )
+      ],
+      now: base.addingTimeInterval(0.2)
+    )
+
+    let shortcut = try XCTUnwrap(anchors.first { $0.kind == .shortcut })
+    XCTAssertEqual(shortcut.captureEventType, "capture.ux.shortcut.v1")
+    XCTAssertEqual(shortcut.recentTargetProcessID, 42)
+    XCTAssertEqual(shortcut.shortcut?.eventCount, 2)
+    XCTAssertEqual(shortcut.shortcut?.keyDownCount, 2)
+    XCTAssertEqual(shortcut.shortcut?.autoRepeatCount, 1)
+    XCTAssertEqual(shortcut.shortcut?.modifierCombinations.map(\.modifiers), [
+      ["command"],
+      ["command", "shift"]
+    ])
+    XCTAssertEqual(shortcut.shortcut?.actionCategories.map(\.category).sorted { $0.rawValue < $1.rawValue }, [
+      .document,
+      .editing
+    ])
+
+    let json = String(decoding: try JSONEncoder().encode(anchors), as: UTF8.self)
+    XCTAssertTrue(json.contains("\"kind\":\"shortcut\""))
+    XCTAssertTrue(json.contains("\"modifier_combinations\""))
+    XCTAssertTrue(json.contains("\"action_categories\""))
+    XCTAssertFalse(json.contains("keyCode"))
+    XCTAssertFalse(json.contains("key_code"))
+    XCTAssertFalse(json.contains("virtualKey"))
+    XCTAssertFalse(json.contains("characters"))
+    XCTAssertFalse(json.contains("\"text\""))
+    XCTAssertFalse(json.contains("Copy"))
+  }
+
+  func testFocusTransitionsEmitOnlySafeTargetHintsWhenTargetPIDChanges() throws {
+    let base = Date(timeIntervalSince1970: 1_779_552_435)
+    let aggregator = UXEventAggregator(keyboardBurstGap: 0.05)
+    let anchors = aggregator.ingest(
+      [
+        UXEventPrimitive(time: base, kind: .keyDown, targetProcessID: 42),
+        UXEventPrimitive(time: base.addingTimeInterval(0.01), kind: .keyUp, targetProcessID: 42),
+        UXEventPrimitive(time: base.addingTimeInterval(0.2), kind: .leftMouseDown, targetProcessID: 99)
+      ],
+      now: base.addingTimeInterval(0.3)
+    )
+
+    let transitions = anchors.filter { $0.kind == .focusTransition }
+    XCTAssertEqual(transitions.count, 2)
+    XCTAssertNil(transitions.first?.focusTransition?.previousProcessID)
+    XCTAssertEqual(transitions.first?.focusTransition?.currentProcessID, 42)
+    XCTAssertEqual(transitions.first?.focusTransition?.trigger, .keyboard)
+    XCTAssertEqual(transitions.first?.focusTransition?.currentTarget?.processID, 42)
+    XCTAssertEqual(transitions.last?.focusTransition?.previousProcessID, 42)
+    XCTAssertEqual(transitions.last?.focusTransition?.currentProcessID, 99)
+    XCTAssertEqual(transitions.last?.focusTransition?.trigger, .pointer)
+    XCTAssertEqual(transitions.last?.focusTransition?.previousTarget?.source, "cg_event_target_pid")
+    XCTAssertEqual(transitions.last?.focusTransition?.currentTarget?.source, "cg_event_target_pid")
+
+    let json = String(decoding: try JSONEncoder().encode(transitions), as: UTF8.self)
+    XCTAssertTrue(json.contains("\"kind\":\"focus_transition\""))
+    XCTAssertTrue(json.contains("\"current_process_id\":99"))
+    XCTAssertFalse(json.contains("title"))
+    XCTAssertFalse(json.contains("key_code"))
+    XCTAssertFalse(json.contains("characters"))
+    XCTAssertFalse(json.contains("\"text\""))
+  }
+
+  func testPrimitiveCapturesOnlyTargetPIDAndShortcutCategoryMetadataFromCGEvent() throws {
     let base = Date(timeIntervalSince1970: 1_779_552_450)
     let event = try XCTUnwrap(CGEvent(keyboardEventSource: nil, virtualKey: 12, keyDown: true))
     event.setIntegerValueField(.eventTargetUnixProcessID, value: 42)
+    event.flags = .maskCommand
 
     let primitive = try XCTUnwrap(OneContextUXEventTap.primitive(from: .keyDown, event: event, at: base))
     XCTAssertEqual(primitive.kind, .keyDown)
     XCTAssertEqual(primitive.targetProcessID, 42)
+    XCTAssertEqual(primitive.shortcutCategory, .appWindow)
     XCTAssertNil(primitive.locationX)
     XCTAssertNil(primitive.locationY)
   }

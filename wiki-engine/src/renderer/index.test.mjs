@@ -68,6 +68,36 @@ access: private
   assert.match(html, /&lt;img src=x onerror=&quot;alert\(1\)&quot;&gt;/);
 });
 
+test('renderer emits Wikipedia-style footnote references', () => {
+  const source = `---
+title: Citation Probe
+slug: citation-probe
+section: reference
+access: private
+---
+# Citation Probe
+
+First claim has a source[^first] and repeats it[^first].
+
+Second claim has another source[^second].
+
+[^first]: First source with [OpenAI](https://openai.com/).
+[^second]: Second source.
+`;
+
+  const { html } = renderPage(source, { slug: 'citation-probe' });
+
+  assert.match(html, /<sup id="cite-ref-citation-probe-1-1" class="opctx-footnote-ref"/);
+  assert.match(html, /<sup id="cite-ref-citation-probe-1-2" class="opctx-footnote-ref"/);
+  assert.match(html, /<sup id="cite-ref-citation-probe-2-1" class="opctx-footnote-ref"/);
+  assert.equal((html.match(/href="#cite-note-citation-probe-1"/g) || []).length, 2);
+  assert.match(html, /<section class="opctx-references" id="opctx-references"/);
+  assert.match(html, /<h2 id="references">References<\/h2>/);
+  assert.match(html, /<li id="cite-note-citation-probe-1" class="opctx-reference"/);
+  assert.match(html, /First source with <a href="https:\/\/openai.com\/">OpenAI<\/a>\./);
+  assert.doesNotMatch(html, /\[\^first\]:/);
+});
+
 test('serve-site answers static wiki state without writable host storage', async () => {
   const tmp = mkdtempSync(resolve(tmpdir(), '1ctx-static-state-'));
   const site = resolve(tmp, 'site');
@@ -843,6 +873,7 @@ Hidden route body.
       'hidden/lab/index.html',
       '.1context/route-manifest.json',
       '.1context/content-index.json',
+      '.1context/reference-index.json',
     ]) {
       assert.ok(existsSync(resolve(output, relativePath)), `${relativePath} should exist`);
     }
@@ -880,6 +911,8 @@ Hidden route body.
     assert.equal(contentIndex.markdown_twin_count, contentIndex.markdown_twins.length);
     assert.equal(contentIndex.page_count, 7);
     assert.equal(contentIndex.talk_count, 3);
+    assert.equal(routeManifest.reference_index.path, '.1context/reference-index.json');
+    assert.equal(contentIndex.reference_index.path, '.1context/reference-index.json');
     assert.equal(routes.get('/guide').page_id, 'guide');
 
     const markdownTwins = new Map(

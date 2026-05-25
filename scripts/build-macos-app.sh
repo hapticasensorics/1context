@@ -268,7 +268,13 @@ resolve_caddy_source() {
 swift build --package-path "$MACOS_DIR" -c release --arch "$ARCH"
 BIN_DIR="$(swift build --package-path "$MACOS_DIR" -c release --arch "$ARCH" --show-bin-path)"
 cargo build --release --package onecontext-wiki-daemon
+cargo build --release --package onecontext-memory-db --bin onecontext-memoryd
+cargo build --release --package onecontext-capture-dashboard --bin onecontext-capture-dashboard
+cargo build --release --package onecontext-agent-harness-daemon --bin onecontext-agent-harness
 WIKI_CORE_BIN="$ROOT/target/release/onecontext-wiki"
+MEMORYD_BIN="$ROOT/target/release/onecontext-memoryd"
+CAPTURE_DASHBOARD_BIN="$ROOT/target/release/onecontext-capture-dashboard"
+AGENT_HARNESS_BIN="$ROOT/target/release/onecontext-agent-harness"
 
 rm -rf "$APP_DIR"
 mkdir -p "$MACOS_APP_DIR" "$RESOURCES_DIR" "$FRAMEWORKS_DIR" "$LAUNCH_DAEMONS_DIR"
@@ -277,6 +283,9 @@ cp "$BIN_DIR/OneContextMenuBar" "$MACOS_APP_DIR/1Context"
 cp "$BIN_DIR/1context" "$MACOS_APP_DIR/1context-cli"
 cp "$BIN_DIR/1contextd" "$MACOS_APP_DIR/1contextd"
 cp "$WIKI_CORE_BIN" "$MACOS_APP_DIR/onecontext-wiki"
+cp "$MEMORYD_BIN" "$MACOS_APP_DIR/onecontext-memoryd"
+cp "$CAPTURE_DASHBOARD_BIN" "$MACOS_APP_DIR/onecontext-capture-dashboard"
+cp "$AGENT_HARNESS_BIN" "$MACOS_APP_DIR/onecontext-agent-harness"
 cp "$BIN_DIR/1context-local-web-proxy" "$RESOURCES_DIR/1context-local-web-proxy"
 cp "$MENU_ICON_SOURCE" "$RESOURCES_DIR/MenuBarIcon.png"
 if [[ ! -d "$BIN_DIR/Sparkle.framework" ]]; then
@@ -561,6 +570,21 @@ if [[ "$SIGNING_MODE" == "developer-id" || "$SIGNING_MODE" == "apple-development
     "$MACOS_APP_DIR/onecontext-wiki" >/dev/null
   codesign_release \
     --entitlements "$MACOS_DIR/entitlements.plist" \
+    --identifier "$BUNDLE_IDENTIFIER.memoryd" \
+    --sign "$IDENTITY" \
+    "$MACOS_APP_DIR/onecontext-memoryd" >/dev/null
+  codesign_release \
+    --entitlements "$MACOS_DIR/entitlements.plist" \
+    --identifier "$BUNDLE_IDENTIFIER.capture-dashboard" \
+    --sign "$IDENTITY" \
+    "$MACOS_APP_DIR/onecontext-capture-dashboard" >/dev/null
+  codesign_release \
+    --entitlements "$MACOS_DIR/entitlements.plist" \
+    --identifier "$BUNDLE_IDENTIFIER.agent-harness" \
+    --sign "$IDENTITY" \
+    "$MACOS_APP_DIR/onecontext-agent-harness" >/dev/null
+  codesign_release \
+    --entitlements "$MACOS_DIR/entitlements.plist" \
     --identifier "$BUNDLE_IDENTIFIER.local-web-proxy" \
     --sign "$IDENTITY" \
     "$RESOURCES_DIR/1context-local-web-proxy" >/dev/null
@@ -579,6 +603,9 @@ elif command -v codesign >/dev/null 2>&1; then
   codesign_adhoc_runtime --entitlements "$MACOS_DIR/entitlements.plist" "$MACOS_APP_DIR/1context-cli" >/dev/null
   codesign_adhoc_runtime --entitlements "$MACOS_DIR/entitlements.plist" "$MACOS_APP_DIR/1contextd" >/dev/null
   codesign_adhoc_runtime --entitlements "$MACOS_DIR/entitlements.plist" "$MACOS_APP_DIR/onecontext-wiki" >/dev/null
+  codesign_adhoc_runtime --entitlements "$MACOS_DIR/entitlements.plist" "$MACOS_APP_DIR/onecontext-memoryd" >/dev/null
+  codesign_adhoc_runtime --entitlements "$MACOS_DIR/entitlements.plist" "$MACOS_APP_DIR/onecontext-capture-dashboard" >/dev/null
+  codesign_adhoc_runtime --entitlements "$MACOS_DIR/entitlements.plist" "$MACOS_APP_DIR/onecontext-agent-harness" >/dev/null
   codesign_adhoc_runtime --entitlements "$MACOS_DIR/entitlements.plist" "$RESOURCES_DIR/1context-local-web-proxy" >/dev/null
   codesign_adhoc_runtime --entitlements "$MACOS_DIR/entitlements.plist" "$MACOS_APP_DIR/1Context" >/dev/null
   write_runtime_defaults_manifest

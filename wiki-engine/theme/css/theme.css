@@ -974,6 +974,37 @@ body {
   border-bottom-color: currentColor;
 }
 
+.opctx-footnote-ref {
+  font-size: 0.72em;
+  line-height: 0;
+  vertical-align: super;
+  margin-inline: 0.08em;
+}
+
+.opctx-footnote-ref a {
+  border-bottom: 0;
+}
+
+.opctx-references {
+  margin-top: var(--size-48);
+  padding-top: var(--size-16);
+  border-top: 1px solid var(--color-border-soft);
+}
+
+.opctx-references ol {
+  font-size: var(--text-body-sm);
+  padding-left: var(--size-24);
+}
+
+.opctx-reference {
+  scroll-margin-top: calc(var(--header-height) + var(--size-24));
+}
+
+.opctx-reference-back {
+  font-size: var(--text-body-xs);
+  white-space: nowrap;
+}
+
 .opctx-article strong { font-weight: 600; }
 .opctx-article em { font-style: italic; }
 

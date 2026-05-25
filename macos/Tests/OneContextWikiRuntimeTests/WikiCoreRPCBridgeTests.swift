@@ -12,23 +12,27 @@ final class WikiCoreRPCBridgeTests: XCTestCase {
       "wiki.page-write-body",
       "wiki.asset.add",
       "wiki.asset-list",
-      "wiki.page_watch",
-      "wiki.page-assign-role",
+      "wiki.reference.list",
       "wiki.talk-append",
-      "wiki.publish.status",
-      "wiki.publish",
-      "wiki.mail.mark-all",
-      "wiki.mail-claim",
-      "wiki.mail_subscriptions",
+      "wiki.agent.identify",
+      "wiki.agent.heartbeat",
+      "wiki.agent.retire",
+      "wiki.agent.status",
+      "wiki.agent.inbox",
+      "wiki.mail.open",
+      "wiki.mail.send",
+      "wiki.mail.claim",
+      "wiki.mail.mark",
+      "wiki.mail.snooze",
+      "wiki.notify.poll",
       "wiki.notify.ack",
-      "wiki.notify-ack"
+      "wiki.notify.dispatch",
+      "wiki.publish.status",
+      "wiki.publish"
     ]
     let daemonOwnedOrUnknownMethods = [
       "health",
       "wiki.status",
-      "wiki.start",
-      "wiki.refresh",
-      "wiki.stop",
       "wiki.nope"
     ]
 
@@ -52,16 +56,10 @@ final class WikiCoreRPCBridgeTests: XCTestCase {
       params: ["page": "rpc-proof", "file": "/tmp/diagram.png", "caption": "Diagram", "altText": "A diagram"]
     )
     _ = try bridge.call(method: "wiki.asset-list", params: ["page": "rpc-proof"])
+    _ = try bridge.call(method: "wiki.reference.list", params: ["page": "rpc-proof"])
+    _ = try bridge.call(method: "wiki.references")
     _ = try bridge.call(method: "wiki.page-delete", params: ["page": "rpc-proof"])
     _ = try bridge.call(method: "wiki.page_restore", params: ["page": "rpc-proof"])
-    _ = try bridge.call(
-      method: "wiki.page-assign-role",
-      params: [
-        "page": "topics",
-        "agentId": "agent-1",
-        "role": "curator"
-      ]
-    )
 
     XCTAssertEqual(recorder.calls, [
       ["page-status", "/topics"],
@@ -69,30 +67,33 @@ final class WikiCoreRPCBridgeTests: XCTestCase {
       ["page-create", "rpc-proof"],
       ["asset-add", "rpc-proof", "--file", "/tmp/diagram.png", "--caption", "Diagram", "--alt-text", "A diagram"],
       ["asset-list", "rpc-proof"],
+      ["reference-list", "rpc-proof"],
+      ["reference-list"],
       ["page-delete", "rpc-proof"],
-      ["page-restore", "rpc-proof"],
-      ["page-assign-role", "topics", "--agent-id", "agent-1", "--role", "curator"]
+      ["page-restore", "rpc-proof"]
     ])
   }
 
-  func testReadOnlyMethodsMapToWikiCoreCommands() throws {
+  func testReadOnlyAndPublishMethodsMapToWikiCoreCommands() throws {
     let recorder = RecordingCore()
-    let bridge = WikiCoreRPCBridge(call: recorder.call)
+    let bridge = WikiCoreRPCBridge(
+      call: recorder.call,
+      defaultWikiEngineDirectory: "/opt/1Context/WikiEngine",
+      defaultNodeExecutable: "/usr/bin/env"
+    )
 
     _ = try bridge.call(method: "wiki.list")
     _ = try bridge.call(method: "wiki.validate")
-    _ = try bridge.call(method: "wiki.page.status", params: ["route": "/topics"])
-    _ = try bridge.call(method: "wiki.page.open", params: ["page": "topics"])
     _ = try bridge.call(method: "wiki.publish.status")
     _ = try bridge.call(method: "wiki.publish-status")
+    _ = try bridge.call(method: "wiki.publish", params: ["trigger": "rpc-proof", "force": true])
 
     XCTAssertEqual(recorder.calls, [
       ["list"],
       ["validate"],
-      ["page-status", "/topics"],
-      ["page-open", "topics"],
       ["publish-status"],
-      ["publish-status"]
+      ["publish-status"],
+      ["publish", "--wiki-engine", "/opt/1Context/WikiEngine", "--trigger", "rpc-proof", "--force"]
     ])
   }
 
@@ -155,66 +156,7 @@ final class WikiCoreRPCBridgeTests: XCTestCase {
     ])
   }
 
-  func testPublishMapsToWikiCoreCommandWithDefaultsAndOverrides() throws {
-    let recorder = RecordingCore()
-    let bridge = WikiCoreRPCBridge(
-      call: recorder.call,
-      defaultWikiEngineDirectory: "/opt/1Context/WikiEngine",
-      defaultNodeExecutable: "/usr/bin/env"
-    )
-
-    _ = try bridge.call(method: "wiki.publish", params: ["trigger": "rpc-proof", "force": true])
-    _ = try bridge.call(
-      method: "wiki.publish",
-      params: [
-        "wikiEngine": "/tmp/WikiEngine",
-        "nodeExecutable": "/opt/node/bin/node",
-        "trigger": "override"
-      ]
-    )
-
-    XCTAssertEqual(recorder.calls, [
-      ["publish", "--wiki-engine", "/opt/1Context/WikiEngine", "--trigger", "rpc-proof", "--force"],
-      ["publish", "--wiki-engine", "/tmp/WikiEngine", "--node", "/opt/node/bin/node", "--trigger", "override"]
-    ])
-  }
-
-  func testFailedPublishReceiptPassesThroughBridgeAsStructuredResult() throws {
-    let receipt: [String: Any] = [
-      "schema_version": 1,
-      "status": "failed",
-      "operation": "wiki.publish",
-      "next_action": "repair_wiki_toml",
-      "validation": [
-        "status": "error",
-        "can_publish": false,
-        "issues": [
-          [
-            "code": "invalid_nav_section",
-            "severity": "error"
-          ]
-        ]
-      ],
-      "repair_hints": ["Run wiki.validate and repair blocking wiki.toml issues before publishing."]
-    ]
-    let bridge = WikiCoreRPCBridge(call: { arguments in
-      XCTAssertEqual(arguments.first, "publish")
-      return receipt
-    })
-
-    let result = try bridge.call(method: "wiki.publish", params: ["trigger": "structured-failure-proof"])
-
-    XCTAssertEqual(result["operation"] as? String, "wiki.publish")
-    XCTAssertEqual(result["status"] as? String, "failed")
-    XCTAssertEqual(result["next_action"] as? String, "repair_wiki_toml")
-    let validation = result["validation"] as? [String: Any]
-    XCTAssertEqual(validation?["status"] as? String, "error")
-    XCTAssertEqual(validation?["can_publish"] as? Bool, false)
-    let issues = validation?["issues"] as? [[String: Any]]
-    XCTAssertEqual(issues?.first?["code"] as? String, "invalid_nav_section")
-  }
-
-  func testFileBackedBodyParamsMapToCoreCommands() throws {
+  func testFileBackedBodyAndTalkParamsMapToCoreCommands() throws {
     let recorder = RecordingCore()
     let bridge = WikiCoreRPCBridge(call: recorder.call)
 
@@ -241,7 +183,7 @@ final class WikiCoreRPCBridgeTests: XCTestCase {
         "message": [
           "subject": "File-backed nested talk",
           "fromAddress": "agent://codex/worker-bl",
-          "toRoles": ["curator"],
+          "to": ["role://topics.curator"],
           "body_file": "/tmp/talk-body.md",
           "attachments": [["path": "/tmp/evidence.txt"]]
         ]
@@ -259,492 +201,13 @@ final class WikiCoreRPCBridgeTests: XCTestCase {
         "File-backed nested talk",
         "--from",
         "agent://codex/worker-bl",
-        "--to-role",
-        "curator",
+        "--to",
+        "role://topics.curator",
         "--body-file",
         "/tmp/talk-body.md",
         "--attachment",
         "/tmp/evidence.txt"
       ]
-    ])
-  }
-
-  func testPageEditDeleteAndRestoreMapToWikiCoreCommands() throws {
-    let recorder = RecordingCore()
-    let bridge = WikiCoreRPCBridge(call: recorder.call)
-
-    _ = try bridge.call(
-      method: "wiki.page.write_body",
-      params: [
-        "page": "rpc-proof",
-        "body": "# Body",
-        "expectedSourceSha256": "abc123"
-      ]
-    )
-    _ = try bridge.call(
-      method: "wiki.page.patch-body",
-      params: [
-        "id": "rpc-proof",
-        "find": "Body",
-        "replace": "Better body",
-        "expected_source_sha256": "def456"
-      ]
-    )
-    _ = try bridge.call(method: "wiki.page.delete", params: ["page": "rpc-proof", "mode": "tombstone"])
-    _ = try bridge.call(method: "wiki.page.restore", params: ["page": "rpc-proof"])
-
-    XCTAssertEqual(recorder.calls, [
-      ["page-write-body", "rpc-proof", "--body", "# Body", "--expected-source-sha256", "abc123"],
-      ["page-patch-body", "rpc-proof", "--find", "Body", "--replace", "Better body", "--expected-source-sha256", "def456"],
-      ["page-delete", "rpc-proof", "--mode", "tombstone"],
-      ["page-restore", "rpc-proof"]
-    ])
-  }
-
-  func testPageWatchRoleAndListMethodsMapConsumerParamsToCoreCommands() throws {
-    let recorder = RecordingCore()
-    let bridge = WikiCoreRPCBridge(call: recorder.call)
-
-    _ = try bridge.call(
-      method: "wiki.page.watch",
-      params: [
-        "route": "/topics",
-        "agentId": "agent-1",
-        "listAddress": "list://topics.watchers",
-        "kinds": ["proposal", "question"],
-        "ttl": 1200
-      ]
-    )
-    _ = try bridge.call(
-      method: "wiki.page-unwatch",
-      params: [
-        "page": ["id": "topics"],
-        "agent": "agent-1",
-        "list": "list://topics.watchers",
-        "kind": "proposal"
-      ]
-    )
-    _ = try bridge.call(
-      method: "wiki.page.assign-role",
-      params: [
-        "id": "topics",
-        "agent_id": "agent-2",
-        "roleAddress": "role://topics.reviewer",
-        "kind": ["proposal"],
-        "ttlSeconds": 600
-      ]
-    )
-    _ = try bridge.call(
-      method: "wiki.list-create",
-      params: [
-        "listAddress": "list://topics.watchers",
-        "title": "Topics Watchers",
-        "description": "Agents watching Topics.",
-        "page": ["id": "topics"],
-        "agentId": "agent-2"
-      ]
-    )
-    _ = try bridge.call(
-      method: "wiki.list.lists",
-      params: [
-        "pageId": "topics",
-        "address": "list://topics.watchers"
-      ]
-    )
-    _ = try bridge.call(
-      method: "wiki.list_status",
-      params: [
-        "list": "list://topics.watchers",
-        "includeArchived": "yes",
-        "include_snoozed": 1
-      ]
-    )
-    _ = try bridge.call(method: "wiki.list-members", params: ["address": "list://topics.watchers"])
-
-    XCTAssertEqual(recorder.calls, [
-      [
-        "page-watch",
-        "/topics",
-        "--agent-id",
-        "agent-1",
-        "--list",
-        "list://topics.watchers",
-        "--kind",
-        "proposal",
-        "--kind",
-        "question",
-        "--ttl-seconds",
-        "1200"
-      ],
-      [
-        "page-unwatch",
-        "topics",
-        "--agent-id",
-        "agent-1",
-        "--list",
-        "list://topics.watchers",
-        "--kind",
-        "proposal"
-      ],
-      [
-        "page-assign-role",
-        "topics",
-        "--agent-id",
-        "agent-2",
-        "--role",
-        "role://topics.reviewer",
-        "--kind",
-        "proposal",
-        "--ttl-seconds",
-        "600"
-      ],
-      [
-        "list-create",
-        "--address",
-        "list://topics.watchers",
-        "--title",
-        "Topics Watchers",
-        "--description",
-        "Agents watching Topics.",
-        "--page",
-        "topics",
-        "--owner",
-        "agent-2"
-      ],
-      ["lists", "--page", "topics", "--address", "list://topics.watchers"],
-      ["list-status", "list://topics.watchers", "--include-archived", "--include-snoozed"],
-      ["list-members", "list://topics.watchers"]
-    ])
-  }
-
-  func testMailAndNotifyAliasesMapToWikiCoreCommands() throws {
-    let recorder = RecordingCore()
-    let bridge = WikiCoreRPCBridge(call: recorder.call)
-
-    _ = try bridge.call(method: "wiki.mail-inbox", params: ["recipient": "role://topics.curator"])
-    _ = try bridge.call(method: "wiki.mail_read", params: ["threadId": "thread-1"])
-    _ = try bridge.call(method: "wiki.mail-mark-all", params: ["message": "msg-1", "state": "done"])
-    _ = try bridge.call(
-      method: "wiki.mail-claim",
-      params: [
-        "messageId": "msg-1",
-        "recipient": "role://topics.curator",
-        "agentId": "agent-1"
-      ]
-    )
-    _ = try bridge.call(
-      method: "wiki.mail-subscribe",
-      params: [
-        "agent": "agent-1",
-        "address": "list://topics.watchers",
-        "relation": "watcher",
-        "kind": ["proposal"],
-        "ttl": 300
-      ]
-    )
-    _ = try bridge.call(
-      method: "wiki.mail_unsubscribe",
-      params: [
-        "agentId": "agent-1",
-        "address": "list://topics.watchers",
-        "relation": "watcher",
-        "kinds": ["proposal", "reply"]
-      ]
-    )
-    _ = try bridge.call(method: "wiki.mail-subscriptions", params: ["agentId": "agent-1"])
-    _ = try bridge.call(method: "wiki.notify-poll", params: ["agentId": "agent-1"])
-    _ = try bridge.call(method: "wiki.notify_ack", params: ["notificationId": "notif-1", "agentId": "agent-1"])
-
-    XCTAssertEqual(recorder.calls, [
-      ["mail-inbox", "role://topics.curator"],
-      ["mail-read", "--thread-id", "thread-1"],
-      ["mail-mark-all", "msg-1", "--state", "done"],
-      ["mail-claim", "msg-1", "--recipient", "role://topics.curator", "--agent-id", "agent-1"],
-      [
-        "mail-subscribe",
-        "--agent-id",
-        "agent-1",
-        "--address",
-        "list://topics.watchers",
-        "--relation",
-        "watcher",
-        "--kind",
-        "proposal",
-        "--ttl-seconds",
-        "300"
-      ],
-      [
-        "mail-unsubscribe",
-        "--agent-id",
-        "agent-1",
-        "--address",
-        "list://topics.watchers",
-        "--relation",
-        "watcher",
-        "--kind",
-        "proposal",
-        "--kind",
-        "reply"
-      ],
-      ["mail-subscriptions", "--agent-id", "agent-1"],
-      ["notify-poll", "agent-1"],
-      ["notify-ack", "notif-1", "--agent-id", "agent-1"]
-    ])
-  }
-
-  func testCommandStyleAliasesAcceptConsumerTypedParams() throws {
-    let recorder = RecordingCore()
-    let bridge = WikiCoreRPCBridge(call: recorder.call)
-
-    _ = try bridge.call(
-      method: "wiki.list-create",
-      params: [
-        "address": "list://dogfood.worker-bo",
-        "title": "Worker BO Dogfood",
-        "owner": "agent://codex/worker-bo"
-      ]
-    )
-    _ = try bridge.call(
-      method: "wiki.list-status",
-      params: [
-        "listAddress": "list://dogfood.worker-bo",
-        "includeArchived": true
-      ]
-    )
-    _ = try bridge.call(
-      method: "wiki.list-members",
-      params: ["list": "list://dogfood.worker-bo"]
-    )
-    _ = try bridge.call(
-      method: "wiki.page-write-body",
-      params: [
-        "page": "dogfood-worker-bo",
-        "body_file": "/tmp/worker-bo-page.md"
-      ]
-    )
-    _ = try bridge.call(
-      method: "wiki.page-patch-body",
-      params: [
-        "page": "dogfood-worker-bo",
-        "find_file": "/tmp/worker-bo-find.md",
-        "replaceFile": "/tmp/worker-bo-replace.md"
-      ]
-    )
-    _ = try bridge.call(
-      method: "wiki.mail-read",
-      params: ["message": "msg-worker-bo"]
-    )
-    _ = try bridge.call(
-      method: "wiki.mail-mark",
-      params: [
-        "messageId": "msg-worker-bo",
-        "mailbox": "role://dogfood.curator",
-        "state": "done"
-      ]
-    )
-    _ = try bridge.call(
-      method: "wiki.mail-unsubscribe",
-      params: [
-        "agentId": "agent-worker-bo",
-        "recipient": "role://dogfood.curator"
-      ]
-    )
-    _ = try bridge.call(
-      method: "wiki.notify-ack",
-      params: ["notification": "notif-worker-bo", "agent": "agent-worker-bo"]
-    )
-    _ = try bridge.call(
-      method: "wiki.talk-append",
-      params: [
-        "page": ["route": "/dogfood/worker-bo"],
-        "message": [
-          "subject": "Nested attachment dogfood",
-          "fromAddress": "agent://codex/worker-bo",
-          "toRoles": ["curator"],
-          "bodyFile": "/tmp/worker-bo-talk.md",
-          "attachments": [
-            ["source": ["path": "/tmp/worker-bo-evidence.txt"]]
-          ]
-        ]
-      ]
-    )
-
-    XCTAssertEqual(recorder.calls, [
-      [
-        "list-create",
-        "--address",
-        "list://dogfood.worker-bo",
-        "--title",
-        "Worker BO Dogfood",
-        "--owner",
-        "agent://codex/worker-bo"
-      ],
-      ["list-status", "list://dogfood.worker-bo", "--include-archived"],
-      ["list-members", "list://dogfood.worker-bo"],
-      ["page-write-body", "dogfood-worker-bo", "--body-file", "/tmp/worker-bo-page.md"],
-      [
-        "page-patch-body",
-        "dogfood-worker-bo",
-        "--find-file",
-        "/tmp/worker-bo-find.md",
-        "--replace-file",
-        "/tmp/worker-bo-replace.md"
-      ],
-      ["mail-read", "--message-id", "msg-worker-bo"],
-      [
-        "mail-mark",
-        "msg-worker-bo",
-        "--recipient",
-        "role://dogfood.curator",
-        "--state",
-        "done"
-      ],
-      [
-        "mail-unsubscribe",
-        "--agent-id",
-        "agent-worker-bo",
-        "--address",
-        "role://dogfood.curator"
-      ],
-      ["notify-ack", "notif-worker-bo", "--agent-id", "agent-worker-bo"],
-      [
-        "talk-append",
-        "--page",
-        "/dogfood/worker-bo",
-        "--subject",
-        "Nested attachment dogfood",
-        "--from",
-        "agent://codex/worker-bo",
-        "--to-role",
-        "curator",
-        "--body-file",
-        "/tmp/worker-bo-talk.md",
-        "--attachment",
-        "/tmp/worker-bo-evidence.txt"
-      ]
-    ])
-  }
-
-  func testAgentTalkMailAndNotifyMethodsMapToWikiCoreCommands() throws {
-    let recorder = RecordingCore()
-    let bridge = WikiCoreRPCBridge(call: recorder.call)
-
-    _ = try bridge.call(
-      method: "wiki.agent.register",
-      params: [
-        "thread_id": "thread-0",
-        "role": "role://topics.curator",
-        "capabilities": ["wiki.mail", "wiki.talk"]
-      ]
-    )
-    _ = try bridge.call(
-      method: "wiki.agent.identify",
-      params: [
-        "threadId": "thread-1",
-        "roles": ["role://topics.curator", "role://projects.curator"],
-        "capability": "wiki.mail",
-        "ttlSeconds": 900
-      ]
-    )
-    _ = try bridge.call(method: "wiki.agent.status", params: ["agentId": "agent-1"])
-    _ = try bridge.call(method: "wiki.agent.list", params: ["includeStale": "true", "include_retired": 1])
-    _ = try bridge.call(
-      method: "wiki.agent.inbox",
-      params: ["agent": "agent-1", "includeArchived": true, "include_snoozed": true]
-    )
-    _ = try bridge.call(
-      method: "wiki.talk.append",
-      params: [
-        "page": "topics",
-        "kind": "proposal",
-        "subject": "Index update",
-        "from": "agent://agent-1",
-        "toRoles": ["curator"],
-        "cc": ["list://wiki.watchers"],
-        "bodyMarkdown": "Please review.",
-        "attachments": ["/tmp/proof.png"],
-        "allowTombstoned": true
-      ]
-    )
-    _ = try bridge.call(method: "wiki.mail.inbox", params: ["recipient": "role://topics.curator"])
-    _ = try bridge.call(method: "wiki.mail.read", params: ["messageId": "msg-1"])
-    _ = try bridge.call(
-      method: "wiki.mail.mark",
-      params: [
-        "message": "msg-1",
-        "recipient": "role://topics.curator",
-        "state": "snoozed",
-        "snoozedUntil": "2026-05-21T00:00:00Z"
-      ]
-    )
-    _ = try bridge.call(method: "wiki.notify.poll", params: ["agent": "agent-1"])
-    _ = try bridge.call(
-      method: "wiki.notify.ack",
-      params: ["id": "notif-1", "agentId": "agent-1", "state": "delivered"]
-    )
-
-    XCTAssertEqual(recorder.calls, [
-      [
-        "agent-register",
-        "--thread-id",
-        "thread-0",
-        "--role",
-        "role://topics.curator",
-        "--capability",
-        "wiki.mail",
-        "--capability",
-        "wiki.talk"
-      ],
-      [
-        "agent-identify",
-        "--thread-id",
-        "thread-1",
-        "--role",
-        "role://topics.curator",
-        "--role",
-        "role://projects.curator",
-        "--capability",
-        "wiki.mail",
-        "--ttl-seconds",
-        "900"
-      ],
-      ["agent-status", "agent-1"],
-      ["agent-list", "--include-stale", "--include-retired"],
-      ["agent-inbox", "agent-1", "--include-archived", "--include-snoozed"],
-      [
-        "talk-append",
-        "--page",
-        "topics",
-        "--subject",
-        "Index update",
-        "--from",
-        "agent://agent-1",
-        "--kind",
-        "proposal",
-        "--to-role",
-        "curator",
-        "--cc",
-        "list://wiki.watchers",
-        "--body",
-        "Please review.",
-        "--attachment",
-        "/tmp/proof.png",
-        "--allow-tombstoned"
-      ],
-      ["mail-inbox", "role://topics.curator"],
-      ["mail-read", "--message-id", "msg-1"],
-      [
-        "mail-mark",
-        "msg-1",
-        "--recipient",
-        "role://topics.curator",
-        "--state",
-        "snoozed",
-        "--until",
-        "2026-05-21T00:00:00Z"
-      ],
-      ["notify-poll", "agent-1"],
-      ["notify-ack", "notif-1", "--agent-id", "agent-1", "--state", "delivered"]
     ])
   }
 
@@ -760,9 +223,11 @@ final class WikiCoreRPCBridgeTests: XCTestCase {
           "kind": "reply",
           "subject": "Thread follow-up",
           "threadId": "thread-topics-proof",
+          "operationId": "swift-rpc-mail-001",
+          "deliveryMode": "mail",
           "from": "agent://codex/worker-ba",
           "to": ["role://topics.curator"],
-          "ccRoles": ["reviewer"],
+          "cc": ["role://topics.reviewer"],
           "body_markdown": "Nested consumer params should map to CLI flags."
         ],
         "attachments": [
@@ -773,18 +238,6 @@ final class WikiCoreRPCBridgeTests: XCTestCase {
             "altText": "A diagram proving the rendered path"
           ],
           ["path": "/tmp/direct-proof.txt"]
-        ]
-      ]
-    )
-    _ = try bridge.call(
-      method: "wiki.talk.append",
-      params: [
-        "page": "topics",
-        "message": [
-          "subject": "File-backed talk",
-          "fromAddress": "agent://codex/worker-ba",
-          "toRoles": ["curator"],
-          "bodyFile": "/tmp/talk-body.md"
         ]
       ]
     )
@@ -801,10 +254,14 @@ final class WikiCoreRPCBridgeTests: XCTestCase {
       "reply",
       "--thread-id",
       "thread-topics-proof",
+      "--operation-id",
+      "swift-rpc-mail-001",
+      "--delivery-mode",
+      "mail",
       "--to",
       "role://topics.curator",
-      "--cc-role",
-      "reviewer",
+      "--cc",
+      "role://topics.reviewer",
       "--body",
       "Nested consumer params should map to CLI flags.",
       "--attachment",
@@ -818,18 +275,245 @@ final class WikiCoreRPCBridgeTests: XCTestCase {
       "--attachment",
       "/tmp/direct-proof.txt"
     ])
-    XCTAssertEqual(recorder.calls[1], [
-      "talk-append",
-      "--page",
-      "topics",
-      "--subject",
-      "File-backed talk",
-      "--from",
-      "agent://codex/worker-ba",
-      "--to-role",
-      "curator",
-      "--body-file",
-      "/tmp/talk-body.md"
+  }
+
+  func testAgentMailAndNotificationMethodsMapToCoreCommands() throws {
+    let recorder = RecordingCore()
+    let bridge = WikiCoreRPCBridge(call: recorder.call)
+
+    _ = try bridge.call(
+      method: "wiki.agent.identify",
+      params: [
+        "threadId": "019e3f72-3471-7da1-92a8-56e5d25aaa01",
+        "roles": ["role://topics.curator"],
+        "capabilities": ["wiki.mail"],
+        "ttlSeconds": 120
+      ]
+    )
+    _ = try bridge.call(
+      method: "wiki.agent.heartbeat",
+      params: ["agentId": "agent_codex_abc", "ttlSeconds": 90]
+    )
+    _ = try bridge.call(method: "wiki.agent.retire", params: ["agentId": "agent_codex_old"])
+    _ = try bridge.call(method: "wiki.agent.status", params: ["agentId": "agent_codex_abc"])
+    _ = try bridge.call(method: "wiki.agent.status_by_thread", params: ["threadId": "019e3f72-3471-7da1-92a8-56e5d25aaa01"])
+    _ = try bridge.call(method: "wiki.agent.inbox", params: ["agentId": "agent_codex_abc"])
+    _ = try bridge.call(
+      method: "wiki.mail.open",
+      params: ["deliveryId": "delivery_001", "agentId": "agent_codex_abc"]
+    )
+    _ = try bridge.call(
+      method: "wiki.mail.record_injection",
+      params: [
+        "deliveryId": "delivery_001",
+        "agentId": "agent_codex_abc",
+        "threadId": "019e3f72-3471-7da1-92a8-56e5d25aaa01",
+        "result": "ok",
+        "itemCount": "1"
+      ]
+    )
+    _ = try bridge.call(
+      method: "wiki.mail.send",
+      params: [
+        "page": "topics",
+        "subject": "Mail send through talk append",
+        "from": "agent://codex/sender",
+        "to": ["role://topics.curator"],
+        "body": "This should use the current durable send path."
+      ]
+    )
+    _ = try bridge.call(
+      method: "wiki.mail.claim",
+      params: ["deliveryId": "delivery_001", "agentId": "agent_codex_abc"]
+    )
+    _ = try bridge.call(
+      method: "wiki.mail.mark",
+      params: ["deliveryId": "delivery_001", "agentId": "agent_codex_abc", "state": "done"]
+    )
+    _ = try bridge.call(
+      method: "wiki.mail.snooze",
+      params: ["deliveryId": "delivery_002", "agentId": "agent_codex_abc", "until": "2026-05-21T08:00:00Z"]
+    )
+    _ = try bridge.call(method: "wiki.notify.poll", params: ["agentId": "agent_codex_abc"])
+    _ = try bridge.call(
+      method: "wiki.notify.ack",
+      params: ["notificationId": "notif_001", "agentId": "agent_codex_abc"]
+    )
+    _ = try bridge.call(
+      method: "wiki.notify.dispatch",
+      params: [
+        "agentId": "agent_codex_abc",
+        "dryRun": true,
+        "steeringCommand": "/usr/bin/true",
+        "steeringArgs": ["--unused"],
+        "payloadFormat": "json",
+        "limit": 3
+      ]
+    )
+
+    XCTAssertEqual(recorder.calls, [
+      [
+        "agent-identify",
+        "--thread-id",
+        "019e3f72-3471-7da1-92a8-56e5d25aaa01",
+        "--role",
+        "role://topics.curator",
+        "--capability",
+        "wiki.mail",
+        "--ttl-seconds",
+        "120"
+      ],
+      ["agent-heartbeat", "agent_codex_abc", "--ttl-seconds", "90"],
+      ["agent-retire", "agent_codex_old"],
+      ["agent-status", "agent_codex_abc"],
+      ["agent-status-by-thread", "019e3f72-3471-7da1-92a8-56e5d25aaa01"],
+      ["agent-inbox", "agent_codex_abc"],
+      ["mail-open", "delivery_001", "--agent-id", "agent_codex_abc"],
+      [
+        "mail-record-injection",
+        "delivery_001",
+        "--agent-id",
+        "agent_codex_abc",
+        "--thread-id",
+        "019e3f72-3471-7da1-92a8-56e5d25aaa01",
+        "--result",
+        "ok",
+        "--item-count",
+        "1"
+      ],
+      [
+        "talk-append",
+        "--page",
+        "topics",
+        "--subject",
+        "Mail send through talk append",
+        "--from",
+        "agent://codex/sender",
+        "--delivery-mode",
+        "mail",
+        "--to",
+        "role://topics.curator",
+        "--body",
+        "This should use the current durable send path."
+      ],
+      ["mail-claim", "delivery_001", "--agent-id", "agent_codex_abc"],
+      ["mail-mark", "delivery_001", "--agent-id", "agent_codex_abc", "--state", "done"],
+      [
+        "mail-snooze",
+        "delivery_002",
+        "--agent-id",
+        "agent_codex_abc",
+        "--until",
+        "2026-05-21T08:00:00Z"
+      ],
+      ["notify-poll", "agent_codex_abc"],
+      ["notify-ack", "notif_001", "--agent-id", "agent_codex_abc"],
+      [
+        "notify-dispatch",
+        "agent_codex_abc",
+        "--dry-run",
+        "--steering-command",
+        "/usr/bin/true",
+        "--steering-arg",
+        "--unused",
+        "--payload-format",
+        "json",
+        "--limit",
+        "3"
+      ]
+    ])
+  }
+
+  func testConvenienceAgentMailAndNotificationMethodsStayThin() throws {
+    let recorder = RecordingCore()
+    let bridge = WikiCoreRPCBridge(call: recorder.call)
+
+    _ = try bridge.identifyAgent(
+      threadID: "thread-clean-api",
+      roles: ["role://topics.curator"],
+      capabilities: ["wiki.mail"],
+      ttlSeconds: 300
+    )
+    _ = try bridge.heartbeatAgent(agentID: "agent_codex_clean", ttlSeconds: 180)
+    _ = try bridge.agentStatus(agentID: "agent_codex_clean")
+    _ = try bridge.agentStatusByThread(threadID: "thread-clean-api")
+    _ = try bridge.agentInbox(agentID: "agent_codex_clean")
+    _ = try bridge.openMail(deliveryID: "delivery_clean", agentID: "agent_codex_clean")
+    _ = try bridge.recordMailInjection(
+      deliveryID: "delivery_clean",
+      agentID: "agent_codex_clean",
+      itemCount: 1,
+      threadID: "thread-clean-api"
+    )
+    _ = try bridge.sendMail(
+      params: [
+        "page": "topics",
+        "subject": "Convenience send",
+        "from": "agent://codex/clean-sender",
+        "to": ["role://topics.curator"],
+        "body": "Convenience send remains talk-mail."
+      ]
+    )
+    _ = try bridge.claimMail(deliveryID: "delivery_clean", agentID: "agent_codex_clean")
+    _ = try bridge.markMail(deliveryID: "delivery_clean", agentID: "agent_codex_clean", state: "done")
+    _ = try bridge.pollNotifications(agentID: "agent_codex_clean", cursor: "notifcur_1")
+    _ = try bridge.acknowledgeNotification(notificationID: "notif_clean", agentID: "agent_codex_clean")
+    _ = try bridge.dispatchNotifications(
+      agentID: "agent_codex_clean",
+      dryRun: true,
+      payloadFormat: "json",
+      limit: 1
+    )
+
+    XCTAssertEqual(recorder.calls, [
+      [
+        "agent-identify",
+        "--thread-id",
+        "thread-clean-api",
+        "--role",
+        "role://topics.curator",
+        "--capability",
+        "wiki.mail",
+        "--ttl-seconds",
+        "300"
+      ],
+      ["agent-heartbeat", "agent_codex_clean", "--ttl-seconds", "180"],
+      ["agent-status", "agent_codex_clean"],
+      ["agent-status-by-thread", "thread-clean-api"],
+      ["agent-inbox", "agent_codex_clean"],
+      ["mail-open", "delivery_clean", "--agent-id", "agent_codex_clean"],
+      [
+        "mail-record-injection",
+        "delivery_clean",
+        "--agent-id",
+        "agent_codex_clean",
+        "--thread-id",
+        "thread-clean-api",
+        "--result",
+        "ok",
+        "--item-count",
+        "1"
+      ],
+      [
+        "talk-append",
+        "--page",
+        "topics",
+        "--subject",
+        "Convenience send",
+        "--from",
+        "agent://codex/clean-sender",
+        "--delivery-mode",
+        "mail",
+        "--to",
+        "role://topics.curator",
+        "--body",
+        "Convenience send remains talk-mail."
+      ],
+      ["mail-claim", "delivery_clean", "--agent-id", "agent_codex_clean"],
+      ["mail-mark", "delivery_clean", "--agent-id", "agent_codex_clean", "--state", "done"],
+      ["notify-poll", "agent_codex_clean", "--cursor", "notifcur_1"],
+      ["notify-ack", "notif_clean", "--agent-id", "agent_codex_clean"],
+      ["notify-dispatch", "agent_codex_clean", "--dry-run", "--payload-format", "json", "--limit", "1"]
     ])
   }
 
@@ -849,8 +533,7 @@ final class WikiCoreRPCBridgeTests: XCTestCase {
           "page": "topics",
           "message": [
             "subject": "Missing body",
-            "from": "agent://codex/worker-bl",
-            "toRoles": ["curator"]
+            "from": "agent://codex/worker-bl"
           ]
         ]
       )

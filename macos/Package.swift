@@ -58,16 +58,24 @@ let package = Package(
       dependencies: ["OneContextPlatform"]
     ),
     .target(
+      name: "OneContextMemoryRuntime",
+      dependencies: ["OneContextCore", "OneContextPlatform"]
+    ),
+    .target(
+      name: "OneContextAgentRuntime",
+      dependencies: ["OneContextCore", "OneContextPlatform"]
+    ),
+    .target(
       name: "OneContextSupervisor",
       dependencies: ["OneContextCore", "OneContextPlatform", "OneContextProtocol"]
     ),
     .executableTarget(
       name: "OneContextCLI",
-      dependencies: ["OneContextCore", "OneContextPlatform", "OneContextProtocol", "OneContextSupervisor", "OneContextInstall", "OneContextLocalWeb", "OneContextSetup", "OneContextUpdate"]
+      dependencies: ["OneContextCore", "OneContextPlatform", "OneContextProtocol", "OneContextSupervisor", "OneContextInstall", "OneContextLocalWeb", "OneContextSetup", "OneContextUpdate", "OneContextCapture"]
     ),
     .executableTarget(
       name: "OneContextDaemon",
-      dependencies: ["OneContextCore", "OneContextPlatform", "OneContextProtocol", "OneContextLocalWeb", "OneContextSetup", "OneContextSupervisor", "OneContextWikiRuntime"]
+      dependencies: ["OneContextCore", "OneContextPlatform", "OneContextProtocol", "OneContextLocalWeb", "OneContextSetup", "OneContextSupervisor", "OneContextCapture", "OneContextWikiRuntime", "OneContextMemoryRuntime", "OneContextAgentRuntime"]
     ),
     .executableTarget(
       name: "OneContextLocalWebProxy"
@@ -119,6 +127,14 @@ let package = Package(
     .testTarget(
       name: "OneContextWikiRuntimeTests",
       dependencies: ["OneContextWikiRuntime"]
+    ),
+    .testTarget(
+      name: "OneContextMemoryRuntimeTests",
+      dependencies: ["OneContextMemoryRuntime"]
+    ),
+    .testTarget(
+      name: "OneContextAgentRuntimeTests",
+      dependencies: ["OneContextAgentRuntime"]
     ),
     .testTarget(
       name: "OneContextSupervisorTests",

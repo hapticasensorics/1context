@@ -1,0 +1,552 @@
+{
+  "adaptiveDecisionCount" : 1,
+  "capture_status" : {
+    "available_methods" : [
+      "capture.status",
+      "capture.snapshot",
+      "capture.active_window_metadata_sample",
+      "capture.ux.status",
+      "capture.ux.probe"
+    ],
+    "ax_semantic_events" : {
+      "buffer" : {
+        "capacity" : 256,
+        "droppedCount" : 0,
+        "emittedCount" : 0,
+        "eventCount" : 0
+      },
+      "enabled" : true,
+      "last_error" : null,
+      "last_persisted_at" : null,
+      "persisted_event_count" : 0,
+      "source" : "AXSemanticEventAggregator"
+    },
+    "continuous_metadata_sampler" : {
+      "cooldown_seconds" : 5,
+      "duration_seconds" : 0.75,
+      "enabled" : true,
+      "last_error" : null,
+      "last_sample_at" : "2026-05-25T05:01:01.950Z",
+      "last_trigger_at" : "2026-05-25T05:01:05.948Z",
+      "max_frames" : 6,
+      "persisted_frame_count" : 2,
+      "running" : false,
+      "sample_count" : 2,
+      "skipped_count" : 4,
+      "trigger_count" : 6
+    },
+    "events_directory" : "\/Users\/paulhan\/Library\/Application Support\/1Context Dev\/capture\/events",
+    "media_directory" : "\/Users\/paulhan\/Library\/Application Support\/1Context Dev\/capture\/media",
+    "metadata_sample_fusion" : {
+      "pixels_untouched" : true,
+      "source" : "persistent_ux_event_tap",
+      "ux_motion_hints_enabled" : true
+    },
+    "motion_hints" : {
+      "estimatedScrollDY" : 0,
+      "focusedRecently" : false,
+      "generatedAt" : "2026-05-25T05:01:35.666Z",
+      "keyboardActivityRecently" : false,
+      "scrollEventRecently" : false
+    },
+    "permission_derived_metadata" : {
+      "capture_paths" : {
+        "events_directory" : "\/Users\/paulhan\/Library\/Application Support\/1Context Dev\/capture\/events",
+        "media_directory" : "\/Users\/paulhan\/Library\/Application Support\/1Context Dev\/capture\/media",
+        "root_directory" : "\/Users\/paulhan\/Library\/Application Support\/1Context Dev\/capture",
+        "windows_directory" : "\/Users\/paulhan\/Library\/Application Support\/1Context Dev\/capture\/windows"
+      },
+      "generated_at" : "2026-05-25T05:01:35.671Z",
+      "privacy" : {
+        "aggregates_and_counts_only" : true,
+        "coordinates_included" : false,
+        "raw_keystrokes_included" : false,
+        "raw_text_included" : false
+      },
+      "process_identities" : [
+        {
+          "bundle_identifier" : "com.haptica.1context.dev",
+          "executable_path" : "\/Applications\/1Context Dev.app\/Contents\/MacOS\/1contextd",
+          "pid" : 48855,
+          "role" : "daemon_process"
+        },
+        {
+          "app_version" : "0.1.87",
+          "bundle_identifier" : "com.haptica.1context.dev",
+          "designated_requirement_sha256" : "15ed1daa9c8ab5fa6fcbfccfadaf13f5961ea1a8f07d982134feedacec7ca3e8",
+          "executable_path" : "\/Applications\/1Context Dev.app\/Contents\/MacOS\/1Context",
+          "role" : "permission_subject"
+        }
+      ],
+      "schema_version" : 1,
+      "signals" : {
+        "accessibility" : {
+          "focused_context" : {
+            "available" : true,
+            "source" : "OneContextWindowIndexer.focusedContext",
+            "status" : "permission_granted",
+            "trusted" : true
+          },
+          "note" : "Focused-context availability is reported as permission readiness only; capture.status does not read raw focused text, geometry, or window contents.",
+          "owner_role" : "daemon_process",
+          "permission_subject_role" : "permission_subject",
+          "ready" : true,
+          "source" : "AXIsProcessTrusted plus AX focused-context reads during capture snapshots",
+          "status" : "granted"
+        },
+        "input_monitoring" : {
+          "event_tap" : {
+            "active" : true,
+            "coalesced_count" : 210,
+            "dropped_count" : 0,
+            "event_mask" : [
+              "scroll_wheel",
+              "left_mouse_down",
+              "left_mouse_up",
+              "right_mouse_down",
+              "right_mouse_up",
+              "other_mouse_down",
+              "other_mouse_up",
+              "left_mouse_dragged",
+              "right_mouse_dragged",
+              "other_mouse_dragged",
+              "flags_changed",
+              "key_down",
+              "key_up"
+            ],
+            "event_tap" : "cgSessionEventTap",
+            "last_event_at" : "2026-05-25T05:01:04.626Z",
+            "lifecycle_state" : "running",
+            "observed_event_count" : 221,
+            "queue_depth" : 0,
+            "tap_options" : "listenOnly"
+          },
+          "note" : "Only aggregate input-event counts and timing hints are exposed; no raw keystrokes, key codes, text, or coordinates are included.",
+          "owner_role" : "daemon_process",
+          "permission_subject_role" : "permission_subject",
+          "proof" : {
+            "details" : {
+
+            },
+            "matches_current_subject" : true,
+            "method" : "iohid-listen-event-preflight",
+            "proof_key" : "RememberingInputMonitoringProof",
+            "proved_at" : "2026-05-24T20:06:53Z",
+            "recorded" : true
+          },
+          "ready" : true,
+          "source" : "persistent listen-only CGEventTap owned by 1contextd",
+          "status" : "granted"
+        },
+        "screen_capture" : {
+          "owner_role" : "daemon_process",
+          "permission_subject_role" : "permission_subject",
+          "proof" : {
+            "details" : {
+              "display_count" : "1"
+            },
+            "matches_current_subject" : true,
+            "method" : "screencapturekit-screen-frame",
+            "proof_key" : "RememberingScreenCaptureProof",
+            "proved_at" : "2026-05-24T20:07:20Z",
+            "recorded" : true
+          },
+          "ready" : true,
+          "source" : "ScreenCaptureKit screen-frame proof recorded by setup\/runtime probes",
+          "status" : "granted"
+        },
+        "system_audio" : {
+          "owner_role" : "daemon_process",
+          "permission_subject_role" : "permission_subject",
+          "proof" : {
+            "details" : {
+              "captures_audio" : "true"
+            },
+            "matches_current_subject" : true,
+            "method" : "screencapturekit-system-audio-stream",
+            "proof_key" : "RememberingSystemAudioProof",
+            "proved_at" : "2026-05-24T20:07:20Z",
+            "recorded" : true
+          },
+          "ready" : true,
+          "source" : "ScreenCaptureKit system-audio sample proof recorded by setup\/runtime probes",
+          "status" : "granted"
+        }
+      }
+    },
+    "root_directory" : "\/Users\/paulhan\/Library\/Application Support\/1Context Dev\/capture",
+    "schema_version" : 1,
+    "surface" : "capture_status",
+    "ux_event_tap" : {
+      "callback_average_us" : 10.68,
+      "callback_count" : 221,
+      "callback_last_us" : 0.20999999999999999,
+      "callback_max_us" : 578,
+      "coalesced_count" : 210,
+      "disabled_by_timeout_count" : 0,
+      "disabled_by_user_input_count" : 0,
+      "disabled_count" : 0,
+      "dropped_count" : 0,
+      "event_mask" : [
+        "scroll_wheel",
+        "left_mouse_down",
+        "left_mouse_up",
+        "right_mouse_down",
+        "right_mouse_up",
+        "other_mouse_down",
+        "other_mouse_up",
+        "left_mouse_dragged",
+        "right_mouse_dragged",
+        "other_mouse_dragged",
+        "flags_changed",
+        "key_down",
+        "key_up"
+      ],
+      "event_tap" : "cgSessionEventTap",
+      "jsonl_persistence" : {
+        "enabled" : true,
+        "events_directory" : "\/Users\/paulhan\/Library\/Application Support\/1Context Dev\/capture\/events",
+        "flush_interval_seconds" : 2,
+        "last_error" : null,
+        "last_flush_at" : "2026-05-25T05:01:33.951Z",
+        "last_persisted_at" : "2026-05-25T05:01:04.626Z",
+        "persisted_anchor_count" : 12
+      },
+      "last_event_at" : "2026-05-25T05:01:04.626Z",
+      "lifecycle_state" : "running",
+      "metadata_sample_fusion_enabled" : true,
+      "motion_hints" : {
+        "estimatedScrollDY" : 0,
+        "focusedRecently" : false,
+        "generatedAt" : "2026-05-25T05:01:35.666Z",
+        "keyboardActivityRecently" : false,
+        "scrollEventRecently" : false
+      },
+      "note" : "Persistent UX event tap is feeding capture motion hints.",
+      "observed_event_count" : 221,
+      "permission_subject" : {
+        "appVersion" : "0.1.87",
+        "bundleIdentifier" : "com.haptica.1context.dev",
+        "designatedRequirement" : "identifier \"com.haptica.1context.dev\" and anchor apple generic and certificate leaf[subject.CN] = \"Apple Development: Paul Han (YP66C5PMPY)\" and certificate 1[field.1.2.840.113635.100.6.2.1] \/* exists *\/",
+        "designatedRequirementSHA256" : "15ed1daa9c8ab5fa6fcbfccfadaf13f5961ea1a8f07d982134feedacec7ca3e8",
+        "executablePath" : "\/Applications\/1Context Dev.app\/Contents\/MacOS\/1Context",
+        "tap_owner_bundle_identifier" : "com.haptica.1context.dev",
+        "tap_owner_executable_path" : "\/Applications\/1Context Dev.app\/Contents\/MacOS\/1contextd",
+        "tap_owner_pid" : 48855,
+        "tap_owner_process" : "1contextd"
+      },
+      "queue_depth" : 0,
+      "reenable_attempt_count" : 0,
+      "reenable_failure_count" : 0,
+      "reenable_success_count" : 0,
+      "schema_version" : 1,
+      "startup_wired" : true,
+      "surface" : "capture_ux_event_tap_status",
+      "tap_active" : true,
+      "tap_options" : "listenOnly",
+      "tap_owner_bundle" : "com.haptica.1context.dev",
+      "tap_owner_executable" : "\/Applications\/1Context Dev.app\/Contents\/MacOS\/1contextd",
+      "tap_owner_pid" : 48855,
+      "target_pid_available" : true,
+      "target_pid_observed_count" : 221,
+      "tcc_identity_note" : "UX event taps are created by the 1contextd daemon process. Input Monitoring must be granted to this app\/daemon identity before a persistent tap is enabled."
+    },
+    "window_unit_of_truth" : true,
+    "windows_directory" : "\/Users\/paulhan\/Library\/Application Support\/1Context Dev\/capture\/windows"
+  },
+  "classifierFeedFrameCount" : 1,
+  "completeFrameCount" : 1,
+  "configurationUpdateDecisionCount" : 1,
+  "configurationUpdateErrors" : [
+
+  ],
+  "endedAt" : "2026-05-25T05:01:40.872Z",
+  "frameCount" : 1,
+  "frames" : [
+    {
+      "adaptiveDecision" : {
+        "changedTileRatio" : 0,
+        "classifierMode" : "watch",
+        "controllerMode" : "watch",
+        "dirtyAreaRatio" : 0,
+        "dirtyRectCount" : 0,
+        "estimatedDY" : 0,
+        "keyboardEventRecently" : false,
+        "minimumFrameIntervalSeconds" : 0.33333333333333331,
+        "previousTargetFPS" : 3,
+        "proposedTargetFPS" : 3,
+        "schemaVersion" : 1,
+        "scrollEventRecently" : false,
+        "shouldEncodeVideoSegment" : false,
+        "shouldOCRDirtyRegions" : true,
+        "shouldStoreKeyframe" : true,
+        "shouldUpdateStreamConfiguration" : false,
+        "targetAnalysisFPS" : 2,
+        "targetFPS" : 3,
+        "updateReason" : "unchanged",
+        "uxMotionHintsFused" : true
+      },
+      "attachmentsPresent" : true,
+      "capturedAt" : "2026-05-25T05:01:35.768Z",
+      "contentRect" : {
+        "height" : 134.85714009404182,
+        "width" : 239.99999508261681,
+        "x" : 0,
+        "y" : 0
+      },
+      "contentScale" : 0.16326530277729034,
+      "dirtyRectSummary" : {
+        "cappedRectLimit" : 32,
+        "cappedRects" : [
+
+        ],
+        "changedTileRatio" : 0,
+        "dirtyAreaRatio" : 0,
+        "dirtyRectCount" : 0,
+        "estimatedDY" : 0,
+        "malformedRectCount" : 1
+      },
+      "displayTime" : 8874207548468,
+      "feedsMotionClassifier" : true,
+      "frameStatus" : "complete",
+      "frameStatusRawValue" : 0,
+      "motionFeatures" : {
+        "changedTileRatio" : 0,
+        "dirtyAreaRatio" : 0,
+        "dirtyRectCount" : 0,
+        "estimatedDY" : 0,
+        "focused" : true,
+        "keyboardEventRecently" : false,
+        "meanPixelDiff" : 0,
+        "ocrNewLineRate" : 0,
+        "scrollEventRecently" : false
+      },
+      "parseWarnings" : [
+        "malformed_dirty_rects:1"
+      ],
+      "scaleFactor" : 2,
+      "schemaVersion" : 1,
+      "sequence" : 1,
+      "streamID" : "A1D623A1-F4F2-4587-A155-4EFF7A36F0CE",
+      "target" : {
+        "appName" : "Codex",
+        "appPID" : 3257,
+        "bundleID" : "com.openai.codex",
+        "captureEligible" : true,
+        "displayID" : "1",
+        "framePixels" : {
+          "height" : 1652,
+          "width" : 2940,
+          "x" : 0,
+          "y" : 66
+        },
+        "framePoints" : {
+          "height" : 826,
+          "width" : 1470,
+          "x" : 0,
+          "y" : 33
+        },
+        "isFocused" : true,
+        "source" : "coregraphics+screencapturekit",
+        "title" : "Codex",
+        "windowID" : 9637,
+        "zRank" : 63
+      },
+      "uxMotionHints" : {
+        "estimatedScrollDY" : 0,
+        "focusedRecently" : false,
+        "generatedAt" : "2026-05-25T05:01:35.768Z",
+        "keyboardActivityRecently" : false,
+        "scrollEventRecently" : false
+      },
+      "uxMotionHintsFused" : true
+    }
+  ],
+  "idleFrameCount" : 0,
+  "initialAdaptiveDecision" : {
+    "changedTileRatio" : 0,
+    "classifierMode" : "watch",
+    "controllerMode" : "watch",
+    "dirtyAreaRatio" : 0,
+    "dirtyRectCount" : 0,
+    "estimatedDY" : 0,
+    "keyboardEventRecently" : false,
+    "minimumFrameIntervalSeconds" : 0.33333333333333331,
+    "proposedTargetFPS" : 3,
+    "schemaVersion" : 1,
+    "scrollEventRecently" : false,
+    "shouldEncodeVideoSegment" : false,
+    "shouldOCRDirtyRegions" : true,
+    "shouldStoreKeyframe" : true,
+    "shouldUpdateStreamConfiguration" : true,
+    "targetAnalysisFPS" : 2,
+    "targetFPS" : 3,
+    "updateReason" : "initial",
+    "uxMotionHintsFused" : false
+  },
+  "latestAdaptiveDecision" : {
+    "changedTileRatio" : 0,
+    "classifierMode" : "watch",
+    "controllerMode" : "watch",
+    "dirtyAreaRatio" : 0,
+    "dirtyRectCount" : 0,
+    "estimatedDY" : 0,
+    "keyboardEventRecently" : false,
+    "minimumFrameIntervalSeconds" : 0.33333333333333331,
+    "previousTargetFPS" : 3,
+    "proposedTargetFPS" : 3,
+    "schemaVersion" : 1,
+    "scrollEventRecently" : false,
+    "shouldEncodeVideoSegment" : false,
+    "shouldOCRDirtyRegions" : true,
+    "shouldStoreKeyframe" : true,
+    "shouldUpdateStreamConfiguration" : false,
+    "targetAnalysisFPS" : 2,
+    "targetFPS" : 3,
+    "updateReason" : "unchanged",
+    "uxMotionHintsFused" : true
+  },
+  "latestFrame" : {
+    "adaptiveDecision" : {
+      "changedTileRatio" : 0,
+      "classifierMode" : "watch",
+      "controllerMode" : "watch",
+      "dirtyAreaRatio" : 0,
+      "dirtyRectCount" : 0,
+      "estimatedDY" : 0,
+      "keyboardEventRecently" : false,
+      "minimumFrameIntervalSeconds" : 0.33333333333333331,
+      "previousTargetFPS" : 3,
+      "proposedTargetFPS" : 3,
+      "schemaVersion" : 1,
+      "scrollEventRecently" : false,
+      "shouldEncodeVideoSegment" : false,
+      "shouldOCRDirtyRegions" : true,
+      "shouldStoreKeyframe" : true,
+      "shouldUpdateStreamConfiguration" : false,
+      "targetAnalysisFPS" : 2,
+      "targetFPS" : 3,
+      "updateReason" : "unchanged",
+      "uxMotionHintsFused" : true
+    },
+    "attachmentsPresent" : true,
+    "capturedAt" : "2026-05-25T05:01:35.768Z",
+    "contentRect" : {
+      "height" : 134.85714009404182,
+      "width" : 239.99999508261681,
+      "x" : 0,
+      "y" : 0
+    },
+    "contentScale" : 0.16326530277729034,
+    "dirtyRectSummary" : {
+      "cappedRectLimit" : 32,
+      "cappedRects" : [
+
+      ],
+      "changedTileRatio" : 0,
+      "dirtyAreaRatio" : 0,
+      "dirtyRectCount" : 0,
+      "estimatedDY" : 0,
+      "malformedRectCount" : 1
+    },
+    "displayTime" : 8874207548468,
+    "feedsMotionClassifier" : true,
+    "frameStatus" : "complete",
+    "frameStatusRawValue" : 0,
+    "motionFeatures" : {
+      "changedTileRatio" : 0,
+      "dirtyAreaRatio" : 0,
+      "dirtyRectCount" : 0,
+      "estimatedDY" : 0,
+      "focused" : true,
+      "keyboardEventRecently" : false,
+      "meanPixelDiff" : 0,
+      "ocrNewLineRate" : 0,
+      "scrollEventRecently" : false
+    },
+    "parseWarnings" : [
+      "malformed_dirty_rects:1"
+    ],
+    "scaleFactor" : 2,
+    "schemaVersion" : 1,
+    "sequence" : 1,
+    "streamID" : "A1D623A1-F4F2-4587-A155-4EFF7A36F0CE",
+    "target" : {
+      "appName" : "Codex",
+      "appPID" : 3257,
+      "bundleID" : "com.openai.codex",
+      "captureEligible" : true,
+      "displayID" : "1",
+      "framePixels" : {
+        "height" : 1652,
+        "width" : 2940,
+        "x" : 0,
+        "y" : 66
+      },
+      "framePoints" : {
+        "height" : 826,
+        "width" : 1470,
+        "x" : 0,
+        "y" : 33
+      },
+      "isFocused" : true,
+      "source" : "coregraphics+screencapturekit",
+      "title" : "Codex",
+      "windowID" : 9637,
+      "zRank" : 63
+    },
+    "uxMotionHints" : {
+      "estimatedScrollDY" : 0,
+      "focusedRecently" : false,
+      "generatedAt" : "2026-05-25T05:01:35.768Z",
+      "keyboardActivityRecently" : false,
+      "scrollEventRecently" : false
+    },
+    "uxMotionHintsFused" : true
+  },
+  "latestUXMotionHints" : {
+    "estimatedScrollDY" : 0,
+    "focusedRecently" : false,
+    "generatedAt" : "2026-05-25T05:01:35.768Z",
+    "keyboardActivityRecently" : false,
+    "scrollEventRecently" : false
+  },
+  "nonCompleteFrameCount" : 0,
+  "operation" : "capture.active_window_metadata_sample",
+  "persistedEventCount" : 1,
+  "persistErrors" : [
+
+  ],
+  "requestedDurationSeconds" : 5,
+  "requestedMaxFrames" : 30,
+  "schemaVersion" : 1,
+  "startedAt" : "2026-05-25T05:01:35.718Z",
+  "stored" : true,
+  "streamID" : "A1D623A1-F4F2-4587-A155-4EFF7A36F0CE",
+  "surface" : "capture_active_window_metadata_sample",
+  "target" : {
+    "appName" : "Codex",
+    "appPID" : 3257,
+    "bundleID" : "com.openai.codex",
+    "captureEligible" : true,
+    "displayID" : "1",
+    "framePixels" : {
+      "height" : 1652,
+      "width" : 2940,
+      "x" : 0,
+      "y" : 66
+    },
+    "framePoints" : {
+      "height" : 826,
+      "width" : 1470,
+      "x" : 0,
+      "y" : 33
+    },
+    "isFocused" : true,
+    "source" : "coregraphics+screencapturekit",
+    "title" : "Codex",
+    "windowID" : 9637,
+    "zRank" : 63
+  },
+  "uxMotionHintsFusedFrameCount" : 1
+}

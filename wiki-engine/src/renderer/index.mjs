@@ -33,6 +33,7 @@ import { parseFrontmatter, FrontmatterError } from './frontmatter.mjs';
 import { buildToc, slugifyHeading } from './toc.mjs';
 import { renderShell } from './template.mjs';
 import { directives } from './directives/index.mjs';
+import { stableCodeBlockId, slugToken } from './references.mjs';
 import {
   extractSections,
   deriveSectionFrontmatter,
@@ -42,13 +43,27 @@ import {
 
 export { FrontmatterError } from './frontmatter.mjs';
 
-function makeMarked() {
+function codeLanguageClass(language) {
+  const firstToken = String(language || '').trim().split(/\s+/)[0] || '';
+  return firstToken.replace(/[^A-Za-z0-9_-]/g, '');
+}
+
+function makeMarked({ codeContextSlug = 'page' } = {}) {
   const m = new Marked();
+  let codeSequence = 0;
   // Override the default heading renderer so H2/H3 get stable
   // 1Context-convention slugs as their id attributes. Text is
   // preserved verbatim (marked already escapes inline HTML).
   m.use({
     renderer: {
+      code({ text, lang }) {
+        codeSequence += 1;
+        const language = codeLanguageClass(lang);
+        const id = stableCodeBlockId(codeContextSlug, codeSequence, language, text);
+        const languageAttr = language ? ` data-1context-language="${escapeHtml(language)}"` : '';
+        const codeClass = language ? ` class="language-${escapeHtml(language)}"` : '';
+        return `<pre id="${id}" class="opctx-code-block" data-1context-code-id="${id}"${languageAttr}><code${codeClass}>${escapeHtml(text)}</code></pre>\n`;
+      },
       html({ text, raw }) {
         return escapeHtml(text || raw || '');
       },
@@ -82,6 +97,135 @@ function escapeHtml(value) {
     .replace(/'/g, '&#39;');
 }
 
+function normalizeFootnoteLabel(value) {
+  return String(value || '').trim().replace(/\s+/g, ' ').toLowerCase();
+}
+
+function extractFootnoteDefinitions(markdown) {
+  const lines = String(markdown || '').split(/\r?\n/);
+  const definitions = new Map();
+  const bodyLines = [];
+  let inCode = null;
+
+  for (const line of lines) {
+    if (inCode) {
+      const closeMatch = /^ {0,3}(`{3,}|~{3,})\s*$/.exec(line);
+      if (closeMatch && closeMatch[1][0] === inCode.fenceChar && closeMatch[1].length >= inCode.fenceLength) {
+        inCode = null;
+      }
+      bodyLines.push(line);
+      continue;
+    }
+
+    const openMatch = /^ {0,3}(`{3,}|~{3,})(.*)$/.exec(line);
+    if (openMatch) {
+      inCode = {
+        fenceChar: openMatch[1][0],
+        fenceLength: openMatch[1].length,
+      };
+      bodyLines.push(line);
+      continue;
+    }
+
+    const definitionMatch = /^ {0,3}\[\^([^\]\n]+)\]:[ \t]*(.*)$/.exec(line);
+    if (definitionMatch) {
+      const label = normalizeFootnoteLabel(definitionMatch[1]);
+      if (label && !definitions.has(label)) {
+        definitions.set(label, definitionMatch[2] || '');
+      }
+      continue;
+    }
+
+    bodyLines.push(line);
+  }
+
+  return {
+    body: bodyLines.join('\n'),
+    definitions,
+  };
+}
+
+function prepareFootnoteBody(markdown, pageSlug) {
+  const { body, definitions } = extractFootnoteDefinitions(markdown);
+  if (!definitions.size) return { body, footnotes: [] };
+
+  const lines = body.split(/\r?\n/);
+  const footnotes = [];
+  const labelToFootnote = new Map();
+  const slug = slugToken(pageSlug);
+  let inCode = null;
+
+  const renderedLines = lines.map((line) => {
+    if (inCode) {
+      const closeMatch = /^ {0,3}(`{3,}|~{3,})\s*$/.exec(line);
+      if (closeMatch && closeMatch[1][0] === inCode.fenceChar && closeMatch[1].length >= inCode.fenceLength) {
+        inCode = null;
+      }
+      return line;
+    }
+
+    const openMatch = /^ {0,3}(`{3,}|~{3,})(.*)$/.exec(line);
+    if (openMatch) {
+      inCode = {
+        fenceChar: openMatch[1][0],
+        fenceLength: openMatch[1].length,
+      };
+      return line;
+    }
+
+    return line.replace(/\[\^([^\]\n]+)\]/g, (match, rawLabel) => {
+      const label = normalizeFootnoteLabel(rawLabel);
+      if (!definitions.has(label)) return match;
+      let footnote = labelToFootnote.get(label);
+      if (!footnote) {
+        const number = footnotes.length + 1;
+        footnote = {
+          label,
+          number,
+          noteId: `cite-note-${slug}-${number}`,
+          refs: [],
+          markdown: definitions.get(label),
+        };
+        labelToFootnote.set(label, footnote);
+        footnotes.push(footnote);
+      }
+      const refOrdinal = footnote.refs.length + 1;
+      const ref = {
+        id: `cite-ref-${slug}-${footnote.number}-${refOrdinal}`,
+        token: `OPCTX_FOOTNOTE_REF_${slug}_${footnote.number}_${refOrdinal}_TOKEN`,
+      };
+      footnote.refs.push(ref);
+      return ref.token;
+    });
+  });
+
+  return {
+    body: renderedLines.join('\n'),
+    footnotes,
+  };
+}
+
+function renderMarkdownWithFootnotes(marked, markdown, { pageSlug = 'page' } = {}) {
+  const { body, footnotes } = prepareFootnoteBody(markdown, pageSlug);
+  let html = marked.parse(body);
+  if (!footnotes.length) return html;
+
+  for (const footnote of footnotes) {
+    for (const ref of footnote.refs) {
+      const refHtml = `<sup id="${ref.id}" class="opctx-footnote-ref" data-1context-citation-ref="${footnote.noteId}"><a href="#${footnote.noteId}" aria-label="Reference ${footnote.number}">${footnote.number}</a></sup>`;
+      html = html.split(ref.token).join(refHtml);
+    }
+  }
+
+  const items = footnotes.map((footnote) => {
+    const noteHtml = marked.parseInline(footnote.markdown || '');
+    const firstRef = footnote.refs[0]?.id || '';
+    return `<li id="${footnote.noteId}" class="opctx-reference" data-1context-citation-id="${footnote.noteId}"><span class="opctx-reference-body">${noteHtml}</span> <a class="opctx-reference-back" href="#${firstRef}" aria-label="Back to reference ${footnote.number}">back</a></li>`;
+  }).join('\n');
+
+  return `${html}\n<section class="opctx-references" id="opctx-references" data-1context-references="footnotes">\n<h2 id="references">References</h2>\n<ol>\n${items}\n</ol>\n</section>\n`;
+}
+
 /**
  * Render a single page from its markdown source.
  *
@@ -100,7 +244,8 @@ export function renderPage(source, { slug, shellOptions = {} } = {}) {
   const { data: frontmatter, content: body } = parseFrontmatter(source, { slug });
   const { sections: sectionDefs, cleanBody } = extractSections(body, frontmatter);
 
-  const marked = makeMarked();
+  const pageSlug = frontmatter.slug || slug || 'page';
+  const marked = makeMarked({ codeContextSlug: pageSlug });
   // Strip the leading H1 from the parent body before rendering. The
   // shell prints `frontmatter.title` as the page <h1>; many .md
   // sources also begin with a `# Title` line by Markdown convention,
@@ -108,7 +253,7 @@ export function renderPage(source, { slug, shellOptions = {} } = {}) {
   // stripLeadingH2 pass we already do for section sub-pages (where
   // the section's H2 becomes the sub-page's H1, and the source H2
   // would otherwise be duplicated).
-  const bodyHtml = stripLeadingH1(marked.parse(cleanBody));
+  const bodyHtml = stripLeadingH1(renderMarkdownWithFootnotes(marked, cleanBody, { pageSlug }));
   const tocHtml = buildToc(bodyHtml);
   const html = renderShell({ frontmatter, bodyHtml, tocHtml, ...shellOptions });
 
@@ -124,8 +269,9 @@ export function renderPage(source, { slug, shellOptions = {} } = {}) {
   // the same shell so the sub-page gets the same chrome.
   const sections = sectionDefs.map((sec) => {
     const subFm = deriveSectionFrontmatter(frontmatter, sec, frontmatter.slug);
-    const subMarked = makeMarked();
-    const subBodyHtml = subMarked.parse(sec.body);
+    const sectionSlug = subFm.slug || sec.slug || 'section';
+    const subMarked = makeMarked({ codeContextSlug: sectionSlug });
+    const subBodyHtml = renderMarkdownWithFootnotes(subMarked, sec.body, { pageSlug: sectionSlug });
     // Strip the leading H2 from the body HTML — the shell renders
     // the section title as the page H1. Otherwise the sub-page would
     // show "Today · 2026-04-26 · Sunday" twice.

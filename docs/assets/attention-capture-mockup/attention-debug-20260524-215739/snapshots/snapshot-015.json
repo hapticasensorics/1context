@@ -1,0 +1,6887 @@
+{
+  "activeApplication" : {
+    "appName" : "Codex",
+    "bundleID" : "com.openai.codex",
+    "processID" : 3257
+  },
+  "capture_status" : {
+    "available_methods" : [
+      "capture.status",
+      "capture.snapshot",
+      "capture.active_window_metadata_sample",
+      "capture.ux.status",
+      "capture.ux.probe"
+    ],
+    "ax_semantic_events" : {
+      "buffer" : {
+        "capacity" : 256,
+        "droppedCount" : 0,
+        "emittedCount" : 6,
+        "eventCount" : 6
+      },
+      "enabled" : true,
+      "last_error" : null,
+      "last_persisted_at" : "2026-05-25T04:57:55.658Z",
+      "persisted_event_count" : 6,
+      "source" : "AXSemanticEventAggregator"
+    },
+    "continuous_metadata_sampler" : {
+      "cooldown_seconds" : 5,
+      "duration_seconds" : 0.75,
+      "enabled" : true,
+      "last_error" : null,
+      "last_sample_at" : "2026-05-25T04:57:52.204Z",
+      "last_trigger_at" : "2026-05-25T04:57:56.225Z",
+      "max_frames" : 6,
+      "persisted_frame_count" : 1,
+      "running" : false,
+      "sample_count" : 1,
+      "skipped_count" : 2,
+      "trigger_count" : 3
+    },
+    "events_directory" : "\/Users\/paulhan\/Library\/Application Support\/1Context Dev\/capture\/events",
+    "media_directory" : "\/Users\/paulhan\/Library\/Application Support\/1Context Dev\/capture\/media",
+    "metadata_sample_fusion" : {
+      "pixels_untouched" : true,
+      "source" : "persistent_ux_event_tap",
+      "ux_motion_hints_enabled" : true
+    },
+    "motion_hints" : {
+      "estimatedScrollDY" : 0,
+      "focusedRecently" : true,
+      "generatedAt" : "2026-05-25T04:57:57.120Z",
+      "keyboardActivityRecently" : false,
+      "recent_target_process_id" : 3257,
+      "scrollEventRecently" : false
+    },
+    "permission_derived_metadata" : {
+      "capture_paths" : {
+        "events_directory" : "\/Users\/paulhan\/Library\/Application Support\/1Context Dev\/capture\/events",
+        "media_directory" : "\/Users\/paulhan\/Library\/Application Support\/1Context Dev\/capture\/media",
+        "root_directory" : "\/Users\/paulhan\/Library\/Application Support\/1Context Dev\/capture",
+        "windows_directory" : "\/Users\/paulhan\/Library\/Application Support\/1Context Dev\/capture\/windows"
+      },
+      "generated_at" : "2026-05-25T04:57:57.127Z",
+      "privacy" : {
+        "aggregates_and_counts_only" : true,
+        "coordinates_included" : false,
+        "raw_keystrokes_included" : false,
+        "raw_text_included" : false
+      },
+      "process_identities" : [
+        {
+          "bundle_identifier" : "com.haptica.1context.dev",
+          "executable_path" : "\/Applications\/1Context Dev.app\/Contents\/MacOS\/1contextd",
+          "pid" : 42694,
+          "role" : "daemon_process"
+        },
+        {
+          "app_version" : "0.1.87",
+          "bundle_identifier" : "com.haptica.1context.dev",
+          "designated_requirement_sha256" : "15ed1daa9c8ab5fa6fcbfccfadaf13f5961ea1a8f07d982134feedacec7ca3e8",
+          "executable_path" : "\/Applications\/1Context Dev.app\/Contents\/MacOS\/1Context",
+          "role" : "permission_subject"
+        }
+      ],
+      "schema_version" : 1,
+      "signals" : {
+        "accessibility" : {
+          "focused_context" : {
+            "available" : true,
+            "source" : "OneContextWindowIndexer.focusedContext",
+            "status" : "permission_granted",
+            "trusted" : true
+          },
+          "note" : "Focused-context availability is reported as permission readiness only; capture.status does not read raw focused text, geometry, or window contents.",
+          "owner_role" : "daemon_process",
+          "permission_subject_role" : "permission_subject",
+          "ready" : true,
+          "source" : "AXIsProcessTrusted plus AX focused-context reads during capture snapshots",
+          "status" : "granted"
+        },
+        "input_monitoring" : {
+          "event_tap" : {
+            "active" : true,
+            "coalesced_count" : 1,
+            "dropped_count" : 0,
+            "event_mask" : [
+              "scroll_wheel",
+              "left_mouse_down",
+              "left_mouse_up",
+              "right_mouse_down",
+              "right_mouse_up",
+              "other_mouse_down",
+              "other_mouse_up",
+              "left_mouse_dragged",
+              "right_mouse_dragged",
+              "other_mouse_dragged",
+              "flags_changed",
+              "key_down",
+              "key_up"
+            ],
+            "event_tap" : "cgSessionEventTap",
+            "last_event_at" : "2026-05-25T04:57:56.142Z",
+            "lifecycle_state" : "running",
+            "observed_event_count" : 9,
+            "queue_depth" : 0,
+            "tap_options" : "listenOnly"
+          },
+          "note" : "Only aggregate input-event counts and timing hints are exposed; no raw keystrokes, key codes, text, or coordinates are included.",
+          "owner_role" : "daemon_process",
+          "permission_subject_role" : "permission_subject",
+          "proof" : {
+            "details" : {
+
+            },
+            "matches_current_subject" : true,
+            "method" : "iohid-listen-event-preflight",
+            "proof_key" : "RememberingInputMonitoringProof",
+            "proved_at" : "2026-05-24T20:06:53Z",
+            "recorded" : true
+          },
+          "ready" : true,
+          "source" : "persistent listen-only CGEventTap owned by 1contextd",
+          "status" : "granted"
+        },
+        "screen_capture" : {
+          "owner_role" : "daemon_process",
+          "permission_subject_role" : "permission_subject",
+          "proof" : {
+            "details" : {
+              "display_count" : "1"
+            },
+            "matches_current_subject" : true,
+            "method" : "screencapturekit-screen-frame",
+            "proof_key" : "RememberingScreenCaptureProof",
+            "proved_at" : "2026-05-24T20:07:20Z",
+            "recorded" : true
+          },
+          "ready" : true,
+          "source" : "ScreenCaptureKit screen-frame proof recorded by setup\/runtime probes",
+          "status" : "granted"
+        },
+        "system_audio" : {
+          "owner_role" : "daemon_process",
+          "permission_subject_role" : "permission_subject",
+          "proof" : {
+            "details" : {
+              "captures_audio" : "true"
+            },
+            "matches_current_subject" : true,
+            "method" : "screencapturekit-system-audio-stream",
+            "proof_key" : "RememberingSystemAudioProof",
+            "proved_at" : "2026-05-24T20:07:20Z",
+            "recorded" : true
+          },
+          "ready" : true,
+          "source" : "ScreenCaptureKit system-audio sample proof recorded by setup\/runtime probes",
+          "status" : "granted"
+        }
+      }
+    },
+    "root_directory" : "\/Users\/paulhan\/Library\/Application Support\/1Context Dev\/capture",
+    "schema_version" : 1,
+    "surface" : "capture_status",
+    "ux_event_tap" : {
+      "callback_average_us" : 5.0599999999999996,
+      "callback_count" : 9,
+      "callback_last_us" : 3,
+      "callback_max_us" : 9.5,
+      "coalesced_count" : 1,
+      "disabled_by_timeout_count" : 0,
+      "disabled_by_user_input_count" : 0,
+      "disabled_count" : 0,
+      "dropped_count" : 0,
+      "event_mask" : [
+        "scroll_wheel",
+        "left_mouse_down",
+        "left_mouse_up",
+        "right_mouse_down",
+        "right_mouse_up",
+        "other_mouse_down",
+        "other_mouse_up",
+        "left_mouse_dragged",
+        "right_mouse_dragged",
+        "other_mouse_dragged",
+        "flags_changed",
+        "key_down",
+        "key_up"
+      ],
+      "event_tap" : "cgSessionEventTap",
+      "jsonl_persistence" : {
+        "enabled" : true,
+        "events_directory" : "\/Users\/paulhan\/Library\/Application Support\/1Context Dev\/capture\/events",
+        "flush_interval_seconds" : 2,
+        "last_error" : null,
+        "last_flush_at" : "2026-05-25T04:57:56.222Z",
+        "last_persisted_at" : "2026-05-25T04:57:56.060Z",
+        "persisted_anchor_count" : 10
+      },
+      "last_event_at" : "2026-05-25T04:57:56.142Z",
+      "lifecycle_state" : "running",
+      "metadata_sample_fusion_enabled" : true,
+      "motion_hints" : {
+        "estimatedScrollDY" : 0,
+        "focusedRecently" : true,
+        "generatedAt" : "2026-05-25T04:57:57.120Z",
+        "keyboardActivityRecently" : false,
+        "recent_target_process_id" : 3257,
+        "scrollEventRecently" : false
+      },
+      "note" : "Persistent UX event tap is feeding capture motion hints.",
+      "observed_event_count" : 9,
+      "permission_subject" : {
+        "appVersion" : "0.1.87",
+        "bundleIdentifier" : "com.haptica.1context.dev",
+        "designatedRequirement" : "identifier \"com.haptica.1context.dev\" and anchor apple generic and certificate leaf[subject.CN] = \"Apple Development: Paul Han (YP66C5PMPY)\" and certificate 1[field.1.2.840.113635.100.6.2.1] \/* exists *\/",
+        "designatedRequirementSHA256" : "15ed1daa9c8ab5fa6fcbfccfadaf13f5961ea1a8f07d982134feedacec7ca3e8",
+        "executablePath" : "\/Applications\/1Context Dev.app\/Contents\/MacOS\/1Context",
+        "tap_owner_bundle_identifier" : "com.haptica.1context.dev",
+        "tap_owner_executable_path" : "\/Applications\/1Context Dev.app\/Contents\/MacOS\/1contextd",
+        "tap_owner_pid" : 42694,
+        "tap_owner_process" : "1contextd"
+      },
+      "queue_depth" : 0,
+      "recent_target_process_id" : 3257,
+      "reenable_attempt_count" : 0,
+      "reenable_failure_count" : 0,
+      "reenable_success_count" : 0,
+      "schema_version" : 1,
+      "startup_wired" : true,
+      "surface" : "capture_ux_event_tap_status",
+      "tap_active" : true,
+      "tap_options" : "listenOnly",
+      "tap_owner_bundle" : "com.haptica.1context.dev",
+      "tap_owner_executable" : "\/Applications\/1Context Dev.app\/Contents\/MacOS\/1contextd",
+      "tap_owner_pid" : 42694,
+      "target_pid_available" : true,
+      "target_pid_observed_count" : 9,
+      "tcc_identity_note" : "UX event taps are created by the 1contextd daemon process. Input Monitoring must be granted to this app\/daemon identity before a persistent tap is enabled."
+    },
+    "window_unit_of_truth" : true,
+    "windows_directory" : "\/Users\/paulhan\/Library\/Application Support\/1Context Dev\/capture\/windows"
+  },
+  "displays" : [
+    {
+      "displayID" : "1",
+      "framePoints" : {
+        "height" : 956,
+        "width" : 1470,
+        "x" : 0,
+        "y" : 0
+      },
+      "isMain" : true,
+      "scaleFactor" : 2
+    },
+    {
+      "displayID" : "4",
+      "framePoints" : {
+        "height" : 946,
+        "width" : 1288,
+        "x" : -1288,
+        "y" : 10
+      },
+      "isMain" : false,
+      "scaleFactor" : 2
+    }
+  ],
+  "focusedContext" : {
+    "activeApplication" : {
+      "appName" : "Codex",
+      "bundleID" : "com.openai.codex",
+      "processID" : 3257
+    },
+    "focusedApplicationProcessID" : 3257,
+    "focusedWindow" : {
+      "frame" : {
+        "height" : 826,
+        "width" : 1470,
+        "x" : 0,
+        "y" : 33
+      },
+      "isSensitive" : false,
+      "redactionReasons" : [
+
+      ],
+      "role" : "AXWindow",
+      "subrole" : "AXStandardWindow",
+      "title" : "Codex"
+    },
+    "generatedAt" : "2026-05-25T04:57:57.131Z",
+    "isProcessTrusted" : true,
+    "issues" : [
+      {
+        "attribute" : "AXFocusedApplication",
+        "code" : "ax_attribute_unavailable",
+        "element" : "system",
+        "message" : "AX attribute was not available.",
+        "status" : "no_value"
+      },
+      {
+        "attribute" : "AXFocusedApplication",
+        "code" : "focused_application_fallback",
+        "element" : "application",
+        "message" : "Fell back to NSWorkspace frontmost application PID for AX reads.",
+        "status" : "success"
+      },
+      {
+        "attribute" : "AXFocusedUIElement",
+        "code" : "ax_attribute_unavailable",
+        "element" : "application",
+        "message" : "AX attribute was not available.",
+        "status" : "no_value"
+      }
+    ],
+    "matchedWindowID" : 9637,
+    "schemaVersion" : 1,
+    "status" : "no_focused_element",
+    "visibleContext" : {
+      "capturedRegionCount" : 7,
+      "elementUnderPointer" : {
+        "frame" : {
+          "height" : 826,
+          "width" : 1470,
+          "x" : 0,
+          "y" : 33
+        },
+        "isSensitive" : false,
+        "redactionReasons" : [
+
+        ],
+        "regionID" : "axr_68155c4ef9dc9116",
+        "role" : "AXScrollArea"
+      },
+      "focusedWindowRegionID" : "axr_596df1c681b6b93a",
+      "maxDepth" : 2,
+      "maxRegionCount" : 48,
+      "regions" : [
+        {
+          "capturedChildCount" : 4,
+          "childCount" : 4,
+          "childrenTruncated" : false,
+          "depth" : 0,
+          "frame" : {
+            "height" : 826,
+            "width" : 1470,
+            "x" : 0,
+            "y" : 33
+          },
+          "isSensitive" : false,
+          "redactionReasons" : [
+
+          ],
+          "regionID" : "axr_596df1c681b6b93a",
+          "role" : "AXWindow",
+          "source" : "focused_window",
+          "subrole" : "AXStandardWindow",
+          "titleShape" : {
+            "characterCount" : 5,
+            "redacted" : false,
+            "sourceAttribute" : "AXTitle",
+            "truncated" : false
+          }
+        },
+        {
+          "capturedChildCount" : 1,
+          "childCount" : 1,
+          "childrenTruncated" : false,
+          "depth" : 1,
+          "frame" : {
+            "height" : 826,
+            "width" : 1470,
+            "x" : 0,
+            "y" : 33
+          },
+          "isInsertionPoint" : true,
+          "isSensitive" : false,
+          "redactionReasons" : [
+
+          ],
+          "regionID" : "axr_b703ea4a5db43a17",
+          "role" : "AXGroup",
+          "selectedTextRange" : {
+            "length" : 0,
+            "location" : 0
+          },
+          "source" : "focused_window.0",
+          "titleShape" : {
+            "characterCount" : 5,
+            "redacted" : false,
+            "sourceAttribute" : "AXTitle",
+            "truncated" : false
+          },
+          "valueShape" : {
+            "characterCount" : 0,
+            "kind" : "string",
+            "redacted" : false,
+            "sourceAttribute" : "AXValue"
+          },
+          "visibleRange" : {
+            "length" : 0,
+            "location" : 0
+          }
+        },
+        {
+          "capturedChildCount" : 0,
+          "childrenTruncated" : false,
+          "depth" : 2,
+          "frame" : {
+            "height" : 826,
+            "width" : 1470,
+            "x" : 0,
+            "y" : 33
+          },
+          "isInsertionPoint" : true,
+          "isSensitive" : false,
+          "redactionReasons" : [
+
+          ],
+          "regionID" : "axr_b79f1d177c0560f8",
+          "role" : "AXGroup",
+          "selectedTextRange" : {
+            "length" : 0,
+            "location" : 0
+          },
+          "source" : "focused_window.0.0",
+          "titleShape" : {
+            "characterCount" : 0,
+            "redacted" : false,
+            "sourceAttribute" : "AXTitle",
+            "truncated" : false
+          },
+          "valueShape" : {
+            "characterCount" : 0,
+            "kind" : "string",
+            "redacted" : false,
+            "sourceAttribute" : "AXValue"
+          },
+          "visibleRange" : {
+            "length" : 0,
+            "location" : 0
+          }
+        },
+        {
+          "capturedChildCount" : 0,
+          "childrenTruncated" : false,
+          "depth" : 1,
+          "frame" : {
+            "height" : 16,
+            "width" : 16,
+            "x" : 15,
+            "y" : 48
+          },
+          "isSensitive" : false,
+          "redactionReasons" : [
+
+          ],
+          "regionID" : "axr_a3fde92ff1d16585",
+          "role" : "AXButton",
+          "source" : "focused_window.1",
+          "subrole" : "AXCloseButton"
+        },
+        {
+          "capturedChildCount" : 1,
+          "childCount" : 1,
+          "childrenTruncated" : false,
+          "depth" : 1,
+          "frame" : {
+            "height" : 16,
+            "width" : 16,
+            "x" : 61,
+            "y" : 48
+          },
+          "isSensitive" : false,
+          "redactionReasons" : [
+
+          ],
+          "regionID" : "axr_b9b67f1f9cc0cbb5",
+          "role" : "AXButton",
+          "source" : "focused_window.2",
+          "subrole" : "AXFullScreenButton"
+        },
+        {
+          "capturedChildCount" : 0,
+          "childrenTruncated" : false,
+          "depth" : 2,
+          "frame" : {
+            "height" : 14,
+            "width" : 14,
+            "x" : 62,
+            "y" : 49
+          },
+          "isSensitive" : false,
+          "redactionReasons" : [
+
+          ],
+          "regionID" : "axr_49899a62f95bea12",
+          "role" : "AXGroup",
+          "source" : "focused_window.2.0"
+        },
+        {
+          "capturedChildCount" : 0,
+          "childrenTruncated" : false,
+          "depth" : 1,
+          "frame" : {
+            "height" : 16,
+            "width" : 16,
+            "x" : 38,
+            "y" : 48
+          },
+          "isSensitive" : false,
+          "redactionReasons" : [
+
+          ],
+          "regionID" : "axr_87059894eb84158a",
+          "role" : "AXButton",
+          "source" : "focused_window.3",
+          "subrole" : "AXMinimizeButton"
+        }
+      ],
+      "source" : "ax_visible_context",
+      "truncated" : false
+    }
+  },
+  "generatedAt" : "2026-05-25T04:57:57.131Z",
+  "schemaVersion" : 1,
+  "stored" : true,
+  "surface" : "capture_window_snapshot",
+  "windows" : [
+    {
+      "alpha" : 1,
+      "appName" : "ThemeWidgetControlViewService",
+      "appPID" : 17235,
+      "bundleID" : "com.apple.appkit.xpc.ThemeWidgetControlViewService",
+      "captureEligible" : false,
+      "displayID" : "1",
+      "framePixels" : {
+        "height" : 28,
+        "width" : 28,
+        "x" : 124,
+        "y" : 98
+      },
+      "framePoints" : {
+        "height" : 14,
+        "width" : 14,
+        "x" : 62,
+        "y" : 49
+      },
+      "isFocused" : false,
+      "isMinimized" : true,
+      "isOnScreen" : false,
+      "layer" : 0,
+      "source" : "coregraphics",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "",
+      "visibleFractionEstimate" : 0,
+      "windowID" : 11599,
+      "zRank" : 0
+    },
+    {
+      "alpha" : 1,
+      "appName" : "ThemeWidgetControlViewService",
+      "appPID" : 75694,
+      "bundleID" : "com.apple.appkit.xpc.ThemeWidgetControlViewService",
+      "captureEligible" : false,
+      "displayID" : "1",
+      "framePixels" : {
+        "height" : 28,
+        "width" : 28,
+        "x" : 118,
+        "y" : 94
+      },
+      "framePoints" : {
+        "height" : 14,
+        "width" : 14,
+        "x" : 59,
+        "y" : 47
+      },
+      "isFocused" : false,
+      "isMinimized" : true,
+      "isOnScreen" : false,
+      "layer" : 0,
+      "source" : "coregraphics",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "",
+      "visibleFractionEstimate" : 0,
+      "windowID" : 11597,
+      "zRank" : 1
+    },
+    {
+      "alpha" : 0,
+      "appName" : "Google Chrome",
+      "appPID" : 19780,
+      "bundleID" : "com.google.Chrome",
+      "captureEligible" : false,
+      "displayID" : "1",
+      "framePixels" : {
+        "height" : 44,
+        "width" : 26,
+        "x" : -2,
+        "y" : 1676
+      },
+      "framePoints" : {
+        "height" : 22,
+        "width" : 13,
+        "x" : -1,
+        "y" : 838
+      },
+      "isFocused" : false,
+      "isMinimized" : true,
+      "isOnScreen" : false,
+      "layer" : 0,
+      "source" : "coregraphics",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "",
+      "visibleFractionEstimate" : 0,
+      "windowID" : 11596,
+      "zRank" : 2
+    },
+    {
+      "alpha" : 1,
+      "appName" : "CursorUIViewService",
+      "appPID" : 1280,
+      "bundleID" : "com.apple.TextInputUI.xpc.CursorUIViewService",
+      "captureEligible" : false,
+      "displayID" : "1",
+      "framePixels" : {
+        "height" : 128,
+        "width" : 128,
+        "x" : 0,
+        "y" : 1784
+      },
+      "framePoints" : {
+        "height" : 64,
+        "width" : 64,
+        "x" : 0,
+        "y" : 892
+      },
+      "isFocused" : false,
+      "isMinimized" : true,
+      "isOnScreen" : false,
+      "layer" : 0,
+      "source" : "coregraphics",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "",
+      "visibleFractionEstimate" : 0,
+      "windowID" : 11592,
+      "zRank" : 3
+    },
+    {
+      "alpha" : 1,
+      "appName" : "Control Center",
+      "appPID" : 1069,
+      "bundleID" : "com.apple.controlcenter",
+      "captureEligible" : true,
+      "displayID" : "4",
+      "framePixels" : {
+        "height" : 60,
+        "width" : 96,
+        "x" : 1642,
+        "y" : -20
+      },
+      "framePoints" : {
+        "height" : 30,
+        "width" : 48,
+        "x" : -467,
+        "y" : 0
+      },
+      "isFocused" : false,
+      "isMinimized" : false,
+      "isOnScreen" : true,
+      "layer" : 25,
+      "source" : "coregraphics+screencapturekit",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "",
+      "visibleFractionEstimate" : 0.66666666666666663,
+      "windowID" : 11591,
+      "zRank" : 4
+    },
+    {
+      "alpha" : 1,
+      "appName" : "Control Center",
+      "appPID" : 1069,
+      "bundleID" : "com.apple.controlcenter",
+      "captureEligible" : true,
+      "displayID" : "1",
+      "framePixels" : {
+        "height" : 66,
+        "width" : 96,
+        "x" : 2010,
+        "y" : 0
+      },
+      "framePoints" : {
+        "height" : 33,
+        "width" : 48,
+        "x" : 1005,
+        "y" : 0
+      },
+      "isFocused" : false,
+      "isMinimized" : false,
+      "isOnScreen" : true,
+      "layer" : 25,
+      "source" : "coregraphics+screencapturekit",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "AudioVideoModule",
+      "visibleFractionEstimate" : 1,
+      "windowID" : 11590,
+      "zRank" : 5
+    },
+    {
+      "alpha" : 1,
+      "appName" : "Window Server",
+      "appPID" : 595,
+      "bundleID" : "",
+      "captureEligible" : true,
+      "displayID" : "4",
+      "framePixels" : {
+        "height" : 56,
+        "width" : 58,
+        "x" : 2218,
+        "y" : -18
+      },
+      "framePoints" : {
+        "height" : 28,
+        "width" : 29,
+        "x" : -179,
+        "y" : 1
+      },
+      "isFocused" : false,
+      "isMinimized" : false,
+      "isOnScreen" : true,
+      "layer" : 2147483630,
+      "source" : "coregraphics+screencapturekit",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "StatusIndicator",
+      "visibleFractionEstimate" : 0.6785714285714286,
+      "windowID" : 11589,
+      "zRank" : 6
+    },
+    {
+      "alpha" : 1,
+      "appName" : "Window Server",
+      "appPID" : 595,
+      "bundleID" : "",
+      "captureEligible" : true,
+      "displayID" : "4",
+      "framePixels" : {
+        "height" : 56,
+        "width" : 58,
+        "x" : 2218,
+        "y" : -18
+      },
+      "framePoints" : {
+        "height" : 28,
+        "width" : 29,
+        "x" : -179,
+        "y" : 1
+      },
+      "isFocused" : false,
+      "isMinimized" : false,
+      "isOnScreen" : true,
+      "layer" : 2147483630,
+      "source" : "coregraphics+screencapturekit",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "StatusIndicator",
+      "visibleFractionEstimate" : 0.6785714285714286,
+      "windowID" : 11588,
+      "zRank" : 7
+    },
+    {
+      "alpha" : 1,
+      "appName" : "Window Server",
+      "appPID" : 595,
+      "bundleID" : "",
+      "captureEligible" : true,
+      "displayID" : "1",
+      "framePixels" : {
+        "height" : 58,
+        "width" : 58,
+        "x" : 2586,
+        "y" : 4
+      },
+      "framePoints" : {
+        "height" : 29,
+        "width" : 29,
+        "x" : 1293,
+        "y" : 2
+      },
+      "isFocused" : false,
+      "isMinimized" : false,
+      "isOnScreen" : true,
+      "layer" : 2147483630,
+      "source" : "coregraphics+screencapturekit",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "StatusIndicator",
+      "visibleFractionEstimate" : 1,
+      "windowID" : 11587,
+      "zRank" : 8
+    },
+    {
+      "alpha" : 1,
+      "appName" : "Window Server",
+      "appPID" : 595,
+      "bundleID" : "",
+      "captureEligible" : true,
+      "displayID" : "1",
+      "framePixels" : {
+        "height" : 58,
+        "width" : 58,
+        "x" : 2586,
+        "y" : 4
+      },
+      "framePoints" : {
+        "height" : 29,
+        "width" : 29,
+        "x" : 1293,
+        "y" : 2
+      },
+      "isFocused" : false,
+      "isMinimized" : false,
+      "isOnScreen" : true,
+      "layer" : 2147483630,
+      "source" : "coregraphics+screencapturekit",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "StatusIndicator",
+      "visibleFractionEstimate" : 1,
+      "windowID" : 11586,
+      "zRank" : 9
+    },
+    {
+      "alpha" : 1,
+      "appName" : "CursorUIViewService",
+      "appPID" : 1280,
+      "bundleID" : "com.apple.TextInputUI.xpc.CursorUIViewService",
+      "captureEligible" : false,
+      "displayID" : "1",
+      "framePixels" : {
+        "height" : 128,
+        "width" : 128,
+        "x" : 0,
+        "y" : 1784
+      },
+      "framePoints" : {
+        "height" : 64,
+        "width" : 64,
+        "x" : 0,
+        "y" : 892
+      },
+      "isFocused" : false,
+      "isMinimized" : true,
+      "isOnScreen" : false,
+      "layer" : 0,
+      "source" : "coregraphics",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "",
+      "visibleFractionEstimate" : 0,
+      "windowID" : 11576,
+      "zRank" : 10
+    },
+    {
+      "alpha" : 1,
+      "appName" : "AutoFill",
+      "appPID" : 3859,
+      "bundleID" : "com.apple.SafariPlatformSupport.Helper",
+      "captureEligible" : false,
+      "displayID" : "1",
+      "framePixels" : {
+        "height" : 474,
+        "width" : 624,
+        "x" : 190,
+        "y" : 1244
+      },
+      "framePoints" : {
+        "height" : 237,
+        "width" : 312,
+        "x" : 95,
+        "y" : 622
+      },
+      "isFocused" : false,
+      "isMinimized" : true,
+      "isOnScreen" : false,
+      "layer" : 0,
+      "source" : "coregraphics",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "",
+      "visibleFractionEstimate" : 0,
+      "windowID" : 11472,
+      "zRank" : 11
+    },
+    {
+      "alpha" : 1,
+      "appName" : "CursorUIViewService",
+      "appPID" : 1280,
+      "bundleID" : "com.apple.TextInputUI.xpc.CursorUIViewService",
+      "captureEligible" : false,
+      "displayID" : "1",
+      "framePixels" : {
+        "height" : 128,
+        "width" : 128,
+        "x" : 0,
+        "y" : 1784
+      },
+      "framePoints" : {
+        "height" : 64,
+        "width" : 64,
+        "x" : 0,
+        "y" : 892
+      },
+      "isFocused" : false,
+      "isMinimized" : true,
+      "isOnScreen" : false,
+      "layer" : 0,
+      "source" : "coregraphics",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "",
+      "visibleFractionEstimate" : 0,
+      "windowID" : 11471,
+      "zRank" : 12
+    },
+    {
+      "alpha" : 1,
+      "appName" : "1Context Dev",
+      "appPID" : 3840,
+      "bundleID" : "com.haptica.1context.dev",
+      "captureEligible" : false,
+      "displayID" : "1",
+      "framePixels" : {
+        "height" : 1000,
+        "width" : 1000,
+        "x" : 0,
+        "y" : 912
+      },
+      "framePoints" : {
+        "height" : 500,
+        "width" : 500,
+        "x" : 0,
+        "y" : 456
+      },
+      "isFocused" : false,
+      "isMinimized" : true,
+      "isOnScreen" : false,
+      "layer" : 0,
+      "source" : "coregraphics",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "",
+      "visibleFractionEstimate" : 0,
+      "windowID" : 11470,
+      "zRank" : 13
+    },
+    {
+      "alpha" : 1,
+      "appName" : "1Context Dev",
+      "appPID" : 3840,
+      "bundleID" : "com.haptica.1context.dev",
+      "captureEligible" : false,
+      "framePoints" : {
+        "height" : 0,
+        "width" : 0,
+        "x" : 0,
+        "y" : 0
+      },
+      "isFocused" : false,
+      "isMinimized" : true,
+      "isOnScreen" : false,
+      "layer" : 1000,
+      "source" : "coregraphics",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "",
+      "visibleFractionEstimate" : 0,
+      "windowID" : 11469,
+      "zRank" : 14
+    },
+    {
+      "alpha" : 1,
+      "appName" : "CursorUIViewService",
+      "appPID" : 1280,
+      "bundleID" : "com.apple.TextInputUI.xpc.CursorUIViewService",
+      "captureEligible" : false,
+      "displayID" : "1",
+      "framePixels" : {
+        "height" : 128,
+        "width" : 128,
+        "x" : 0,
+        "y" : 1784
+      },
+      "framePoints" : {
+        "height" : 64,
+        "width" : 64,
+        "x" : 0,
+        "y" : 892
+      },
+      "isFocused" : false,
+      "isMinimized" : true,
+      "isOnScreen" : false,
+      "layer" : 0,
+      "source" : "coregraphics",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "",
+      "visibleFractionEstimate" : 0,
+      "windowID" : 11365,
+      "zRank" : 15
+    },
+    {
+      "alpha" : 1,
+      "appName" : "1Context Dev",
+      "appPID" : 91069,
+      "bundleID" : "com.haptica.1context.dev",
+      "captureEligible" : false,
+      "framePoints" : {
+        "height" : 0,
+        "width" : 0,
+        "x" : 0,
+        "y" : 0
+      },
+      "isFocused" : false,
+      "isMinimized" : true,
+      "isOnScreen" : false,
+      "layer" : 1000,
+      "source" : "coregraphics",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "",
+      "visibleFractionEstimate" : 0,
+      "windowID" : 11350,
+      "zRank" : 16
+    },
+    {
+      "alpha" : 1,
+      "appName" : "1Context Dev",
+      "appPID" : 91069,
+      "bundleID" : "com.haptica.1context.dev",
+      "captureEligible" : true,
+      "displayID" : "1",
+      "framePixels" : {
+        "height" : 1504,
+        "width" : 1240,
+        "x" : 850,
+        "y" : 104
+      },
+      "framePoints" : {
+        "height" : 752,
+        "width" : 620,
+        "x" : 425,
+        "y" : 52
+      },
+      "isFocused" : false,
+      "isMinimized" : false,
+      "isOnScreen" : true,
+      "layer" : 0,
+      "source" : "coregraphics+screencapturekit",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "1Context Setup",
+      "visibleFractionEstimate" : 1,
+      "windowID" : 11349,
+      "zRank" : 17
+    },
+    {
+      "alpha" : 1,
+      "appName" : "AutoFill",
+      "appPID" : 91786,
+      "bundleID" : "com.apple.SafariPlatformSupport.Helper",
+      "captureEligible" : false,
+      "displayID" : "1",
+      "framePixels" : {
+        "height" : 474,
+        "width" : 624,
+        "x" : 190,
+        "y" : 1244
+      },
+      "framePoints" : {
+        "height" : 237,
+        "width" : 312,
+        "x" : 95,
+        "y" : 622
+      },
+      "isFocused" : false,
+      "isMinimized" : true,
+      "isOnScreen" : false,
+      "layer" : 0,
+      "source" : "coregraphics",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "",
+      "visibleFractionEstimate" : 0,
+      "windowID" : 11346,
+      "zRank" : 18
+    },
+    {
+      "alpha" : 1,
+      "appName" : "1Context Capture Dashboard",
+      "appPID" : 91771,
+      "bundleID" : "com.haptica.1context.capture-dashboard.dev-launcher",
+      "captureEligible" : false,
+      "displayID" : "1",
+      "framePixels" : {
+        "height" : 1000,
+        "width" : 1000,
+        "x" : 0,
+        "y" : 912
+      },
+      "framePoints" : {
+        "height" : 500,
+        "width" : 500,
+        "x" : 0,
+        "y" : 456
+      },
+      "isFocused" : false,
+      "isMinimized" : true,
+      "isOnScreen" : false,
+      "layer" : 0,
+      "source" : "coregraphics",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "",
+      "visibleFractionEstimate" : 0,
+      "windowID" : 11344,
+      "zRank" : 19
+    },
+    {
+      "alpha" : 1,
+      "appName" : "1Context Capture Dashboard",
+      "appPID" : 91771,
+      "bundleID" : "com.haptica.1context.capture-dashboard.dev-launcher",
+      "captureEligible" : false,
+      "framePoints" : {
+        "height" : 0,
+        "width" : 0,
+        "x" : 0,
+        "y" : 0
+      },
+      "isFocused" : false,
+      "isMinimized" : true,
+      "isOnScreen" : false,
+      "layer" : 0,
+      "source" : "coregraphics",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "",
+      "visibleFractionEstimate" : 0,
+      "windowID" : 11343,
+      "zRank" : 20
+    },
+    {
+      "alpha" : 1,
+      "appName" : "1Context Capture Dashboard",
+      "appPID" : 91771,
+      "bundleID" : "com.haptica.1context.capture-dashboard.dev-launcher",
+      "captureEligible" : true,
+      "displayID" : "4",
+      "framePixels" : {
+        "height" : 1652,
+        "width" : 2560,
+        "x" : 14,
+        "y" : 74
+      },
+      "framePoints" : {
+        "height" : 826,
+        "width" : 1280,
+        "x" : -1281,
+        "y" : 47
+      },
+      "isFocused" : false,
+      "isMinimized" : false,
+      "isOnScreen" : true,
+      "layer" : 0,
+      "source" : "coregraphics+screencapturekit",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "1Context Capture Dashboard",
+      "visibleFractionEstimate" : 1,
+      "windowID" : 11342,
+      "zRank" : 21
+    },
+    {
+      "alpha" : 1,
+      "appName" : "1Context Capture Dashboard",
+      "appPID" : 91771,
+      "bundleID" : "com.haptica.1context.capture-dashboard.dev-launcher",
+      "captureEligible" : false,
+      "displayID" : "1",
+      "framePixels" : {
+        "height" : 60,
+        "width" : 2508,
+        "x" : 0,
+        "y" : 60
+      },
+      "framePoints" : {
+        "height" : 30,
+        "width" : 1254,
+        "x" : 0,
+        "y" : 30
+      },
+      "isFocused" : false,
+      "isMinimized" : true,
+      "isOnScreen" : false,
+      "layer" : 1000,
+      "source" : "coregraphics",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "",
+      "visibleFractionEstimate" : 0,
+      "windowID" : 11341,
+      "zRank" : 22
+    },
+    {
+      "alpha" : 1,
+      "appName" : "1Context Capture Dashboard",
+      "appPID" : 91771,
+      "bundleID" : "com.haptica.1context.capture-dashboard.dev-launcher",
+      "captureEligible" : false,
+      "displayID" : "4",
+      "framePixels" : {
+        "height" : 60,
+        "width" : 2576,
+        "x" : 0,
+        "y" : -20
+      },
+      "framePoints" : {
+        "height" : 30,
+        "width" : 1288,
+        "x" : -1288,
+        "y" : 0
+      },
+      "isFocused" : false,
+      "isMinimized" : true,
+      "isOnScreen" : false,
+      "layer" : 0,
+      "source" : "coregraphics",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "",
+      "visibleFractionEstimate" : 0,
+      "windowID" : 11340,
+      "zRank" : 23
+    },
+    {
+      "alpha" : 1,
+      "appName" : "1Context Capture Dashboard",
+      "appPID" : 91771,
+      "bundleID" : "com.haptica.1context.capture-dashboard.dev-launcher",
+      "captureEligible" : false,
+      "displayID" : "4",
+      "framePixels" : {
+        "height" : 60,
+        "width" : 2576,
+        "x" : 0,
+        "y" : -20
+      },
+      "framePoints" : {
+        "height" : 30,
+        "width" : 1288,
+        "x" : -1288,
+        "y" : 0
+      },
+      "isFocused" : false,
+      "isMinimized" : true,
+      "isOnScreen" : false,
+      "layer" : 0,
+      "source" : "coregraphics",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "",
+      "visibleFractionEstimate" : 0,
+      "windowID" : 11339,
+      "zRank" : 24
+    },
+    {
+      "alpha" : 1,
+      "appName" : "1Context Capture Dashboard",
+      "appPID" : 91771,
+      "bundleID" : "com.haptica.1context.capture-dashboard.dev-launcher",
+      "captureEligible" : false,
+      "displayID" : "4",
+      "framePixels" : {
+        "height" : 60,
+        "width" : 2576,
+        "x" : 0,
+        "y" : -20
+      },
+      "framePoints" : {
+        "height" : 30,
+        "width" : 1288,
+        "x" : -1288,
+        "y" : 0
+      },
+      "isFocused" : false,
+      "isMinimized" : true,
+      "isOnScreen" : false,
+      "layer" : 0,
+      "source" : "coregraphics",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "",
+      "visibleFractionEstimate" : 0,
+      "windowID" : 11338,
+      "zRank" : 25
+    },
+    {
+      "alpha" : 1,
+      "appName" : "1Context Capture Dashboard",
+      "appPID" : 91771,
+      "bundleID" : "com.haptica.1context.capture-dashboard.dev-launcher",
+      "captureEligible" : false,
+      "displayID" : "4",
+      "framePixels" : {
+        "height" : 60,
+        "width" : 2576,
+        "x" : 0,
+        "y" : -20
+      },
+      "framePoints" : {
+        "height" : 30,
+        "width" : 1288,
+        "x" : -1288,
+        "y" : 0
+      },
+      "isFocused" : false,
+      "isMinimized" : true,
+      "isOnScreen" : false,
+      "layer" : 0,
+      "source" : "coregraphics",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "",
+      "visibleFractionEstimate" : 0,
+      "windowID" : 11337,
+      "zRank" : 26
+    },
+    {
+      "alpha" : 1,
+      "appName" : "1Context Capture Dashboard",
+      "appPID" : 91771,
+      "bundleID" : "com.haptica.1context.capture-dashboard.dev-launcher",
+      "captureEligible" : false,
+      "displayID" : "1",
+      "framePixels" : {
+        "height" : 66,
+        "width" : 2940,
+        "x" : 0,
+        "y" : 0
+      },
+      "framePoints" : {
+        "height" : 33,
+        "width" : 1470,
+        "x" : 0,
+        "y" : 0
+      },
+      "isFocused" : false,
+      "isMinimized" : true,
+      "isOnScreen" : false,
+      "layer" : 0,
+      "source" : "coregraphics",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "",
+      "visibleFractionEstimate" : 0,
+      "windowID" : 11336,
+      "zRank" : 27
+    },
+    {
+      "alpha" : 1,
+      "appName" : "1Context Capture Dashboard",
+      "appPID" : 91771,
+      "bundleID" : "com.haptica.1context.capture-dashboard.dev-launcher",
+      "captureEligible" : false,
+      "displayID" : "1",
+      "framePixels" : {
+        "height" : 66,
+        "width" : 2940,
+        "x" : 0,
+        "y" : 0
+      },
+      "framePoints" : {
+        "height" : 33,
+        "width" : 1470,
+        "x" : 0,
+        "y" : 0
+      },
+      "isFocused" : false,
+      "isMinimized" : true,
+      "isOnScreen" : false,
+      "layer" : 0,
+      "source" : "coregraphics",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "",
+      "visibleFractionEstimate" : 0,
+      "windowID" : 11335,
+      "zRank" : 28
+    },
+    {
+      "alpha" : 1,
+      "appName" : "1Context Capture Dashboard",
+      "appPID" : 91771,
+      "bundleID" : "com.haptica.1context.capture-dashboard.dev-launcher",
+      "captureEligible" : false,
+      "displayID" : "1",
+      "framePixels" : {
+        "height" : 66,
+        "width" : 2940,
+        "x" : 0,
+        "y" : 0
+      },
+      "framePoints" : {
+        "height" : 33,
+        "width" : 1470,
+        "x" : 0,
+        "y" : 0
+      },
+      "isFocused" : false,
+      "isMinimized" : true,
+      "isOnScreen" : false,
+      "layer" : 0,
+      "source" : "coregraphics",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "",
+      "visibleFractionEstimate" : 0,
+      "windowID" : 11334,
+      "zRank" : 29
+    },
+    {
+      "alpha" : 1,
+      "appName" : "1Context Capture Dashboard",
+      "appPID" : 91771,
+      "bundleID" : "com.haptica.1context.capture-dashboard.dev-launcher",
+      "captureEligible" : false,
+      "displayID" : "1",
+      "framePixels" : {
+        "height" : 66,
+        "width" : 2940,
+        "x" : 0,
+        "y" : 0
+      },
+      "framePoints" : {
+        "height" : 33,
+        "width" : 1470,
+        "x" : 0,
+        "y" : 0
+      },
+      "isFocused" : false,
+      "isMinimized" : true,
+      "isOnScreen" : false,
+      "layer" : 0,
+      "source" : "coregraphics",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "",
+      "visibleFractionEstimate" : 0,
+      "windowID" : 11333,
+      "zRank" : 30
+    },
+    {
+      "alpha" : 1,
+      "appName" : "AutoFill",
+      "appPID" : 86234,
+      "bundleID" : "com.apple.SafariPlatformSupport.Helper",
+      "captureEligible" : false,
+      "displayID" : "1",
+      "framePixels" : {
+        "height" : 474,
+        "width" : 624,
+        "x" : 44,
+        "y" : 1224
+      },
+      "framePoints" : {
+        "height" : 237,
+        "width" : 312,
+        "x" : 22,
+        "y" : 612
+      },
+      "isFocused" : false,
+      "isMinimized" : true,
+      "isOnScreen" : false,
+      "layer" : 0,
+      "source" : "coregraphics",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "",
+      "visibleFractionEstimate" : 0,
+      "windowID" : 11263,
+      "zRank" : 31
+    },
+    {
+      "alpha" : 1,
+      "appName" : "Google Chrome",
+      "appPID" : 86159,
+      "bundleID" : "com.google.Chrome",
+      "captureEligible" : false,
+      "displayID" : "1",
+      "framePixels" : {
+        "height" : 128,
+        "width" : 128,
+        "x" : 0,
+        "y" : 912
+      },
+      "framePoints" : {
+        "height" : 64,
+        "width" : 64,
+        "x" : 0,
+        "y" : 456
+      },
+      "isFocused" : false,
+      "isMinimized" : true,
+      "isOnScreen" : false,
+      "layer" : 0,
+      "source" : "coregraphics",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "",
+      "visibleFractionEstimate" : 0,
+      "windowID" : 11258,
+      "zRank" : 32
+    },
+    {
+      "alpha" : 1,
+      "appName" : "Google Chrome",
+      "appPID" : 86159,
+      "bundleID" : "com.google.Chrome",
+      "captureEligible" : false,
+      "framePoints" : {
+        "height" : 0,
+        "width" : 0,
+        "x" : 0,
+        "y" : 0
+      },
+      "isFocused" : false,
+      "isMinimized" : true,
+      "isOnScreen" : false,
+      "layer" : 1000,
+      "source" : "coregraphics",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "",
+      "visibleFractionEstimate" : 0,
+      "windowID" : 11257,
+      "zRank" : 33
+    },
+    {
+      "alpha" : 1,
+      "appName" : "Google Chrome",
+      "appPID" : 86159,
+      "bundleID" : "com.google.Chrome",
+      "captureEligible" : false,
+      "displayID" : "4",
+      "framePixels" : {
+        "height" : 60,
+        "width" : 2576,
+        "x" : 0,
+        "y" : -20
+      },
+      "framePoints" : {
+        "height" : 30,
+        "width" : 1288,
+        "x" : -1288,
+        "y" : 0
+      },
+      "isFocused" : false,
+      "isMinimized" : true,
+      "isOnScreen" : false,
+      "layer" : 0,
+      "source" : "coregraphics",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "",
+      "visibleFractionEstimate" : 0,
+      "windowID" : 11256,
+      "zRank" : 34
+    },
+    {
+      "alpha" : 1,
+      "appName" : "Google Chrome",
+      "appPID" : 86159,
+      "bundleID" : "com.google.Chrome",
+      "captureEligible" : false,
+      "displayID" : "4",
+      "framePixels" : {
+        "height" : 60,
+        "width" : 2576,
+        "x" : 0,
+        "y" : -20
+      },
+      "framePoints" : {
+        "height" : 30,
+        "width" : 1288,
+        "x" : -1288,
+        "y" : 0
+      },
+      "isFocused" : false,
+      "isMinimized" : true,
+      "isOnScreen" : false,
+      "layer" : 0,
+      "source" : "coregraphics",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "",
+      "visibleFractionEstimate" : 0,
+      "windowID" : 11255,
+      "zRank" : 35
+    },
+    {
+      "alpha" : 1,
+      "appName" : "Google Chrome",
+      "appPID" : 86159,
+      "bundleID" : "com.google.Chrome",
+      "captureEligible" : false,
+      "displayID" : "4",
+      "framePixels" : {
+        "height" : 60,
+        "width" : 2576,
+        "x" : 0,
+        "y" : -20
+      },
+      "framePoints" : {
+        "height" : 30,
+        "width" : 1288,
+        "x" : -1288,
+        "y" : 0
+      },
+      "isFocused" : false,
+      "isMinimized" : true,
+      "isOnScreen" : false,
+      "layer" : 0,
+      "source" : "coregraphics",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "",
+      "visibleFractionEstimate" : 0,
+      "windowID" : 11254,
+      "zRank" : 36
+    },
+    {
+      "alpha" : 1,
+      "appName" : "Google Chrome",
+      "appPID" : 86159,
+      "bundleID" : "com.google.Chrome",
+      "captureEligible" : false,
+      "displayID" : "1",
+      "framePixels" : {
+        "height" : 66,
+        "width" : 2940,
+        "x" : 0,
+        "y" : 0
+      },
+      "framePoints" : {
+        "height" : 33,
+        "width" : 1470,
+        "x" : 0,
+        "y" : 0
+      },
+      "isFocused" : false,
+      "isMinimized" : true,
+      "isOnScreen" : false,
+      "layer" : 0,
+      "source" : "coregraphics",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "",
+      "visibleFractionEstimate" : 0,
+      "windowID" : 11252,
+      "zRank" : 37
+    },
+    {
+      "alpha" : 1,
+      "appName" : "Google Chrome",
+      "appPID" : 86159,
+      "bundleID" : "com.google.Chrome",
+      "captureEligible" : false,
+      "displayID" : "1",
+      "framePixels" : {
+        "height" : 66,
+        "width" : 2940,
+        "x" : 0,
+        "y" : 0
+      },
+      "framePoints" : {
+        "height" : 33,
+        "width" : 1470,
+        "x" : 0,
+        "y" : 0
+      },
+      "isFocused" : false,
+      "isMinimized" : true,
+      "isOnScreen" : false,
+      "layer" : 0,
+      "source" : "coregraphics",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "",
+      "visibleFractionEstimate" : 0,
+      "windowID" : 11251,
+      "zRank" : 38
+    },
+    {
+      "alpha" : 1,
+      "appName" : "Google Chrome",
+      "appPID" : 86159,
+      "bundleID" : "com.google.Chrome",
+      "captureEligible" : false,
+      "displayID" : "1",
+      "framePixels" : {
+        "height" : 66,
+        "width" : 2940,
+        "x" : 0,
+        "y" : 0
+      },
+      "framePoints" : {
+        "height" : 33,
+        "width" : 1470,
+        "x" : 0,
+        "y" : 0
+      },
+      "isFocused" : false,
+      "isMinimized" : true,
+      "isOnScreen" : false,
+      "layer" : 0,
+      "source" : "coregraphics",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "",
+      "visibleFractionEstimate" : 0,
+      "windowID" : 11250,
+      "zRank" : 39
+    },
+    {
+      "alpha" : 1,
+      "appName" : "Google Chrome",
+      "appPID" : 86159,
+      "bundleID" : "com.google.Chrome",
+      "captureEligible" : false,
+      "displayID" : "1",
+      "framePixels" : {
+        "height" : 66,
+        "width" : 2940,
+        "x" : 0,
+        "y" : 0
+      },
+      "framePoints" : {
+        "height" : 33,
+        "width" : 1470,
+        "x" : 0,
+        "y" : 0
+      },
+      "isFocused" : false,
+      "isMinimized" : true,
+      "isOnScreen" : false,
+      "layer" : 0,
+      "source" : "coregraphics",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "",
+      "visibleFractionEstimate" : 0,
+      "windowID" : 11249,
+      "zRank" : 40
+    },
+    {
+      "alpha" : 1,
+      "appName" : "Code",
+      "appPID" : 28730,
+      "bundleID" : "com.microsoft.VSCode",
+      "captureEligible" : false,
+      "displayID" : "4",
+      "framePixels" : {
+        "height" : 60,
+        "width" : 2576,
+        "x" : 0,
+        "y" : -20
+      },
+      "framePoints" : {
+        "height" : 30,
+        "width" : 1288,
+        "x" : -1288,
+        "y" : 0
+      },
+      "isFocused" : false,
+      "isMinimized" : true,
+      "isOnScreen" : false,
+      "layer" : 0,
+      "source" : "coregraphics",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "",
+      "visibleFractionEstimate" : 0,
+      "windowID" : 11060,
+      "zRank" : 41
+    },
+    {
+      "alpha" : 1,
+      "appName" : "Code",
+      "appPID" : 28730,
+      "bundleID" : "com.microsoft.VSCode",
+      "captureEligible" : false,
+      "displayID" : "4",
+      "framePixels" : {
+        "height" : 60,
+        "width" : 2576,
+        "x" : 0,
+        "y" : -20
+      },
+      "framePoints" : {
+        "height" : 30,
+        "width" : 1288,
+        "x" : -1288,
+        "y" : 0
+      },
+      "isFocused" : false,
+      "isMinimized" : true,
+      "isOnScreen" : false,
+      "layer" : 0,
+      "source" : "coregraphics",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "",
+      "visibleFractionEstimate" : 0,
+      "windowID" : 11059,
+      "zRank" : 42
+    },
+    {
+      "alpha" : 1,
+      "appName" : "Code",
+      "appPID" : 28730,
+      "bundleID" : "com.microsoft.VSCode",
+      "captureEligible" : false,
+      "displayID" : "4",
+      "framePixels" : {
+        "height" : 60,
+        "width" : 2576,
+        "x" : 0,
+        "y" : -20
+      },
+      "framePoints" : {
+        "height" : 30,
+        "width" : 1288,
+        "x" : -1288,
+        "y" : 0
+      },
+      "isFocused" : false,
+      "isMinimized" : true,
+      "isOnScreen" : false,
+      "layer" : 0,
+      "source" : "coregraphics",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "",
+      "visibleFractionEstimate" : 0,
+      "windowID" : 11057,
+      "zRank" : 43
+    },
+    {
+      "alpha" : 1,
+      "appName" : "Code",
+      "appPID" : 28730,
+      "bundleID" : "com.microsoft.VSCode",
+      "captureEligible" : false,
+      "displayID" : "1",
+      "framePixels" : {
+        "height" : 66,
+        "width" : 2940,
+        "x" : 0,
+        "y" : 0
+      },
+      "framePoints" : {
+        "height" : 33,
+        "width" : 1470,
+        "x" : 0,
+        "y" : 0
+      },
+      "isFocused" : false,
+      "isMinimized" : true,
+      "isOnScreen" : false,
+      "layer" : 0,
+      "source" : "coregraphics",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "",
+      "visibleFractionEstimate" : 0,
+      "windowID" : 11056,
+      "zRank" : 44
+    },
+    {
+      "alpha" : 1,
+      "appName" : "CursorUIViewService",
+      "appPID" : 1280,
+      "bundleID" : "com.apple.TextInputUI.xpc.CursorUIViewService",
+      "captureEligible" : false,
+      "displayID" : "1",
+      "framePixels" : {
+        "height" : 108,
+        "width" : 108,
+        "x" : 190,
+        "y" : 1610
+      },
+      "framePoints" : {
+        "height" : 54,
+        "width" : 54,
+        "x" : 95,
+        "y" : 805
+      },
+      "isFocused" : false,
+      "isMinimized" : true,
+      "isOnScreen" : false,
+      "layer" : 0,
+      "source" : "coregraphics",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "",
+      "visibleFractionEstimate" : 0,
+      "windowID" : 10781,
+      "zRank" : 45
+    },
+    {
+      "alpha" : 0,
+      "appName" : "Finder",
+      "appPID" : 1256,
+      "bundleID" : "com.apple.finder",
+      "captureEligible" : false,
+      "displayID" : "1",
+      "framePixels" : {
+        "height" : 656,
+        "width" : 1150,
+        "x" : 16,
+        "y" : 964
+      },
+      "framePoints" : {
+        "height" : 328,
+        "width" : 575,
+        "x" : 8,
+        "y" : 482
+      },
+      "isFocused" : false,
+      "isMinimized" : true,
+      "isOnScreen" : false,
+      "layer" : 3,
+      "source" : "coregraphics",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "",
+      "visibleFractionEstimate" : 0,
+      "windowID" : 10369,
+      "zRank" : 46
+    },
+    {
+      "alpha" : 1,
+      "appName" : "Control Center",
+      "appPID" : 1069,
+      "bundleID" : "com.apple.controlcenter",
+      "captureEligible" : true,
+      "displayID" : "4",
+      "framePixels" : {
+        "height" : 60,
+        "width" : 76,
+        "x" : 1738,
+        "y" : -20
+      },
+      "framePoints" : {
+        "height" : 30,
+        "width" : 38,
+        "x" : -419,
+        "y" : 0
+      },
+      "isFocused" : false,
+      "isMinimized" : false,
+      "isOnScreen" : true,
+      "layer" : 25,
+      "source" : "coregraphics+screencapturekit",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "com.haptica.1context.dev",
+      "visibleFractionEstimate" : 0.66666666666666663,
+      "windowID" : 11316,
+      "zRank" : 47
+    },
+    {
+      "alpha" : 1,
+      "appName" : "TextInputSwitcher",
+      "appPID" : 19831,
+      "bundleID" : "com.apple.TextInputSwitcher",
+      "captureEligible" : false,
+      "displayID" : "1",
+      "framePixels" : {
+        "height" : 200,
+        "width" : 494,
+        "x" : 1222,
+        "y" : 792
+      },
+      "framePoints" : {
+        "height" : 100,
+        "width" : 247,
+        "x" : 611,
+        "y" : 396
+      },
+      "isFocused" : false,
+      "isMinimized" : true,
+      "isOnScreen" : false,
+      "layer" : 2147483628,
+      "source" : "coregraphics",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "Keyboard Input",
+      "visibleFractionEstimate" : 0,
+      "windowID" : 9728,
+      "zRank" : 48
+    },
+    {
+      "alpha" : 1,
+      "appName" : "Control Center",
+      "appPID" : 1069,
+      "bundleID" : "com.apple.controlcenter",
+      "captureEligible" : true,
+      "displayID" : "1",
+      "framePixels" : {
+        "height" : 66,
+        "width" : 76,
+        "x" : 2106,
+        "y" : 0
+      },
+      "framePoints" : {
+        "height" : 33,
+        "width" : 38,
+        "x" : 1053,
+        "y" : 0
+      },
+      "isFocused" : false,
+      "isMinimized" : false,
+      "isOnScreen" : true,
+      "layer" : 25,
+      "source" : "coregraphics+screencapturekit",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "Item-0",
+      "visibleFractionEstimate" : 1,
+      "windowID" : 11315,
+      "zRank" : 49
+    },
+    {
+      "alpha" : 1,
+      "appName" : "AutoFill",
+      "appPID" : 19838,
+      "bundleID" : "com.apple.SafariPlatformSupport.Helper",
+      "captureEligible" : false,
+      "displayID" : "1",
+      "framePixels" : {
+        "height" : 474,
+        "width" : 624,
+        "x" : 0,
+        "y" : 1244
+      },
+      "framePoints" : {
+        "height" : 237,
+        "width" : 312,
+        "x" : 0,
+        "y" : 622
+      },
+      "isFocused" : false,
+      "isMinimized" : true,
+      "isOnScreen" : false,
+      "layer" : 0,
+      "source" : "coregraphics",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "",
+      "visibleFractionEstimate" : 0,
+      "windowID" : 9727,
+      "zRank" : 50
+    },
+    {
+      "alpha" : 1,
+      "appName" : "Google Chrome",
+      "appPID" : 19780,
+      "bundleID" : "com.google.Chrome",
+      "captureEligible" : false,
+      "displayID" : "4",
+      "framePixels" : {
+        "height" : 60,
+        "width" : 2576,
+        "x" : 0,
+        "y" : -20
+      },
+      "framePoints" : {
+        "height" : 30,
+        "width" : 1288,
+        "x" : -1288,
+        "y" : 0
+      },
+      "isFocused" : false,
+      "isMinimized" : true,
+      "isOnScreen" : false,
+      "layer" : 0,
+      "source" : "coregraphics",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "",
+      "visibleFractionEstimate" : 0,
+      "windowID" : 9724,
+      "zRank" : 51
+    },
+    {
+      "alpha" : 1,
+      "appName" : "Google Chrome",
+      "appPID" : 19780,
+      "bundleID" : "com.google.Chrome",
+      "captureEligible" : false,
+      "displayID" : "4",
+      "framePixels" : {
+        "height" : 60,
+        "width" : 2576,
+        "x" : 0,
+        "y" : -20
+      },
+      "framePoints" : {
+        "height" : 30,
+        "width" : 1288,
+        "x" : -1288,
+        "y" : 0
+      },
+      "isFocused" : false,
+      "isMinimized" : true,
+      "isOnScreen" : false,
+      "layer" : 0,
+      "source" : "coregraphics",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "",
+      "visibleFractionEstimate" : 0,
+      "windowID" : 9723,
+      "zRank" : 52
+    },
+    {
+      "alpha" : 1,
+      "appName" : "Google Chrome",
+      "appPID" : 19780,
+      "bundleID" : "com.google.Chrome",
+      "captureEligible" : false,
+      "displayID" : "4",
+      "framePixels" : {
+        "height" : 60,
+        "width" : 2576,
+        "x" : 0,
+        "y" : -20
+      },
+      "framePoints" : {
+        "height" : 30,
+        "width" : 1288,
+        "x" : -1288,
+        "y" : 0
+      },
+      "isFocused" : false,
+      "isMinimized" : true,
+      "isOnScreen" : false,
+      "layer" : 0,
+      "source" : "coregraphics",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "",
+      "visibleFractionEstimate" : 0,
+      "windowID" : 9721,
+      "zRank" : 53
+    },
+    {
+      "alpha" : 1,
+      "appName" : "Google Chrome",
+      "appPID" : 19780,
+      "bundleID" : "com.google.Chrome",
+      "captureEligible" : false,
+      "displayID" : "1",
+      "framePixels" : {
+        "height" : 66,
+        "width" : 2940,
+        "x" : 0,
+        "y" : 0
+      },
+      "framePoints" : {
+        "height" : 33,
+        "width" : 1470,
+        "x" : 0,
+        "y" : 0
+      },
+      "isFocused" : false,
+      "isMinimized" : true,
+      "isOnScreen" : false,
+      "layer" : 0,
+      "source" : "coregraphics",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "",
+      "visibleFractionEstimate" : 0,
+      "windowID" : 9720,
+      "zRank" : 54
+    },
+    {
+      "alpha" : 1,
+      "appName" : "Google Chrome",
+      "appPID" : 19780,
+      "bundleID" : "com.google.Chrome",
+      "captureEligible" : false,
+      "displayID" : "1",
+      "framePixels" : {
+        "height" : 66,
+        "width" : 2940,
+        "x" : 0,
+        "y" : 0
+      },
+      "framePoints" : {
+        "height" : 33,
+        "width" : 1470,
+        "x" : 0,
+        "y" : 0
+      },
+      "isFocused" : false,
+      "isMinimized" : true,
+      "isOnScreen" : false,
+      "layer" : 0,
+      "source" : "coregraphics",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "",
+      "visibleFractionEstimate" : 0,
+      "windowID" : 9718,
+      "zRank" : 55
+    },
+    {
+      "alpha" : 1,
+      "appName" : "Google Chrome",
+      "appPID" : 19780,
+      "bundleID" : "com.google.Chrome",
+      "captureEligible" : false,
+      "displayID" : "1",
+      "framePixels" : {
+        "height" : 66,
+        "width" : 2940,
+        "x" : 0,
+        "y" : 0
+      },
+      "framePoints" : {
+        "height" : 33,
+        "width" : 1470,
+        "x" : 0,
+        "y" : 0
+      },
+      "isFocused" : false,
+      "isMinimized" : true,
+      "isOnScreen" : false,
+      "layer" : 0,
+      "source" : "coregraphics",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "",
+      "visibleFractionEstimate" : 0,
+      "windowID" : 9717,
+      "zRank" : 56
+    },
+    {
+      "alpha" : 1,
+      "appName" : "Google Chrome",
+      "appPID" : 19780,
+      "bundleID" : "com.google.Chrome",
+      "captureEligible" : false,
+      "displayID" : "1",
+      "framePixels" : {
+        "height" : 1000,
+        "width" : 1000,
+        "x" : 0,
+        "y" : 912
+      },
+      "framePoints" : {
+        "height" : 500,
+        "width" : 500,
+        "x" : 0,
+        "y" : 456
+      },
+      "isFocused" : false,
+      "isMinimized" : true,
+      "isOnScreen" : false,
+      "layer" : 0,
+      "source" : "coregraphics",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "",
+      "visibleFractionEstimate" : 0,
+      "windowID" : 9715,
+      "zRank" : 57
+    },
+    {
+      "alpha" : 1,
+      "appName" : "Google Chrome",
+      "appPID" : 19780,
+      "bundleID" : "com.google.Chrome",
+      "captureEligible" : false,
+      "displayID" : "1",
+      "framePixels" : {
+        "height" : 2,
+        "width" : 2,
+        "x" : 0,
+        "y" : 0
+      },
+      "framePoints" : {
+        "height" : 1,
+        "width" : 1,
+        "x" : 0,
+        "y" : 0
+      },
+      "isFocused" : false,
+      "isMinimized" : true,
+      "isOnScreen" : false,
+      "layer" : 0,
+      "source" : "coregraphics",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "",
+      "visibleFractionEstimate" : 0,
+      "windowID" : 9714,
+      "zRank" : 58
+    },
+    {
+      "alpha" : 1,
+      "appName" : "Google Chrome",
+      "appPID" : 19780,
+      "bundleID" : "com.google.Chrome",
+      "captureEligible" : false,
+      "displayID" : "1",
+      "framePixels" : {
+        "height" : 2,
+        "width" : 2,
+        "x" : 0,
+        "y" : 0
+      },
+      "framePoints" : {
+        "height" : 1,
+        "width" : 1,
+        "x" : 0,
+        "y" : 0
+      },
+      "isFocused" : false,
+      "isMinimized" : true,
+      "isOnScreen" : false,
+      "layer" : 0,
+      "source" : "coregraphics",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "",
+      "visibleFractionEstimate" : 0,
+      "windowID" : 9713,
+      "zRank" : 59
+    },
+    {
+      "alpha" : 1,
+      "appName" : "Google Chrome",
+      "appPID" : 19780,
+      "bundleID" : "com.google.Chrome",
+      "captureEligible" : false,
+      "displayID" : "1",
+      "framePixels" : {
+        "height" : 276,
+        "width" : 1680,
+        "x" : 270,
+        "y" : 116
+      },
+      "framePoints" : {
+        "height" : 138,
+        "width" : 840,
+        "x" : 135,
+        "y" : 58
+      },
+      "isFocused" : false,
+      "isMinimized" : true,
+      "isOnScreen" : false,
+      "layer" : 0,
+      "source" : "coregraphics",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "",
+      "visibleFractionEstimate" : 0,
+      "windowID" : 9712,
+      "zRank" : 60
+    },
+    {
+      "alpha" : 1,
+      "appName" : "Google Chrome",
+      "appPID" : 19780,
+      "bundleID" : "com.google.Chrome",
+      "captureEligible" : false,
+      "displayID" : "1",
+      "framePixels" : {
+        "height" : 2,
+        "width" : 2,
+        "x" : 0,
+        "y" : 0
+      },
+      "framePoints" : {
+        "height" : 1,
+        "width" : 1,
+        "x" : 0,
+        "y" : 0
+      },
+      "isFocused" : false,
+      "isMinimized" : true,
+      "isOnScreen" : false,
+      "layer" : 0,
+      "source" : "coregraphics",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "",
+      "visibleFractionEstimate" : 0,
+      "windowID" : 9711,
+      "zRank" : 61
+    },
+    {
+      "alpha" : 1,
+      "appName" : "Google Chrome",
+      "appPID" : 19780,
+      "bundleID" : "com.google.Chrome",
+      "captureEligible" : true,
+      "displayID" : "1",
+      "framePixels" : {
+        "height" : 1652,
+        "width" : 2940,
+        "x" : 0,
+        "y" : 66
+      },
+      "framePoints" : {
+        "height" : 826,
+        "width" : 1470,
+        "x" : 0,
+        "y" : 33
+      },
+      "isFocused" : false,
+      "isMinimized" : false,
+      "isOnScreen" : true,
+      "layer" : 0,
+      "source" : "coregraphics+screencapturekit",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "Composite Screenshot System",
+      "visibleFractionEstimate" : 0.61601686679514422,
+      "windowID" : 9710,
+      "zRank" : 62
+    },
+    {
+      "alpha" : 1,
+      "appName" : "AutoFill",
+      "appPID" : 3787,
+      "bundleID" : "com.apple.SafariPlatformSupport.Helper",
+      "captureEligible" : false,
+      "displayID" : "1",
+      "framePixels" : {
+        "height" : 474,
+        "width" : 624,
+        "x" : 0,
+        "y" : 1244
+      },
+      "framePoints" : {
+        "height" : 237,
+        "width" : 312,
+        "x" : 0,
+        "y" : 622
+      },
+      "isFocused" : false,
+      "isMinimized" : true,
+      "isOnScreen" : false,
+      "layer" : 0,
+      "source" : "coregraphics",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "",
+      "visibleFractionEstimate" : 0,
+      "windowID" : 9642,
+      "zRank" : 63
+    },
+    {
+      "alpha" : 1,
+      "appName" : "Codex",
+      "appPID" : 3257,
+      "bundleID" : "com.openai.codex",
+      "captureEligible" : false,
+      "displayID" : "1",
+      "framePixels" : {
+        "height" : 1000,
+        "width" : 1000,
+        "x" : 0,
+        "y" : 912
+      },
+      "framePoints" : {
+        "height" : 500,
+        "width" : 500,
+        "x" : 0,
+        "y" : 456
+      },
+      "isFocused" : false,
+      "isMinimized" : true,
+      "isOnScreen" : false,
+      "layer" : 0,
+      "source" : "coregraphics",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "",
+      "visibleFractionEstimate" : 0,
+      "windowID" : 9640,
+      "zRank" : 64
+    },
+    {
+      "alpha" : 1,
+      "appName" : "Control Center",
+      "appPID" : 1069,
+      "bundleID" : "com.apple.controlcenter",
+      "captureEligible" : true,
+      "displayID" : "4",
+      "framePixels" : {
+        "height" : 60,
+        "width" : 68,
+        "x" : 1814,
+        "y" : -20
+      },
+      "framePoints" : {
+        "height" : 30,
+        "width" : 34,
+        "x" : -381,
+        "y" : 0
+      },
+      "isFocused" : false,
+      "isMinimized" : false,
+      "isOnScreen" : true,
+      "layer" : 25,
+      "source" : "coregraphics+screencapturekit",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "com.openai.codex",
+      "visibleFractionEstimate" : 0.66666666666666663,
+      "windowID" : 9639,
+      "zRank" : 65
+    },
+    {
+      "alpha" : 1,
+      "appName" : "Control Center",
+      "appPID" : 1069,
+      "bundleID" : "com.apple.controlcenter",
+      "captureEligible" : true,
+      "displayID" : "1",
+      "framePixels" : {
+        "height" : 66,
+        "width" : 68,
+        "x" : 2182,
+        "y" : 0
+      },
+      "framePoints" : {
+        "height" : 33,
+        "width" : 34,
+        "x" : 1091,
+        "y" : 0
+      },
+      "isFocused" : false,
+      "isMinimized" : false,
+      "isOnScreen" : true,
+      "layer" : 25,
+      "source" : "coregraphics+screencapturekit",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "Item-0",
+      "visibleFractionEstimate" : 1,
+      "windowID" : 9638,
+      "zRank" : 66
+    },
+    {
+      "alpha" : 1,
+      "appName" : "Codex",
+      "appPID" : 3257,
+      "bundleID" : "com.openai.codex",
+      "captureEligible" : true,
+      "displayID" : "1",
+      "focusMetadata" : {
+        "confidence" : "high",
+        "matchedWindowID" : 9637,
+        "matchSignals" : [
+          "pid",
+          "title",
+          "bounds"
+        ],
+        "source" : "ax_focused_context",
+        "status" : "matched"
+      },
+      "framePixels" : {
+        "height" : 1652,
+        "width" : 2940,
+        "x" : 0,
+        "y" : 66
+      },
+      "framePoints" : {
+        "height" : 826,
+        "width" : 1470,
+        "x" : 0,
+        "y" : 33
+      },
+      "isFocused" : true,
+      "isMinimized" : false,
+      "isOnScreen" : true,
+      "layer" : 0,
+      "source" : "coregraphics+screencapturekit",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "Codex",
+      "visibleFractionEstimate" : 0,
+      "windowID" : 9637,
+      "zRank" : 67
+    },
+    {
+      "alpha" : 1,
+      "appName" : "Codex",
+      "appPID" : 3257,
+      "bundleID" : "com.openai.codex",
+      "captureEligible" : false,
+      "displayID" : "1",
+      "framePixels" : {
+        "height" : 60,
+        "width" : 2508,
+        "x" : 0,
+        "y" : 0
+      },
+      "framePoints" : {
+        "height" : 30,
+        "width" : 1254,
+        "x" : 0,
+        "y" : 0
+      },
+      "isFocused" : false,
+      "isMinimized" : true,
+      "isOnScreen" : false,
+      "layer" : 1000,
+      "source" : "coregraphics",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "",
+      "visibleFractionEstimate" : 0,
+      "windowID" : 9636,
+      "zRank" : 68
+    },
+    {
+      "alpha" : 1,
+      "appName" : "Codex",
+      "appPID" : 3257,
+      "bundleID" : "com.openai.codex",
+      "captureEligible" : false,
+      "displayID" : "4",
+      "framePixels" : {
+        "height" : 60,
+        "width" : 2576,
+        "x" : 0,
+        "y" : -20
+      },
+      "framePoints" : {
+        "height" : 30,
+        "width" : 1288,
+        "x" : -1288,
+        "y" : 0
+      },
+      "isFocused" : false,
+      "isMinimized" : true,
+      "isOnScreen" : false,
+      "layer" : 0,
+      "source" : "coregraphics",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "",
+      "visibleFractionEstimate" : 0,
+      "windowID" : 9635,
+      "zRank" : 69
+    },
+    {
+      "alpha" : 1,
+      "appName" : "Codex",
+      "appPID" : 3257,
+      "bundleID" : "com.openai.codex",
+      "captureEligible" : false,
+      "displayID" : "4",
+      "framePixels" : {
+        "height" : 60,
+        "width" : 2576,
+        "x" : 0,
+        "y" : -20
+      },
+      "framePoints" : {
+        "height" : 30,
+        "width" : 1288,
+        "x" : -1288,
+        "y" : 0
+      },
+      "isFocused" : false,
+      "isMinimized" : true,
+      "isOnScreen" : false,
+      "layer" : 0,
+      "source" : "coregraphics",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "",
+      "visibleFractionEstimate" : 0,
+      "windowID" : 9634,
+      "zRank" : 70
+    },
+    {
+      "alpha" : 1,
+      "appName" : "Codex",
+      "appPID" : 3257,
+      "bundleID" : "com.openai.codex",
+      "captureEligible" : false,
+      "displayID" : "4",
+      "framePixels" : {
+        "height" : 60,
+        "width" : 2576,
+        "x" : 0,
+        "y" : -20
+      },
+      "framePoints" : {
+        "height" : 30,
+        "width" : 1288,
+        "x" : -1288,
+        "y" : 0
+      },
+      "isFocused" : false,
+      "isMinimized" : true,
+      "isOnScreen" : false,
+      "layer" : 0,
+      "source" : "coregraphics",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "",
+      "visibleFractionEstimate" : 0,
+      "windowID" : 9633,
+      "zRank" : 71
+    },
+    {
+      "alpha" : 1,
+      "appName" : "Codex",
+      "appPID" : 3257,
+      "bundleID" : "com.openai.codex",
+      "captureEligible" : false,
+      "displayID" : "4",
+      "framePixels" : {
+        "height" : 60,
+        "width" : 2576,
+        "x" : 0,
+        "y" : -20
+      },
+      "framePoints" : {
+        "height" : 30,
+        "width" : 1288,
+        "x" : -1288,
+        "y" : 0
+      },
+      "isFocused" : false,
+      "isMinimized" : true,
+      "isOnScreen" : false,
+      "layer" : 0,
+      "source" : "coregraphics",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "",
+      "visibleFractionEstimate" : 0,
+      "windowID" : 9632,
+      "zRank" : 72
+    },
+    {
+      "alpha" : 1,
+      "appName" : "Codex",
+      "appPID" : 3257,
+      "bundleID" : "com.openai.codex",
+      "captureEligible" : false,
+      "displayID" : "1",
+      "framePixels" : {
+        "height" : 66,
+        "width" : 2940,
+        "x" : 0,
+        "y" : 0
+      },
+      "framePoints" : {
+        "height" : 33,
+        "width" : 1470,
+        "x" : 0,
+        "y" : 0
+      },
+      "isFocused" : false,
+      "isMinimized" : true,
+      "isOnScreen" : false,
+      "layer" : 0,
+      "source" : "coregraphics",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "",
+      "visibleFractionEstimate" : 0,
+      "windowID" : 9631,
+      "zRank" : 73
+    },
+    {
+      "alpha" : 1,
+      "appName" : "Codex",
+      "appPID" : 3257,
+      "bundleID" : "com.openai.codex",
+      "captureEligible" : false,
+      "displayID" : "1",
+      "framePixels" : {
+        "height" : 66,
+        "width" : 2940,
+        "x" : 0,
+        "y" : 0
+      },
+      "framePoints" : {
+        "height" : 33,
+        "width" : 1470,
+        "x" : 0,
+        "y" : 0
+      },
+      "isFocused" : false,
+      "isMinimized" : true,
+      "isOnScreen" : false,
+      "layer" : 0,
+      "source" : "coregraphics",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "",
+      "visibleFractionEstimate" : 0,
+      "windowID" : 9630,
+      "zRank" : 74
+    },
+    {
+      "alpha" : 1,
+      "appName" : "Codex",
+      "appPID" : 3257,
+      "bundleID" : "com.openai.codex",
+      "captureEligible" : false,
+      "displayID" : "1",
+      "framePixels" : {
+        "height" : 66,
+        "width" : 2940,
+        "x" : 0,
+        "y" : 0
+      },
+      "framePoints" : {
+        "height" : 33,
+        "width" : 1470,
+        "x" : 0,
+        "y" : 0
+      },
+      "isFocused" : false,
+      "isMinimized" : true,
+      "isOnScreen" : false,
+      "layer" : 0,
+      "source" : "coregraphics",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "",
+      "visibleFractionEstimate" : 0,
+      "windowID" : 9629,
+      "zRank" : 75
+    },
+    {
+      "alpha" : 1,
+      "appName" : "Codex",
+      "appPID" : 3257,
+      "bundleID" : "com.openai.codex",
+      "captureEligible" : false,
+      "displayID" : "1",
+      "framePixels" : {
+        "height" : 66,
+        "width" : 2940,
+        "x" : 0,
+        "y" : 0
+      },
+      "framePoints" : {
+        "height" : 33,
+        "width" : 1470,
+        "x" : 0,
+        "y" : 0
+      },
+      "isFocused" : false,
+      "isMinimized" : true,
+      "isOnScreen" : false,
+      "layer" : 0,
+      "source" : "coregraphics",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "",
+      "visibleFractionEstimate" : 0,
+      "windowID" : 9628,
+      "zRank" : 76
+    },
+    {
+      "alpha" : 1,
+      "appName" : "Chromium",
+      "appPID" : 67311,
+      "bundleID" : "org.chromium.Chromium",
+      "captureEligible" : false,
+      "displayID" : "1",
+      "framePixels" : {
+        "height" : 128,
+        "width" : 128,
+        "x" : 0,
+        "y" : 912
+      },
+      "framePoints" : {
+        "height" : 64,
+        "width" : 64,
+        "x" : 0,
+        "y" : 456
+      },
+      "isFocused" : false,
+      "isMinimized" : true,
+      "isOnScreen" : false,
+      "layer" : 0,
+      "source" : "coregraphics",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "",
+      "visibleFractionEstimate" : 0,
+      "windowID" : 9610,
+      "zRank" : 77
+    },
+    {
+      "alpha" : 1,
+      "appName" : "Google Chrome",
+      "appPID" : 19780,
+      "bundleID" : "com.google.Chrome",
+      "captureEligible" : false,
+      "displayID" : "1",
+      "framePixels" : {
+        "height" : 60,
+        "width" : 2508,
+        "x" : 0,
+        "y" : 0
+      },
+      "framePoints" : {
+        "height" : 30,
+        "width" : 1254,
+        "x" : 0,
+        "y" : 0
+      },
+      "isFocused" : false,
+      "isMinimized" : true,
+      "isOnScreen" : false,
+      "layer" : 1000,
+      "source" : "coregraphics",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "",
+      "visibleFractionEstimate" : 0,
+      "windowID" : 9725,
+      "zRank" : 78
+    },
+    {
+      "alpha" : 1,
+      "appName" : "Finder",
+      "appPID" : 1256,
+      "bundleID" : "com.apple.finder",
+      "captureEligible" : false,
+      "displayID" : "1",
+      "framePixels" : {
+        "height" : 60,
+        "width" : 2508,
+        "x" : 0,
+        "y" : 0
+      },
+      "framePoints" : {
+        "height" : 30,
+        "width" : 1254,
+        "x" : 0,
+        "y" : 0
+      },
+      "isFocused" : false,
+      "isMinimized" : true,
+      "isOnScreen" : false,
+      "layer" : 1000,
+      "source" : "coregraphics",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "",
+      "visibleFractionEstimate" : 0,
+      "windowID" : 9162,
+      "zRank" : 79
+    },
+    {
+      "alpha" : 1,
+      "appName" : "WebThumbnailExte",
+      "appPID" : 71655,
+      "captureEligible" : false,
+      "framePoints" : {
+        "height" : 0,
+        "width" : 0,
+        "x" : 0,
+        "y" : 0
+      },
+      "isFocused" : false,
+      "isMinimized" : true,
+      "isOnScreen" : false,
+      "layer" : 0,
+      "source" : "coregraphics",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "",
+      "visibleFractionEstimate" : 0,
+      "windowID" : 9161,
+      "zRank" : 80
+    },
+    {
+      "alpha" : 1,
+      "appName" : "Chromium",
+      "appPID" : 67311,
+      "bundleID" : "org.chromium.Chromium",
+      "captureEligible" : false,
+      "framePoints" : {
+        "height" : 0,
+        "width" : 0,
+        "x" : 0,
+        "y" : 0
+      },
+      "isFocused" : false,
+      "isMinimized" : true,
+      "isOnScreen" : false,
+      "layer" : 1000,
+      "source" : "coregraphics",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "",
+      "visibleFractionEstimate" : 0,
+      "windowID" : 9123,
+      "zRank" : 81
+    },
+    {
+      "alpha" : 1,
+      "appName" : "Claude",
+      "appPID" : 45096,
+      "bundleID" : "com.anthropic.claudefordesktop",
+      "captureEligible" : false,
+      "displayID" : "1",
+      "framePixels" : {
+        "height" : 60,
+        "width" : 2508,
+        "x" : 0,
+        "y" : 0
+      },
+      "framePoints" : {
+        "height" : 30,
+        "width" : 1254,
+        "x" : 0,
+        "y" : 0
+      },
+      "isFocused" : false,
+      "isMinimized" : true,
+      "isOnScreen" : false,
+      "layer" : 1000,
+      "source" : "coregraphics",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "",
+      "visibleFractionEstimate" : 0,
+      "windowID" : 9105,
+      "zRank" : 82
+    },
+    {
+      "alpha" : 1,
+      "appName" : "Control Strip",
+      "appPID" : 69601,
+      "bundleID" : "com.apple.controlstrip",
+      "captureEligible" : false,
+      "framePoints" : {
+        "height" : 0,
+        "width" : 0,
+        "x" : 0,
+        "y" : 0
+      },
+      "isFocused" : false,
+      "isMinimized" : true,
+      "isOnScreen" : false,
+      "layer" : 1000,
+      "source" : "coregraphics",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "",
+      "visibleFractionEstimate" : 0,
+      "windowID" : 9101,
+      "zRank" : 83
+    },
+    {
+      "alpha" : 1,
+      "appName" : "Control Strip",
+      "appPID" : 69601,
+      "bundleID" : "com.apple.controlstrip",
+      "captureEligible" : false,
+      "framePoints" : {
+        "height" : 0,
+        "width" : 0,
+        "x" : 0,
+        "y" : 0
+      },
+      "isFocused" : false,
+      "isMinimized" : true,
+      "isOnScreen" : false,
+      "layer" : 1000,
+      "source" : "coregraphics",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "",
+      "visibleFractionEstimate" : 0,
+      "windowID" : 9100,
+      "zRank" : 84
+    },
+    {
+      "alpha" : 1,
+      "appName" : "Control Strip",
+      "appPID" : 69601,
+      "bundleID" : "com.apple.controlstrip",
+      "captureEligible" : false,
+      "framePoints" : {
+        "height" : 0,
+        "width" : 0,
+        "x" : 0,
+        "y" : 0
+      },
+      "isFocused" : false,
+      "isMinimized" : true,
+      "isOnScreen" : false,
+      "layer" : 1000,
+      "source" : "coregraphics",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "",
+      "visibleFractionEstimate" : 0,
+      "windowID" : 9099,
+      "zRank" : 85
+    },
+    {
+      "alpha" : 1,
+      "appName" : "Control Strip",
+      "appPID" : 69601,
+      "bundleID" : "com.apple.controlstrip",
+      "captureEligible" : false,
+      "framePoints" : {
+        "height" : 0,
+        "width" : 0,
+        "x" : 0,
+        "y" : 0
+      },
+      "isFocused" : false,
+      "isMinimized" : true,
+      "isOnScreen" : false,
+      "layer" : 1000,
+      "source" : "coregraphics",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "",
+      "visibleFractionEstimate" : 0,
+      "windowID" : 9098,
+      "zRank" : 86
+    },
+    {
+      "alpha" : 1,
+      "appName" : "1Context Dev",
+      "appPID" : 3840,
+      "bundleID" : "com.haptica.1context.dev",
+      "captureEligible" : false,
+      "framePoints" : {
+        "height" : 0,
+        "width" : 0,
+        "x" : 0,
+        "y" : 0
+      },
+      "isFocused" : false,
+      "isMinimized" : true,
+      "isOnScreen" : false,
+      "layer" : 0,
+      "source" : "coregraphics",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "",
+      "visibleFractionEstimate" : 0,
+      "windowID" : 11468,
+      "zRank" : 87
+    },
+    {
+      "alpha" : 1,
+      "appName" : "Window Server",
+      "appPID" : 595,
+      "bundleID" : "",
+      "captureEligible" : true,
+      "displayID" : "4",
+      "framePixels" : {
+        "height" : 1892,
+        "width" : 2576,
+        "x" : 0,
+        "y" : -20
+      },
+      "framePoints" : {
+        "height" : 946,
+        "width" : 1288,
+        "x" : -1288,
+        "y" : 0
+      },
+      "isFocused" : false,
+      "isMinimized" : false,
+      "isOnScreen" : true,
+      "layer" : -2147483626,
+      "source" : "coregraphics+screencapturekit",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "Display 4 Backstop",
+      "visibleFractionEstimate" : 0.98942917547568709,
+      "windowID" : 9086,
+      "zRank" : 88
+    },
+    {
+      "alpha" : 1,
+      "appName" : "1Context Dev",
+      "appPID" : 3840,
+      "bundleID" : "com.haptica.1context.dev",
+      "captureEligible" : true,
+      "displayID" : "1",
+      "framePixels" : {
+        "height" : 1652,
+        "width" : 2560,
+        "x" : 190,
+        "y" : 66
+      },
+      "framePoints" : {
+        "height" : 826,
+        "width" : 1280,
+        "x" : 95,
+        "y" : 33
+      },
+      "isFocused" : false,
+      "isMinimized" : false,
+      "isOnScreen" : true,
+      "layer" : 0,
+      "source" : "coregraphics+screencapturekit",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "1Context Capture Dashboard",
+      "visibleFractionEstimate" : 0,
+      "windowID" : 11467,
+      "zRank" : 89
+    },
+    {
+      "alpha" : 1,
+      "appName" : "Chromium",
+      "appPID" : 67311,
+      "bundleID" : "org.chromium.Chromium",
+      "captureEligible" : false,
+      "displayID" : "4",
+      "framePixels" : {
+        "height" : 60,
+        "width" : 2576,
+        "x" : 0,
+        "y" : -20
+      },
+      "framePoints" : {
+        "height" : 30,
+        "width" : 1288,
+        "x" : -1288,
+        "y" : 0
+      },
+      "isFocused" : false,
+      "isMinimized" : true,
+      "isOnScreen" : false,
+      "layer" : 0,
+      "source" : "coregraphics",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "",
+      "visibleFractionEstimate" : 0,
+      "windowID" : 9085,
+      "zRank" : 90
+    },
+    {
+      "alpha" : 1,
+      "appName" : "CursorUIViewService",
+      "appPID" : 1280,
+      "bundleID" : "com.apple.TextInputUI.xpc.CursorUIViewService",
+      "captureEligible" : false,
+      "displayID" : "1",
+      "framePixels" : {
+        "height" : 128,
+        "width" : 128,
+        "x" : 0,
+        "y" : 1784
+      },
+      "framePoints" : {
+        "height" : 64,
+        "width" : 64,
+        "x" : 0,
+        "y" : 892
+      },
+      "isFocused" : false,
+      "isMinimized" : true,
+      "isOnScreen" : false,
+      "layer" : 0,
+      "source" : "coregraphics",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "",
+      "visibleFractionEstimate" : 0,
+      "windowID" : 11466,
+      "zRank" : 91
+    },
+    {
+      "alpha" : 1,
+      "appName" : "Chromium",
+      "appPID" : 67311,
+      "bundleID" : "org.chromium.Chromium",
+      "captureEligible" : false,
+      "displayID" : "4",
+      "framePixels" : {
+        "height" : 60,
+        "width" : 2576,
+        "x" : 0,
+        "y" : -20
+      },
+      "framePoints" : {
+        "height" : 30,
+        "width" : 1288,
+        "x" : -1288,
+        "y" : 0
+      },
+      "isFocused" : false,
+      "isMinimized" : true,
+      "isOnScreen" : false,
+      "layer" : 0,
+      "source" : "coregraphics",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "",
+      "visibleFractionEstimate" : 0,
+      "windowID" : 9084,
+      "zRank" : 92
+    },
+    {
+      "alpha" : 1,
+      "appName" : "CursorUIViewService",
+      "appPID" : 1280,
+      "bundleID" : "com.apple.TextInputUI.xpc.CursorUIViewService",
+      "captureEligible" : false,
+      "displayID" : "1",
+      "framePixels" : {
+        "height" : 128,
+        "width" : 128,
+        "x" : 0,
+        "y" : 912
+      },
+      "framePoints" : {
+        "height" : 64,
+        "width" : 64,
+        "x" : 0,
+        "y" : 456
+      },
+      "isFocused" : false,
+      "isMinimized" : true,
+      "isOnScreen" : false,
+      "layer" : 0,
+      "source" : "coregraphics",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "",
+      "visibleFractionEstimate" : 0,
+      "windowID" : 11464,
+      "zRank" : 93
+    },
+    {
+      "alpha" : 1,
+      "appName" : "Chromium",
+      "appPID" : 67311,
+      "bundleID" : "org.chromium.Chromium",
+      "captureEligible" : false,
+      "displayID" : "4",
+      "framePixels" : {
+        "height" : 60,
+        "width" : 2576,
+        "x" : 0,
+        "y" : -20
+      },
+      "framePoints" : {
+        "height" : 30,
+        "width" : 1288,
+        "x" : -1288,
+        "y" : 0
+      },
+      "isFocused" : false,
+      "isMinimized" : true,
+      "isOnScreen" : false,
+      "layer" : 0,
+      "source" : "coregraphics",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "",
+      "visibleFractionEstimate" : 0,
+      "windowID" : 9082,
+      "zRank" : 94
+    },
+    {
+      "alpha" : 1,
+      "appName" : "Chromium",
+      "appPID" : 67311,
+      "bundleID" : "org.chromium.Chromium",
+      "captureEligible" : false,
+      "displayID" : "4",
+      "framePixels" : {
+        "height" : 60,
+        "width" : 2576,
+        "x" : 0,
+        "y" : -20
+      },
+      "framePoints" : {
+        "height" : 30,
+        "width" : 1288,
+        "x" : -1288,
+        "y" : 0
+      },
+      "isFocused" : false,
+      "isMinimized" : true,
+      "isOnScreen" : false,
+      "layer" : 0,
+      "source" : "coregraphics",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "",
+      "visibleFractionEstimate" : 0,
+      "windowID" : 9080,
+      "zRank" : 95
+    },
+    {
+      "alpha" : 1,
+      "appName" : "Code",
+      "appPID" : 28730,
+      "bundleID" : "com.microsoft.VSCode",
+      "captureEligible" : false,
+      "displayID" : "1",
+      "framePixels" : {
+        "height" : 1000,
+        "width" : 1000,
+        "x" : 0,
+        "y" : 912
+      },
+      "framePoints" : {
+        "height" : 500,
+        "width" : 500,
+        "x" : 0,
+        "y" : 456
+      },
+      "isFocused" : false,
+      "isMinimized" : true,
+      "isOnScreen" : false,
+      "layer" : 0,
+      "source" : "coregraphics",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "",
+      "visibleFractionEstimate" : 0,
+      "windowID" : 11062,
+      "zRank" : 96
+    },
+    {
+      "alpha" : 1,
+      "appName" : "Control Center",
+      "appPID" : 1069,
+      "bundleID" : "com.apple.controlcenter",
+      "captureEligible" : true,
+      "displayID" : "4",
+      "framePixels" : {
+        "height" : 60,
+        "width" : 76,
+        "x" : 1946,
+        "y" : -20
+      },
+      "framePoints" : {
+        "height" : 30,
+        "width" : 38,
+        "x" : -315,
+        "y" : 0
+      },
+      "isFocused" : false,
+      "isMinimized" : false,
+      "isOnScreen" : true,
+      "layer" : 25,
+      "source" : "coregraphics+screencapturekit",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "io.tailscale.ipn.macos",
+      "visibleFractionEstimate" : 0.66666666666666663,
+      "windowID" : 9077,
+      "zRank" : 97
+    },
+    {
+      "alpha" : 1,
+      "appName" : "Code",
+      "appPID" : 28730,
+      "bundleID" : "com.microsoft.VSCode",
+      "captureEligible" : false,
+      "framePoints" : {
+        "height" : 0,
+        "width" : 0,
+        "x" : 0,
+        "y" : 0
+      },
+      "isFocused" : false,
+      "isMinimized" : true,
+      "isOnScreen" : false,
+      "layer" : 1000,
+      "source" : "coregraphics",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "",
+      "visibleFractionEstimate" : 0,
+      "windowID" : 11061,
+      "zRank" : 98
+    },
+    {
+      "alpha" : 1,
+      "appName" : "Control Center",
+      "appPID" : 1069,
+      "bundleID" : "com.apple.controlcenter",
+      "captureEligible" : true,
+      "displayID" : "4",
+      "framePixels" : {
+        "height" : 60,
+        "width" : 84,
+        "x" : 2182,
+        "y" : -20
+      },
+      "framePoints" : {
+        "height" : 30,
+        "width" : 42,
+        "x" : -197,
+        "y" : 0
+      },
+      "isFocused" : false,
+      "isMinimized" : false,
+      "isOnScreen" : true,
+      "layer" : 25,
+      "source" : "coregraphics+screencapturekit",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "",
+      "visibleFractionEstimate" : 0.66666666666666663,
+      "windowID" : 9076,
+      "zRank" : 99
+    },
+    {
+      "alpha" : 1,
+      "appName" : "Code",
+      "appPID" : 28730,
+      "bundleID" : "com.microsoft.VSCode",
+      "captureEligible" : false,
+      "displayID" : "1",
+      "framePixels" : {
+        "height" : 66,
+        "width" : 2940,
+        "x" : 0,
+        "y" : 0
+      },
+      "framePoints" : {
+        "height" : 33,
+        "width" : 1470,
+        "x" : 0,
+        "y" : 0
+      },
+      "isFocused" : false,
+      "isMinimized" : true,
+      "isOnScreen" : false,
+      "layer" : 0,
+      "source" : "coregraphics",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "",
+      "visibleFractionEstimate" : 0,
+      "windowID" : 11054,
+      "zRank" : 100
+    },
+    {
+      "alpha" : 1,
+      "appName" : "Claude",
+      "appPID" : 45096,
+      "bundleID" : "com.anthropic.claudefordesktop",
+      "captureEligible" : false,
+      "displayID" : "4",
+      "framePixels" : {
+        "height" : 60,
+        "width" : 2576,
+        "x" : 0,
+        "y" : -20
+      },
+      "framePoints" : {
+        "height" : 30,
+        "width" : 1288,
+        "x" : -1288,
+        "y" : 0
+      },
+      "isFocused" : false,
+      "isMinimized" : true,
+      "isOnScreen" : false,
+      "layer" : 0,
+      "source" : "coregraphics",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "",
+      "visibleFractionEstimate" : 0,
+      "windowID" : 9069,
+      "zRank" : 101
+    },
+    {
+      "alpha" : 1,
+      "appName" : "Control Center",
+      "appPID" : 1069,
+      "bundleID" : "com.apple.controlcenter",
+      "captureEligible" : true,
+      "displayID" : "4",
+      "framePixels" : {
+        "height" : 60,
+        "width" : 84,
+        "x" : 2098,
+        "y" : -20
+      },
+      "framePoints" : {
+        "height" : 30,
+        "width" : 42,
+        "x" : -239,
+        "y" : 0
+      },
+      "isFocused" : false,
+      "isMinimized" : false,
+      "isOnScreen" : true,
+      "layer" : 25,
+      "source" : "coregraphics+screencapturekit",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "",
+      "visibleFractionEstimate" : 0.66666666666666663,
+      "windowID" : 9059,
+      "zRank" : 102
+    },
+    {
+      "alpha" : 1,
+      "appName" : "Finder",
+      "appPID" : 1256,
+      "bundleID" : "com.apple.finder",
+      "captureEligible" : false,
+      "displayID" : "4",
+      "framePixels" : {
+        "height" : 60,
+        "width" : 2576,
+        "x" : 0,
+        "y" : -20
+      },
+      "framePoints" : {
+        "height" : 30,
+        "width" : 1288,
+        "x" : -1288,
+        "y" : 0
+      },
+      "isFocused" : false,
+      "isMinimized" : true,
+      "isOnScreen" : false,
+      "layer" : 0,
+      "source" : "coregraphics",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "",
+      "visibleFractionEstimate" : 0,
+      "windowID" : 9052,
+      "zRank" : 103
+    },
+    {
+      "alpha" : 1,
+      "appName" : "Finder",
+      "appPID" : 1256,
+      "bundleID" : "com.apple.finder",
+      "captureEligible" : false,
+      "displayID" : "4",
+      "framePixels" : {
+        "height" : 60,
+        "width" : 2576,
+        "x" : 0,
+        "y" : -20
+      },
+      "framePoints" : {
+        "height" : 30,
+        "width" : 1288,
+        "x" : -1288,
+        "y" : 0
+      },
+      "isFocused" : false,
+      "isMinimized" : true,
+      "isOnScreen" : false,
+      "layer" : 0,
+      "source" : "coregraphics",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "",
+      "visibleFractionEstimate" : 0,
+      "windowID" : 9051,
+      "zRank" : 104
+    },
+    {
+      "alpha" : 1,
+      "appName" : "Finder",
+      "appPID" : 1256,
+      "bundleID" : "com.apple.finder",
+      "captureEligible" : false,
+      "displayID" : "4",
+      "framePixels" : {
+        "height" : 60,
+        "width" : 2576,
+        "x" : 0,
+        "y" : -20
+      },
+      "framePoints" : {
+        "height" : 30,
+        "width" : 1288,
+        "x" : -1288,
+        "y" : 0
+      },
+      "isFocused" : false,
+      "isMinimized" : true,
+      "isOnScreen" : false,
+      "layer" : 0,
+      "source" : "coregraphics",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "",
+      "visibleFractionEstimate" : 0,
+      "windowID" : 9050,
+      "zRank" : 105
+    },
+    {
+      "alpha" : 1,
+      "appName" : "Finder",
+      "appPID" : 1256,
+      "bundleID" : "com.apple.finder",
+      "captureEligible" : false,
+      "displayID" : "4",
+      "framePixels" : {
+        "height" : 60,
+        "width" : 2576,
+        "x" : 0,
+        "y" : -20
+      },
+      "framePoints" : {
+        "height" : 30,
+        "width" : 1288,
+        "x" : -1288,
+        "y" : 0
+      },
+      "isFocused" : false,
+      "isMinimized" : true,
+      "isOnScreen" : false,
+      "layer" : 0,
+      "source" : "coregraphics",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "",
+      "visibleFractionEstimate" : 0,
+      "windowID" : 9049,
+      "zRank" : 106
+    },
+    {
+      "alpha" : 1,
+      "appName" : "UserNotificationCenter",
+      "appPID" : 1434,
+      "bundleID" : "com.apple.UserNotificationCenter",
+      "captureEligible" : false,
+      "framePoints" : {
+        "height" : 0,
+        "width" : 0,
+        "x" : 0,
+        "y" : 0
+      },
+      "isFocused" : false,
+      "isMinimized" : true,
+      "isOnScreen" : false,
+      "layer" : 1000,
+      "source" : "coregraphics",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "",
+      "visibleFractionEstimate" : 0,
+      "windowID" : 9436,
+      "zRank" : 107
+    },
+    {
+      "alpha" : 1,
+      "appName" : "Window Server",
+      "appPID" : 595,
+      "bundleID" : "",
+      "captureEligible" : true,
+      "displayID" : "4",
+      "framePixels" : {
+        "height" : 160,
+        "width" : 2576,
+        "x" : 0,
+        "y" : -20
+      },
+      "framePoints" : {
+        "height" : 80,
+        "width" : 1288,
+        "x" : -1288,
+        "y" : 0
+      },
+      "isFocused" : false,
+      "isMinimized" : false,
+      "isOnScreen" : true,
+      "layer" : -2147483602,
+      "source" : "coregraphics+screencapturekit",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "underbelly",
+      "visibleFractionEstimate" : 0.875,
+      "windowID" : 9036,
+      "zRank" : 108
+    },
+    {
+      "alpha" : 1,
+      "appName" : "Activity Monitor",
+      "appPID" : 1247,
+      "bundleID" : "com.apple.ActivityMonitor",
+      "captureEligible" : false,
+      "displayID" : "4",
+      "framePixels" : {
+        "height" : 60,
+        "width" : 2576,
+        "x" : 0,
+        "y" : -20
+      },
+      "framePoints" : {
+        "height" : 30,
+        "width" : 1288,
+        "x" : -1288,
+        "y" : 0
+      },
+      "isFocused" : false,
+      "isMinimized" : true,
+      "isOnScreen" : false,
+      "layer" : 0,
+      "source" : "coregraphics",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "",
+      "visibleFractionEstimate" : 0,
+      "windowID" : 9031,
+      "zRank" : 109
+    },
+    {
+      "alpha" : 1,
+      "appName" : "Tailscale",
+      "appPID" : 1252,
+      "bundleID" : "io.tailscale.ipn.macos",
+      "captureEligible" : false,
+      "displayID" : "4",
+      "framePixels" : {
+        "height" : 60,
+        "width" : 2576,
+        "x" : 0,
+        "y" : -20
+      },
+      "framePoints" : {
+        "height" : 30,
+        "width" : 1288,
+        "x" : -1288,
+        "y" : 0
+      },
+      "isFocused" : false,
+      "isMinimized" : true,
+      "isOnScreen" : false,
+      "layer" : 0,
+      "source" : "coregraphics",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "",
+      "visibleFractionEstimate" : 0,
+      "windowID" : 9025,
+      "zRank" : 110
+    },
+    {
+      "alpha" : 1,
+      "appName" : "Finder",
+      "appPID" : 1256,
+      "bundleID" : "com.apple.finder",
+      "captureEligible" : true,
+      "displayID" : "4",
+      "framePixels" : {
+        "height" : 1892,
+        "width" : 2576,
+        "x" : 0,
+        "y" : -20
+      },
+      "framePoints" : {
+        "height" : 946,
+        "width" : 1288,
+        "x" : -1288,
+        "y" : 0
+      },
+      "isFocused" : false,
+      "isMinimized" : false,
+      "isOnScreen" : true,
+      "layer" : -2147483603,
+      "source" : "coregraphics+screencapturekit",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "",
+      "visibleFractionEstimate" : 0.98942917547568709,
+      "windowID" : 9024,
+      "zRank" : 111
+    },
+    {
+      "alpha" : 1,
+      "appName" : "Tailscale",
+      "appPID" : 1252,
+      "bundleID" : "io.tailscale.ipn.macos",
+      "captureEligible" : false,
+      "displayID" : "4",
+      "framePixels" : {
+        "height" : 60,
+        "width" : 2576,
+        "x" : 0,
+        "y" : -20
+      },
+      "framePoints" : {
+        "height" : 30,
+        "width" : 1288,
+        "x" : -1288,
+        "y" : 0
+      },
+      "isFocused" : false,
+      "isMinimized" : true,
+      "isOnScreen" : false,
+      "layer" : 0,
+      "source" : "coregraphics",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "",
+      "visibleFractionEstimate" : 0,
+      "windowID" : 9023,
+      "zRank" : 112
+    },
+    {
+      "alpha" : 1,
+      "appName" : "Activity Monitor",
+      "appPID" : 1247,
+      "bundleID" : "com.apple.ActivityMonitor",
+      "captureEligible" : false,
+      "displayID" : "4",
+      "framePixels" : {
+        "height" : 60,
+        "width" : 2576,
+        "x" : 0,
+        "y" : -20
+      },
+      "framePoints" : {
+        "height" : 30,
+        "width" : 1288,
+        "x" : -1288,
+        "y" : 0
+      },
+      "isFocused" : false,
+      "isMinimized" : true,
+      "isOnScreen" : false,
+      "layer" : 0,
+      "source" : "coregraphics",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "",
+      "visibleFractionEstimate" : 0,
+      "windowID" : 9022,
+      "zRank" : 113
+    },
+    {
+      "alpha" : 1,
+      "appName" : "Dock",
+      "appPID" : 1254,
+      "bundleID" : "com.apple.dock",
+      "captureEligible" : true,
+      "displayID" : "4",
+      "framePixels" : {
+        "height" : 1892,
+        "width" : 2576,
+        "x" : 0,
+        "y" : -20
+      },
+      "framePoints" : {
+        "height" : 946,
+        "width" : 1288,
+        "x" : -1288,
+        "y" : 0
+      },
+      "isFocused" : false,
+      "isMinimized" : false,
+      "isOnScreen" : true,
+      "layer" : -2147483624,
+      "source" : "coregraphics+screencapturekit",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "Wallpaper-F7B1A243-BE1F-46A3-8D71-26CDCBCF12AB",
+      "visibleFractionEstimate" : 0.98942917547568709,
+      "windowID" : 9020,
+      "zRank" : 114
+    },
+    {
+      "alpha" : 1,
+      "appName" : "Tailscale",
+      "appPID" : 1252,
+      "bundleID" : "io.tailscale.ipn.macos",
+      "captureEligible" : false,
+      "displayID" : "4",
+      "framePixels" : {
+        "height" : 60,
+        "width" : 2576,
+        "x" : 0,
+        "y" : -20
+      },
+      "framePoints" : {
+        "height" : 30,
+        "width" : 1288,
+        "x" : -1288,
+        "y" : 0
+      },
+      "isFocused" : false,
+      "isMinimized" : true,
+      "isOnScreen" : false,
+      "layer" : 0,
+      "source" : "coregraphics",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "",
+      "visibleFractionEstimate" : 0,
+      "windowID" : 9019,
+      "zRank" : 115
+    },
+    {
+      "alpha" : 1,
+      "appName" : "Chromium",
+      "appPID" : 67311,
+      "bundleID" : "org.chromium.Chromium",
+      "captureEligible" : false,
+      "displayID" : "1",
+      "framePixels" : {
+        "height" : 66,
+        "width" : 2940,
+        "x" : 0,
+        "y" : 0
+      },
+      "framePoints" : {
+        "height" : 33,
+        "width" : 1470,
+        "x" : 0,
+        "y" : 0
+      },
+      "isFocused" : false,
+      "isMinimized" : true,
+      "isOnScreen" : false,
+      "layer" : 0,
+      "source" : "coregraphics",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "",
+      "visibleFractionEstimate" : 0,
+      "windowID" : 8990,
+      "zRank" : 116
+    },
+    {
+      "alpha" : 1,
+      "appName" : "Chromium",
+      "appPID" : 67311,
+      "bundleID" : "org.chromium.Chromium",
+      "captureEligible" : false,
+      "displayID" : "1",
+      "framePixels" : {
+        "height" : 66,
+        "width" : 2940,
+        "x" : 0,
+        "y" : 0
+      },
+      "framePoints" : {
+        "height" : 33,
+        "width" : 1470,
+        "x" : 0,
+        "y" : 0
+      },
+      "isFocused" : false,
+      "isMinimized" : true,
+      "isOnScreen" : false,
+      "layer" : 0,
+      "source" : "coregraphics",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "",
+      "visibleFractionEstimate" : 0,
+      "windowID" : 8989,
+      "zRank" : 117
+    },
+    {
+      "alpha" : 1,
+      "appName" : "ThemeWidgetControlViewService",
+      "appPID" : 92132,
+      "bundleID" : "com.apple.appkit.xpc.ThemeWidgetControlViewService",
+      "captureEligible" : false,
+      "displayID" : "4",
+      "framePixels" : {
+        "height" : 28,
+        "width" : 28,
+        "x" : 124,
+        "y" : 92
+      },
+      "framePoints" : {
+        "height" : 14,
+        "width" : 14,
+        "x" : -1226,
+        "y" : 56
+      },
+      "isFocused" : false,
+      "isMinimized" : true,
+      "isOnScreen" : false,
+      "layer" : 0,
+      "source" : "coregraphics",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "",
+      "visibleFractionEstimate" : 0,
+      "windowID" : 11370,
+      "zRank" : 118
+    },
+    {
+      "alpha" : 1,
+      "appName" : "Chromium",
+      "appPID" : 67311,
+      "bundleID" : "org.chromium.Chromium",
+      "captureEligible" : false,
+      "displayID" : "1",
+      "framePixels" : {
+        "height" : 66,
+        "width" : 2940,
+        "x" : 0,
+        "y" : 0
+      },
+      "framePoints" : {
+        "height" : 33,
+        "width" : 1470,
+        "x" : 0,
+        "y" : 0
+      },
+      "isFocused" : false,
+      "isMinimized" : true,
+      "isOnScreen" : false,
+      "layer" : 0,
+      "source" : "coregraphics",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "",
+      "visibleFractionEstimate" : 0,
+      "windowID" : 8988,
+      "zRank" : 119
+    },
+    {
+      "alpha" : 1,
+      "appName" : "Chromium",
+      "appPID" : 67311,
+      "bundleID" : "org.chromium.Chromium",
+      "captureEligible" : false,
+      "displayID" : "1",
+      "framePixels" : {
+        "height" : 66,
+        "width" : 2940,
+        "x" : 0,
+        "y" : 0
+      },
+      "framePoints" : {
+        "height" : 33,
+        "width" : 1470,
+        "x" : 0,
+        "y" : 0
+      },
+      "isFocused" : false,
+      "isMinimized" : true,
+      "isOnScreen" : false,
+      "layer" : 0,
+      "source" : "coregraphics",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "",
+      "visibleFractionEstimate" : 0,
+      "windowID" : 8987,
+      "zRank" : 120
+    },
+    {
+      "alpha" : 1,
+      "appName" : "Google Chrome",
+      "appPID" : 19780,
+      "bundleID" : "com.google.Chrome",
+      "captureEligible" : false,
+      "displayID" : "1",
+      "framePixels" : {
+        "height" : 66,
+        "width" : 2940,
+        "x" : 0,
+        "y" : 0
+      },
+      "framePoints" : {
+        "height" : 33,
+        "width" : 1470,
+        "x" : 0,
+        "y" : 0
+      },
+      "isFocused" : false,
+      "isMinimized" : true,
+      "isOnScreen" : false,
+      "layer" : 0,
+      "source" : "coregraphics",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "",
+      "visibleFractionEstimate" : 0,
+      "windowID" : 9719,
+      "zRank" : 121
+    },
+    {
+      "alpha" : 1,
+      "appName" : "Claude",
+      "appPID" : 45096,
+      "bundleID" : "com.anthropic.claudefordesktop",
+      "captureEligible" : false,
+      "displayID" : "1",
+      "framePixels" : {
+        "height" : 1000,
+        "width" : 1000,
+        "x" : 0,
+        "y" : 912
+      },
+      "framePoints" : {
+        "height" : 500,
+        "width" : 500,
+        "x" : 0,
+        "y" : 456
+      },
+      "isFocused" : false,
+      "isMinimized" : true,
+      "isOnScreen" : false,
+      "layer" : 0,
+      "source" : "coregraphics",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "",
+      "visibleFractionEstimate" : 0,
+      "windowID" : 8925,
+      "zRank" : 122
+    },
+    {
+      "alpha" : 1,
+      "appName" : "Claude",
+      "appPID" : 45096,
+      "bundleID" : "com.anthropic.claudefordesktop",
+      "captureEligible" : false,
+      "displayID" : "1",
+      "framePixels" : {
+        "height" : 66,
+        "width" : 2940,
+        "x" : 0,
+        "y" : 0
+      },
+      "framePoints" : {
+        "height" : 33,
+        "width" : 1470,
+        "x" : 0,
+        "y" : 0
+      },
+      "isFocused" : false,
+      "isMinimized" : true,
+      "isOnScreen" : false,
+      "layer" : 0,
+      "source" : "coregraphics",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "",
+      "visibleFractionEstimate" : 0,
+      "windowID" : 8914,
+      "zRank" : 123
+    },
+    {
+      "alpha" : 1,
+      "appName" : "Claude",
+      "appPID" : 45096,
+      "bundleID" : "com.anthropic.claudefordesktop",
+      "captureEligible" : false,
+      "displayID" : "1",
+      "framePixels" : {
+        "height" : 1912,
+        "width" : 2940,
+        "x" : 0,
+        "y" : 0
+      },
+      "framePoints" : {
+        "height" : 956,
+        "width" : 1470,
+        "x" : 0,
+        "y" : 0
+      },
+      "isFocused" : false,
+      "isMinimized" : true,
+      "isOnScreen" : false,
+      "layer" : 1000,
+      "source" : "coregraphics",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "",
+      "visibleFractionEstimate" : 0,
+      "windowID" : 8897,
+      "zRank" : 124
+    },
+    {
+      "alpha" : 1,
+      "appName" : "CursorUIViewService",
+      "appPID" : 1280,
+      "bundleID" : "com.apple.TextInputUI.xpc.CursorUIViewService",
+      "captureEligible" : false,
+      "displayID" : "1",
+      "framePixels" : {
+        "height" : 128,
+        "width" : 128,
+        "x" : 0,
+        "y" : 1784
+      },
+      "framePoints" : {
+        "height" : 64,
+        "width" : 64,
+        "x" : 0,
+        "y" : 892
+      },
+      "isFocused" : false,
+      "isMinimized" : true,
+      "isOnScreen" : false,
+      "layer" : 0,
+      "source" : "coregraphics",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "",
+      "visibleFractionEstimate" : 0,
+      "windowID" : 8878,
+      "zRank" : 125
+    },
+    {
+      "alpha" : 1,
+      "appName" : "Window Server",
+      "appPID" : 595,
+      "bundleID" : "",
+      "captureEligible" : true,
+      "displayID" : "1",
+      "framePixels" : {
+        "height" : 162,
+        "width" : 2940,
+        "x" : 0,
+        "y" : 0
+      },
+      "framePoints" : {
+        "height" : 81,
+        "width" : 1470,
+        "x" : 0,
+        "y" : 0
+      },
+      "isFocused" : false,
+      "isMinimized" : false,
+      "isOnScreen" : true,
+      "layer" : -2147483602,
+      "source" : "coregraphics+screencapturekit",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "underbelly",
+      "visibleFractionEstimate" : 1,
+      "windowID" : 7950,
+      "zRank" : 126
+    },
+    {
+      "alpha" : 1,
+      "appName" : "Window Server",
+      "appPID" : 595,
+      "bundleID" : "",
+      "captureEligible" : true,
+      "displayID" : "1",
+      "framePixels" : {
+        "height" : 66,
+        "width" : 2940,
+        "x" : 0,
+        "y" : 0
+      },
+      "framePoints" : {
+        "height" : 33,
+        "width" : 1470,
+        "x" : 0,
+        "y" : 0
+      },
+      "isFocused" : false,
+      "isMinimized" : false,
+      "isOnScreen" : true,
+      "layer" : 24,
+      "source" : "coregraphics+screencapturekit",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "Menubar",
+      "visibleFractionEstimate" : 1,
+      "windowID" : 7949,
+      "zRank" : 127
+    },
+    {
+      "alpha" : 1,
+      "appName" : "Dock",
+      "appPID" : 1254,
+      "bundleID" : "com.apple.dock",
+      "captureEligible" : false,
+      "displayID" : "1",
+      "framePixels" : {
+        "height" : 1912,
+        "width" : 2940,
+        "x" : 0,
+        "y" : 0
+      },
+      "framePoints" : {
+        "height" : 956,
+        "width" : 1470,
+        "x" : 0,
+        "y" : 0
+      },
+      "isFocused" : false,
+      "isMinimized" : true,
+      "isOnScreen" : false,
+      "layer" : -2147483624,
+      "source" : "coregraphics",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "Wallpaper-C846E1CF-7E96-416D-A95B-9036CCE45F37",
+      "visibleFractionEstimate" : 0,
+      "windowID" : 7940,
+      "zRank" : 128
+    },
+    {
+      "alpha" : 1,
+      "appName" : "Dock",
+      "appPID" : 1254,
+      "bundleID" : "com.apple.dock",
+      "captureEligible" : true,
+      "displayID" : "1",
+      "framePixels" : {
+        "height" : 1912,
+        "width" : 2940,
+        "x" : 0,
+        "y" : 0
+      },
+      "framePoints" : {
+        "height" : 956,
+        "width" : 1470,
+        "x" : 0,
+        "y" : 0
+      },
+      "isFocused" : false,
+      "isMinimized" : false,
+      "isOnScreen" : true,
+      "layer" : -2147483624,
+      "source" : "coregraphics+screencapturekit",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "Wallpaper-",
+      "visibleFractionEstimate" : 1,
+      "windowID" : 7938,
+      "zRank" : 129
+    },
+    {
+      "alpha" : 1,
+      "appName" : "Window Server",
+      "appPID" : 595,
+      "captureEligible" : false,
+      "displayID" : "1",
+      "framePixels" : {
+        "height" : 66,
+        "width" : 2940,
+        "x" : 0,
+        "y" : 0
+      },
+      "framePoints" : {
+        "height" : 33,
+        "width" : 1470,
+        "x" : 0,
+        "y" : 0
+      },
+      "isFocused" : false,
+      "isMinimized" : true,
+      "isOnScreen" : false,
+      "layer" : 24,
+      "source" : "coregraphics",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "Menubar",
+      "visibleFractionEstimate" : 0,
+      "windowID" : 7925,
+      "zRank" : 130
+    },
+    {
+      "alpha" : 1,
+      "appName" : "Window Server",
+      "appPID" : 595,
+      "captureEligible" : false,
+      "displayID" : "1",
+      "framePixels" : {
+        "height" : 162,
+        "width" : 2940,
+        "x" : 0,
+        "y" : 0
+      },
+      "framePoints" : {
+        "height" : 81,
+        "width" : 1470,
+        "x" : 0,
+        "y" : 0
+      },
+      "isFocused" : false,
+      "isMinimized" : true,
+      "isOnScreen" : false,
+      "layer" : -2147483602,
+      "source" : "coregraphics",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "underbelly",
+      "visibleFractionEstimate" : 0,
+      "windowID" : 7924,
+      "zRank" : 131
+    },
+    {
+      "alpha" : 1,
+      "appName" : "Window Server",
+      "appPID" : 595,
+      "captureEligible" : false,
+      "displayID" : "1",
+      "framePixels" : {
+        "height" : 66,
+        "width" : 2940,
+        "x" : 0,
+        "y" : 0
+      },
+      "framePoints" : {
+        "height" : 33,
+        "width" : 1470,
+        "x" : 0,
+        "y" : 0
+      },
+      "isFocused" : false,
+      "isMinimized" : true,
+      "isOnScreen" : false,
+      "layer" : 24,
+      "source" : "coregraphics",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "Menubar",
+      "visibleFractionEstimate" : 0,
+      "windowID" : 7923,
+      "zRank" : 132
+    },
+    {
+      "alpha" : 1,
+      "appName" : "Activity Monitor",
+      "appPID" : 1247,
+      "bundleID" : "com.apple.ActivityMonitor",
+      "captureEligible" : false,
+      "displayID" : "4",
+      "framePixels" : {
+        "height" : 60,
+        "width" : 2576,
+        "x" : 0,
+        "y" : -20
+      },
+      "framePoints" : {
+        "height" : 30,
+        "width" : 1288,
+        "x" : -1288,
+        "y" : 0
+      },
+      "isFocused" : false,
+      "isMinimized" : true,
+      "isOnScreen" : false,
+      "layer" : 0,
+      "source" : "coregraphics",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "",
+      "visibleFractionEstimate" : 0,
+      "windowID" : 9026,
+      "zRank" : 133
+    },
+    {
+      "alpha" : 1,
+      "appName" : "Window Server",
+      "appPID" : 595,
+      "bundleID" : "",
+      "captureEligible" : true,
+      "displayID" : "4",
+      "framePixels" : {
+        "height" : 60,
+        "width" : 2576,
+        "x" : 0,
+        "y" : -20
+      },
+      "framePoints" : {
+        "height" : 30,
+        "width" : 1288,
+        "x" : -1288,
+        "y" : 0
+      },
+      "isFocused" : false,
+      "isMinimized" : false,
+      "isOnScreen" : true,
+      "layer" : 24,
+      "source" : "coregraphics+screencapturekit",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "Menubar",
+      "visibleFractionEstimate" : 0.66666666666666663,
+      "windowID" : 9035,
+      "zRank" : 134
+    },
+    {
+      "alpha" : 1,
+      "appName" : "Activity Monitor",
+      "appPID" : 1247,
+      "bundleID" : "com.apple.ActivityMonitor",
+      "captureEligible" : false,
+      "displayID" : "4",
+      "framePixels" : {
+        "height" : 60,
+        "width" : 2576,
+        "x" : 0,
+        "y" : -20
+      },
+      "framePoints" : {
+        "height" : 30,
+        "width" : 1288,
+        "x" : -1288,
+        "y" : 0
+      },
+      "isFocused" : false,
+      "isMinimized" : true,
+      "isOnScreen" : false,
+      "layer" : 0,
+      "source" : "coregraphics",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "",
+      "visibleFractionEstimate" : 0,
+      "windowID" : 9029,
+      "zRank" : 135
+    },
+    {
+      "alpha" : 1,
+      "appName" : "Tailscale",
+      "appPID" : 1252,
+      "bundleID" : "io.tailscale.ipn.macos",
+      "captureEligible" : false,
+      "displayID" : "4",
+      "framePixels" : {
+        "height" : 60,
+        "width" : 2576,
+        "x" : 0,
+        "y" : -20
+      },
+      "framePoints" : {
+        "height" : 30,
+        "width" : 1288,
+        "x" : -1288,
+        "y" : 0
+      },
+      "isFocused" : false,
+      "isMinimized" : true,
+      "isOnScreen" : false,
+      "layer" : 0,
+      "source" : "coregraphics",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "",
+      "visibleFractionEstimate" : 0,
+      "windowID" : 9028,
+      "zRank" : 136
+    },
+    {
+      "alpha" : 1,
+      "appName" : "Control Center",
+      "appPID" : 1069,
+      "bundleID" : "com.apple.controlcenter",
+      "captureEligible" : true,
+      "displayID" : "4",
+      "framePixels" : {
+        "height" : 60,
+        "width" : 64,
+        "x" : 1882,
+        "y" : -20
+      },
+      "framePoints" : {
+        "height" : 30,
+        "width" : 32,
+        "x" : -347,
+        "y" : 0
+      },
+      "isFocused" : false,
+      "isMinimized" : false,
+      "isOnScreen" : true,
+      "layer" : 25,
+      "source" : "coregraphics+screencapturekit",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "com.1password.1password",
+      "visibleFractionEstimate" : 0.66666666666666663,
+      "windowID" : 9079,
+      "zRank" : 137
+    },
+    {
+      "alpha" : 1,
+      "appName" : "Code",
+      "appPID" : 28730,
+      "bundleID" : "com.microsoft.VSCode",
+      "captureEligible" : false,
+      "displayID" : "4",
+      "framePixels" : {
+        "height" : 60,
+        "width" : 2576,
+        "x" : 0,
+        "y" : -20
+      },
+      "framePoints" : {
+        "height" : 30,
+        "width" : 1288,
+        "x" : -1288,
+        "y" : 0
+      },
+      "isFocused" : false,
+      "isMinimized" : true,
+      "isOnScreen" : false,
+      "layer" : 0,
+      "source" : "coregraphics",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "",
+      "visibleFractionEstimate" : 0,
+      "windowID" : 11058,
+      "zRank" : 138
+    },
+    {
+      "alpha" : 1,
+      "appName" : "Control Center",
+      "appPID" : 1069,
+      "bundleID" : "com.apple.controlcenter",
+      "captureEligible" : true,
+      "displayID" : "4",
+      "framePixels" : {
+        "height" : 60,
+        "width" : 76,
+        "x" : 2022,
+        "y" : -20
+      },
+      "framePoints" : {
+        "height" : 30,
+        "width" : 38,
+        "x" : -277,
+        "y" : 0
+      },
+      "isFocused" : false,
+      "isMinimized" : false,
+      "isOnScreen" : true,
+      "layer" : 25,
+      "source" : "coregraphics+screencapturekit",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "",
+      "visibleFractionEstimate" : 0.66666666666666663,
+      "windowID" : 9073,
+      "zRank" : 139
+    },
+    {
+      "alpha" : 1,
+      "appName" : "Finder",
+      "appPID" : 1256,
+      "bundleID" : "com.apple.finder",
+      "captureEligible" : false,
+      "displayID" : "1",
+      "framePixels" : {
+        "height" : 264,
+        "width" : 978,
+        "x" : 534,
+        "y" : 150
+      },
+      "framePoints" : {
+        "height" : 132,
+        "width" : 489,
+        "x" : 267,
+        "y" : 75
+      },
+      "isFocused" : false,
+      "isMinimized" : true,
+      "isOnScreen" : false,
+      "layer" : 0,
+      "source" : "coregraphics",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "",
+      "visibleFractionEstimate" : 0,
+      "windowID" : 2324,
+      "zRank" : 140
+    },
+    {
+      "alpha" : 1,
+      "appName" : "Control Center",
+      "appPID" : 1069,
+      "bundleID" : "com.apple.controlcenter",
+      "captureEligible" : false,
+      "displayID" : "1",
+      "framePixels" : {
+        "height" : 298,
+        "width" : 704,
+        "x" : 2240,
+        "y" : 0
+      },
+      "framePoints" : {
+        "height" : 149,
+        "width" : 352,
+        "x" : 1120,
+        "y" : 0
+      },
+      "isFocused" : false,
+      "isMinimized" : true,
+      "isOnScreen" : false,
+      "layer" : 2005,
+      "source" : "coregraphics",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "",
+      "visibleFractionEstimate" : 0,
+      "windowID" : 2244,
+      "zRank" : 141
+    },
+    {
+      "alpha" : 1,
+      "appName" : "Finder",
+      "appPID" : 1256,
+      "bundleID" : "com.apple.finder",
+      "captureEligible" : false,
+      "displayID" : "1",
+      "framePixels" : {
+        "height" : 264,
+        "width" : 978,
+        "x" : 2076,
+        "y" : 540
+      },
+      "framePoints" : {
+        "height" : 132,
+        "width" : 489,
+        "x" : 1038,
+        "y" : 270
+      },
+      "isFocused" : false,
+      "isMinimized" : true,
+      "isOnScreen" : false,
+      "layer" : 0,
+      "source" : "coregraphics",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "",
+      "visibleFractionEstimate" : 0,
+      "windowID" : 1647,
+      "zRank" : 142
+    },
+    {
+      "alpha" : 1,
+      "appName" : "Finder",
+      "appPID" : 1256,
+      "bundleID" : "com.apple.finder",
+      "captureEligible" : false,
+      "displayID" : "1",
+      "framePixels" : {
+        "height" : 264,
+        "width" : 978,
+        "x" : 2076,
+        "y" : 540
+      },
+      "framePoints" : {
+        "height" : 132,
+        "width" : 489,
+        "x" : 1038,
+        "y" : 270
+      },
+      "isFocused" : false,
+      "isMinimized" : true,
+      "isOnScreen" : false,
+      "layer" : 0,
+      "source" : "coregraphics",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "",
+      "visibleFractionEstimate" : 0,
+      "windowID" : 1641,
+      "zRank" : 143
+    },
+    {
+      "alpha" : 1,
+      "appName" : "Window Server",
+      "appPID" : 595,
+      "captureEligible" : false,
+      "displayID" : "1",
+      "framePixels" : {
+        "height" : 162,
+        "width" : 2940,
+        "x" : 0,
+        "y" : 0
+      },
+      "framePoints" : {
+        "height" : 81,
+        "width" : 1470,
+        "x" : 0,
+        "y" : 0
+      },
+      "isFocused" : false,
+      "isMinimized" : true,
+      "isOnScreen" : false,
+      "layer" : -2147483602,
+      "source" : "coregraphics",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "underbelly",
+      "visibleFractionEstimate" : 0,
+      "windowID" : 7926,
+      "zRank" : 144
+    },
+    {
+      "alpha" : 1,
+      "appName" : "Control Strip",
+      "appPID" : 69601,
+      "bundleID" : "com.apple.controlstrip",
+      "captureEligible" : false,
+      "framePoints" : {
+        "height" : 0,
+        "width" : 0,
+        "x" : 0,
+        "y" : 0
+      },
+      "isFocused" : false,
+      "isMinimized" : true,
+      "isOnScreen" : false,
+      "layer" : 1000,
+      "source" : "coregraphics",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "",
+      "visibleFractionEstimate" : 0,
+      "windowID" : 9103,
+      "zRank" : 145
+    },
+    {
+      "alpha" : 1,
+      "appName" : "Control Strip",
+      "appPID" : 69601,
+      "bundleID" : "com.apple.controlstrip",
+      "captureEligible" : false,
+      "framePoints" : {
+        "height" : 0,
+        "width" : 0,
+        "x" : 0,
+        "y" : 0
+      },
+      "isFocused" : false,
+      "isMinimized" : true,
+      "isOnScreen" : false,
+      "layer" : 1000,
+      "source" : "coregraphics",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "",
+      "visibleFractionEstimate" : 0,
+      "windowID" : 9102,
+      "zRank" : 146
+    },
+    {
+      "alpha" : 1,
+      "appName" : "Control Center",
+      "appPID" : 1069,
+      "bundleID" : "com.apple.controlcenter",
+      "captureEligible" : false,
+      "framePoints" : {
+        "height" : 0,
+        "width" : 0,
+        "x" : 0,
+        "y" : 0
+      },
+      "isFocused" : false,
+      "isMinimized" : true,
+      "isOnScreen" : false,
+      "layer" : 1000,
+      "source" : "coregraphics",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "",
+      "visibleFractionEstimate" : 0,
+      "windowID" : 9096,
+      "zRank" : 147
+    },
+    {
+      "alpha" : 1,
+      "appName" : "Notification Center",
+      "appPID" : 1124,
+      "bundleID" : "com.apple.notificationcenterui",
+      "captureEligible" : false,
+      "framePoints" : {
+        "height" : 0,
+        "width" : 0,
+        "x" : 0,
+        "y" : 0
+      },
+      "isFocused" : false,
+      "isMinimized" : true,
+      "isOnScreen" : false,
+      "layer" : 1000,
+      "source" : "coregraphics",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "",
+      "visibleFractionEstimate" : 0,
+      "windowID" : 9095,
+      "zRank" : 148
+    },
+    {
+      "alpha" : 1,
+      "appName" : "Claude",
+      "appPID" : 45096,
+      "bundleID" : "com.anthropic.claudefordesktop",
+      "captureEligible" : false,
+      "displayID" : "4",
+      "framePixels" : {
+        "height" : 60,
+        "width" : 2576,
+        "x" : 0,
+        "y" : -20
+      },
+      "framePoints" : {
+        "height" : 30,
+        "width" : 1288,
+        "x" : -1288,
+        "y" : 0
+      },
+      "isFocused" : false,
+      "isMinimized" : true,
+      "isOnScreen" : false,
+      "layer" : 0,
+      "source" : "coregraphics",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "",
+      "visibleFractionEstimate" : 0,
+      "windowID" : 9066,
+      "zRank" : 149
+    },
+    {
+      "alpha" : 1,
+      "appName" : "Google Drive",
+      "appPID" : 77187,
+      "bundleID" : "com.google.drivefs",
+      "captureEligible" : false,
+      "displayID" : "1",
+      "framePixels" : {
+        "height" : 1000,
+        "width" : 1000,
+        "x" : 0,
+        "y" : 912
+      },
+      "framePoints" : {
+        "height" : 500,
+        "width" : 500,
+        "x" : 0,
+        "y" : 456
+      },
+      "isFocused" : false,
+      "isMinimized" : true,
+      "isOnScreen" : false,
+      "layer" : 0,
+      "source" : "coregraphics",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "",
+      "visibleFractionEstimate" : 0,
+      "windowID" : 7081,
+      "zRank" : 150
+    },
+    {
+      "alpha" : 1,
+      "appName" : "Google Drive",
+      "appPID" : 77187,
+      "bundleID" : "com.google.drivefs",
+      "captureEligible" : false,
+      "displayID" : "1",
+      "framePixels" : {
+        "height" : 1464,
+        "width" : 2048,
+        "x" : 1536,
+        "y" : -132
+      },
+      "framePoints" : {
+        "height" : 732,
+        "width" : 1024,
+        "x" : 768,
+        "y" : -66
+      },
+      "isFocused" : false,
+      "isMinimized" : true,
+      "isOnScreen" : false,
+      "layer" : 0,
+      "source" : "coregraphics",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "Google Drive",
+      "visibleFractionEstimate" : 0,
+      "windowID" : 7080,
+      "zRank" : 151
+    },
+    {
+      "alpha" : 1,
+      "appName" : "Codex",
+      "appPID" : 3257,
+      "bundleID" : "com.openai.codex",
+      "captureEligible" : false,
+      "displayID" : "1",
+      "framePixels" : {
+        "height" : 1464,
+        "width" : 1618,
+        "x" : 1306,
+        "y" : 238
+      },
+      "framePoints" : {
+        "height" : 732,
+        "width" : 809,
+        "x" : 653,
+        "y" : 119
+      },
+      "isFocused" : false,
+      "isMinimized" : true,
+      "isOnScreen" : false,
+      "layer" : 3,
+      "source" : "coregraphics",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "Browser comment",
+      "visibleFractionEstimate" : 0,
+      "windowID" : 11601,
+      "zRank" : 152
+    },
+    {
+      "alpha" : 1,
+      "appName" : "AutoFill",
+      "appPID" : 3029,
+      "bundleID" : "com.apple.SafariPlatformSupport.Helper",
+      "captureEligible" : false,
+      "displayID" : "1",
+      "framePixels" : {
+        "height" : 474,
+        "width" : 624,
+        "x" : 0,
+        "y" : 1438
+      },
+      "framePoints" : {
+        "height" : 237,
+        "width" : 312,
+        "x" : 0,
+        "y" : 719
+      },
+      "isFocused" : false,
+      "isMinimized" : true,
+      "isOnScreen" : false,
+      "layer" : 0,
+      "source" : "coregraphics",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "",
+      "visibleFractionEstimate" : 0,
+      "windowID" : 9616,
+      "zRank" : 153
+    },
+    {
+      "alpha" : 0,
+      "appName" : "Spotlight",
+      "appPID" : 1879,
+      "bundleID" : "com.apple.Spotlight",
+      "captureEligible" : false,
+      "displayID" : "1",
+      "framePixels" : {
+        "height" : 112,
+        "width" : 1280,
+        "x" : 830,
+        "y" : 380
+      },
+      "framePoints" : {
+        "height" : 56,
+        "width" : 640,
+        "x" : 415,
+        "y" : 190
+      },
+      "isFocused" : false,
+      "isMinimized" : true,
+      "isOnScreen" : false,
+      "layer" : 23,
+      "source" : "coregraphics",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "Spotlight",
+      "visibleFractionEstimate" : 0,
+      "windowID" : 88,
+      "zRank" : 154
+    },
+    {
+      "alpha" : 1,
+      "appName" : "Window Server",
+      "appPID" : 595,
+      "captureEligible" : false,
+      "displayID" : "1",
+      "framePixels" : {
+        "height" : 2,
+        "width" : 2,
+        "x" : 0,
+        "y" : 0
+      },
+      "framePoints" : {
+        "height" : 1,
+        "width" : 1,
+        "x" : 0,
+        "y" : 0
+      },
+      "isFocused" : false,
+      "isMinimized" : true,
+      "isOnScreen" : false,
+      "layer" : -2147483626,
+      "source" : "coregraphics",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "Display 3 Backstop",
+      "visibleFractionEstimate" : 0,
+      "windowID" : 4,
+      "zRank" : 155
+    },
+    {
+      "alpha" : 1,
+      "appName" : "Dock",
+      "appPID" : 1254,
+      "bundleID" : "com.apple.dock",
+      "captureEligible" : false,
+      "displayID" : "1",
+      "framePixels" : {
+        "height" : 1912,
+        "width" : 2940,
+        "x" : 0,
+        "y" : 0
+      },
+      "framePoints" : {
+        "height" : 956,
+        "width" : 1470,
+        "x" : 0,
+        "y" : 0
+      },
+      "isFocused" : false,
+      "isMinimized" : true,
+      "isOnScreen" : false,
+      "layer" : -2147483624,
+      "source" : "coregraphics",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "Wallpaper-739AE048-1608-4FD2-9E27-ECFE0E2BAA70",
+      "visibleFractionEstimate" : 0,
+      "windowID" : 7943,
+      "zRank" : 156
+    },
+    {
+      "alpha" : 1,
+      "appName" : "Window Server",
+      "appPID" : 595,
+      "captureEligible" : false,
+      "framePoints" : {
+        "height" : 1,
+        "width" : 1,
+        "x" : -2560,
+        "y" : 196
+      },
+      "isFocused" : false,
+      "isMinimized" : true,
+      "isOnScreen" : false,
+      "layer" : -2147483626,
+      "source" : "coregraphics",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "Display 2 Backstop",
+      "visibleFractionEstimate" : 0,
+      "windowID" : 3,
+      "zRank" : 157
+    },
+    {
+      "alpha" : 1,
+      "appName" : "Window Server",
+      "appPID" : 595,
+      "bundleID" : "",
+      "captureEligible" : true,
+      "displayID" : "1",
+      "framePixels" : {
+        "height" : 1912,
+        "width" : 2940,
+        "x" : 0,
+        "y" : 0
+      },
+      "framePoints" : {
+        "height" : 956,
+        "width" : 1470,
+        "x" : 0,
+        "y" : 0
+      },
+      "isFocused" : false,
+      "isMinimized" : false,
+      "isOnScreen" : true,
+      "layer" : -2147483626,
+      "source" : "coregraphics+screencapturekit",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "Display 1 Backstop",
+      "visibleFractionEstimate" : 1,
+      "windowID" : 2,
+      "zRank" : 158
+    },
+    {
+      "alpha" : 1,
+      "appName" : "Google Chrome",
+      "appPID" : 19780,
+      "bundleID" : "com.google.Chrome",
+      "captureEligible" : false,
+      "displayID" : "4",
+      "framePixels" : {
+        "height" : 60,
+        "width" : 2576,
+        "x" : 0,
+        "y" : -20
+      },
+      "framePoints" : {
+        "height" : 30,
+        "width" : 1288,
+        "x" : -1288,
+        "y" : 0
+      },
+      "isFocused" : false,
+      "isMinimized" : true,
+      "isOnScreen" : false,
+      "layer" : 0,
+      "source" : "coregraphics",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "",
+      "visibleFractionEstimate" : 0,
+      "windowID" : 9722,
+      "zRank" : 159
+    },
+    {
+      "alpha" : 1,
+      "appName" : "Finder",
+      "appPID" : 1256,
+      "bundleID" : "com.apple.finder",
+      "captureEligible" : false,
+      "displayID" : "1",
+      "framePixels" : {
+        "height" : 128,
+        "width" : 128,
+        "x" : 0,
+        "y" : 912
+      },
+      "framePoints" : {
+        "height" : 64,
+        "width" : 64,
+        "x" : 0,
+        "y" : 456
+      },
+      "isFocused" : false,
+      "isMinimized" : true,
+      "isOnScreen" : false,
+      "layer" : 0,
+      "source" : "coregraphics",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "",
+      "visibleFractionEstimate" : 0,
+      "windowID" : 194,
+      "zRank" : 160
+    },
+    {
+      "alpha" : 1,
+      "appName" : "Activity Monitor",
+      "appPID" : 1247,
+      "bundleID" : "com.apple.ActivityMonitor",
+      "captureEligible" : false,
+      "displayID" : "1",
+      "framePixels" : {
+        "height" : 38,
+        "width" : 166,
+        "x" : 548,
+        "y" : 602
+      },
+      "framePoints" : {
+        "height" : 19,
+        "width" : 83,
+        "x" : 274,
+        "y" : 301
+      },
+      "isFocused" : false,
+      "isMinimized" : true,
+      "isOnScreen" : false,
+      "layer" : 103,
+      "source" : "coregraphics",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "",
+      "visibleFractionEstimate" : 0,
+      "windowID" : 266,
+      "zRank" : 161
+    },
+    {
+      "alpha" : 1,
+      "appName" : "Finder",
+      "appPID" : 1256,
+      "bundleID" : "com.apple.finder",
+      "captureEligible" : false,
+      "displayID" : "1",
+      "framePixels" : {
+        "height" : 38,
+        "width" : 64,
+        "x" : 1342,
+        "y" : 264
+      },
+      "framePoints" : {
+        "height" : 19,
+        "width" : 32,
+        "x" : 671,
+        "y" : 132
+      },
+      "isFocused" : false,
+      "isMinimized" : true,
+      "isOnScreen" : false,
+      "layer" : 103,
+      "source" : "coregraphics",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "",
+      "visibleFractionEstimate" : 0,
+      "windowID" : 258,
+      "zRank" : 162
+    },
+    {
+      "alpha" : 1,
+      "appName" : "Claude",
+      "appPID" : 45096,
+      "bundleID" : "com.anthropic.claudefordesktop",
+      "captureEligible" : false,
+      "displayID" : "1",
+      "framePixels" : {
+        "height" : 66,
+        "width" : 2940,
+        "x" : 0,
+        "y" : 0
+      },
+      "framePoints" : {
+        "height" : 33,
+        "width" : 1470,
+        "x" : 0,
+        "y" : 0
+      },
+      "isFocused" : false,
+      "isMinimized" : true,
+      "isOnScreen" : false,
+      "layer" : 0,
+      "source" : "coregraphics",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "",
+      "visibleFractionEstimate" : 0,
+      "windowID" : 8913,
+      "zRank" : 163
+    },
+    {
+      "alpha" : 1,
+      "appName" : "Claude",
+      "appPID" : 45096,
+      "bundleID" : "com.anthropic.claudefordesktop",
+      "captureEligible" : false,
+      "displayID" : "1",
+      "framePixels" : {
+        "height" : 66,
+        "width" : 2940,
+        "x" : 0,
+        "y" : 0
+      },
+      "framePoints" : {
+        "height" : 33,
+        "width" : 1470,
+        "x" : 0,
+        "y" : 0
+      },
+      "isFocused" : false,
+      "isMinimized" : true,
+      "isOnScreen" : false,
+      "layer" : 0,
+      "source" : "coregraphics",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "",
+      "visibleFractionEstimate" : 0,
+      "windowID" : 8912,
+      "zRank" : 164
+    },
+    {
+      "alpha" : 1,
+      "appName" : "Claude",
+      "appPID" : 45096,
+      "bundleID" : "com.anthropic.claudefordesktop",
+      "captureEligible" : false,
+      "displayID" : "1",
+      "framePixels" : {
+        "height" : 66,
+        "width" : 2940,
+        "x" : 0,
+        "y" : 0
+      },
+      "framePoints" : {
+        "height" : 33,
+        "width" : 1470,
+        "x" : 0,
+        "y" : 0
+      },
+      "isFocused" : false,
+      "isMinimized" : true,
+      "isOnScreen" : false,
+      "layer" : 0,
+      "source" : "coregraphics",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "",
+      "visibleFractionEstimate" : 0,
+      "windowID" : 8911,
+      "zRank" : 165
+    },
+    {
+      "alpha" : 1,
+      "appName" : "Claude",
+      "appPID" : 45096,
+      "bundleID" : "com.anthropic.claudefordesktop",
+      "captureEligible" : false,
+      "displayID" : "1",
+      "framePixels" : {
+        "height" : 1200,
+        "width" : 1600,
+        "x" : 670,
+        "y" : 292
+      },
+      "framePoints" : {
+        "height" : 600,
+        "width" : 800,
+        "x" : 335,
+        "y" : 146
+      },
+      "isFocused" : false,
+      "isMinimized" : true,
+      "isOnScreen" : false,
+      "layer" : 0,
+      "source" : "coregraphics",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "",
+      "visibleFractionEstimate" : 0,
+      "windowID" : 8900,
+      "zRank" : 166
+    },
+    {
+      "alpha" : 1,
+      "appName" : "Claude",
+      "appPID" : 45096,
+      "bundleID" : "com.anthropic.claudefordesktop",
+      "captureEligible" : true,
+      "displayID" : "1",
+      "framePixels" : {
+        "height" : 1652,
+        "width" : 2940,
+        "x" : 0,
+        "y" : 66
+      },
+      "framePoints" : {
+        "height" : 826,
+        "width" : 1470,
+        "x" : 0,
+        "y" : 33
+      },
+      "isFocused" : false,
+      "isMinimized" : false,
+      "isOnScreen" : true,
+      "layer" : 0,
+      "source" : "coregraphics+screencapturekit",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "Claude",
+      "visibleFractionEstimate" : 0,
+      "windowID" : 8896,
+      "zRank" : 167
+    },
+    {
+      "alpha" : 1,
+      "appName" : "Code",
+      "appPID" : 28730,
+      "bundleID" : "com.microsoft.VSCode",
+      "captureEligible" : false,
+      "displayID" : "1",
+      "framePixels" : {
+        "height" : 66,
+        "width" : 2940,
+        "x" : 0,
+        "y" : 0
+      },
+      "framePoints" : {
+        "height" : 33,
+        "width" : 1470,
+        "x" : 0,
+        "y" : 0
+      },
+      "isFocused" : false,
+      "isMinimized" : true,
+      "isOnScreen" : false,
+      "layer" : 0,
+      "source" : "coregraphics",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "",
+      "visibleFractionEstimate" : 0,
+      "windowID" : 11055,
+      "zRank" : 168
+    },
+    {
+      "alpha" : 1,
+      "appName" : "Claude",
+      "appPID" : 45096,
+      "bundleID" : "com.anthropic.claudefordesktop",
+      "captureEligible" : false,
+      "displayID" : "4",
+      "framePixels" : {
+        "height" : 60,
+        "width" : 2576,
+        "x" : 0,
+        "y" : -20
+      },
+      "framePoints" : {
+        "height" : 30,
+        "width" : 1288,
+        "x" : -1288,
+        "y" : 0
+      },
+      "isFocused" : false,
+      "isMinimized" : true,
+      "isOnScreen" : false,
+      "layer" : 0,
+      "source" : "coregraphics",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "",
+      "visibleFractionEstimate" : 0,
+      "windowID" : 9070,
+      "zRank" : 169
+    },
+    {
+      "alpha" : 1,
+      "appName" : "CursorUIViewService",
+      "appPID" : 1280,
+      "bundleID" : "com.apple.TextInputUI.xpc.CursorUIViewService",
+      "captureEligible" : false,
+      "displayID" : "1",
+      "framePixels" : {
+        "height" : 128,
+        "width" : 128,
+        "x" : 0,
+        "y" : 912
+      },
+      "framePoints" : {
+        "height" : 64,
+        "width" : 64,
+        "x" : 0,
+        "y" : 456
+      },
+      "isFocused" : false,
+      "isMinimized" : true,
+      "isOnScreen" : false,
+      "layer" : 0,
+      "source" : "coregraphics",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "",
+      "visibleFractionEstimate" : 0,
+      "windowID" : 11450,
+      "zRank" : 170
+    },
+    {
+      "alpha" : 1,
+      "appName" : "Code",
+      "appPID" : 28730,
+      "bundleID" : "com.microsoft.VSCode",
+      "captureEligible" : false,
+      "displayID" : "1",
+      "framePixels" : {
+        "height" : 66,
+        "width" : 2940,
+        "x" : 0,
+        "y" : 0
+      },
+      "framePoints" : {
+        "height" : 33,
+        "width" : 1470,
+        "x" : 0,
+        "y" : 0
+      },
+      "isFocused" : false,
+      "isMinimized" : true,
+      "isOnScreen" : false,
+      "layer" : 0,
+      "source" : "coregraphics",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "",
+      "visibleFractionEstimate" : 0,
+      "windowID" : 11053,
+      "zRank" : 171
+    },
+    {
+      "alpha" : 1,
+      "appName" : "Claude",
+      "appPID" : 45096,
+      "bundleID" : "com.anthropic.claudefordesktop",
+      "captureEligible" : false,
+      "displayID" : "4",
+      "framePixels" : {
+        "height" : 60,
+        "width" : 2576,
+        "x" : 0,
+        "y" : -20
+      },
+      "framePoints" : {
+        "height" : 30,
+        "width" : 1288,
+        "x" : -1288,
+        "y" : 0
+      },
+      "isFocused" : false,
+      "isMinimized" : true,
+      "isOnScreen" : false,
+      "layer" : 0,
+      "source" : "coregraphics",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "",
+      "visibleFractionEstimate" : 0,
+      "windowID" : 9068,
+      "zRank" : 172
+    },
+    {
+      "alpha" : 1,
+      "appName" : "Google Drive",
+      "appPID" : 77187,
+      "bundleID" : "com.google.drivefs",
+      "captureEligible" : false,
+      "displayID" : "1",
+      "framePixels" : {
+        "height" : 600,
+        "width" : 600,
+        "x" : 2260,
+        "y" : 300
+      },
+      "framePoints" : {
+        "height" : 300,
+        "width" : 300,
+        "x" : 1130,
+        "y" : 150
+      },
+      "isFocused" : false,
+      "isMinimized" : true,
+      "isOnScreen" : false,
+      "layer" : 101,
+      "source" : "coregraphics",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "Survey",
+      "visibleFractionEstimate" : 0,
+      "windowID" : 7083,
+      "zRank" : 173
+    },
+    {
+      "alpha" : 1,
+      "appName" : "Google Chrome",
+      "appPID" : 86159,
+      "bundleID" : "com.google.Chrome",
+      "captureEligible" : false,
+      "displayID" : "4",
+      "framePixels" : {
+        "height" : 60,
+        "width" : 2576,
+        "x" : 0,
+        "y" : -20
+      },
+      "framePoints" : {
+        "height" : 30,
+        "width" : 1288,
+        "x" : -1288,
+        "y" : 0
+      },
+      "isFocused" : false,
+      "isMinimized" : true,
+      "isOnScreen" : false,
+      "layer" : 0,
+      "source" : "coregraphics",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "",
+      "visibleFractionEstimate" : 0,
+      "windowID" : 11253,
+      "zRank" : 174
+    },
+    {
+      "alpha" : 1,
+      "appName" : "Finder",
+      "appPID" : 1256,
+      "bundleID" : "com.apple.finder",
+      "captureEligible" : false,
+      "displayID" : "1",
+      "framePixels" : {
+        "height" : 66,
+        "width" : 2940,
+        "x" : 0,
+        "y" : 0
+      },
+      "framePoints" : {
+        "height" : 33,
+        "width" : 1470,
+        "x" : 0,
+        "y" : 0
+      },
+      "isFocused" : false,
+      "isMinimized" : true,
+      "isOnScreen" : false,
+      "layer" : 0,
+      "source" : "coregraphics",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "",
+      "visibleFractionEstimate" : 0,
+      "windowID" : 137,
+      "zRank" : 175
+    },
+    {
+      "alpha" : 1,
+      "appName" : "Code",
+      "appPID" : 28730,
+      "bundleID" : "com.microsoft.VSCode",
+      "captureEligible" : true,
+      "displayID" : "1",
+      "framePixels" : {
+        "height" : 1652,
+        "width" : 2940,
+        "x" : 0,
+        "y" : 66
+      },
+      "framePoints" : {
+        "height" : 826,
+        "width" : 1470,
+        "x" : 0,
+        "y" : 33
+      },
+      "isFocused" : false,
+      "isMinimized" : false,
+      "isOnScreen" : true,
+      "layer" : 0,
+      "source" : "coregraphics+screencapturekit",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "screencap-attention-algorithm-notes.md",
+      "visibleFractionEstimate" : 0,
+      "windowID" : 11052,
+      "zRank" : 176
+    },
+    {
+      "alpha" : 1,
+      "appName" : "CursorUIViewService",
+      "appPID" : 1280,
+      "bundleID" : "com.apple.TextInputUI.xpc.CursorUIViewService",
+      "captureEligible" : false,
+      "displayID" : "1",
+      "framePixels" : {
+        "height" : 128,
+        "width" : 128,
+        "x" : 0,
+        "y" : 912
+      },
+      "framePoints" : {
+        "height" : 64,
+        "width" : 64,
+        "x" : 0,
+        "y" : 456
+      },
+      "isFocused" : false,
+      "isMinimized" : true,
+      "isOnScreen" : false,
+      "layer" : 0,
+      "source" : "coregraphics",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "",
+      "visibleFractionEstimate" : 0,
+      "windowID" : 10655,
+      "zRank" : 177
+    },
+    {
+      "alpha" : 1,
+      "appName" : "Control Center",
+      "appPID" : 1069,
+      "bundleID" : "com.apple.controlcenter",
+      "captureEligible" : true,
+      "displayID" : "4",
+      "framePixels" : {
+        "height" : 60,
+        "width" : 310,
+        "x" : 2266,
+        "y" : -20
+      },
+      "framePoints" : {
+        "height" : 30,
+        "width" : 155,
+        "x" : -155,
+        "y" : 0
+      },
+      "isFocused" : false,
+      "isMinimized" : false,
+      "isOnScreen" : true,
+      "layer" : 25,
+      "source" : "coregraphics+screencapturekit",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "",
+      "visibleFractionEstimate" : 0.66666666666666663,
+      "windowID" : 9067,
+      "zRank" : 178
+    },
+    {
+      "alpha" : 1,
+      "appName" : "Google Drive",
+      "appPID" : 77187,
+      "bundleID" : "com.google.drivefs",
+      "captureEligible" : false,
+      "displayID" : "1",
+      "framePixels" : {
+        "height" : 64,
+        "width" : 64,
+        "x" : 0,
+        "y" : 1848
+      },
+      "framePoints" : {
+        "height" : 32,
+        "width" : 32,
+        "x" : 0,
+        "y" : 924
+      },
+      "isFocused" : false,
+      "isMinimized" : true,
+      "isOnScreen" : false,
+      "layer" : 19,
+      "source" : "coregraphics",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "Google Drive Real-time Presence",
+      "visibleFractionEstimate" : 0,
+      "windowID" : 7082,
+      "zRank" : 179
+    },
+    {
+      "alpha" : 1,
+      "appName" : "Finder",
+      "appPID" : 1256,
+      "bundleID" : "com.apple.finder",
+      "captureEligible" : false,
+      "displayID" : "1",
+      "framePixels" : {
+        "height" : 66,
+        "width" : 2940,
+        "x" : 0,
+        "y" : 0
+      },
+      "framePoints" : {
+        "height" : 33,
+        "width" : 1470,
+        "x" : 0,
+        "y" : 0
+      },
+      "isFocused" : false,
+      "isMinimized" : true,
+      "isOnScreen" : false,
+      "layer" : 0,
+      "source" : "coregraphics",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "",
+      "visibleFractionEstimate" : 0,
+      "windowID" : 132,
+      "zRank" : 180
+    },
+    {
+      "alpha" : 1,
+      "appName" : "Activity Monitor",
+      "appPID" : 1247,
+      "bundleID" : "com.apple.ActivityMonitor",
+      "captureEligible" : false,
+      "displayID" : "1",
+      "framePixels" : {
+        "height" : 66,
+        "width" : 2940,
+        "x" : 0,
+        "y" : 0
+      },
+      "framePoints" : {
+        "height" : 33,
+        "width" : 1470,
+        "x" : 0,
+        "y" : 0
+      },
+      "isFocused" : false,
+      "isMinimized" : true,
+      "isOnScreen" : false,
+      "layer" : 0,
+      "source" : "coregraphics",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "",
+      "visibleFractionEstimate" : 0,
+      "windowID" : 131,
+      "zRank" : 181
+    },
+    {
+      "alpha" : 1,
+      "appName" : "Finder",
+      "appPID" : 1256,
+      "bundleID" : "com.apple.finder",
+      "captureEligible" : false,
+      "displayID" : "1",
+      "framePixels" : {
+        "height" : 66,
+        "width" : 2940,
+        "x" : 0,
+        "y" : 0
+      },
+      "framePoints" : {
+        "height" : 33,
+        "width" : 1470,
+        "x" : 0,
+        "y" : 0
+      },
+      "isFocused" : false,
+      "isMinimized" : true,
+      "isOnScreen" : false,
+      "layer" : 0,
+      "source" : "coregraphics",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "",
+      "visibleFractionEstimate" : 0,
+      "windowID" : 129,
+      "zRank" : 182
+    },
+    {
+      "alpha" : 1,
+      "appName" : "Activity Monitor",
+      "appPID" : 1247,
+      "bundleID" : "com.apple.ActivityMonitor",
+      "captureEligible" : false,
+      "displayID" : "1",
+      "framePixels" : {
+        "height" : 66,
+        "width" : 2940,
+        "x" : 0,
+        "y" : 0
+      },
+      "framePoints" : {
+        "height" : 33,
+        "width" : 1470,
+        "x" : 0,
+        "y" : 0
+      },
+      "isFocused" : false,
+      "isMinimized" : true,
+      "isOnScreen" : false,
+      "layer" : 0,
+      "source" : "coregraphics",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "",
+      "visibleFractionEstimate" : 0,
+      "windowID" : 128,
+      "zRank" : 183
+    },
+    {
+      "alpha" : 1,
+      "appName" : "Tailscale",
+      "appPID" : 1252,
+      "bundleID" : "io.tailscale.ipn.macos",
+      "captureEligible" : false,
+      "displayID" : "1",
+      "framePixels" : {
+        "height" : 66,
+        "width" : 2940,
+        "x" : 0,
+        "y" : 0
+      },
+      "framePoints" : {
+        "height" : 33,
+        "width" : 1470,
+        "x" : 0,
+        "y" : 0
+      },
+      "isFocused" : false,
+      "isMinimized" : true,
+      "isOnScreen" : false,
+      "layer" : 0,
+      "source" : "coregraphics",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "",
+      "visibleFractionEstimate" : 0,
+      "windowID" : 127,
+      "zRank" : 184
+    },
+    {
+      "alpha" : 1,
+      "appName" : "Finder",
+      "appPID" : 1256,
+      "bundleID" : "com.apple.finder",
+      "captureEligible" : false,
+      "displayID" : "1",
+      "framePixels" : {
+        "height" : 66,
+        "width" : 2940,
+        "x" : 0,
+        "y" : 0
+      },
+      "framePoints" : {
+        "height" : 33,
+        "width" : 1470,
+        "x" : 0,
+        "y" : 0
+      },
+      "isFocused" : false,
+      "isMinimized" : true,
+      "isOnScreen" : false,
+      "layer" : 0,
+      "source" : "coregraphics",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "",
+      "visibleFractionEstimate" : 0,
+      "windowID" : 124,
+      "zRank" : 185
+    },
+    {
+      "alpha" : 1,
+      "appName" : "Activity Monitor",
+      "appPID" : 1247,
+      "bundleID" : "com.apple.ActivityMonitor",
+      "captureEligible" : false,
+      "displayID" : "1",
+      "framePixels" : {
+        "height" : 66,
+        "width" : 2940,
+        "x" : 0,
+        "y" : 0
+      },
+      "framePoints" : {
+        "height" : 33,
+        "width" : 1470,
+        "x" : 0,
+        "y" : 0
+      },
+      "isFocused" : false,
+      "isMinimized" : true,
+      "isOnScreen" : false,
+      "layer" : 0,
+      "source" : "coregraphics",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "",
+      "visibleFractionEstimate" : 0,
+      "windowID" : 123,
+      "zRank" : 186
+    },
+    {
+      "alpha" : 1,
+      "appName" : "Tailscale",
+      "appPID" : 1252,
+      "bundleID" : "io.tailscale.ipn.macos",
+      "captureEligible" : false,
+      "displayID" : "1",
+      "framePixels" : {
+        "height" : 66,
+        "width" : 2940,
+        "x" : 0,
+        "y" : 0
+      },
+      "framePoints" : {
+        "height" : 33,
+        "width" : 1470,
+        "x" : 0,
+        "y" : 0
+      },
+      "isFocused" : false,
+      "isMinimized" : true,
+      "isOnScreen" : false,
+      "layer" : 0,
+      "source" : "coregraphics",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "",
+      "visibleFractionEstimate" : 0,
+      "windowID" : 122,
+      "zRank" : 187
+    },
+    {
+      "alpha" : 1,
+      "appName" : "Activity Monitor",
+      "appPID" : 1247,
+      "bundleID" : "com.apple.ActivityMonitor",
+      "captureEligible" : false,
+      "displayID" : "1",
+      "framePixels" : {
+        "height" : 66,
+        "width" : 2940,
+        "x" : 0,
+        "y" : 0
+      },
+      "framePoints" : {
+        "height" : 33,
+        "width" : 1470,
+        "x" : 0,
+        "y" : 0
+      },
+      "isFocused" : false,
+      "isMinimized" : true,
+      "isOnScreen" : false,
+      "layer" : 0,
+      "source" : "coregraphics",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "",
+      "visibleFractionEstimate" : 0,
+      "windowID" : 119,
+      "zRank" : 188
+    },
+    {
+      "alpha" : 1,
+      "appName" : "Tailscale",
+      "appPID" : 1252,
+      "bundleID" : "io.tailscale.ipn.macos",
+      "captureEligible" : false,
+      "displayID" : "1",
+      "framePixels" : {
+        "height" : 66,
+        "width" : 2940,
+        "x" : 0,
+        "y" : 0
+      },
+      "framePoints" : {
+        "height" : 33,
+        "width" : 1470,
+        "x" : 0,
+        "y" : 0
+      },
+      "isFocused" : false,
+      "isMinimized" : true,
+      "isOnScreen" : false,
+      "layer" : 0,
+      "source" : "coregraphics",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "",
+      "visibleFractionEstimate" : 0,
+      "windowID" : 118,
+      "zRank" : 189
+    },
+    {
+      "alpha" : 1,
+      "appName" : "Tailscale",
+      "appPID" : 1252,
+      "bundleID" : "io.tailscale.ipn.macos",
+      "captureEligible" : false,
+      "displayID" : "1",
+      "framePixels" : {
+        "height" : 66,
+        "width" : 2940,
+        "x" : 0,
+        "y" : 0
+      },
+      "framePoints" : {
+        "height" : 33,
+        "width" : 1470,
+        "x" : 0,
+        "y" : 0
+      },
+      "isFocused" : false,
+      "isMinimized" : true,
+      "isOnScreen" : false,
+      "layer" : 0,
+      "source" : "coregraphics",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "",
+      "visibleFractionEstimate" : 0,
+      "windowID" : 116,
+      "zRank" : 190
+    },
+    {
+      "alpha" : 1,
+      "appName" : "CursorUIViewService",
+      "appPID" : 1280,
+      "bundleID" : "com.apple.TextInputUI.xpc.CursorUIViewService",
+      "captureEligible" : false,
+      "displayID" : "1",
+      "framePixels" : {
+        "height" : 128,
+        "width" : 128,
+        "x" : 0,
+        "y" : 1784
+      },
+      "framePoints" : {
+        "height" : 64,
+        "width" : 64,
+        "x" : 0,
+        "y" : 892
+      },
+      "isFocused" : false,
+      "isMinimized" : true,
+      "isOnScreen" : false,
+      "layer" : 0,
+      "source" : "coregraphics",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "",
+      "visibleFractionEstimate" : 0,
+      "windowID" : 11602,
+      "zRank" : 191
+    },
+    {
+      "alpha" : 1,
+      "appName" : "Spotlight",
+      "appPID" : 1879,
+      "bundleID" : "com.apple.Spotlight",
+      "captureEligible" : false,
+      "displayID" : "1",
+      "framePixels" : {
+        "height" : 1000,
+        "width" : 1000,
+        "x" : 0,
+        "y" : 912
+      },
+      "framePoints" : {
+        "height" : 500,
+        "width" : 500,
+        "x" : 0,
+        "y" : 456
+      },
+      "isFocused" : false,
+      "isMinimized" : true,
+      "isOnScreen" : false,
+      "layer" : 0,
+      "source" : "coregraphics",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "",
+      "visibleFractionEstimate" : 0,
+      "windowID" : 89,
+      "zRank" : 192
+    },
+    {
+      "alpha" : 1,
+      "appName" : "Spotlight",
+      "appPID" : 1879,
+      "bundleID" : "com.apple.Spotlight",
+      "captureEligible" : false,
+      "displayID" : "1",
+      "framePixels" : {
+        "height" : 1214,
+        "width" : 1688,
+        "x" : 626,
+        "y" : 380
+      },
+      "framePoints" : {
+        "height" : 607,
+        "width" : 844,
+        "x" : 313,
+        "y" : 190
+      },
+      "isFocused" : false,
+      "isMinimized" : true,
+      "isOnScreen" : false,
+      "layer" : 23,
+      "source" : "coregraphics",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "Spotlight",
+      "visibleFractionEstimate" : 0,
+      "windowID" : 87,
+      "zRank" : 193
+    },
+    {
+      "alpha" : 1,
+      "appName" : "Code",
+      "appPID" : 28730,
+      "bundleID" : "com.microsoft.VSCode",
+      "captureEligible" : false,
+      "displayID" : "1",
+      "framePixels" : {
+        "height" : 40,
+        "width" : 132,
+        "x" : 12,
+        "y" : 78
+      },
+      "framePoints" : {
+        "height" : 20,
+        "width" : 66,
+        "x" : 6,
+        "y" : 39
+      },
+      "isFocused" : false,
+      "isMinimized" : true,
+      "isOnScreen" : false,
+      "layer" : 0,
+      "source" : "coregraphics",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "Window",
+      "visibleFractionEstimate" : 0,
+      "windowID" : 11594,
+      "zRank" : 194
+    },
+    {
+      "alpha" : 1,
+      "appName" : "Control Center",
+      "appPID" : 1069,
+      "bundleID" : "com.apple.controlcenter",
+      "captureEligible" : true,
+      "displayID" : "1",
+      "framePixels" : {
+        "height" : 66,
+        "width" : 64,
+        "x" : 2250,
+        "y" : 0
+      },
+      "framePoints" : {
+        "height" : 33,
+        "width" : 32,
+        "x" : 1125,
+        "y" : 0
+      },
+      "isFocused" : false,
+      "isMinimized" : false,
+      "isOnScreen" : true,
+      "layer" : 25,
+      "source" : "coregraphics+screencapturekit",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "bb3cc23c-6950-4e96-8b40-850e09f46934",
+      "visibleFractionEstimate" : 1,
+      "windowID" : 81,
+      "zRank" : 195
+    },
+    {
+      "alpha" : 1,
+      "appName" : "ThemeWidgetControlViewService",
+      "appPID" : 42780,
+      "bundleID" : "com.apple.appkit.xpc.ThemeWidgetControlViewService",
+      "captureEligible" : false,
+      "displayID" : "1",
+      "framePixels" : {
+        "height" : 28,
+        "width" : 28,
+        "x" : 110,
+        "y" : 84
+      },
+      "framePoints" : {
+        "height" : 14,
+        "width" : 14,
+        "x" : 55,
+        "y" : 42
+      },
+      "isFocused" : false,
+      "isMinimized" : true,
+      "isOnScreen" : false,
+      "layer" : 0,
+      "source" : "coregraphics",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "",
+      "visibleFractionEstimate" : 0,
+      "windowID" : 11593,
+      "zRank" : 196
+    },
+    {
+      "alpha" : 1,
+      "appName" : "Universal Control",
+      "appPID" : 1494,
+      "bundleID" : "com.apple.universalcontrol",
+      "captureEligible" : false,
+      "framePoints" : {
+        "height" : 0,
+        "width" : 0,
+        "x" : 0,
+        "y" : 0
+      },
+      "isFocused" : false,
+      "isMinimized" : true,
+      "isOnScreen" : false,
+      "layer" : 0,
+      "source" : "coregraphics",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "",
+      "visibleFractionEstimate" : 0,
+      "windowID" : 80,
+      "zRank" : 197
+    },
+    {
+      "alpha" : 1,
+      "appName" : "Finder",
+      "appPID" : 1256,
+      "bundleID" : "com.apple.finder",
+      "captureEligible" : true,
+      "displayID" : "1",
+      "framePixels" : {
+        "height" : 1912,
+        "width" : 2940,
+        "x" : 0,
+        "y" : 0
+      },
+      "framePoints" : {
+        "height" : 956,
+        "width" : 1470,
+        "x" : 0,
+        "y" : 0
+      },
+      "isFocused" : false,
+      "isMinimized" : false,
+      "isOnScreen" : true,
+      "layer" : -2147483603,
+      "source" : "coregraphics+screencapturekit",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "",
+      "visibleFractionEstimate" : 1,
+      "windowID" : 56,
+      "zRank" : 198
+    },
+    {
+      "alpha" : 1,
+      "appName" : "Tailscale",
+      "appPID" : 1252,
+      "bundleID" : "io.tailscale.ipn.macos",
+      "captureEligible" : true,
+      "displayID" : "1",
+      "framePixels" : {
+        "height" : 1132,
+        "width" : 1780,
+        "x" : 0,
+        "y" : 66
+      },
+      "framePoints" : {
+        "height" : 566,
+        "width" : 890,
+        "x" : 0,
+        "y" : 33
+      },
+      "isFocused" : false,
+      "isMinimized" : false,
+      "isOnScreen" : true,
+      "layer" : 0,
+      "source" : "coregraphics+screencapturekit",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "",
+      "visibleFractionEstimate" : 0,
+      "windowID" : 48,
+      "zRank" : 199
+    },
+    {
+      "alpha" : 1,
+      "appName" : "Control Center",
+      "appPID" : 1069,
+      "bundleID" : "com.apple.controlcenter",
+      "captureEligible" : true,
+      "displayID" : "1",
+      "framePixels" : {
+        "height" : 66,
+        "width" : 76,
+        "x" : 2314,
+        "y" : 0
+      },
+      "framePoints" : {
+        "height" : 33,
+        "width" : 38,
+        "x" : 1157,
+        "y" : 0
+      },
+      "isFocused" : false,
+      "isMinimized" : false,
+      "isOnScreen" : true,
+      "layer" : 25,
+      "source" : "coregraphics+screencapturekit",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "Item-0",
+      "visibleFractionEstimate" : 1,
+      "windowID" : 44,
+      "zRank" : 200
+    },
+    {
+      "alpha" : 1,
+      "appName" : "loginwindow",
+      "appPID" : 593,
+      "bundleID" : "com.apple.loginwindow",
+      "captureEligible" : false,
+      "displayID" : "1",
+      "framePixels" : {
+        "height" : 1000,
+        "width" : 1000,
+        "x" : 0,
+        "y" : 912
+      },
+      "framePoints" : {
+        "height" : 500,
+        "width" : 500,
+        "x" : 0,
+        "y" : 456
+      },
+      "isFocused" : false,
+      "isMinimized" : true,
+      "isOnScreen" : false,
+      "layer" : 0,
+      "source" : "coregraphics",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "",
+      "visibleFractionEstimate" : 0,
+      "windowID" : 42,
+      "zRank" : 201
+    },
+    {
+      "alpha" : 1,
+      "appName" : "Notification Center",
+      "appPID" : 1124,
+      "bundleID" : "com.apple.notificationcenterui",
+      "captureEligible" : true,
+      "displayID" : "1",
+      "framePixels" : {
+        "height" : 360,
+        "width" : 360,
+        "x" : 376,
+        "y" : 82
+      },
+      "framePoints" : {
+        "height" : 180,
+        "width" : 180,
+        "x" : 188,
+        "y" : 41
+      },
+      "isFocused" : false,
+      "isMinimized" : false,
+      "isOnScreen" : true,
+      "layer" : -2147483601,
+      "source" : "coregraphics+screencapturekit",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "Forecast",
+      "visibleFractionEstimate" : 1,
+      "windowID" : 41,
+      "zRank" : 202
+    },
+    {
+      "alpha" : 1,
+      "appName" : "Notification Center",
+      "appPID" : 1124,
+      "bundleID" : "com.apple.notificationcenterui",
+      "captureEligible" : true,
+      "displayID" : "1",
+      "framePixels" : {
+        "height" : 360,
+        "width" : 360,
+        "x" : 16,
+        "y" : 82
+      },
+      "framePoints" : {
+        "height" : 180,
+        "width" : 180,
+        "x" : 8,
+        "y" : 41
+      },
+      "isFocused" : false,
+      "isMinimized" : false,
+      "isOnScreen" : true,
+      "layer" : -2147483601,
+      "source" : "coregraphics+screencapturekit",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "Month",
+      "visibleFractionEstimate" : 1,
+      "windowID" : 40,
+      "zRank" : 203
+    },
+    {
+      "alpha" : 1,
+      "appName" : "Dock",
+      "appPID" : 1254,
+      "bundleID" : "com.apple.dock",
+      "captureEligible" : true,
+      "displayID" : "1",
+      "framePixels" : {
+        "height" : 1912,
+        "width" : 2940,
+        "x" : 0,
+        "y" : 0
+      },
+      "framePoints" : {
+        "height" : 956,
+        "width" : 1470,
+        "x" : 0,
+        "y" : 0
+      },
+      "isFocused" : false,
+      "isMinimized" : false,
+      "isOnScreen" : true,
+      "layer" : 20,
+      "source" : "coregraphics+screencapturekit",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "Dock",
+      "visibleFractionEstimate" : 1,
+      "windowID" : 29,
+      "zRank" : 204
+    },
+    {
+      "alpha" : 0.10000000149011612,
+      "appName" : "1Password",
+      "appPID" : 1436,
+      "bundleID" : "com.1password.1password",
+      "captureEligible" : false,
+      "displayID" : "1",
+      "framePixels" : {
+        "height" : 38,
+        "width" : 134,
+        "x" : 2284,
+        "y" : 58
+      },
+      "framePoints" : {
+        "height" : 19,
+        "width" : 67,
+        "x" : 1142,
+        "y" : 29
+      },
+      "isFocused" : false,
+      "isMinimized" : true,
+      "isOnScreen" : false,
+      "layer" : 103,
+      "source" : "coregraphics",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "",
+      "visibleFractionEstimate" : 0,
+      "windowID" : 9149,
+      "zRank" : 205
+    },
+    {
+      "alpha" : 1,
+      "appName" : "Control Center",
+      "appPID" : 1069,
+      "bundleID" : "com.apple.controlcenter",
+      "captureEligible" : true,
+      "displayID" : "1",
+      "framePixels" : {
+        "height" : 66,
+        "width" : 84,
+        "x" : 2550,
+        "y" : 0
+      },
+      "framePoints" : {
+        "height" : 33,
+        "width" : 42,
+        "x" : 1275,
+        "y" : 0
+      },
+      "isFocused" : false,
+      "isMinimized" : false,
+      "isOnScreen" : true,
+      "layer" : 25,
+      "source" : "coregraphics+screencapturekit",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "BentoBox-0",
+      "visibleFractionEstimate" : 1,
+      "windowID" : 18,
+      "zRank" : 206
+    },
+    {
+      "alpha" : 1,
+      "appName" : "Control Center",
+      "appPID" : 1069,
+      "bundleID" : "com.apple.controlcenter",
+      "captureEligible" : true,
+      "displayID" : "1",
+      "framePixels" : {
+        "height" : 66,
+        "width" : 76,
+        "x" : 2390,
+        "y" : 0
+      },
+      "framePoints" : {
+        "height" : 33,
+        "width" : 38,
+        "x" : 1195,
+        "y" : 0
+      },
+      "isFocused" : false,
+      "isMinimized" : false,
+      "isOnScreen" : true,
+      "layer" : 25,
+      "source" : "coregraphics+screencapturekit",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "WiFi",
+      "visibleFractionEstimate" : 1,
+      "windowID" : 17,
+      "zRank" : 207
+    },
+    {
+      "alpha" : 1,
+      "appName" : "Control Center",
+      "appPID" : 1069,
+      "bundleID" : "com.apple.controlcenter",
+      "captureEligible" : true,
+      "displayID" : "1",
+      "framePixels" : {
+        "height" : 66,
+        "width" : 310,
+        "x" : 2634,
+        "y" : 0
+      },
+      "framePoints" : {
+        "height" : 33,
+        "width" : 155,
+        "x" : 1317,
+        "y" : 0
+      },
+      "isFocused" : false,
+      "isMinimized" : false,
+      "isOnScreen" : true,
+      "layer" : 25,
+      "source" : "coregraphics+screencapturekit",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "Clock",
+      "visibleFractionEstimate" : 0.98709677419354835,
+      "windowID" : 16,
+      "zRank" : 208
+    },
+    {
+      "alpha" : 1,
+      "appName" : "Control Center",
+      "appPID" : 1069,
+      "bundleID" : "com.apple.controlcenter",
+      "captureEligible" : true,
+      "displayID" : "1",
+      "framePixels" : {
+        "height" : 66,
+        "width" : 84,
+        "x" : 2466,
+        "y" : 0
+      },
+      "framePoints" : {
+        "height" : 33,
+        "width" : 42,
+        "x" : 1233,
+        "y" : 0
+      },
+      "isFocused" : false,
+      "isMinimized" : false,
+      "isOnScreen" : true,
+      "layer" : 25,
+      "source" : "coregraphics+screencapturekit",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "Battery",
+      "visibleFractionEstimate" : 1,
+      "windowID" : 15,
+      "zRank" : 209
+    },
+    {
+      "alpha" : 1,
+      "appName" : "Activity Monitor",
+      "appPID" : 1247,
+      "bundleID" : "com.apple.ActivityMonitor",
+      "captureEligible" : false,
+      "framePoints" : {
+        "height" : 0,
+        "width" : 0,
+        "x" : 0,
+        "y" : 0
+      },
+      "isFocused" : false,
+      "isMinimized" : true,
+      "isOnScreen" : false,
+      "layer" : 1000,
+      "source" : "coregraphics",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "",
+      "visibleFractionEstimate" : 0,
+      "windowID" : 9145,
+      "zRank" : 210
+    },
+    {
+      "alpha" : 1,
+      "appName" : "Notification Center",
+      "appPID" : 1124,
+      "bundleID" : "com.apple.notificationcenterui",
+      "captureEligible" : false,
+      "displayID" : "1",
+      "framePixels" : {
+        "height" : 1912,
+        "width" : 2940,
+        "x" : 0,
+        "y" : 0
+      },
+      "framePoints" : {
+        "height" : 956,
+        "width" : 1470,
+        "x" : 0,
+        "y" : 0
+      },
+      "isFocused" : false,
+      "isMinimized" : true,
+      "isOnScreen" : false,
+      "layer" : 21,
+      "source" : "coregraphics",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "Notification Center",
+      "visibleFractionEstimate" : 0,
+      "windowID" : 14,
+      "zRank" : 211
+    },
+    {
+      "alpha" : 1,
+      "appName" : "Accessibility",
+      "appPID" : 1057,
+      "bundleID" : "com.apple.AccessibilityUIServer",
+      "captureEligible" : false,
+      "framePoints" : {
+        "height" : 0,
+        "width" : 0,
+        "x" : 0,
+        "y" : 506
+      },
+      "isFocused" : false,
+      "isMinimized" : true,
+      "isOnScreen" : false,
+      "layer" : 3,
+      "source" : "coregraphics",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "Accessibility",
+      "visibleFractionEstimate" : 0,
+      "windowID" : 12,
+      "zRank" : 212
+    },
+    {
+      "alpha" : 1,
+      "appName" : "Wallpaper",
+      "appPID" : 1261,
+      "bundleID" : "com.apple.wallpaper.agent",
+      "captureEligible" : true,
+      "displayID" : "1",
+      "framePixels" : {
+        "height" : 1912,
+        "width" : 2940,
+        "x" : 0,
+        "y" : 0
+      },
+      "framePoints" : {
+        "height" : 956,
+        "width" : 1470,
+        "x" : 0,
+        "y" : 0
+      },
+      "isFocused" : false,
+      "isMinimized" : false,
+      "isOnScreen" : true,
+      "layer" : -2147483625,
+      "source" : "coregraphics+screencapturekit",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "Offscreen Wallpaper Window",
+      "visibleFractionEstimate" : 1,
+      "windowID" : 7948,
+      "zRank" : 213
+    },
+    {
+      "alpha" : 1,
+      "appName" : "Window Server",
+      "appPID" : 595,
+      "bundleID" : "",
+      "captureEligible" : true,
+      "displayID" : "1",
+      "framePixels" : {
+        "height" : 80,
+        "width" : 56,
+        "x" : 910,
+        "y" : 1082
+      },
+      "framePoints" : {
+        "height" : 40,
+        "width" : 28,
+        "x" : 455,
+        "y" : 541
+      },
+      "isFocused" : false,
+      "isMinimized" : false,
+      "isOnScreen" : true,
+      "layer" : 2147483630,
+      "source" : "coregraphics+screencapturekit",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "Cursor",
+      "visibleFractionEstimate" : 1,
+      "windowID" : 8,
+      "zRank" : 214
+    },
+    {
+      "alpha" : 1,
+      "appName" : "Activity Monitor",
+      "appPID" : 1247,
+      "bundleID" : "com.apple.ActivityMonitor",
+      "captureEligible" : true,
+      "displayID" : "1",
+      "framePixels" : {
+        "height" : 1652,
+        "width" : 2940,
+        "x" : 0,
+        "y" : 66
+      },
+      "framePoints" : {
+        "height" : 826,
+        "width" : 1470,
+        "x" : 0,
+        "y" : 33
+      },
+      "isFocused" : false,
+      "isMinimized" : false,
+      "isOnScreen" : true,
+      "layer" : 0,
+      "source" : "coregraphics+screencapturekit",
+      "time" : "2026-05-25T04:57:57.131Z",
+      "title" : "Activity Monitor",
+      "visibleFractionEstimate" : 0,
+      "windowID" : 49,
+      "zRank" : 215
+    }
+  ]
+}

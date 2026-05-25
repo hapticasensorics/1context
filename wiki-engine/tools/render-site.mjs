@@ -19,11 +19,20 @@ import {
   statSync,
   writeFileSync,
 } from 'node:fs';
-import { basename, dirname, join, relative, resolve } from 'node:path';
+import { basename, dirname, extname, join, relative, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import matter from 'gray-matter';
+import {
+  assetCitationUri,
+  citationCitationUri,
+  codeCitationUri,
+  linkCitationUri,
+  sha256Text,
+  stableCodeBlockId,
+  slugToken,
+} from '../src/renderer/references.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const ENGINE_ROOT = resolve(dirname(__filename), '..');
@@ -138,6 +147,88 @@ function fileRecord(root, path, role, contentType) {
     bytes: stat.size,
     content_type: contentType,
   };
+}
+
+const CODE_FILE_EXTENSIONS = new Set([
+  '.c',
+  '.cc',
+  '.cpp',
+  '.css',
+  '.go',
+  '.h',
+  '.hpp',
+  '.html',
+  '.java',
+  '.js',
+  '.json',
+  '.jsx',
+  '.kt',
+  '.m',
+  '.mm',
+  '.mjs',
+  '.py',
+  '.rb',
+  '.rs',
+  '.sh',
+  '.sql',
+  '.swift',
+  '.toml',
+  '.ts',
+  '.tsx',
+  '.xml',
+  '.yaml',
+  '.yml',
+]);
+
+function inferMediaTypeForPath(path) {
+  switch (extname(path).toLowerCase()) {
+    case '.png': return 'image/png';
+    case '.jpg':
+    case '.jpeg': return 'image/jpeg';
+    case '.gif': return 'image/gif';
+    case '.webp': return 'image/webp';
+    case '.svg': return 'image/svg+xml';
+    case '.json': return 'application/json';
+    case '.md':
+    case '.markdown': return 'text/markdown';
+    case '.csv': return 'text/csv';
+    case '.pdf': return 'application/pdf';
+    case '.css': return 'text/css';
+    case '.html': return 'text/html';
+    case '.js':
+    case '.mjs':
+    case '.jsx':
+    case '.ts':
+    case '.tsx': return 'text/javascript';
+    case '.toml': return 'text/toml';
+    case '.yaml':
+    case '.yml': return 'text/yaml';
+    case '.txt':
+    case '.log':
+    case '.rs':
+    case '.swift':
+    case '.py':
+    case '.go':
+    case '.java':
+    case '.kt':
+    case '.sh':
+    case '.sql':
+    case '.c':
+    case '.h':
+    case '.cc':
+    case '.cpp':
+    case '.hpp':
+    case '.m':
+    case '.mm':
+    case '.rb': return 'text/plain';
+    default: return 'application/octet-stream';
+  }
+}
+
+function assetKindForPath(path, mediaType) {
+  if (mediaType.startsWith('image/')) return 'image';
+  if (CODE_FILE_EXTENSIONS.has(extname(path).toLowerCase())) return 'code_file';
+  return 'file';
 }
 
 function markdownTwinKind(markdownPath) {
@@ -579,6 +670,425 @@ function routeOverrideForInput(sourceRoot, config, input) {
   return null;
 }
 
+function markdownContentStartLine(raw) {
+  if (!raw.startsWith('---')) return 1;
+  const lines = raw.split(/\r?\n/);
+  for (let index = 1; index < lines.length; index += 1) {
+    if (lines[index].trim() === '---') return index + 2;
+  }
+  return 1;
+}
+
+function normalizeCodeLanguage(value) {
+  return String(value || '').trim().split(/\s+/)[0].replace(/[^A-Za-z0-9_-]/g, '');
+}
+
+function markdownLinkDestination(raw) {
+  const trimmed = String(raw || '').trim();
+  if (!trimmed) return '';
+  if (trimmed.startsWith('<')) {
+    const end = trimmed.indexOf('>');
+    if (end > 0) return trimmed.slice(1, end).trim();
+  }
+  return trimmed.split(/\s+/)[0].trim();
+}
+
+function normalizeMarkdownReferenceLabel(value) {
+  return String(value || '').trim().replace(/\s+/g, ' ').toLowerCase();
+}
+
+function normalizeFootnoteLabel(value) {
+  return String(value || '').trim().replace(/\s+/g, ' ').toLowerCase();
+}
+
+function normalizeMarkdownHrefToPath(href, markdownPath) {
+  const trimmed = String(href || '').trim();
+  if (
+    !trimmed ||
+    trimmed.startsWith('#') ||
+    /^https?:\/\//i.test(trimmed) ||
+    /^(mailto|tel|data|javascript):/i.test(trimmed)
+  ) {
+    return null;
+  }
+  const withoutFragment = trimmed.split('#')[0] || trimmed;
+  const withoutQuery = withoutFragment.split('?')[0] || withoutFragment;
+  const normalized = withoutQuery.startsWith('/')
+    ? normalizePosixSegments(withoutQuery.replace(/^\/+/, ''))
+    : normalizeRelativeRoute(markdownPath, withoutQuery);
+  return normalized ? normalized.replace(/^\/+/, '').replace(/\/+$/, '') : null;
+}
+
+function classifyMarkdownHref(href, markdownPath) {
+  const trimmed = String(href || '').trim();
+  if (!trimmed) return { target_kind: 'empty', target_path: null };
+  if (trimmed.startsWith('#')) return { target_kind: 'anchor', target_path: null };
+  if (/^https?:\/\//i.test(trimmed)) return { target_kind: 'external_web', target_path: null };
+  if (/^(mailto|tel):/i.test(trimmed)) return { target_kind: 'external_protocol', target_path: null };
+  if (/^(data|javascript):/i.test(trimmed)) return { target_kind: 'ignored_protocol', target_path: null };
+  const targetPath = normalizeMarkdownHrefToPath(trimmed, markdownPath);
+  if (!targetPath) return { target_kind: 'invalid_internal', target_path: null };
+  if (targetPath.includes('.assets/') || targetPath.includes('/talk/attachments/')) {
+    return { target_kind: 'asset', target_path: targetPath };
+  }
+  if (targetPath.endsWith('.md')) return { target_kind: 'internal_markdown', target_path: targetPath };
+  return { target_kind: 'internal_route', target_path: targetPath };
+}
+
+function collectMarkdownReferenceDefinitions(lines, contentStartLine) {
+  const definitions = new Map();
+  let inCode = null;
+
+  for (let index = contentStartLine - 1; index < lines.length; index += 1) {
+    const line = lines[index];
+    const lineNumber = index + 1;
+
+    if (inCode) {
+      const closeMatch = /^ {0,3}(`{3,}|~{3,})\s*$/.exec(line);
+      if (closeMatch && closeMatch[1][0] === inCode.fenceChar && closeMatch[1].length >= inCode.fenceLength) {
+        inCode = null;
+      }
+      continue;
+    }
+
+    const openMatch = /^ {0,3}(`{3,}|~{3,})(.*)$/.exec(line);
+    if (openMatch) {
+      inCode = {
+        fenceChar: openMatch[1][0],
+        fenceLength: openMatch[1].length,
+      };
+      continue;
+    }
+
+    const definitionMatch = /^ {0,3}\[([^\]\n]+)\]:[ \t]*(.+)$/.exec(line);
+    if (!definitionMatch) continue;
+    const label = normalizeMarkdownReferenceLabel(definitionMatch[1]);
+    const href = markdownLinkDestination(definitionMatch[2]);
+    if (!label || !href || /^(data|javascript):/i.test(href) || definitions.has(label)) continue;
+    definitions.set(label, {
+      href,
+      definition_line_start: lineNumber,
+    });
+  }
+
+  return definitions;
+}
+
+function collectMarkdownFootnoteDefinitions(lines, contentStartLine) {
+  const definitions = new Map();
+  let inCode = null;
+
+  for (let index = contentStartLine - 1; index < lines.length; index += 1) {
+    const line = lines[index];
+    const lineNumber = index + 1;
+
+    if (inCode) {
+      const closeMatch = /^ {0,3}(`{3,}|~{3,})\s*$/.exec(line);
+      if (closeMatch && closeMatch[1][0] === inCode.fenceChar && closeMatch[1].length >= inCode.fenceLength) {
+        inCode = null;
+      }
+      continue;
+    }
+
+    const openMatch = /^ {0,3}(`{3,}|~{3,})(.*)$/.exec(line);
+    if (openMatch) {
+      inCode = {
+        fenceChar: openMatch[1][0],
+        fenceLength: openMatch[1].length,
+      };
+      continue;
+    }
+
+    const definitionMatch = /^ {0,3}\[\^([^\]\n]+)\]:[ \t]*(.*)$/.exec(line);
+    if (!definitionMatch) continue;
+    const label = normalizeFootnoteLabel(definitionMatch[1]);
+    if (!label || definitions.has(label)) continue;
+    definitions.set(label, {
+      label,
+      markdown: definitionMatch[2] || '',
+      definition_line_start: lineNumber,
+    });
+  }
+
+  return definitions;
+}
+
+function collectMarkdownCitations(output, markdownTwins) {
+  const citations = [];
+
+  for (const twin of markdownTwins) {
+    const markdownPath = twin.path;
+    const markdownFile = join(output, ...markdownPath.split('/'));
+    if (!existsSync(markdownFile)) continue;
+    const raw = readFileSync(markdownFile, 'utf8');
+    const lines = raw.split(/\r?\n/);
+    const contentStartLine = markdownContentStartLine(raw);
+    const definitions = collectMarkdownFootnoteDefinitions(lines, contentStartLine);
+    if (!definitions.size) continue;
+
+    const pageId = twin.page_id || twin.slug || markdownPath.replace(/\.md$/, '');
+    const pageSlug = slugToken(twin.slug || pageId);
+    const labelToCitation = new Map();
+    let inCode = null;
+
+    for (let index = contentStartLine - 1; index < lines.length; index += 1) {
+      const line = lines[index];
+      const lineNumber = index + 1;
+
+      if (inCode) {
+        const closeMatch = /^ {0,3}(`{3,}|~{3,})\s*$/.exec(line);
+        if (closeMatch && closeMatch[1][0] === inCode.fenceChar && closeMatch[1].length >= inCode.fenceLength) {
+          inCode = null;
+        }
+        continue;
+      }
+
+      const openMatch = /^ {0,3}(`{3,}|~{3,})(.*)$/.exec(line);
+      if (openMatch) {
+        inCode = {
+          fenceChar: openMatch[1][0],
+          fenceLength: openMatch[1].length,
+        };
+        continue;
+      }
+
+      if (/^ {0,3}\[\^([^\]\n]+)\]:[ \t]*(.*)$/.test(line)) continue;
+
+      const footnoteRe = /\[\^([^\]\n]+)\]/g;
+      let match;
+      while ((match = footnoteRe.exec(line)) !== null) {
+        const label = normalizeFootnoteLabel(match[1]);
+        const definition = definitions.get(label);
+        if (!definition || labelToCitation.has(label)) continue;
+        const number = citations.filter((citation) => citation.page_id === pageId).length + 1;
+        const id = `cite-note-${pageSlug}-${number}`;
+        const record = {
+          kind: 'citation',
+          id,
+          citation_uri: citationCitationUri(pageId, id),
+          page_id: pageId,
+          route: twin.route,
+          markdown_path: markdownPath,
+          html_path: twin.html_path,
+          html_anchor: twin.route ? `${twin.route}#${id}` : `/${markdownPath}#${id}`,
+          label,
+          number,
+          line_start: lineNumber,
+          definition_line_start: definition.definition_line_start,
+          text_markdown: definition.markdown,
+          sha256: sha256Text(definition.markdown),
+          bytes: Buffer.byteLength(definition.markdown),
+        };
+        labelToCitation.set(label, record);
+        citations.push(record);
+      }
+    }
+  }
+
+  return citations;
+}
+
+function collectMarkdownReferences(output, markdownTwins) {
+  const links = [];
+  const codeBlocks = [];
+  const linkByTarget = new Map();
+
+  for (const twin of markdownTwins) {
+    const markdownPath = twin.path;
+    const markdownFile = join(output, ...markdownPath.split('/'));
+    if (!existsSync(markdownFile)) continue;
+    const raw = readFileSync(markdownFile, 'utf8');
+    const lines = raw.split(/\r?\n/);
+    const contentStartLine = markdownContentStartLine(raw);
+    const referenceDefinitions = collectMarkdownReferenceDefinitions(lines, contentStartLine);
+    const pageId = twin.page_id || twin.slug || markdownPath.replace(/\.md$/, '');
+    const pageSlug = twin.slug || pageId;
+    let inCode = null;
+    let linkSequence = 0;
+    let codeSequence = 0;
+
+    for (let index = contentStartLine - 1; index < lines.length; index += 1) {
+      const line = lines[index];
+      const lineNumber = index + 1;
+
+      if (inCode) {
+        const closeMatch = /^ {0,3}(`{3,}|~{3,})\s*$/.exec(line);
+        if (closeMatch && closeMatch[1][0] === inCode.fenceChar && closeMatch[1].length >= inCode.fenceLength) {
+          codeSequence += 1;
+          const text = inCode.lines.join('\n');
+          const language = normalizeCodeLanguage(inCode.info);
+          const codeId = stableCodeBlockId(pageSlug, codeSequence, language, text);
+          codeBlocks.push({
+            kind: 'code_block',
+            id: codeId,
+            citation_uri: codeCitationUri(pageId, codeId),
+            page_id: pageId,
+            route: twin.route,
+            markdown_path: markdownPath,
+            html_path: twin.html_path,
+            html_anchor: twin.route ? `${twin.route}#${codeId}` : `/${markdownPath}#${codeId}`,
+            language: language || null,
+            sequence: codeSequence,
+            line_start: inCode.lineStart,
+            line_end: lineNumber,
+            sha256: sha256Text(text),
+            bytes: Buffer.byteLength(text),
+          });
+          inCode = null;
+        } else {
+          inCode.lines.push(line);
+        }
+        continue;
+      }
+
+      const openMatch = /^ {0,3}(`{3,}|~{3,})(.*)$/.exec(line);
+      if (openMatch) {
+        inCode = {
+          fenceChar: openMatch[1][0],
+          fenceLength: openMatch[1].length,
+          info: openMatch[2] || '',
+          lineStart: lineNumber,
+          lines: [],
+        };
+        continue;
+      }
+
+      if (/^ {0,3}\[\^([^\]\n]+)\]:[ \t]*(.*)$/.test(line)) continue;
+
+      const discoveredLinks = [];
+      const inlineLinkRe = /(!?)\[([^\]\n]*)\]\(([^)\n]+)\)/g;
+      let match;
+      while ((match = inlineLinkRe.exec(line)) !== null) {
+        discoveredLinks.push({
+          index: match.index,
+          isImage: match[1] === '!',
+          text: match[2] || '',
+          href: markdownLinkDestination(match[3]),
+        });
+      }
+
+      const referenceLinkRe = /(!?)\[([^\]\n]*)\]\[([^\]\n]*)\]/g;
+      while ((match = referenceLinkRe.exec(line)) !== null) {
+        const label = normalizeMarkdownReferenceLabel(match[3] || match[2]);
+        const definition = referenceDefinitions.get(label);
+        if (!definition) continue;
+        discoveredLinks.push({
+          index: match.index,
+          isImage: match[1] === '!',
+          text: match[2] || '',
+          href: definition.href,
+        });
+      }
+
+      discoveredLinks.sort((left, right) => left.index - right.index);
+      for (const discovered of discoveredLinks) {
+        const href = discovered.href;
+        if (!href || /^(data|javascript):/i.test(href)) continue;
+        linkSequence += 1;
+        const classification = classifyMarkdownHref(href, markdownPath);
+        const linkHash = sha256Text(`${markdownPath}\n${lineNumber}\n${linkSequence}\n${href}`).slice(0, 8);
+        const linkId = `link-${String(linkSequence).padStart(3, '0')}-${linkHash}`;
+        const record = {
+          kind: discovered.isImage ? 'image_link' : 'link',
+          id: linkId,
+          citation_uri: linkCitationUri(pageId, linkId),
+          page_id: pageId,
+          route: twin.route,
+          markdown_path: markdownPath,
+          line_start: lineNumber,
+          text: discovered.text,
+          href,
+          target_kind: classification.target_kind,
+          target_path: classification.target_path,
+        };
+        links.push(record);
+        if (classification.target_path) {
+          if (!linkByTarget.has(classification.target_path)) linkByTarget.set(classification.target_path, []);
+          linkByTarget.get(classification.target_path).push({
+            page_id: pageId,
+            route: twin.route,
+            markdown_path: markdownPath,
+            line_start: lineNumber,
+            href,
+          });
+        }
+      }
+    }
+  }
+
+  return { links, codeBlocks, linkByTarget };
+}
+
+function routeForAssetPath(assetPath, routes) {
+  const assetMarker = assetPath.indexOf('.assets/');
+  if (assetMarker < 0) return null;
+  const ownerStem = assetPath.slice(0, assetMarker);
+  const ownerRoute = ownerStem === 'index' ? '/' : `/${ownerStem}`;
+  const ownerMarkdown = `${ownerStem}.md`;
+  return (routes || []).find((route) => (
+    route.route === ownerRoute ||
+    route.markdown_path === ownerMarkdown ||
+    route.html_path === `${ownerStem}.html`
+  )) || null;
+}
+
+function buildReferenceIndex(output, generatedAt, assets, markdownTwins, routes) {
+  const { links, codeBlocks, linkByTarget } = collectMarkdownReferences(output, markdownTwins);
+  const citations = collectMarkdownCitations(output, markdownTwins);
+  const pageAssets = assets
+    .filter((assetPath) => assetPath.includes('.assets/'))
+    .map((assetPath) => {
+      const assetFile = join(output, ...assetPath.split('/'));
+      const filename = basename(assetPath);
+      const route = routeForAssetPath(assetPath, routes);
+      const pageId = route?.page_id || route?.slug || null;
+      const mediaType = inferMediaTypeForPath(assetPath);
+      const referencedFrom = linkByTarget.get(assetPath) || [];
+      return {
+        kind: assetKindForPath(assetPath, mediaType),
+        id: `asset-${sha256Text(assetPath).slice(0, 10)}`,
+        citation_uri: assetCitationUri(pageId, filename),
+        page_id: pageId,
+        route: route?.route || null,
+        markdown_path: route?.markdown_path || null,
+        path: assetPath,
+        published_href: `/${assetPath}`,
+        filename,
+        media_type: mediaType,
+        sha256: sha256File(assetFile),
+        bytes: statSync(assetFile).size,
+        referenced: referencedFrom.length > 0,
+        referenced_from: referencedFrom,
+      };
+    });
+
+  return {
+    schema_version: 'wiki.reference-index.v1',
+    generated_at: generatedAt,
+    output: 'site://.',
+    reference_count: pageAssets.length + links.length + codeBlocks.length + citations.length,
+    asset_count: pageAssets.length,
+    link_count: links.length,
+    code_block_count: codeBlocks.length,
+    citation_count: citations.length,
+    assets: pageAssets,
+    links,
+    code_blocks: codeBlocks,
+    citations,
+  };
+}
+
+function referenceIndexSummary(referenceIndex) {
+  return {
+    path: '.1context/reference-index.json',
+    reference_count: referenceIndex.reference_count,
+    asset_count: referenceIndex.asset_count,
+    link_count: referenceIndex.link_count,
+    code_block_count: referenceIndex.code_block_count,
+    citation_count: referenceIndex.citation_count,
+  };
+}
+
 function buildSiteMetadata(output, generatedAt, assets) {
   const metadataDir = join(output, '.1context');
   mkdirSync(metadataDir, { recursive: true });
@@ -651,6 +1161,9 @@ function buildSiteMetadata(output, generatedAt, assets) {
     }
   }
 
+  const referenceIndex = buildReferenceIndex(output, generatedAt, assets, markdownTwins, routes);
+  const referenceSummary = referenceIndexSummary(referenceIndex);
+
   const routeManifest = {
     schema_version: 'wiki.route-manifest.v1',
     generated_at: generatedAt,
@@ -658,6 +1171,7 @@ function buildSiteMetadata(output, generatedAt, assets) {
     route_count: routes.length,
     routes,
     assets,
+    reference_index: referenceSummary,
   };
   const contentIndex = {
     schema_version: 'wiki.content-index.v1',
@@ -668,6 +1182,7 @@ function buildSiteMetadata(output, generatedAt, assets) {
     markdown_twin_count: markdownTwins.length,
     pages: routes,
     markdown_twins: markdownTwins,
+    reference_index: referenceSummary,
     export_allowlist: [
       '*.html',
       '*.md',
@@ -679,17 +1194,25 @@ function buildSiteMetadata(output, generatedAt, assets) {
       '.1context/render-events.jsonl',
       '.1context/route-manifest.json',
       '.1context/content-index.json',
+      '.1context/reference-index.json',
     ],
   };
 
   writeFileSync(join(metadataDir, 'route-manifest.json'), JSON.stringify(routeManifest, null, 2) + '\n');
   writeFileSync(join(metadataDir, 'content-index.json'), JSON.stringify(contentIndex, null, 2) + '\n');
+  writeFileSync(join(metadataDir, 'reference-index.json'), JSON.stringify(referenceIndex, null, 2) + '\n');
 
   return {
     routeManifestPath: '.1context/route-manifest.json',
     contentIndexPath: '.1context/content-index.json',
+    referenceIndexPath: '.1context/reference-index.json',
     routeCount: routes.length,
     markdownTwinCount: markdownTwins.length,
+    referenceCount: referenceIndex.reference_count,
+    pageAssetCount: referenceIndex.asset_count,
+    codeBlockCount: referenceIndex.code_block_count,
+    linkCount: referenceIndex.link_count,
+    citationCount: referenceIndex.citation_count,
   };
 }
 
@@ -1188,8 +1711,14 @@ function main() {
       output,
       route_manifest: metadata.routeManifestPath,
       content_index: metadata.contentIndexPath,
+      reference_index: metadata.referenceIndexPath,
       route_count: metadata.routeCount,
       markdown_twin_count: metadata.markdownTwinCount,
+      reference_count: metadata.referenceCount,
+      page_asset_count: metadata.pageAssetCount,
+      code_block_count: metadata.codeBlockCount,
+      link_count: metadata.linkCount,
+      citation_count: metadata.citationCount,
       source_inputs: sourceInputs,
       site_inputs: siteInputs.map((entry) => entry.input),
       talk_inputs: talkInputs,

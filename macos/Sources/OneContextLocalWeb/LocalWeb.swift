@@ -465,6 +465,11 @@ public struct CaddyConfig: Equatable, Sendable {
           reverse_proxy \(apiBindHost):\(apiPort)
         }
 
+        @memoryApi path /memory /api/memory/*
+        handle @memoryApi {
+          reverse_proxy \(apiBindHost):\(apiPort)
+        }
+
         try_files {path} {path}.html {path}/index.html
         file_server
       }
@@ -507,6 +512,11 @@ public struct CaddyConfig: Equatable, Sendable {
 
         @wikiDynamicApi path /api/wiki/*
         handle @wikiDynamicApi {
+          reverse_proxy \(apiBindHost):\(apiPort)
+        }
+
+        @memoryApi path /memory /api/memory/*
+        handle @memoryApi {
           reverse_proxy \(apiBindHost):\(apiPort)
         }
 

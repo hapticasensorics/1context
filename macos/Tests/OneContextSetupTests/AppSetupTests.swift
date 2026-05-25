@@ -136,7 +136,7 @@ final class AppSetupTests: XCTestCase {
     XCTAssertEqual(readiness.requiredSetupSummary, "Remembering requires Microphone.")
   }
 
-  func testBrowserAutomationAndFullDiskAccessAreRequiredSetup() {
+  func testBrowserExtensionIsOptionalUntilExtensionShips() {
     let readiness = OneContextAppReadiness.snapshot(
       localWebDiagnostics: diagnostics(
         setup: localHTTPSSetup(ready: true),
@@ -154,7 +154,7 @@ final class AppSetupTests: XCTestCase {
     XCTAssertFalse(readiness.requiredSetupReady)
     XCTAssertEqual(
       readiness.requiredSetupSummary,
-      "Remembering requires Browser Extension Permissions, Automation, Full Disk Access."
+      "Remembering requires Automation, Full Disk Access."
     )
   }
 

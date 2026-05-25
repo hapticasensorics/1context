@@ -3,6 +3,10 @@
   "private": true,
   "description": "Dev-only browser harness dependencies for 1Context public launch.",
   "scripts": {
+    "generate:agent-mail-triad": "node scripts/generate-agent-mail-triad-demo.mjs",
+    "serve:agent-mail-triad": "python3 -m http.server --directory demos/agent-mail-triad/static 8765",
+    "test:agent-mail:dogfood": "node scripts/test-agent-mail-dogfood.mjs",
+    "verify:agent-mail-triad:mcp": "node scripts/verify-agent-mail-triad-mcp-realism.mjs",
     "test:wiki:browser": "playwright test"
   },
   "license": "Apache-2.0",

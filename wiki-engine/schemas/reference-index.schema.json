@@ -1,0 +1,172 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://1context.local/schemas/wiki-engine/reference-index.schema.json",
+  "title": "1Context Wiki Reference Index",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "generated_at",
+    "output",
+    "reference_count",
+    "asset_count",
+    "link_count",
+    "code_block_count",
+    "citation_count",
+    "assets",
+    "links",
+    "code_blocks",
+    "citations"
+  ],
+  "properties": {
+    "schema_version": { "const": "wiki.reference-index.v1" },
+    "generated_at": { "type": "string", "format": "date-time" },
+    "output": { "type": "string", "minLength": 1 },
+    "reference_count": { "type": "integer", "minimum": 0 },
+    "asset_count": { "type": "integer", "minimum": 0 },
+    "link_count": { "type": "integer", "minimum": 0 },
+    "code_block_count": { "type": "integer", "minimum": 0 },
+    "citation_count": { "type": "integer", "minimum": 0 },
+    "assets": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "kind",
+          "id",
+          "citation_uri",
+          "path",
+          "published_href",
+          "filename",
+          "media_type",
+          "sha256",
+          "bytes",
+          "referenced",
+          "referenced_from"
+        ],
+        "properties": {
+          "kind": { "enum": ["image", "file", "code_file"] },
+          "id": { "type": "string", "minLength": 1 },
+          "citation_uri": { "type": "string", "pattern": "^user-wiki://" },
+          "page_id": { "type": ["string", "null"] },
+          "route": { "type": ["string", "null"] },
+          "markdown_path": { "type": ["string", "null"] },
+          "path": { "type": "string", "minLength": 1 },
+          "published_href": { "type": "string", "pattern": "^/" },
+          "filename": { "type": "string", "minLength": 1 },
+          "media_type": { "type": "string", "minLength": 1 },
+          "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+          "bytes": { "type": "integer", "minimum": 0 },
+          "referenced": { "type": "boolean" },
+          "referenced_from": { "type": "array" }
+        },
+        "additionalProperties": false
+      }
+    },
+    "links": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "kind",
+          "id",
+          "citation_uri",
+          "page_id",
+          "markdown_path",
+          "line_start",
+          "href",
+          "target_kind"
+        ],
+        "properties": {
+          "kind": { "enum": ["link", "image_link"] },
+          "id": { "type": "string", "minLength": 1 },
+          "citation_uri": { "type": "string", "pattern": "^user-wiki://" },
+          "page_id": { "type": "string", "minLength": 1 },
+          "route": { "type": ["string", "null"] },
+          "markdown_path": { "type": "string", "minLength": 1 },
+          "line_start": { "type": "integer", "minimum": 1 },
+          "text": { "type": "string" },
+          "href": { "type": "string", "minLength": 1 },
+          "target_kind": { "type": "string", "minLength": 1 },
+          "target_path": { "type": ["string", "null"] }
+        },
+        "additionalProperties": false
+      }
+    },
+    "code_blocks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "kind",
+          "id",
+          "citation_uri",
+          "page_id",
+          "markdown_path",
+          "html_anchor",
+          "sequence",
+          "line_start",
+          "line_end",
+          "sha256",
+          "bytes"
+        ],
+        "properties": {
+          "kind": { "const": "code_block" },
+          "id": { "type": "string", "minLength": 1 },
+          "citation_uri": { "type": "string", "pattern": "^user-wiki://" },
+          "page_id": { "type": "string", "minLength": 1 },
+          "route": { "type": ["string", "null"] },
+          "markdown_path": { "type": "string", "minLength": 1 },
+          "html_path": { "type": ["string", "null"] },
+          "html_anchor": { "type": "string", "minLength": 1 },
+          "language": { "type": ["string", "null"] },
+          "sequence": { "type": "integer", "minimum": 1 },
+          "line_start": { "type": "integer", "minimum": 1 },
+          "line_end": { "type": "integer", "minimum": 1 },
+          "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+          "bytes": { "type": "integer", "minimum": 0 }
+        },
+        "additionalProperties": false
+      }
+    },
+    "citations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "kind",
+          "id",
+          "citation_uri",
+          "page_id",
+          "markdown_path",
+          "html_anchor",
+          "label",
+          "number",
+          "line_start",
+          "definition_line_start",
+          "text_markdown",
+          "sha256",
+          "bytes"
+        ],
+        "properties": {
+          "kind": { "const": "citation" },
+          "id": { "type": "string", "minLength": 1 },
+          "citation_uri": { "type": "string", "pattern": "^user-wiki://" },
+          "page_id": { "type": "string", "minLength": 1 },
+          "route": { "type": ["string", "null"] },
+          "markdown_path": { "type": "string", "minLength": 1 },
+          "html_path": { "type": ["string", "null"] },
+          "html_anchor": { "type": "string", "minLength": 1 },
+          "label": { "type": "string", "minLength": 1 },
+          "number": { "type": "integer", "minimum": 1 },
+          "line_start": { "type": "integer", "minimum": 1 },
+          "definition_line_start": { "type": "integer", "minimum": 1 },
+          "text_markdown": { "type": "string" },
+          "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+          "bytes": { "type": "integer", "minimum": 0 }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}

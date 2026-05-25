@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Agent Mail Triad</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div>
+        <h1>Agent Mail Triad</h1>
+        <p id="runSummary" aria-live="polite">loading latest dogfood run</p>
+      </div>
+      <div class="run-stats" aria-label="run stats">
+        <div><span>Agents</span><strong id="agentCount">--</strong></div>
+        <div><span>Mail</span><strong id="mailCount">--</strong></div>
+        <div><span>Tasks</span><strong id="taskCount">--</strong></div>
+      </div>
+    </header>
+
+    <main>
+      <section class="task-strip" role="tablist" aria-label="task filter">
+        <button class="task-tab active" type="button" role="tab" aria-selected="true" data-task="all">All</button>
+      </section>
+
+      <section class="proof-strip" id="proofGrid" aria-label="run proof summary"></section>
+
+      <section class="agent-grid" id="agentGrid" aria-label="agent sessions"></section>
+
+      <section class="mail-rail">
+        <div class="rail-head">
+          <div>
+            <h2>Mail Ledger</h2>
+            <p id="ledgerScope">showing all task mail</p>
+          </div>
+          <span id="evidencePath">evidence pending</span>
+        </div>
+        <div id="mailLedger" class="mail-grid"></div>
+      </section>
+    </main>
+
+    <script src="./app.js"></script>
+  </body>
+</html>

@@ -130,10 +130,10 @@ public enum OneContextAppSetupDiagnostics {
       "Local Wiki Access: \(snapshot.localWikiStatus)",
       "Local Wiki URL: \(snapshot.localWikiAccess.targetURL)"
     ]
-    lines.append(contentsOf: snapshot.rememberingPermissions.requiredPermissions.map {
+    lines.append(contentsOf: snapshot.rememberingPermissions.diagnosticPermissions.map {
       "\($0.title): \($0.displayStatus)"
     })
-    lines.append(contentsOf: snapshot.rememberingPermissions.requiredPermissions.compactMap {
+    lines.append(contentsOf: snapshot.rememberingPermissions.diagnosticPermissions.compactMap {
       $0.ready ? nil : "\($0.title) Detail: \($0.detail)"
     })
     lines.append(contentsOf: OneContextSystemPermissions.fullDiskAccessDiagnostics(redact: redact))
