@@ -50,6 +50,10 @@ let package = Package(
       dependencies: ["OneContextCore", "OneContextPlatform"]
     ),
     .target(
+      name: "OneContextCapture",
+      dependencies: ["OneContextCore", "OneContextPlatform"]
+    ),
+    .target(
       name: "OneContextWikiRuntime",
       dependencies: ["OneContextPlatform"]
     ),
@@ -107,6 +111,10 @@ let package = Package(
     .testTarget(
       name: "OneContextLocalWebTests",
       dependencies: ["OneContextLocalWeb"]
+    ),
+    .testTarget(
+      name: "OneContextCaptureTests",
+      dependencies: ["OneContextCapture"]
     ),
     .testTarget(
       name: "OneContextWikiRuntimeTests",
