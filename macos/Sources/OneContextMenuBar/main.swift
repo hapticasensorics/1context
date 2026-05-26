@@ -27,6 +27,32 @@ private struct ProcessCaptureResult: Sendable {
   let stderr: String
 }
 
+private enum PermissionProbeCommandResult: Sendable {
+  case exit(Int32)
+  case failure(String)
+}
+
+private final class PermissionProbeCommandCompletion: @unchecked Sendable {
+  private let condition = NSCondition()
+  private var result: PermissionProbeCommandResult?
+
+  func finish(_ result: PermissionProbeCommandResult) {
+    condition.lock()
+    self.result = result
+    condition.broadcast()
+    condition.unlock()
+  }
+
+  func wait() -> PermissionProbeCommandResult {
+    condition.lock()
+    defer { condition.unlock() }
+    while result == nil {
+      condition.wait()
+    }
+    return result ?? .failure("permission capability probe did not return a result")
+  }
+}
+
 nonisolated(unsafe) private var menuInstanceLockFD: Int32 = -1
 
 private func acquireMenuInstanceLock() -> Bool {
@@ -120,9 +146,7 @@ private func runPermissionCapabilityProbeIfRequested() {
   let outputPath = commandLineValue(after: "--json")
   let timeout = commandLineValue(after: "--timeout").flatMap(TimeInterval.init) ?? 5
   let skipBrowserExtension = !CommandLine.arguments.contains("--include-browser-extension")
-  let semaphore = DispatchSemaphore(value: 0)
-  nonisolated(unsafe) var report: OneContextPermissionCapabilityProbeReport?
-  nonisolated(unsafe) var failure: Error?
+  let completion = PermissionProbeCommandCompletion()
 
   Task.detached(priority: .userInitiated) {
     let probeReport = await OneContextPermissionCapabilityProbe.run(
@@ -145,19 +169,19 @@ private func runPermissionCapabilityProbeIfRequested() {
       } else if let text = String(data: data, encoding: .utf8) {
         print(text)
       }
-      report = probeReport
+      completion.finish(.exit(probeReport.passed ? 0 : 2))
     } catch {
-      failure = error
+      completion.finish(.failure(error.localizedDescription))
     }
-    semaphore.signal()
   }
 
-  semaphore.wait()
-  if let failure {
-    FileHandle.standardError.write(Data("permission capability probe failed: \(failure.localizedDescription)\n".utf8))
+  switch completion.wait() {
+  case .exit(let status):
+    Foundation.exit(status)
+  case .failure(let message):
+    FileHandle.standardError.write(Data("permission capability probe failed: \(message)\n".utf8))
     Foundation.exit(1)
   }
-  Foundation.exit(report?.passed == true ? 0 : 2)
 }
 
 private func commandLineValue(after flag: String) -> String? {

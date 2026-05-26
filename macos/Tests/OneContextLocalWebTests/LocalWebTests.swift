@@ -68,6 +68,27 @@ final class LocalWebTests: XCTestCase {
     XCTAssertEqual(config.url, LocalWebDefaults.defaultWikiURL)
   }
 
+  func testReadinessProbeUsesLiteralLoopbackInsteadOfBrandedLocalhostName() {
+    let config = CaddyConfig(
+      mode: .localHTTPSPortless,
+      siteRoot: URL(fileURLWithPath: "/tmp/1Context Wiki/current", isDirectory: true),
+      logFile: URL(fileURLWithPath: "/tmp/1Context Logs/caddy.log")
+    )
+
+    XCTAssertEqual(config.url, "https://localhost/your-context")
+    XCTAssertEqual(config.healthURL.host, "127.0.0.1")
+    XCTAssertEqual(config.brandedHealthURL.host, "wiki.1context.localhost")
+  }
+
+  func testLocalHealthProbeSessionBypassesSystemProxyAndCache() {
+    let configuration = CaddyManager.localHealthProbeSessionConfiguration()
+
+    XCTAssertNotNil(configuration.connectionProxyDictionary)
+    XCTAssertEqual(configuration.connectionProxyDictionary?.isEmpty, true)
+    XCTAssertEqual(configuration.requestCachePolicy, .reloadIgnoringLocalCacheData)
+    XCTAssertNil(configuration.urlCache)
+  }
+
   func testLocalWebPathsUseDedicatedInfrastructureFolders() {
     let root = URL(fileURLWithPath: NSTemporaryDirectory())
       .appendingPathComponent("1context-local-web-tests-\(UUID().uuidString)", isDirectory: true)

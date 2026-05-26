@@ -974,7 +974,8 @@ public final class CaddyManager: @unchecked Sendable {
     request.timeoutInterval = 0.75
     let semaphore = DispatchSemaphore(value: 0)
     nonisolated(unsafe) var health = "no response"
-    let task = URLSession.shared.dataTask(with: request) { data, _, error in
+    let session = URLSession(configuration: Self.localHealthProbeSessionConfiguration())
+    let task = session.dataTask(with: request) { data, _, error in
       defer { semaphore.signal() }
       if let error {
         health = Self.describeProbeError(error)
@@ -989,11 +990,20 @@ public final class CaddyManager: @unchecked Sendable {
       health = object["status"] as? String == "ok" ? "OK" : "unhealthy response"
     }
     task.resume()
+    defer { session.finishTasksAndInvalidate() }
     if semaphore.wait(timeout: .now() + 1) == .timedOut {
       task.cancel()
       return "timeout"
     }
     return health
+  }
+
+  static func localHealthProbeSessionConfiguration() -> URLSessionConfiguration {
+    let configuration = URLSessionConfiguration.ephemeral
+    configuration.connectionProxyDictionary = [:]
+    configuration.requestCachePolicy = .reloadIgnoringLocalCacheData
+    configuration.urlCache = nil
+    return configuration
   }
 
   private static func describeProbeError(_ error: Error) -> String {
