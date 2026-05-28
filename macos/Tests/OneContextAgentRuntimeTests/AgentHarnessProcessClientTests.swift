@@ -269,7 +269,7 @@ final class AgentHarnessProcessClientTests: XCTestCase {
       root: root,
       body: """
       cat <<'JSON'
-      {"schema_version":1,"status":"error","surface":"agent_harness","error":{"code":"agent_harness_scaffold_not_implemented","message":"agents is declared by the scaffold but not implemented yet"},"repair_hints":["Implement the matching onecontext-agent-harness-core store method.","Keep the command receipt shape stable while filling behavior."]}
+      {"schema_version":1,"status":"error","surface":"agent_harness","error":{"code":"agent_harness_store_unavailable","message":"agent store is unavailable"},"repair_hints":["Start the agent harness store and retry.","Keep the command receipt shape stable while restoring behavior."]}
       JSON
       exit 3
       """
@@ -282,8 +282,8 @@ final class AgentHarnessProcessClientTests: XCTestCase {
     XCTAssertThrowsError(try client.agents()) { error in
       let processError = error as? AgentHarnessProcessError
       XCTAssertEqual(processError?.terminationStatus, 3)
-      XCTAssertEqual(processError?.message, "agents is declared by the scaffold but not implemented yet")
-      XCTAssertEqual(processError?.errorCode, "agent_harness_scaffold_not_implemented")
+      XCTAssertEqual(processError?.message, "agent store is unavailable")
+      XCTAssertEqual(processError?.errorCode, "agent_harness_store_unavailable")
       XCTAssertEqual(processError?.repairHints.count, 2)
       XCTAssertEqual(processError?.structuredPayload?["status"] as? String, "error")
     }

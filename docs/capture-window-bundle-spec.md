@@ -199,10 +199,10 @@ The bundle is files-first. SQLite or the memory DB may index bundle metadata,
 but the handoff artifact must remain inspectable, copyable, hashable, and
 replayable as a folder.
 
-## 3.1 Rust Scaffold Status
+## 3.1 Rust Contract Status
 
-The current Rust capture-bundle layer is a V0 contract scaffold, not the whole
-capture runtime.
+The current Rust capture-bundle layer owns reusable V0 file-contract behavior;
+the Swift daemon owns production export orchestration.
 
 Crate boundaries:
 
@@ -224,7 +224,7 @@ crates/onecontext-capture-bundler:
   - list
   - validate
   - sweep
-  - export scaffold receipt only
+  - export command that refuses to act as the production READY writer
 
 crates/onecontext-capture-dashboard:
   owns live GUI/debug visibility and bundle-contract tests. It should read the
@@ -245,7 +245,7 @@ Production and dev capture roots:
 ~/Library/Application Support/1Context Dev/capture/
 ```
 
-The Rust `CaptureRootPaths` scaffold expects and creates:
+The Rust `CaptureRootPaths` contract expects and creates:
 
 ```text
 capture/
@@ -697,7 +697,7 @@ onecontext_capture_core::export_ready_bundle:
   test/fixture helper over existing JSONL spool files
 
 onecontext-capture-bundler export:
-  scaffold receipt only; it does not write production READY bundles
+  refuses to write production READY bundles
 
 future 1contextd capture.bundle.export:
   production V0 export owner
@@ -850,7 +850,7 @@ disabled_by_policy
 
 `not_implemented` is not a valid status for a V0 mandatory lane. If a direct
 connector is not implemented, capture must still write a degraded lane using the
-fallback source stack.
+secondary source stack.
 
 Any non-present source should also emit a known-gap record.
 
@@ -1077,7 +1077,7 @@ source_span_id:
 The exported `capture_id` groups the handoff bundle. Existing source-group IDs
 remain useful provenance and should not be discarded. New bundle writers should
 prefer the name `source_span_id` for these values and reserve
-`capture_bundle_id` for the exported bundle id or a compatibility alias.
+`capture_bundle_id` for the exported bundle id.
 
 ## 13. Event Envelope
 
@@ -1222,8 +1222,8 @@ source snapshot id
 
 `events/capture.events.jsonl` is required.
 
-This file may be an aggregate index or compatibility stream. It should not be
-the only place rich lane data lives; lane-specific files are required below.
+This file may be an aggregate index stream. It should not be the only place
+rich lane data lives; lane-specific files are required below.
 
 Allowed event types include all V0 lane event types.
 
@@ -1534,7 +1534,7 @@ browser-extension native-host artifact import
 Automation / Apple Events where available
 Accessibility tree and selected text
 window title / app metadata
-ScreenCaptureKit/OCR fallback in V1
+ScreenCaptureKit/OCR-derived capture in V1
 ```
 
 If the browser extension is not installed, this file still exists and records
@@ -1577,7 +1577,7 @@ PTY/session recorder or shell integration
 terminal app integration
 Accessibility visible text and selected text
 window title / process metadata
-ScreenCaptureKit/OCR fallback in V1
+ScreenCaptureKit/OCR-derived capture in V1
 ```
 
 If PTY or shell integration is unavailable, this file still exists and records
@@ -1861,7 +1861,7 @@ Known-gap record:
   "source_id": "browser",
   "severity": "warning",
   "code": "browser_extension_unavailable",
-  "message": "Browser lane used Accessibility and window metadata fallback because the browser extension was unavailable.",
+  "message": "Browser lane used Accessibility and window metadata because the browser extension was unavailable.",
   "blocks_ready": false
 }
 ```
@@ -1889,7 +1889,7 @@ ScreenCaptureKit dirty rects missing on one frame
 media frame omitted by storage budget
 UX event tap dropped/coalesced events under pressure
 active-window stream configuration update failed once
-browser extension proof missing but AX/window fallback exists
+browser extension proof missing but AX/window metadata exists
 ```
 
 Examples that do block READY:
@@ -2097,7 +2097,7 @@ Future media/derived work:
 scroll mosaics
 document reconstruction
 chat transcript reconstruction
-OCR confidence repair
+OCR confidence tuning
 video metadata tagging
 meeting/audio summaries
 ```

@@ -220,8 +220,6 @@ Acceptance:
 
 - local fixture import writes only missing files or unchanged imported files
 - edited user files are not overwritten
-- `Application Support/1Context/setup/dev-user-data-import.toml` records source
-  hash, destination, and installed hash
 - the fixture is inspectable as normal Markdown/TOML/YAML under ignored
   `runtime-test`
 
@@ -232,8 +230,6 @@ Review implementation:
 - synthetic fixture data in the smoke test proves the copy/import behavior
 - the smoke test uses a temporary runtime root and writes a namespaced smoke
   fixture there instead of contaminating the persistent development runtime
-- the initializer records file hashes and install status in
-  `Application Support/1Context/setup/dev-user-data-import.toml`
 - the smoke test runs the initializer twice to prove idempotent install
 
 Current proof:

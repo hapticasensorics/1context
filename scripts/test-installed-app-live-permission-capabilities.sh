@@ -9,14 +9,14 @@ Usage:
   scripts/test-installed-app-live-permission-capabilities.sh
 
 Environment:
-  ONECONTEXT_APP                         App bundle to verify. Defaults to /Applications/1Context.app.
+  ONECONTEXT_APP                         Timestamped dev permission-test app bundle to verify. Required.
   ONECONTEXT_CAPABILITY_EVIDENCE_DIR     Defaults to dist/live-permission-capability-evidence/<timestamp>.
   ONECONTEXT_PERMISSION_PROBE_TIMEOUT    Per-capability timeout in seconds. Defaults to 5.
-  ONECONTEXT_INCLUDE_BROWSER_EXTENSION=1 Include the browser extension probe. Defaults to skipped.
+  ONECONTEXT_INCLUDE_BROWSER_EXTENSION=1 Include the dev browser extension probe. Defaults to skipped.
 
-Runs the installed 1Context app executable in hidden one-shot probe mode, using
-the app bundle's signed TCC identity. The browser extension probe is skipped by
-default because the production browser extension is not built yet.
+Runs the installed timestamped dev app executable in hidden one-shot probe mode,
+using the app bundle's signed TCC identity. This is the only live TCC probe path
+and intentionally rejects stable dev or production bundle identifiers.
 USAGE
 }
 
@@ -30,7 +30,8 @@ fail() {
   exit 1
 }
 
-APP="${ONECONTEXT_APP:-/Applications/1Context.app}"
+[[ -n "${ONECONTEXT_APP:-}" ]] || fail "ONECONTEXT_APP is required and must point at a timestamped dev permission-test app"
+APP="$ONECONTEXT_APP"
 APP="${APP%/}"
 MAIN_EXE="$APP/Contents/MacOS/1Context"
 INFO="$APP/Contents/Info.plist"
@@ -46,7 +47,11 @@ TIMEOUT="${ONECONTEXT_PERMISSION_PROBE_TIMEOUT:-5}"
 [[ -f "$INFO" ]] || fail "Info.plist not found: $INFO"
 mkdir -p "$EVIDENCE_DIR"
 
-/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$INFO" >"$EVIDENCE_DIR/bundle-identifier.txt"
+BUNDLE_ID="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$INFO")"
+[[ "$BUNDLE_ID" =~ ^com\.haptica\.1context\.dev\.permission\.[a-z0-9][a-z0-9-]{0,39}$ ]] \
+  || fail "expected timestamped dev permission-test bundle id, got: $BUNDLE_ID"
+
+printf '%s\n' "$BUNDLE_ID" >"$EVIDENCE_DIR/bundle-identifier.txt"
 /usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$INFO" >"$EVIDENCE_DIR/version.txt"
 codesign -dv --verbose=4 "$APP" >"$EVIDENCE_DIR/codesign.txt" 2>&1 || true
 codesign -d --entitlements :- "$APP" >"$EVIDENCE_DIR/entitlements.plist" 2>"$EVIDENCE_DIR/entitlements.err" || true

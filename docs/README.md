@@ -33,10 +33,6 @@ that operators and contributors should use.
   surface for durable agent mail, async ready/valid semantics, backpressure,
   talk-page inboxes, notifications, and governance workflows over proposals and
   artifacts.
-- [Release Factory Goal](goals/1context-release-factory-goal.md): active
-  priority for channel-aware dev, prototype, private, and official release
-  builds with no backwards-compatible shims, no Homebrew dependency for
-  distributable artifacts, and no revival of deleted release paths.
 - [macOS Release Runbook](macos-release-runbook.md): current release packaging,
   local proof, update policy, and self-hosted Mac proof guidance.
 - [Development And Release Notes](development.md): maintainer details for local
@@ -84,7 +80,7 @@ that operators and contributors should use.
   output inspection, timeline lanes, review labels, and four-agent
   implementation split.
 - [Local Web Contract](local-web-contract.md): local HTTPS, Caddy, static wiki
-  publication, daemon API, cloud compatibility, and user-wiki boundaries.
+  publication, daemon API, cloud boundary, and user-wiki ownership.
 - [User Data Spec](user-data-spec.md): filesystem and persisted-data contract
   for `~/1Context`, Application Support, first-run defaults, runtime mirrors,
   templates, source families, talk files, ledgers, indexes, and static export.
@@ -99,15 +95,12 @@ that operators and contributors should use.
   updater proof for release hops that need installed-app evidence.
 - [Archived Release Lockdown Goal](goals/archive/1context-release-lockdown-goal.md):
   historical Sparkle-transition evidence.
-- [Wiki Memory Runtime V0 Goal](goals/1context-wiki-memory-runtime-v0-goal.md):
-  historical close-loop checklist for the user-owned wiki runtime, publisher,
-  bundled renderer, local web proof, and future memory authoring surfaces.
 - [Wiki Runtime Production Shape Goal](goals/1context-wiki-runtime-production-shape-goal.md):
   historical cleanup checklist for retiring duplicate shipped wiki runtime
   artifacts and proving the `RuntimeDefaults` plus `WikiEngine` app shape.
 - [Archived Delete Bloat Goal](goals/archive/1context-delete-bloat-goal.md):
-  historical cleanup evidence for deleting old release paths, compatibility
-  shims, stale docs, generated state, and product test hooks.
+  historical cleanup evidence for deleting old release paths, stale shims,
+  stale docs, generated state, and product test hooks.
 - [Goals Folder](goals/README.md): policy for keeping operator goals out of the
   installed user wiki.
 

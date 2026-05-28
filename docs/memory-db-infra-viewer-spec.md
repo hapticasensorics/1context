@@ -807,24 +807,16 @@ filtering to one lane stays responsive
 Developers should get a one-command local loop:
 
 ```bash
-./scripts/memory-db-dev up
-./scripts/memory-db-dev bootstrap
-./scripts/memory-db-dev seed
-./scripts/memory-db-dev viewer
-./scripts/memory-db-dev test
+./scripts/memory-db-dev.sh provision
+export ONECONTEXT_MEMORY_DB_URL="$(./scripts/memory-db-dev.sh url)"
+cargo test -p onecontext-memory-db
 ```
 
-The dev harness should create:
+The dev helper should create:
 
 ```text
 local TimescaleDB
-local blob directory
-sample user
-default lanes
-sample sources
-fixture perception objects
-fixture edges
-fixture blobs
+current app, perception, and search schemas
 ```
 
 Every serious viewer change should have:

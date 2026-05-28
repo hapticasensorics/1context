@@ -110,13 +110,13 @@ macos/Sources/OneContextDaemon/main.swift
   UX event tap startup and JSONL persistence
 
 crates/onecontext-capture-core/
-  Rust file-contract scaffold for bundle paths, V0 required lane files,
+  Rust file-contract layer for bundle paths, V0 required lane files,
   manifest/schema types, atomic processing -> live promotion, validation,
   spool-window reads, and retention planning/audit helpers
 
 crates/onecontext-capture-bundler/
-  Rust operator CLI scaffold for describe/list/validate/sweep and an export
-  placeholder receipt
+  Rust operator CLI for describe/list/validate/sweep and an export command that
+  refuses to act as the production READY writer
 
 crates/onecontext-capture-dashboard/
   Rust/egui live capture dashboard plus bundle-contract tests
@@ -142,8 +142,7 @@ onecontext-capture-core:
 
 onecontext-capture-bundler:
   owns local operator commands around existing bundle folders; its export
-  command is still a scaffold receipt and must not be treated as production
-  bundle export
+  command refuses to act as production bundle export
 
 onecontext-capture-dashboard:
   owns GUI/debug visibility into live capture state and contract tests for
@@ -213,7 +212,7 @@ capture/
     sweeps.jsonl
 ```
 
-The Rust `CaptureRootPaths` scaffold currently creates:
+The Rust `CaptureRootPaths` contract currently creates:
 
 ```text
 capture/
@@ -263,7 +262,7 @@ stream_id
 source_record_id
 source_hash
 source_span_id
-capture_bundle_id compatibility alias when present
+capture_bundle_id when present
 privacy_class
 privacy_shape
 source_clock
@@ -280,8 +279,8 @@ capture_id:
   exported bundle id
 
 capture_bundle_id:
-  legacy compatibility alias in current Swift envelopes; new exporter code
-  should write source_span_id and reserve capture_id for bundle identity
+  existing Swift envelope field; new exporter code should write source_span_id
+  and reserve capture_id for bundle identity
 ```
 
 Durability classes:
@@ -489,7 +488,7 @@ native messaging bridge
 browser capture artifacts
 ```
 
-Fallback source:
+Secondary source:
 
 ```text
 window graph titles
@@ -538,7 +537,7 @@ PTY/session recorder
 terminal integration
 ```
 
-Fallback source:
+Secondary source:
 
 ```text
 AX text/value/selection
@@ -580,7 +579,7 @@ source connector
 Automation where configured
 ```
 
-Fallback source:
+Secondary source:
 
 ```text
 AX focused element
@@ -723,9 +722,9 @@ The exporter must tolerate missing or degraded mandatory lanes by writing empty
 or degraded lane files plus explicit capability metadata. It must not silently
 omit a lane.
 
-### 8.1 Rust Capture-Bundle Scaffold Runbook
+### 8.1 Rust Capture-Bundle Contract Runbook
 
-Use the Rust scaffold as the contract harness while the Swift daemon exporter is
+Use the Rust crate as the contract harness while the Swift daemon exporter is
 being wired.
 
 Crate boundaries:
@@ -739,8 +738,8 @@ onecontext-capture-core:
 onecontext-capture-bundler:
   standalone operator/debug binary. It can describe the contract, list bundle
   directories, validate READY bundles, and dry-run/apply a simple folder sweep.
-  Its export command currently returns status="scaffold" and points callers
-  back to the daemon-owned capture.bundle.export method.
+  Its export command refuses production export and points callers back to the
+  daemon-owned capture.bundle.export method.
 
 onecontext-capture-dashboard:
   GUI/debug binary. It reads daemon `capture status` and `capture snapshot`,
@@ -755,9 +754,8 @@ onecontext_capture_core::export_ready_bundle(...)
   is a useful test/fixture exporter over existing JSONL spool files.
 
 onecontext-capture-bundler export
-  is not yet the production exporter; it prints a scaffold receipt because
-  production export must run through the Swift daemon's current status,
-  permission, sampler, and source-health truth.
+  is not the production exporter; production export must run through the Swift
+  daemon's current status, permission, sampler, and source-health truth.
 ```
 
 Build and test:
@@ -1129,7 +1127,7 @@ Unit tests:
 
 ```text
 capture paths permissions
-event envelope compatibility
+event envelope conformance
 retention policy decisions
 retention sweeper file deletion/preserve logic
 bundle manifest required fields

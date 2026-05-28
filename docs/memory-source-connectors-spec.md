@@ -91,9 +91,8 @@ perception.source_cursors
 ```
 
 These are not timeline tables. They are the setup, dedupe, and cursor layer for
-timeline imports. Older `capture.source_connectors`, `capture.source_locations`,
-and `capture.source_connector_probes` migrations may remain for existing dev DB
-compatibility, but new product reads and writes should target `perception.*`.
+timeline imports. Dev DBs created before this contract should be recreated
+before source-registry work; product reads and writes target `perception.*`.
 
 `perception.sources` records:
 
@@ -129,8 +128,8 @@ metadata
 ```
 
 The current Rust source-probe structs in
-`crates/onecontext-memory-db/src/source_connector.rs` are a compatibility
-surface until the Perception DB source registry is fully wired.
+`crates/onecontext-memory-db/src/source_connector.rs` are a temporary
+source-registry surface until Perception DB owns the full connector lifecycle.
 
 ## 4. Standard Connector Lifecycle
 
@@ -158,8 +157,8 @@ What permissions or auth are missing?
 What stable source ids and timestamps can be extracted?
 ```
 
-Backfill imports historical records inside an explicit time range. Tail/poll
-imports new records after the cursor.
+Range imports ingest historical records inside an explicit time window.
+Tail/poll imports new records after the cursor.
 
 Codex and Claude session ingest is governed by
 [Coding Agent Ingest Spec](coding-agent-ingest-spec.md). They reduce into a
@@ -256,8 +255,8 @@ privacy_class must be set early
 ```
 
 The service inserts into `perception.objects`; connector code only emits
-Perception DB object inputs. Legacy `CaptureEnvelope` naming can remain in code
-while the write path migrates, but it is not the product contract.
+Perception DB object inputs. `CaptureEventEnvelope` remains the source-spool
+envelope and is not the product object contract.
 
 ## 6.1 Lane Rule For Chat Apps
 

@@ -63,23 +63,21 @@ Acceptable replacements:
 
 | Paths | Action | Replacement |
 | --- | --- | --- |
-| `scripts/test-release-train.sh` | Merge/delete | `release/runner` tests own manifest, appcast, and workflow assertions. |
-| `scripts/test-launch-agent-package.sh` | Merge | Release runner package smoke plus `LaunchAgentManagerTests`. |
-| `scripts/test-wiki.sh` | Delete | Checked-in Playwright spec using root config. |
-| `scripts/test-wiki-runtime-defaults-scenarios.sh` | Delete/merge | Swift runtime-default tests; no generated shell Playwright. |
-| `scripts/test-memory-local-web-e2e.sh` | Delete | Playwright local-web spec with seeded fixture. |
+| Retired release train shell test | Done | `release/runner` tests own manifest, appcast, dry-run, and workflow assertions. |
+| Retired packaged launch agent shell smoke | Done | Release runner tests and `LaunchAgentManagerTests` own the current checks. |
+| `scripts/test-wiki.sh` | Shrink/keep | Compact current-contract render/manifest smoke; route coverage lives in wiki-engine tests. |
+| Retired RuntimeDefaults scenario wrapper | Done | Swift runtime-default tests; no generated shell Playwright. |
+| Retired memory local-web shell harness | Done | Local-web contracts live in typed macOS tests. |
 
 ### P2: Collapse DB, Capture, Benchmark, And Permission Scripts
 
 | Paths | Action | Replacement |
 | --- | --- | --- |
-| `scripts/memory-db-dev.sh`, `scripts/perception-db-local.sh` | Merge | One Rust DB lifecycle command or `docker compose` fixture. |
-| `scripts/benchmark-memory-backfill.sh`, `scripts/summarize-memory-benchmarks.sh` | Delete | Rust benchmark output. |
-| `scripts/benchmark-capture-bundle-large-windows.sh`, `scripts/benchmark-capture-bundle-media-export.sh` | Delete | Rust capture-core benchmark fixtures. |
-| `scripts/test-capture-audit-regenerated-bundle.sh` | Delete | Capture-core bundle contract tests. |
-| `scripts/test-capture-dashboard-metadata.sh` | Delete | Swift/Rust metadata tests. |
-| `scripts/test-installed-app-permission-capabilities.sh` | Merge | Release package smoke plus Swift permission proof tests. |
-| `scripts/test-installed-app-live-permission-capabilities.sh` | Keep/merge | One live TCC probe entrypoint only. |
+| `scripts/memory-db-dev.sh` | Shrink/keep | Fresh-schema dev helper over the Rust bootstrap command. |
+| Retired memory DB benchmark shell harnesses | Done | Rust memory DB tests own current schema and writer contracts. |
+| Retired capture/attention benchmark and proof shell harnesses | Done | Rust capture/attention tests own current bundle and dashboard contracts. |
+| Non-live installed-app permission package checkers | Delete | Permission proof should be covered by release package smoke plus Swift tests. |
+| `scripts/test-installed-app-live-permission-capabilities.sh` | Keep/merge | One timestamped dev live TCC probe entrypoint only. |
 
 ### P3: Thin Operator Shims Only
 
@@ -89,7 +87,7 @@ Keep or reduce these to small shims:
 - `scripts/test.sh`
 - `scripts/check-macos-release-credentials.sh`
 - `scripts/prepare-macos-release-keychain.sh`
-- `scripts/install-browser-extension-dev.sh` only if browser proof remains dev-supported
+- `scripts/install-browser-extension-dev.sh` only while browser proof remains explicitly dev-supported
 
 The size gate should become explicit:
 
@@ -227,7 +225,7 @@ deletion, that is not automatically a regression.
 | `scripts/test-agent-harness-boundary-dogfood.mjs` | Accepts `status: "scaffold"`. | Product proof must fail scaffold receipts. |
 | `docs/agent-harness-implementation-scaffold.md` | Keeps scaffold contract alive. | Archive or rewrite as current contract. |
 | `wiki-engine/src/renderer/index.test.mjs` | Requires legacy `.talk` route aliases. | Replace with canonical route tests. |
-| `scripts/test-wiki-runtime-defaults-scenarios.sh` | Preserves upgrade/backfill scenario. | Archive one-time evidence; keep fresh install/idempotency only. |
+| the retired RuntimeDefaults scenario wrapper | Preserves upgrade/backfill scenario. | Archive one-time evidence; keep fresh install/idempotency only. |
 | `docs/attention-bundle-migration-notes.md`, `bundle_input.rs` | No-frame compatibility report. | Missing frame media should be invalid input. |
 | `docs/codex-adapter-harness-dogfood.md` | Still says scaffold behavior. | Rewrite as current CLI contract. |
 

@@ -2475,7 +2475,7 @@ This section separates the protocol destination from the V0 build order.
 | Physical schema cutover | Now | The durable tables are `perception.*`. Reset transitional dev DBs and ship one current perception-only schema for product work. |
 | Source identity model | Now | Adopt `(source_id, source_record_key)` and deterministic receipts before adding more connectors. Add an adapter from current `connector_key/source_record_id/source_hash`. |
 | `memory.writeObjects` | V0 | Build this first as the single durable write protocol. Preserve COPY/staging throughput. |
-| Source cursor advancement | V0 | Implement with writes so backfills and daemon polling cannot advance after a failed durable write. |
+| Source cursor advancement | V0 | Implement with writes so source sweeps and daemon polling cannot advance after a failed durable write. |
 | `memory.ingestSources` | V0 | Add after `writeObjects`; source adapters should normalize and call the same writer path. |
 | Codex, Claude, iMessage connectors | V0 | Keep these as the first proof set because they exercise local files, SQLite, filtered messages, and high-volume text. |
 | `memory.queryViewport` | V0 | First read path. Needs time overlap, lane/source/kind/role filters, keyset pagination, and browser-safe projection. |
@@ -2585,7 +2585,7 @@ current schema:
   create app, perception, and search schemas
   create perception.sources, lanes, blobs, series, source_records, objects,
     object_edges, object_density_1m, source_cursors, and search embeddings
-  do not create, backfill, or query capture.* product tables
+  do not create or query capture.* product tables
 
 series writer:
   choose or create perception.series before claiming source_records

@@ -13,20 +13,15 @@ Current goals:
   - Status: complete. Retired the duplicate `release/memory-runtime` artifact
     path and proved the single `RuntimeDefaults` plus `WikiEngine` bundle
     shape.
-- [1Context Wiki Memory Runtime V0 Goal](1context-wiki-memory-runtime-v0-goal.md)
-  - Status: superseded for final cleanup by the production-shape goal. Swift render coordination, runtime
-    page lifecycle, browser route proof, package smoke, wiki-interface cleanup,
-    and custom-page fallback proof are in place.
 - [1Context Wiki Engine V0 Goal](1context-wiki-engine-v0-goal.md)
-  - Status: renderer slice extracted into `wiki-engine/`; current closure work
-    is tracked by the Wiki Memory Runtime V0 goal.
+  - Status: renderer slice extracted into `wiki-engine/`; remaining closure is
+    tracked by current contracts and production-shape proof.
 - [1Context Agent Mail Protocol Goal](1context-agent-mail-protocol-goal.md)
   - Status: planning. Defines the implementation boundary for bringing agent
     mail back beside the wiki runtime as a clean transport kernel.
 - [1Context Codex Adapter Implementation Goal](1context-codex-adapter-implementation-goal.md)
   - Status: active. Tracks the Rust adapter spine for Codex app-server binding,
     hooks, wake dispatch, body injection, event mirroring, and redacted proof.
-- [1Context Release Factory Goal](1context-release-factory-goal.md)
 
 Archived goals:
 

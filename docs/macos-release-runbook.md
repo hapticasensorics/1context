@@ -84,7 +84,6 @@ Run these before treating a release candidate as locally proved:
 swift test --package-path macos
 ./scripts/test.sh
 ./scripts/release-train.sh build --channel dev
-./scripts/test-launch-agent-package.sh
 ```
 
 For release/update policy changes, also validate the generated appcast and

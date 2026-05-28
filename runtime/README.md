@@ -122,11 +122,12 @@ The current wiki-engine V0 review slice uses:
 
 ```text
 scripts/init-dev-wiki-runtime.sh
-  copies the runtime tree into runtime-test and optionally imports a local fixture
+  copies missing files from the tracked runtime tree into runtime-test and
+  optionally overlays a current-shape local fixture
 
 scripts/test-wiki.sh
-  creates the configured wiki source/talk files, renders the site, serves it locally, and
-  checks source, talk, custom, menu, markdown-twin, and 404 routes in a browser
+  creates a configured custom source/talk page, renders the site, and checks
+  canonical source, talk, markdown-twin, and route-manifest output
 ```
 
 Run:
@@ -135,17 +136,10 @@ Run:
 ./scripts/test-wiki.sh
 ```
 
-When a local fixture is imported, the initializer writes import state to
-Application Support setup:
-
-```text
-runtime-test/Library/Application Support/1Context/setup/dev-user-data-import.toml
-```
-
 The helper expects fixture imports to be shaped like `runtime-test/`, with
 `1Context/` and optionally `Library/` at the fixture root. It copies fixture
 files only when the destination is missing. Existing edited files are left in
-place and reported as `skipped_modified` in setup state.
+place.
 
 After copying defaults and fixture files, the initializer creates configured
 source-backed pages from `runtime-test/1Context/user-wiki/wiki.toml`. The

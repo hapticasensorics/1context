@@ -25,10 +25,9 @@ and tests:
 ./scripts/memory-db-dev.sh provision
 ```
 
-That command starts a local Postgres + Timescale container, creates the current
-schema from `crates/onecontext-memory-db/schema/current.sql` when the database
-is empty, rejects deleted migration/capture-era schemas, and verifies the
-central `perception.*` tables.
+That command starts a local Postgres + Timescale container and asks the Rust
+memory DB CLI to create or validate the current schema from
+`crates/onecontext-memory-db/schema/current.sql`.
 
 ## Requirements
 
@@ -81,18 +80,6 @@ Run the schema smoke check:
 
 ```bash
 ./scripts/memory-db-dev.sh verify
-```
-
-Run the local backfill/write benchmark against a disposable Timescale database:
-
-```bash
-./scripts/benchmark-memory-backfill.sh
-```
-
-The benchmark writes per-run summaries under:
-
-```text
-test-results/memory-db-benchmarks/<run-id>/
 ```
 
 Open `psql` inside the container:
@@ -155,7 +142,7 @@ tables. Source cursors advance only after the DB writer commits.
 ## V2 Cutover Checklist
 
 Perception DB V2 is a perception-only contract. Dev databases that still contain
-prototype `capture.*` tables should be reset instead of carried forward:
+prototype `capture.*` tables should be reset:
 
 ```bash
 ./scripts/memory-db-dev.sh reset
@@ -167,14 +154,14 @@ Implementation gates:
 ```text
 schema:
   current schema creates app, perception, and search schemas only
-  current schema does not create or backfill capture.* tables
+  current schema does not create capture.* tables
   perception.series exists before perception.objects/source_records depend on it
   perception.source_records remains the dedupe/idempotency table
 
 writer:
   memory.writeObjects chooses or creates perception.series rows
   object and source_record writes include series_id in the same transaction
-  retries return stable receipts without dual-writing legacy tables
+  retries return stable receipts without writing removed tables
 
 adapters:
   Codex, Claude, iMessage, browser, file, screen, audio, and metric inputs map
@@ -187,9 +174,7 @@ reads:
   series-scoped reads return records in event order
   density defaults do not group by series_id
 
-benchmarks:
+validation:
   focused contract tests pass
   10k write, 5k viewport, density, and hydrate paths meet local benchmark gates
-  benchmark-memory-backfill writes through Perception DB and records durable
-  summaries in test-results/memory-db-benchmarks
 ```

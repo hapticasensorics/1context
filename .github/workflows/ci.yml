@@ -34,5 +34,3 @@ jobs:
       - run: swift test --package-path macos
       - run: ./scripts/test.sh
       - run: ./scripts/release-train.sh build --channel dev
-      - name: Packaged LaunchAgent smoke
-        run: ONECONTEXT_ALLOW_LAUNCH_AGENT_SMOKE=1 ./scripts/test-launch-agent-package.sh

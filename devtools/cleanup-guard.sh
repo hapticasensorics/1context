@@ -24,6 +24,7 @@ RG_EXCLUDES=(
   --glob '!runtime-test/**'
   --glob '!test-results/**'
   --glob '!docs/archive/**'
+  --glob '!docs/goals/archive/**'
   --glob '!docs/retired.md'
   --glob '!docs/cleanup-policy.md'
   --glob '!docs/coding-agent-cleanup-questions.md'
@@ -44,6 +45,19 @@ SCRIPT_RETIRE_CANDIDATES=(
   'test-wiki-core-dogfood.mjs'
   'verify-agent-mail-triad-mcp-realism.mjs'
   'onecontext-wiki-mcp-server.mjs'
+  'test-capture-audit-regenerated-bundle.sh'
+  'benchmark-capture-bundle-large-windows.sh'
+  'benchmark-capture-bundle-media-export.sh'
+  'test-capture-dashboard-metadata.sh'
+  'launch-attention-dashboard.sh'
+  'benchmark-memory-backfill.sh'
+  'summarize-memory-benchmarks.sh'
+  'test-memory-local-web-e2e.sh'
+  'test-installed-app-permission-capabilities.sh'
+  'test-browser-extension-native-host.sh'
+  'test-wiki-runtime-defaults-scenarios.sh'
+  'test-release-train.sh'
+  'test-launch-agent-package.sh'
 )
 
 GENERATED_TRACKED_PATHS=(

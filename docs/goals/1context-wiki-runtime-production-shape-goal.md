@@ -69,9 +69,8 @@ Collapse the wiki runtime into one knowable production shape:
   8 routes, 8 markdown twins, wiki-core hash prefix `78ae10f53900`, and
   renderer hash prefix `0aeac13b4e1e`.
 - [x] Validate that manifest in package and installed-path smoke tests.
-  Evidence: `ONECONTEXT_ALLOW_LAUNCH_AGENT_SMOKE=1
-  ./scripts/test-launch-agent-package.sh` and
-  `./scripts/test-wiki.sh` pass.
+  Evidence: typed macOS runtime tests and `./scripts/test-wiki.sh` cover the
+  current manifest shape.
 - [x] Record the manifest identity in the first-run/defaults install ledger.
   Evidence: `WikiRuntimeDefaultsInstallerTests.copiesMissingDefaultsAndPreservesExistingFiles`
   asserts `packagedManifest` survives into `runtime-defaults-install.json`.
@@ -80,8 +79,8 @@ Collapse the wiki runtime into one knowable production shape:
 
 - [x] Package smoke rejects `memory-core`, `runtime-test`, generated private
   state, and the old `memory-runtime` artifact.
-- [x] Release-train tests no longer call or require the retired artifact
-  builder. Evidence: `./scripts/test-release-train.sh` passes and scans active
+- [x] Release-train validation no longer calls or requires the retired artifact
+  builder. Evidence: `release/runner` tests and cleanup guards scan active
   build/runtime code for retired `build-memory-runtime-artifact` and
   `release/memory-runtime` references.
 - [x] Active docs/specs point operators to `RuntimeDefaults` and `WikiEngine`
@@ -91,14 +90,14 @@ Collapse the wiki runtime into one knowable production shape:
 
 ### 4. Verification Evidence
 
-- [x] `./scripts/test-release-train.sh`
 - [x] `swift test --package-path macos`
 - [x] `npm test --prefix wiki-engine`
 - [x] `/usr/bin/time -p ./scripts/release-train.sh build --channel dev` completed in
   73.00 seconds and produced `dist/1Context-0.1.87-macos-arm64.dmg`.
-- [x] `ONECONTEXT_ALLOW_LAUNCH_AGENT_SMOKE=1 ./scripts/test-launch-agent-package.sh`
 - [x] `./scripts/test-wiki.sh`
-- [x] `./scripts/test-wiki-runtime-defaults-scenarios.sh`
+- [x] RuntimeDefaults current-contract coverage lives in
+  `WikiRuntimeDefaultsInstallerTests`, `WikiRuntimeDefaultsScenarioTests`, and
+  `./scripts/test-wiki.sh`; the old shell scenario wrapper was retired.
 - [x] `git diff --check`
 
 ## Evidence Log

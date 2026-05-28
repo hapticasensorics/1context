@@ -148,6 +148,9 @@ localhost ports are also suffix-scoped so it can run beside the stable dev app
 without reusing its proof records or instance lock. Install that app when you
 want a clean TCC identity and fresh prompts. Do not use the permission-test
 identity to judge whether normal dev rebuilds preserve existing permissions.
+`scripts/test-installed-app-live-permission-capabilities.sh` is intentionally
+limited to this timestamped dev identity and requires `ONECONTEXT_APP`; it does
+not probe stable dev or production apps.
 When reporting a timestamped build, include the `BUILD_TIME`, the installed app
 path, the `real/user/sys` timing from `/usr/bin/time -p`, and the live
 permission probe evidence path if permissions were part of the task.

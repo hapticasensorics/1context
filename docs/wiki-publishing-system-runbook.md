@@ -95,7 +95,7 @@ onecontext-wiki --root <runtime-home>/1Context page-create dummy-custom \
   --type context-page \
   --template pages/context-page.md \
   --talk-conventions-template talk/conventions.md \
-  --summary "Fixture custom page generated from the fallback template." \
+  --summary "Fixture custom page created from the context-page template." \
   --nav-order 900
 ```
 
@@ -232,15 +232,13 @@ Then verify:
 
 Use the in-app browser or Playwright when a route behavior changes.
 
-## RuntimeDefaults Upgrade Check
+## RuntimeDefaults Check
 
-RuntimeDefaults are backfill material:
+RuntimeDefaults are the first-run seed for the current user-data shape:
 
 1. Build app defaults from `runtime/1Context`.
-2. Install missing defaults into the user tree only when files are absent.
-3. Preserve existing user files.
-4. Write conflict/proposal evidence for changed packaged defaults.
-5. Render from actual user data.
+2. Install missing defaults into an empty user tree.
+3. Render from actual user data.
 
 The user tree is always the live truth.
 

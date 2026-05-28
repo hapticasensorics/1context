@@ -48,6 +48,28 @@ test("manifest validates and exports dev channel policy", async () => {
   assert.equal(env.ONECONTEXT_BUNDLE_IDENTIFIER, "com.haptica.1context.dev");
 });
 
+test("release train dev build dry-run writes timing evidence", async () => {
+  const evidenceDir = tmpDir("build-evidence");
+  await execa(fromRoot("scripts", "release-train.sh"), ["build", "--channel", "dev", "--dry-run"], {
+    env: { ...process.env, ONECONTEXT_RELEASE_EVIDENCE_DIR: evidenceDir },
+  });
+  const stage = JSON.parse(fs.readFileSync(path.join(evidenceDir, "timings", "build-dev.json"), "utf8")) as { channel?: string; status?: string };
+  const summary = JSON.parse(fs.readFileSync(path.join(evidenceDir, "timing-summary.json"), "utf8")) as { schema_version?: string; stage_count?: number };
+  const releaseEvidence = fs.readFileSync(path.join(evidenceDir, "release-evidence.json"), "utf8");
+  assert.equal(stage.channel, "dev");
+  assert.equal(stage.status, "dry-run");
+  assert.equal(summary.schema_version, "1context.release-timing-summary.v1");
+  assert.equal(summary.stage_count, 1);
+  assert.match(releaseEvidence, /"timing_summary": "timing-summary\.json"/);
+});
+
+test("release train has no package compatibility command", async () => {
+  await assert.rejects(
+    () => execa(fromRoot("scripts", "release-train.sh"), ["package"]),
+    /unknown command 'package'|Unknown release train command: package/
+  );
+});
+
 test("appcast policy accepts mandatory official appcast and rejects hidden release notes", () => {
   const manifest = loadManifestFile();
   const dir = tmpDir("appcast");

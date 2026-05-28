@@ -160,14 +160,14 @@ fn export_includes_appended_windows_records_after_index_creation() {
 }
 
 #[test]
-fn undated_legacy_windows_file_is_not_used_as_bracketing_fallback() {
+fn undated_windows_file_is_not_used_as_bracketing_input() {
     let temp = tempdir().unwrap();
     let capture_root = temp.path().join("capture");
     let paths = CaptureRootPaths::new(&capture_root);
     paths.ensure_directories().unwrap();
     let base = Utc.with_ymd_and_hms(2026, 5, 25, 12, 0, 0).unwrap();
     fs::write(
-        paths.windows_dir.join("legacy.windows.jsonl"),
+        paths.windows_dir.join("undated.windows.jsonl"),
         format!("{}\n", window_snapshot_line(base - Duration::hours(1), 1)),
     )
     .unwrap();
@@ -183,7 +183,7 @@ fn undated_legacy_windows_file_is_not_used_as_bracketing_fallback() {
     let exported_windows = read_jsonl_values(&response.bundle_path.join("events/windows.jsonl"));
     assert!(
         exported_windows.is_empty(),
-        "undated legacy window logs should not be compatibility inputs"
+        "undated window logs should not be accepted as inputs"
     );
     let sources: Value = read_json(&response.bundle_path.join("sources.json"));
     assert!(sources["sources"].as_array().unwrap().iter().any(|source| {
@@ -194,7 +194,7 @@ fn undated_legacy_windows_file_is_not_used_as_bracketing_fallback() {
 }
 
 #[test]
-fn fresh_window_snapshot_focused_context_does_not_backfill_ax_lane() {
+fn fresh_window_snapshot_focused_context_does_not_synthesize_ax_lane() {
     let temp = tempdir().unwrap();
     let capture_root = temp.path().join("capture");
     let paths = CaptureRootPaths::new(&capture_root);
