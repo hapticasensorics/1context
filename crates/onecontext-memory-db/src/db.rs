@@ -1,39 +1,18 @@
-use std::collections::HashSet;
 use std::fmt;
 
-use postgres::{Client, GenericClient, NoTls};
+use postgres::{Client, NoTls};
 
-use crate::migrations::{
-    apply_bundled_migrations_with_client, MigrationApplyReport, MigrationRunnerError, MIGRATIONS,
+use crate::schema::{
+    bootstrap_current_schema_with_client, validate_current_schema_with_client,
+    CurrentSchemaBootstrapReport, CurrentSchemaError, CurrentSchemaStatus,
 };
 
 pub const DATABASE_URL_ENV: &str = "ONECONTEXT_MEMORY_DB_URL";
-pub const LEGACY_DATABASE_URL_ENV: &str = "ONECONTEXT_MEMORY_DATABASE_URL";
-pub const FALLBACK_DATABASE_URL_ENV: &str = "DATABASE_URL";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DatabaseUrl {
     pub url: String,
     pub source: String,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct AppliedMigrationState {
-    pub version: u16,
-    pub name: String,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct MigrationState {
-    pub applied: Vec<AppliedMigrationState>,
-    pub pending: Vec<&'static str>,
-    pub total: usize,
-}
-
-impl MigrationState {
-    pub fn is_current(&self) -> bool {
-        self.pending.is_empty()
-    }
 }
 
 #[derive(Debug)]
@@ -43,7 +22,7 @@ pub enum DbError {
         step: String,
         source: postgres::Error,
     },
-    Migration(MigrationRunnerError),
+    Schema(CurrentSchemaError),
 }
 
 impl fmt::Display for DbError {
@@ -53,7 +32,7 @@ impl fmt::Display for DbError {
             Self::Postgres { step, source } => {
                 write!(formatter, "postgres failed while {step}: {source}")
             }
-            Self::Migration(source) => write!(formatter, "{source}"),
+            Self::Schema(source) => write!(formatter, "{source}"),
         }
     }
 }
@@ -63,14 +42,14 @@ impl std::error::Error for DbError {
         match self {
             Self::MissingDatabaseUrl => None,
             Self::Postgres { source, .. } => Some(source),
-            Self::Migration(source) => Some(source),
+            Self::Schema(source) => Some(source),
         }
     }
 }
 
-impl From<MigrationRunnerError> for DbError {
-    fn from(value: MigrationRunnerError) -> Self {
-        Self::Migration(value)
+impl From<CurrentSchemaError> for DbError {
+    fn from(value: CurrentSchemaError) -> Self {
+        Self::Schema(value)
     }
 }
 
@@ -104,12 +83,12 @@ impl MemoryDatabase {
         self.client
     }
 
-    pub fn apply_migrations(&mut self) -> Result<MigrationApplyReport, DbError> {
-        apply_bundled_migrations_with_client(&mut self.client).map_err(DbError::from)
+    pub fn bootstrap_current_schema(&mut self) -> Result<CurrentSchemaBootstrapReport, DbError> {
+        bootstrap_current_schema_with_client(&mut self.client).map_err(DbError::from)
     }
 
-    pub fn migration_state(&mut self) -> Result<MigrationState, DbError> {
-        migration_state_with_client(&mut self.client)
+    pub fn validate_current_schema(&mut self) -> Result<CurrentSchemaStatus, DbError> {
+        validate_current_schema_with_client(&mut self.client).map_err(DbError::from)
     }
 }
 
@@ -121,80 +100,16 @@ pub fn resolve_database_url(explicit_database_url: Option<&str>) -> Option<Datab
         });
     }
 
-    for key in [
-        DATABASE_URL_ENV,
-        LEGACY_DATABASE_URL_ENV,
-        FALLBACK_DATABASE_URL_ENV,
-    ] {
-        if let Ok(value) = std::env::var(key) {
-            if let Some(url) = nonempty(Some(&value)) {
-                return Some(DatabaseUrl {
-                    url: url.to_string(),
-                    source: format!("env:{key}"),
-                });
-            }
+    if let Ok(value) = std::env::var(DATABASE_URL_ENV) {
+        if let Some(url) = nonempty(Some(&value)) {
+            return Some(DatabaseUrl {
+                url: url.to_string(),
+                source: format!("env:{DATABASE_URL_ENV}"),
+            });
         }
     }
 
     None
-}
-
-pub fn migration_state_with_client(
-    client: &mut impl GenericClient,
-) -> Result<MigrationState, DbError> {
-    let row = client
-        .query_one(
-            "SELECT to_regclass('app.schema_migrations') IS NOT NULL;",
-            &[],
-        )
-        .map_err(|source| DbError::Postgres {
-            step: "checking app.schema_migrations".to_string(),
-            source,
-        })?;
-
-    let has_schema_migrations = row.get::<_, bool>(0);
-    if !has_schema_migrations {
-        return Ok(MigrationState {
-            applied: Vec::new(),
-            pending: MIGRATIONS.iter().map(|migration| migration.name).collect(),
-            total: MIGRATIONS.len(),
-        });
-    }
-
-    let applied = client
-        .query(
-            "SELECT version, name FROM app.schema_migrations ORDER BY version;",
-            &[],
-        )
-        .map_err(|source| DbError::Postgres {
-            step: "reading app.schema_migrations".to_string(),
-            source,
-        })?
-        .into_iter()
-        .map(|row| {
-            let version = row.get::<_, i32>(0);
-            AppliedMigrationState {
-                version: u16::try_from(version).unwrap_or_default(),
-                name: row.get(1),
-            }
-        })
-        .collect::<Vec<_>>();
-
-    let applied_keys = applied
-        .iter()
-        .map(|migration| (migration.version, migration.name.as_str()))
-        .collect::<HashSet<_>>();
-    let pending = MIGRATIONS
-        .iter()
-        .filter(|migration| !applied_keys.contains(&(migration.version, migration.name)))
-        .map(|migration| migration.name)
-        .collect();
-
-    Ok(MigrationState {
-        applied,
-        pending,
-        total: MIGRATIONS.len(),
-    })
 }
 
 pub fn redact_database_url(database_url: &str) -> String {
@@ -246,14 +161,10 @@ mod tests {
     }
 
     #[test]
-    fn migration_state_reports_manifest_total() {
-        let state = MigrationState {
-            applied: Vec::new(),
-            pending: MIGRATIONS.iter().map(|migration| migration.name).collect(),
-            total: MIGRATIONS.len(),
-        };
+    fn resolve_database_url_prefers_explicit_url() {
+        let resolved = resolve_database_url(Some("postgres://explicit")).unwrap();
 
-        assert_eq!(state.total, MIGRATIONS.len());
-        assert!(!state.is_current());
+        assert_eq!(resolved.url, "postgres://explicit");
+        assert_eq!(resolved.source, "explicit");
     }
 }

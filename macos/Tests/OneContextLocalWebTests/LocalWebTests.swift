@@ -541,6 +541,21 @@ final class LocalWebTests: XCTestCase {
     XCTAssertFalse(html.localizedCaseInsensitiveContains("trace"))
   }
 
+  func testMemoryAPIDoesNotFabricateUnavailableResultsWithoutProvider() throws {
+    let root = temporaryRoot()
+    let web = LocalWebPaths(runtimePaths: testRuntimePaths(root: root))
+    let handler = WikiLocalAPIHandler(paths: web)
+
+    let response = handler.handle(WikiLocalAPIRequest(method: "GET", path: "/api/memory/viewport"))
+    let payload = try XCTUnwrap(json(response))
+    let error = try XCTUnwrap(payload["error"] as? [String: Any])
+
+    XCTAssertEqual(response.statusCode, 503)
+    XCTAssertEqual(payload["surface"] as? String, "memory_viewport")
+    XCTAssertEqual(payload["status"] as? String, "error")
+    XCTAssertEqual(error["code"] as? String, "memory_protocol_error")
+  }
+
   func testWikiLocalAPIRedactsBrowserVisibleLocalPaths() throws {
     let root = temporaryRoot()
     let web = LocalWebPaths(runtimePaths: testRuntimePaths(root: root))
@@ -588,6 +603,21 @@ final class LocalWebTests: XCTestCase {
     XCTAssertEqual(payload["current_site"] as? String, "app-support://wiki-site/current")
     XCTAssertEqual(payload["current_site_exists"] as? Bool, true)
     XCTAssertEqual(payload["published_at"] as? String, "2026-05-20T13:36:00Z")
+  }
+
+  func testWikiLocalAPIHealthIgnoresLegacyPublishManifest() throws {
+    let root = temporaryRoot()
+    let web = LocalWebPaths(runtimePaths: testRuntimePaths(root: root))
+    try writeJSON([
+      "published_at": "2020-01-01T00:00:00Z"
+    ], to: web.wikiCurrent.appendingPathComponent("publish-manifest.json"))
+
+    let handler = WikiLocalAPIHandler(paths: web)
+    let response = handler.handle(WikiLocalAPIRequest(method: "GET", path: "/api/wiki/health"))
+    let payload = try XCTUnwrap(json(response))
+
+    XCTAssertEqual(response.statusCode, 200)
+    XCTAssertTrue(payload["published_at"] is NSNull)
   }
 
   func testWikiLocalAPIDoesNotExposeUnshippedChatRoutes() throws {

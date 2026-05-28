@@ -249,15 +249,11 @@ Restored route body.
     assert.match(canonicalTalkResponse.headers.get('content-type'), /^text\/html\b/);
     assert.match(await canonicalTalkResponse.text(), /Talk · Deep Note/);
 
-    const legacyTalkResponse = await fetch(`http://127.0.0.1:${port}/deep/note.talk`);
-    assert.equal(legacyTalkResponse.status, 200);
-    assert.match(legacyTalkResponse.headers.get('content-type'), /^text\/html\b/);
-    assert.match(await legacyTalkResponse.text(), /Talk · Deep Note/);
+    const dotTalkResponse = await fetch(`http://127.0.0.1:${port}/deep/note.talk`);
+    assert.equal(dotTalkResponse.status, 404);
 
-    const legacyTalkSlashResponse = await fetch(`http://127.0.0.1:${port}/deep/note.talk/`);
-    assert.equal(legacyTalkSlashResponse.status, 200);
-    assert.match(legacyTalkSlashResponse.headers.get('content-type'), /^text\/html\b/);
-    assert.match(await legacyTalkSlashResponse.text(), /Talk · Deep Note/);
+    const dotTalkSlashResponse = await fetch(`http://127.0.0.1:${port}/deep/note.talk/`);
+    assert.equal(dotTalkSlashResponse.status, 404);
 
     const emlResponse = await fetch(`http://127.0.0.1:${port}/deep/talk/attachments/proof.eml`);
     assert.equal(emlResponse.status, 200);

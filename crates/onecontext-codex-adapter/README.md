@@ -69,18 +69,6 @@ consume it without scraping text. It does not start Codex. Optional flags:
   initializes, proves `thread/start`, proves `thread/loaded/list`, and records
   redacted harness evidence.
 
-The deterministic bridge dogfood drives the real harness CLI plus the adapter
-CLI and writes redacted proof evidence:
-
-```bash
-node scripts/test-codex-adapter-harness-dogfood.mjs
-```
-
-The live mail flow dogfood proves the next boundary: real 1Context mail creates
-a durable notification, `wiki.notify.dispatch` invokes a host command bridge,
-the bridge calls live Codex `turn/steer`, and the opened body is delivered with
-`thread/inject_items`:
-
-```bash
-node scripts/test-codex-adapter-live-mail-flow.mjs
-```
+The old MJS dogfood runners for the deterministic bridge and live mail flow
+were retired during cleanup. Preserve adapter contracts through Rust tests and
+the typed CLI surfaces above.

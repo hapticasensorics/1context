@@ -445,13 +445,10 @@ plugin tree. The factory must keep package-smoke checks that fail on
   `app_relaunch_recovery`, `old_app_with_new_appcast`, and
   `stale_sparkle_defaults`, with no release-notes prompt, installer
   click-through, support alert, or runtime pause.
-- 2026-05-13: Added release-factory support for fixture-owned updater matrix
-  proof results. `release-train.sh prove` now runs the focused
-  `OneContextSparkleUpdateTests` fixture suite after real-Mac artifacts
-  download, then asks `scripts/release-train.sh manifest write-fixture-proof-results` to emit
-  normalized JSON for the seven `sparkle_fixture` cases. This leaves only the
-  `login_restart_recovery` / real uninstall-reinstall proof missing before
-  `release-train.sh bless` can pass the full matrix.
+- 2026-05-27 cleanup: Removed fixture-owned updater proof JSON from the active
+  release matrix. Release bless now expects only self-hosted proof result files;
+  local Sparkle reducer tests may remain tests, but they no longer mint
+  `passed` release evidence.
 - 2026-05-13: Tightened the shipped dependency boundary beyond path greps.
   Added `macos/tools/audit-app-dependencies.sh`, wired it into non-dev app
   builds and package smoke, and added a regression test that rejects an
@@ -474,8 +471,7 @@ plugin tree. The factory must keep package-smoke checks that fail on
   the public `0.1.71 -> 0.1.72` Sparkle hop plus already-current manual check,
   app relaunch recovery, old-app/new-appcast behavior, stale Sparkle defaults,
   and login/restart recovery. `release-train.sh prove --channel official`
-  downloaded the runner artifacts, emitted the remaining fixture-owned matrix
-  proof JSON, and passed redaction audit. Reconstructed the official
+  downloaded the runner artifacts and passed redaction audit. Reconstructed the official
   `asset-manifest.json` from public GitHub release assets, redacted/audited the
   evidence bundle, and `release-train.sh bless --channel official` passed for
   `v0.1.72`.

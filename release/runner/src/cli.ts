@@ -15,7 +15,6 @@ import {
   shellExport,
   validateManifest,
   writeAssetManifest,
-  writeFixtureProofResults,
 } from "./manifest.js";
 import { phaseAudit, phaseBless, phaseBuild, phaseProve, phasePublish, phaseValidate } from "./phases.js";
 
@@ -211,15 +210,6 @@ async function main(): Promise<void> {
         console.log(matrixCase);
       }
     });
-  addManifestCommonOptions(manifest.command("write-fixture-proof-results"))
-    .requiredOption("--output-dir <path>", "proof result output directory")
-    .action(async (options: Record<string, unknown> & { outputDir: string }) => {
-      const releaseManifest = await validateManifest(manifestOptions(options));
-      for (const item of writeFixtureProofResults(releaseManifest, path.resolve(options.outputDir))) {
-        console.log(item);
-      }
-    });
-
   await program.parseAsync(process.argv);
 }
 

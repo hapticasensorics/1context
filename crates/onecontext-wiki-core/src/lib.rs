@@ -1842,7 +1842,7 @@ impl WikiCore {
             format!("{}/talk", record.route.trim_end_matches('/'))
         };
         let meta = format!(
-            "title: \"Talk - {}\"\ntalk_for: \"page://{}\"\npage: \"user-wiki://source/families/{}/{}/source/{}.md\"\nroute: \"{}\"\ntalk_route: \"{}\"\nstatus: open\nschema_version: 1\n",
+            "title: \"Talk - {}\"\ntalk_for: \"mailbox://page/{}\"\npage: \"user-wiki://source/families/{}/{}/source/{}.md\"\nroute: \"{}\"\ntalk_route: \"{}\"\nstatus: open\nschema_version: 1\n",
             record.title,
             record.id,
             record.family_group,
@@ -1873,11 +1873,11 @@ impl WikiCore {
                 &mut evidence,
             )?;
         }
-        let curator_content = if let Some(template) = &record.talk_curator_template {
-            render_template(&self.read_template(template)?, &vars)
-        } else {
-            default_curator_template(&record)
-        };
+        let curator_template = record
+            .talk_curator_template
+            .as_deref()
+            .ok_or_else(|| anyhow!("page {} missing talk_curator_template; page-create requires an explicit curator template", record.id))?;
+        let curator_content = render_template(&self.read_template(curator_template)?, &vars);
         write_if_missing(
             &self.paths.root,
             &talk_dir.join("_curator.md"),
@@ -1890,12 +1890,7 @@ impl WikiCore {
             curator_content,
             &mut evidence,
         )?;
-        let entry_template = render_template(
-            &self
-                .read_template("talk/entry.md")
-                .unwrap_or_else(|_| default_entry_template()),
-            &vars,
-        );
+        let entry_template = render_template(&self.read_template("talk/entry.md")?, &vars);
         write_if_missing(
             &self.paths.root,
             &talk_templates_dir.join("entry.template.md"),
@@ -2368,7 +2363,7 @@ impl WikiCore {
             )
         };
         let body = format!(
-            "---\nid: \"{}\"\n{}kind: \"{}\"\nauthor: \"{}\"\ncreated: \"{}\"\ntalk_for: \"page://{}\"\nthread: \"{}\"\n{}subject: \"{}\"\nstate: open\n{}\n{}\n---\n\n## {}\n\n{}{}\n",
+            "---\nid: \"{}\"\n{}kind: \"{}\"\nauthor: \"{}\"\ncreated: \"{}\"\ntalk_for: \"mailbox://page/{}\"\nthread: \"{}\"\n{}subject: \"{}\"\nstate: open\n{}\n{}\n---\n\n## {}\n\n{}{}\n",
             message_id,
             frontmatter_operation_id,
             request.kind,
@@ -3476,7 +3471,12 @@ impl WikiCore {
                     .clone()
                     .unwrap_or_else(|| "talk/conventions.md".to_string()),
             ),
-            talk_curator_template: options.talk_curator_template.clone(),
+            talk_curator_template: Some(
+                options
+                    .talk_curator_template
+                    .clone()
+                    .unwrap_or_else(|| "talk/curators/your-context.md".to_string()),
+            ),
             summary: options.summary.clone(),
             nav_section: options.nav_section.clone(),
             nav_order: options.nav_order,
@@ -3555,9 +3555,11 @@ impl WikiCore {
             .unwrap_or("talk/conventions.md");
         self.read_template(conventions_template)?;
 
-        if let Some(curator_template) = options.talk_curator_template.as_deref() {
-            self.read_template(curator_template)?;
-        }
+        let curator_template = options
+            .talk_curator_template
+            .as_deref()
+            .unwrap_or("talk/curators/your-context.md");
+        self.read_template(curator_template)?;
         Ok(())
     }
 
@@ -3730,7 +3732,10 @@ impl WikiCore {
             ("last_updated".to_string(), today),
             ("created_at".to_string(), now_rfc3339()),
             ("updated_at".to_string(), now_rfc3339()),
-            ("talk_for_uri".to_string(), format!("page://{}", record.id)),
+            (
+                "talk_for_uri".to_string(),
+                format!("mailbox://page/{}", record.id),
+            ),
             (
                 "article_path".to_string(),
                 format!(
@@ -4325,17 +4330,6 @@ fn render_template(template: &str, vars: &BTreeMap<String, String>) -> String {
         rendered = rendered.replace(&format!("{{{{{key}}}}}"), value);
     }
     rendered
-}
-
-fn default_entry_template() -> String {
-    "---\nid: \"{{ entry_id }}\"\nkind: \"{{ kind }}\"\nauthor: \"{{ author_id }}\"\ncreated: \"{{ created_at }}\"\ntalk_for: \"{{ talk_for_uri }}\"\nstate: open\n---\n\n## {{ title }}\n\n{{ body }}\n".to_string()
-}
-
-fn default_curator_template(record: &PageRecord) -> String {
-    format!(
-        "# {} Curator\n\nUse this talk folder as the inbox and decision record for `{}`.\n\n- Read new proposals before editing the page.\n- Prefer small, source-backed changes with evidence.\n- Write decisions back to this talk folder.\n- Keep page source, talk entries, and rendered output consistent.\n",
-        record.title, record.id
-    )
 }
 
 fn renderer_section_for_page(record: &PageRecord) -> String {
@@ -6058,14 +6052,14 @@ mod tests {
             talk_dir
                 .join("attachments")
                 .join(parent_id)
-                .join("legacy-note.txt"),
-            "legacy attachment",
+                .join("file-note.txt"),
+            "file attachment",
         )
         .unwrap();
         fs::write(
             talk_dir.join("2026-05-20T00-00-00-000000000Z.proposal.file-only-parent.md"),
             format!(
-                "---\nid: \"{parent_id}\"\nkind: \"proposal\"\nauthor: \"agent://codex/legacy\"\ncreated: \"2026-05-20T00:00:00Z\"\ntalk_for: \"page://topics\"\nthread: \"{parent_thread}\"\nsubject: \"File only parent\"\nstate: open\nrecipients:\n  - \"role://topics.curator\"\nattachments:\n  - filename: \"legacy-note.txt\"\n    media_type: \"text/plain\"\n    path: \"attachments/{parent_id}/legacy-note.txt\"\n    handle: \"user-wiki://page/topics/talk/attachments/{parent_id}/legacy-note.txt\"\n    caption: \"Legacy note\"\n    alt_text: \"Legacy note alt\"\n---\n\n## File only parent\n\nParent message with no delivery rows.\n"
+                "---\nid: \"{parent_id}\"\nkind: \"proposal\"\nauthor: \"agent://codex/fileonly\"\ncreated: \"2026-05-20T00:00:00Z\"\ntalk_for: \"mailbox://page/topics\"\nthread: \"{parent_thread}\"\nsubject: \"File only parent\"\nstate: open\nrecipients:\n  - \"role://topics.curator\"\nattachments:\n  - filename: \"file-note.txt\"\n    media_type: \"text/plain\"\n    path: \"attachments/{parent_id}/file-note.txt\"\n    handle: \"user-wiki://page/topics/talk/attachments/{parent_id}/file-note.txt\"\n    caption: \"File note\"\n    alt_text: \"File note alt\"\n---\n\n## File only parent\n\nParent message with no delivery rows.\n"
             ),
         )
         .unwrap();
@@ -6073,7 +6067,7 @@ mod tests {
         fs::write(
             talk_dir.join("2026-05-20T00-01-00-000000000Z.question.file-only-direct.md"),
             format!(
-                "---\nid: \"talkmsg_file_only_direct\"\nkind: \"question\"\nauthor: \"agent://codex/legacy\"\ncreated: \"2026-05-20T00:01:00Z\"\ntalk_for: \"page://topics\"\nthread: \"{direct_thread}\"\nsubject: \"File only direct\"\nstate: open\nrecipients:\n  - \"role://topics.curator\"\nattachments: []\n---\n\n## File only direct\n\nThread target message with no delivery rows.\n"
+                "---\nid: \"talkmsg_file_only_direct\"\nkind: \"question\"\nauthor: \"agent://codex/fileonly\"\ncreated: \"2026-05-20T00:01:00Z\"\ntalk_for: \"mailbox://page/topics\"\nthread: \"{direct_thread}\"\nsubject: \"File only direct\"\nstate: open\nrecipients:\n  - \"role://topics.curator\"\nattachments: []\n---\n\n## File only direct\n\nThread target message with no delivery rows.\n"
             ),
         )
         .unwrap();
@@ -6133,23 +6127,23 @@ mod tests {
         assert_eq!(hydrated_parent.thread_id, parent_thread);
         assert_eq!(hydrated_parent.subject, "File only parent");
         assert_eq!(hydrated_parent.attachments.len(), 1);
-        assert_eq!(hydrated_parent.attachments[0].filename, "legacy-note.txt");
+        assert_eq!(hydrated_parent.attachments[0].filename, "file-note.txt");
         assert_eq!(hydrated_parent.attachments[0].media_type, "text/plain");
         assert_eq!(
             hydrated_parent.attachments[0].path,
-            format!("attachments/{parent_id}/legacy-note.txt")
+            format!("attachments/{parent_id}/file-note.txt")
         );
         assert_eq!(
             hydrated_parent.attachments[0].handle,
-            format!("user-wiki://page/topics/talk/attachments/{parent_id}/legacy-note.txt")
+            format!("user-wiki://page/topics/talk/attachments/{parent_id}/file-note.txt")
         );
         assert_eq!(
             hydrated_parent.attachments[0].caption.as_deref(),
-            Some("Legacy note")
+            Some("File note")
         );
         assert_eq!(
             hydrated_parent.attachments[0].alt_text.as_deref(),
-            Some("Legacy note alt")
+            Some("File note alt")
         );
         assert!(messages
             .iter()
@@ -7347,6 +7341,16 @@ talk_curator_template = "talk/curators/topics.md"
         fs::write(
             root.join("user-wiki/templates/talk/curators/topics.md"),
             "# {{ title }} Curator\n",
+        )
+        .unwrap();
+        fs::write(
+            root.join("user-wiki/templates/talk/curators/your-context.md"),
+            "# {{ title }} Curator\n",
+        )
+        .unwrap();
+        fs::write(
+            root.join("user-wiki/templates/talk/entry.md"),
+            "---\nid: \"{{ entry_id }}\"\nkind: \"{{ kind }}\"\nauthor: \"{{ author_id }}\"\ncreated: \"{{ created_at }}\"\ntalk_for: \"{{ talk_for_uri }}\"\nstate: open\n---\n\n## {{ title }}\n\n{{ body }}\n",
         )
         .unwrap();
     }

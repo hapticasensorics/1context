@@ -38,7 +38,7 @@ author: "{{ author_id }}"
 created: "{{ created_at }}"
 target_section: "{{ section_name }}"
 project_id: "{{ project_id }}"
-talk_for: "page://projects"
+talk_for: "mailbox://page/projects"
 state: open
 evidence:
   - "{{ evidence_uri }}"

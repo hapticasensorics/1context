@@ -48,7 +48,7 @@ The system should be boring where correctness matters and expressive where the
 user explores memory:
 
 ```text
-boring infra: migrations, append, blobs, health, query APIs
+boring infra: current schema, append, blobs, health, query APIs
 expressive viewer: lanes, zoom, search, media, provenance, corrections
 ```
 
@@ -61,7 +61,7 @@ have an obvious "show sources" path.
 V0 has five long-lived parts:
 
 ```text
-onecontext-memory-db          Rust crate with migrations and type contracts
+onecontext-memory-db          Rust crate with current schema and type contracts
 onecontext-memory-service     local Rust service that owns DB access
 source adapters               small source-specific producers
 blob store                    local content-addressed large-object storage
@@ -102,7 +102,7 @@ V0 deployment targets:
 ```text
 Developer mode:
   repo-managed DB container or local Postgres
-  explicit migration command
+  explicit current-schema bootstrap command
   visible health page
 
 Installed local mode:
@@ -130,9 +130,7 @@ Suggested installed paths:
 ```text
 ~/1Context/context-engine/memory-db/
   config.toml
-  migrations/
   exports/
-  repair/
 
 ~/1Context/context-engine/blobs/
   sha256/
@@ -149,7 +147,6 @@ Suggested installed paths:
 
 ~/Library/Logs/1Context/memory-db/
   service.log
-  migrations.log
   adapters.log
 ```
 
@@ -171,7 +168,7 @@ user-owned memory records or blobs without explicit user intent.
 `onecontext-memory-service` owns:
 
 ```text
-migration status
+schema status
 DB connection pooling
 Perception DB object input validation
 lane and source auto-registration
@@ -222,7 +219,7 @@ Every adapter submits Perception DB object inputs:
     "role": "assistant"
   },
   "display_title": "Agent message",
-  "display_text": "Implemented the migration contract.",
+  "display_text": "Implemented the current schema contract.",
   "privacy_class": "normal"
 }
 ```
@@ -695,8 +692,8 @@ bounded ingest ticks, status JSON, and eventually Timescale writes.
 V0 slices:
 
 ```text
-1. Keep onecontext-memory-db crate as migration/type contract.
-2. Add migration runner against a local TimescaleDB instance.
+1. Keep onecontext-memory-db crate as current schema/type contract.
+2. Add current schema bootstrap against a local TimescaleDB instance.
 3. Add onecontext-memory-service with health, lanes, writeObjects, viewport, object show.
 4. Add local blob store.
 5. Add cursorized seed adapter for Codex logs through the shared agent IR.
@@ -811,7 +808,7 @@ Developers should get a one-command local loop:
 
 ```bash
 ./scripts/memory-db-dev up
-./scripts/memory-db-dev migrate
+./scripts/memory-db-dev bootstrap
 ./scripts/memory-db-dev seed
 ./scripts/memory-db-dev viewer
 ./scripts/memory-db-dev test
@@ -870,7 +867,7 @@ The infra and viewer are real when:
 
 ```text
 the app can start/stop the memory service
-migrations run deterministically
+current schema bootstraps deterministically
 source adapters can append without knowing SQL
 the viewer can show a mixed time range across all seeded lanes
 the inspector can trace a derived memory back to source objects

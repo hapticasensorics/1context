@@ -1,6 +1,6 @@
 use chrono::{DateTime, Duration, SecondsFormat, Utc};
 use onecontext_memory_db::{
-    migrations::apply_bundled_migrations_with_client,
+    bootstrap_current_schema_with_client,
     write_objects::{
         canonical_source_hash, write_objects_with_client, PerceptionObjectInput,
         WriteObjectsRequest, WriteObjectsResponse,
@@ -19,7 +19,7 @@ fn live_perception_source_record_claims_handle_duplicates_conflicts_and_retries(
     };
 
     let mut client = Client::connect(&database_url, NoTls).unwrap();
-    apply_bundled_migrations_with_client(&mut client).unwrap();
+    bootstrap_current_schema_with_client(&mut client).unwrap();
 
     let run_seed = run_seed();
     let user_id = uuid_for(run_seed, 1);
@@ -156,7 +156,7 @@ fn live_perception_write_objects_exact_and_mutable_container_fast_paths() {
     };
 
     let mut client = Client::connect(&database_url, NoTls).unwrap();
-    apply_bundled_migrations_with_client(&mut client).unwrap();
+    bootstrap_current_schema_with_client(&mut client).unwrap();
 
     let run_seed = run_seed();
     let user_id = uuid_for(run_seed, 101);

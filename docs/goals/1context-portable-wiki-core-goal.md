@@ -2912,7 +2912,7 @@ wiki rules.
   value_cli_flags_reject_dangling_or_flag_values_before_mutating --
   --nocapture`, and `git diff --check` passed.
 - Latest reusable dogfood harness evidence, 2026-05-20T09:28Z:
-  `scripts/test-wiki-core-dogfood.mjs` now runs the repeatable live-daemon
+  `retired wiki dogfood harness` now runs the repeatable live-daemon
   wiki dogfood loop against a disposable fake home: `wiki.validate`, expected
   error recovery, agent identify, page create/write/patch, list create/status,
   role assignment, watch, publish, talk append with `.eml` attachment,
@@ -2921,7 +2921,7 @@ wiki rules.
   Default delete proof passed at
   `test-results/wiki-core-dogfood-20260520T092752Z`; the runner rebuilt Rust
   and Swift with `--build` before proving the integrated state. The runbook now
-  documents `node scripts/test-wiki-core-dogfood.mjs` and the
+  documents `retired wiki dogfood harness` and the
   `--keep-runtime --leave-published` browser-inspection mode.
 - Latest in-app browser harness evidence, 2026-05-20T09:28Z:
   `test-results/wiki-core-dogfood-browser-20260520T092001Z` kept a rendered
@@ -2951,10 +2951,10 @@ wiki rules.
   bridge alias/missing-body polish, and browser evidence,
   `swift test --package-path macos --filter WikiCoreRPCBridgeTests`,
   `cargo test -p onecontext-wiki-daemon`, `node --check
-  scripts/test-wiki-core-dogfood.mjs`, `node scripts/test-wiki-core-dogfood.mjs
+  retired wiki dogfood harness`, `retired wiki dogfood harness
   --build`, and `git diff --check` passed.
 - Latest alias/route dogfood evidence, 2026-05-20T09:45Z:
-  `scripts/test-wiki-core-dogfood.mjs` now intentionally drives the
+  `retired wiki dogfood harness` now intentionally drives the
   consumer-shaped alias API instead of only the canonical core method names:
   `wiki.page-write-body`, `wiki.page-patch-body`, `wiki.list-create`,
   `wiki.list-status`, `wiki.list-members`, `wiki.page-assign-role`,
@@ -2993,19 +2993,19 @@ wiki rules.
   Verification commands passed: `cargo fmt --check -p onecontext-wiki-core -p
   onecontext-wiki-daemon`, `cargo test -p onecontext-wiki-core`, `cargo test
   -p onecontext-wiki-daemon`, `swift test --package-path macos --filter
-  WikiCoreRPCBridgeTests`, `node --check scripts/test-wiki-core-dogfood.mjs`,
-  `node scripts/test-wiki-core-dogfood.mjs --build`, and `git diff --check`.
+  WikiCoreRPCBridgeTests`, `archived wiki dogfood syntax evidence`,
+  `archived wiki dogfood run evidence`, and `git diff --check`.
 - Latest attachment metadata fix evidence, 2026-05-20T10:05Z:
   the previous browser pass exposed that `.eml` talk attachments rendered with
   the core metadata label `application/octet-stream` even though the static
   server served them inline as text. `crates/onecontext-wiki-core/src/lib.rs`
   now infers `.eml` as `text/plain`, and
-  `scripts/test-wiki-core-dogfood.mjs` fails if a rendered talk page contains
+  `retired wiki dogfood harness` fails if a rendered talk page contains
   `application/octet-stream` for the dogfood attachment. Focused
   `talk_attachments_copy_media_and_duplicate_names`, full
   `cargo test -p onecontext-wiki-core`, `cargo test -p
   onecontext-wiki-daemon`, and `node --check
-  scripts/test-wiki-core-dogfood.mjs` passed.
+  retired wiki dogfood harness` passed.
 - Latest live dogfood and browser evidence, 2026-05-20T10:05Z:
   rebuilt live-daemon proof passed at
   `test-results/wiki-core-dogfood-20260520T095046Z`, including the new
@@ -3046,7 +3046,7 @@ wiki rules.
   the same fields so old Swift-side inventory reads do not drift from the Rust
   core.
 - Latest origin harness evidence, 2026-05-20T10:18Z:
-  `scripts/test-wiki-core-dogfood.mjs` now fails unless `for-you`,
+  `retired wiki dogfood harness` now fails unless `for-you`,
   `your-context`, `projects`, and `topics` report
   `origin: runtime_default`, `flags.runtime_default: true`, and
   `flags.custom_created: false`, and unless the disposable dogfood page reports
@@ -3080,9 +3080,8 @@ wiki rules.
   --nocapture`, full `cargo test -p onecontext-wiki-core`, full `cargo test -p
   onecontext-wiki-daemon`, `swift test --package-path macos --filter
   WikiInventoryTests`, `swift test --package-path macos --filter
-  WikiCoreRPCBridgeTests`, `node --check scripts/test-wiki-core-dogfood.mjs`,
-  `node scripts/test-wiki-core-dogfood.mjs --build`, `node
-  scripts/test-wiki-core-dogfood.mjs`, and `git diff --check` passed.
+  WikiCoreRPCBridgeTests`, `archived wiki dogfood syntax evidence`,
+  `archived wiki dogfood run evidence`, `archived wiki dogfood evidence`, and `git diff --check` passed.
 - Latest generated-page/list metadata evidence, 2026-05-20T10:35Z:
   Worker BV proved that configured generated `[[site_pages]]` were visible in
   `wiki.toml` and post-publish route manifests but missing from `wiki.list` and
@@ -3109,7 +3108,7 @@ wiki rules.
   `mail_list_summaries_expose_created_at` regressions.
   `cargo test -p onecontext-wiki-daemon` passed with 16 unit tests and the
   page-create concurrency integration test. `node --check
-  scripts/test-wiki-core-dogfood.mjs`, `git diff --check`, and the rebuilt
+  retired wiki dogfood harness`, `git diff --check`, and the rebuilt
   dogfood harness passed at
   `test-results/wiki-core-dogfood-20260520T103252Z`; the summary proves
   `page_count=7`, `source_page_count=4`, `generated_page_count=3`,
@@ -3152,9 +3151,8 @@ wiki rules.
 - Latest integrated proof evidence, 2026-05-20T10:49Z:
   `cargo fmt --package onecontext-wiki-core --package onecontext-wiki-daemon`,
   `cargo test -p onecontext-wiki-core`, `cargo test -p
-  onecontext-wiki-daemon`, `node --check scripts/test-wiki-core-dogfood.mjs`,
-  `node --check wiki-engine/theme/js/enhance.js`, `node
-  scripts/test-wiki-core-dogfood.mjs --build`, and `git diff --check` passed.
+  onecontext-wiki-daemon`, `archived wiki dogfood syntax evidence`,
+  `node --check wiki-engine/theme/js/enhance.js`, `archived wiki dogfood evidence`, and `git diff --check` passed.
   The rebuilt dogfood evidence at
   `test-results/wiki-core-dogfood-20260520T104557Z` proves runtime-default,
   generated, and custom page template metadata; `page_count=7`,
@@ -3198,8 +3196,7 @@ wiki rules.
   onecontext-wiki-daemon`, `swift test --package-path macos --filter
   PathAndPermissionTests`, `uv run --project memory-core --with pytest pytest
   memory-core/tests/test_wiki_core_client.py -k list_status -q`,
-  `node --check scripts/test-wiki-core-dogfood.mjs`, `node
-  scripts/test-wiki-core-dogfood.mjs --build`, and `git diff --check` passed.
+  `archived wiki dogfood syntax evidence`, `archived wiki dogfood evidence`, and `git diff --check` passed.
   The rebuilt dogfood evidence at
   `test-results/wiki-core-dogfood-20260520T110240Z` proves the short socket
   path, generated/source page counts, template metadata, inbox thread
@@ -3297,7 +3294,7 @@ wiki rules.
   -q -p onecontext-wiki-daemon`, `uv run --project memory-core --with pytest
   pytest memory-core/tests/test_wiki_core_client.py -q`, `node --test
   wiki-engine/src/renderer/index.test.mjs`, `swift test --package-path macos
-  --filter WikiCore`, `node --check scripts/test-wiki-core-dogfood.mjs`, `node
+  --filter WikiCore`, `archived wiki dogfood syntax evidence`, `node
   --check wiki-engine/theme/js/enhance.js`, and `git diff --check` passed.
   Temporary Playwright `node_modules` from main and Worker CN evidence folders
   were removed after proof; no disposable servers or debug daemons were left
@@ -3334,7 +3331,7 @@ wiki rules.
 - Latest integrated verification evidence, 2026-05-20T12:22Z:
   `cargo fmt --check && cargo test -q -p onecontext-wiki-core -p
   onecontext-wiki-daemon`, `node --test wiki-engine/src/renderer/index.test.mjs`,
-  `node --check scripts/test-wiki-core-dogfood.mjs`, `node --check
+  `archived wiki dogfood syntax evidence`, `node --check
   wiki-engine/theme/js/enhance.js`, `bash -n
   scripts/test-wiki-runtime-defaults-scenarios.sh`, `uv run --with pytest
   --project memory-core pytest memory-core/tests/test_wiki_core_client.py -q`,
@@ -3387,7 +3384,7 @@ wiki rules.
   `swift test --package-path macos --filter WikiCore`, `node --test
   wiki-engine/src/renderer/index.test.mjs`, `node --check
   test-results/wiki-core-main-grown-map-20260520T1225Z/run-grown-map.mjs`,
-  `node --check scripts/test-wiki-core-dogfood.mjs`, `node --check
+  `archived wiki dogfood syntax evidence`, `node --check
   wiki-engine/theme/js/enhance.js`, `bash -n
   scripts/test-wiki-runtime-defaults-scenarios.sh`, `cargo fmt --check &&
   cargo test -q -p onecontext-wiki-core -p onecontext-wiki-daemon`, `uv run
@@ -3436,7 +3433,7 @@ wiki rules.
   memory-core/tests/test_wiki_core_client.py -q`, `node --test
   wiki-engine/src/renderer/index.test.mjs`, `node --check
   test-results/wiki-core-main-large-publish-20260520T1248Z/run-large-publish.mjs`,
-  `node --check scripts/test-wiki-core-dogfood.mjs`, `node --check
+  `archived wiki dogfood syntax evidence`, `node --check
   wiki-engine/theme/js/enhance.js`, `bash -n
   scripts/test-wiki-runtime-defaults-scenarios.sh`, `swift test
   --package-path macos --filter WikiCore`, and `git diff --check` passed. The
@@ -3490,7 +3487,7 @@ wiki rules.
   memory-core/tests/test_wiki_core_client.py -q`, `swift test --package-path
   macos --filter OneContextLocalWebTests`, `swift test --package-path macos
   --filter WikiCore`, `node --test wiki-engine/src/renderer/index.test.mjs`,
-  `node --check scripts/test-wiki-core-dogfood.mjs`, `node --check
+  `archived wiki dogfood syntax evidence`, `node --check
   test-results/worker-da-browser-grown-map-20260520T1306Z/dogfood-grown-map.mjs`,
   `node --check wiki-engine/theme/js/enhance.js`, `bash -n
   scripts/test-wiki-runtime-defaults-scenarios.sh`, and `git diff --check`
@@ -4093,7 +4090,7 @@ wiki rules.
   `render_required=false`.
 - Latest product fix, 2026-05-20T16:24Z:
   FI fixed the reusable dogfood harness
-  `scripts/test-wiki-core-dogfood.mjs` so notification ack uses the actual
+  `retired wiki dogfood harness` so notification ack uses the actual
   `notification.notification_id`, passes it as `notificationId` to
   `wiki.notify-ack`, and immediately proves the follow-up poll is empty. This
   was a consumer-harness bug, not a Rust mail-core bug, but it matters because
@@ -4105,7 +4102,7 @@ wiki rules.
   `test-launch-agent-package.sh`, and `test-wiki-runtime-defaults-scenarios.sh`.
   Worker FH passed `cargo build --package onecontext-wiki-daemon` and
   `cargo test --package onecontext-wiki-daemon`. Worker FI passed
-  `node --check scripts/test-wiki-core-dogfood.mjs`, `node --check` on its
+  `archived wiki dogfood syntax evidence`, `node --check` on its
   mail ergonomics harness, and `cargo test --package onecontext-wiki-core
   repeated_mail_claim_mark_and_notification_ack_are_idempotent`. The final
   integration sweep also passed `npm test --prefix wiki-engine`,

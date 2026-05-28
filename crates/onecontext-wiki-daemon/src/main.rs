@@ -3716,6 +3716,16 @@ talk_curator_template = "talk/curators/topics.md"
             "# {{ title }} Curator\n",
         )
         .unwrap();
+        fs::write(
+            root.join("user-wiki/templates/talk/curators/your-context.md"),
+            "# {{ title }} Curator\n",
+        )
+        .unwrap();
+        fs::write(
+            root.join("user-wiki/templates/talk/entry.md"),
+            "---\nid: \"{{ entry_id }}\"\nkind: \"{{ kind }}\"\nauthor: \"{{ author_id }}\"\ncreated: \"{{ created_at }}\"\ntalk_for: \"{{ talk_for_uri }}\"\nstate: open\n---\n\n## {{ title }}\n\n{{ body }}\n",
+        )
+        .unwrap();
     }
 
     fn seed_fake_renderer(wiki_engine: &Path) {

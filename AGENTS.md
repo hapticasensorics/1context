@@ -2,6 +2,15 @@
 
 Follow the global Codex instructions plus these repo-specific rules.
 
+## Schema And Compatibility Policy
+
+Do not add migration systems, backwards-compatibility scaffolds, legacy upgrade
+paths, or compatibility tables unless the user explicitly asks for them. This
+project currently prefers deleting the old implementation first, then replacing
+it with a cleaner solution when the right design is clear. If a deleted system
+is still referenced by builds or tests, remove or no-op those references rather
+than recreating stale migration files.
+
 ## Dev Builds And Permission Testing
 
 Use the stable dev build for ordinary iteration:

@@ -146,73 +146,66 @@ public final class MemoryDaemonProcessClient: @unchecked Sendable {
       throw MemoryDaemonProcessError(message: "onecontext-memoryd executable missing")
     }
 
-    let process = Process()
-    let stdout = Pipe()
-    let stderr = Pipe()
-    process.executableURL = executable
-    process.arguments = [
-      "bench",
-      "--home", fileManager.homeDirectoryForCurrentUser.path,
-      "--context-engine-root", runtimePaths.contextEngineDirectory.path,
-      "--run-dir", runtimePaths.runDirectory.path,
-      "--sources", sources,
-      "--max-events", "\(maxEvents)",
-      "--max-lines", "\(maxLines)"
-    ]
-    process.environment = processEnvironment()
-    process.standardOutput = stdout
-    process.standardError = stderr
-    try process.run()
-    let output = stdout.fileHandleForReading.readDataToEndOfFile()
-    let error = stderr.fileHandleForReading.readDataToEndOfFile()
-    process.waitUntilExit()
-    guard process.terminationStatus == 0 else {
-      let message = String(decoding: error.isEmpty ? output : error, as: UTF8.self)
+    let result = try ProcessRunner.run(
+      executable: executable,
+      arguments: [
+        "bench",
+        "--home", fileManager.homeDirectoryForCurrentUser.path,
+        "--context-engine-root", runtimePaths.contextEngineDirectory.path,
+        "--run-dir", runtimePaths.runDirectory.path,
+        "--sources", sources,
+        "--max-events", "\(maxEvents)",
+        "--max-lines", "\(maxLines)"
+      ],
+      environment: processEnvironment()
+    )
+    guard result.status == 0 else {
+      let message = String(decoding: result.stderr.isEmpty ? result.stdout : result.stderr, as: UTF8.self)
       throw MemoryDaemonProcessError(message: message.trimmingCharacters(in: .whitespacesAndNewlines))
     }
-    guard let object = try JSONSerialization.jsonObject(with: output) as? [String: Any] else {
+    guard let object = try JSONSerialization.jsonObject(with: result.stdout) as? [String: Any] else {
       throw MemoryDaemonProcessError(message: "onecontext-memoryd bench returned non-object JSON")
     }
     return object
   }
 
-  public func queryViewport(_ query: MemoryViewportQuery = MemoryViewportQuery()) -> [String: Any] {
-    MemoryProtocolClientFactory
+  public func queryViewport(_ query: MemoryViewportQuery = MemoryViewportQuery()) throws -> [String: Any] {
+    try MemoryProtocolClientFactory
       .make(configuration: protocolConfiguration())
       .queryViewport(query)
       .payload
   }
 
-  public func hydrateObjects(_ query: MemoryObjectHydrationQuery) -> [String: Any] {
-    MemoryProtocolClientFactory
+  public func hydrateObjects(_ query: MemoryObjectHydrationQuery) throws -> [String: Any] {
+    try MemoryProtocolClientFactory
       .make(configuration: protocolConfiguration())
       .hydrateObject(query)
       .payload
   }
 
-  public func queryDensity(_ query: MemoryDensityQuery = MemoryDensityQuery()) -> [String: Any] {
-    MemoryProtocolClientFactory
+  public func queryDensity(_ query: MemoryDensityQuery = MemoryDensityQuery()) throws -> [String: Any] {
+    try MemoryProtocolClientFactory
       .make(configuration: protocolConfiguration())
       .queryDensity(query)
       .payload
   }
 
-  public func queryEdges(_ query: MemoryEdgesQuery) -> [String: Any] {
-    MemoryProtocolClientFactory
+  public func queryEdges(_ query: MemoryEdgesQuery) throws -> [String: Any] {
+    try MemoryProtocolClientFactory
       .make(configuration: protocolConfiguration())
       .queryEdges(query)
       .payload
   }
 
-  public func searchText(_ query: MemorySearchTextQuery) -> [String: Any] {
-    MemoryProtocolClientFactory
+  public func searchText(_ query: MemorySearchTextQuery) throws -> [String: Any] {
+    try MemoryProtocolClientFactory
       .make(configuration: protocolConfiguration())
       .searchText(query)
       .payload
   }
 
-  public func viewport(limit: Int = 200, source: String? = nil) -> [String: Any] {
-    queryViewport(MemoryViewportQuery(limit: limit, source: source))
+  public func viewport(limit: Int = 200, source: String? = nil) throws -> [String: Any] {
+    try queryViewport(MemoryViewportQuery(limit: limit, source: source))
   }
 
   public func discoverExecutable() -> URL? {
@@ -256,7 +249,7 @@ public final class MemoryDaemonProcessClient: @unchecked Sendable {
   private func executableCandidates() -> [URL] {
     var candidates: [URL] = []
     if let override = environment["ONECONTEXT_MEMORYD_BIN"], !override.isEmpty {
-      candidates.append(URL(fileURLWithPath: override))
+      return [URL(fileURLWithPath: override)]
     }
 
     if let executableDirectory = Bundle.main.executableURL?.deletingLastPathComponent() {

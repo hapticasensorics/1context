@@ -47,7 +47,7 @@ kind: "{{ kind }}"
 author: "{{ author_id }}"
 created: "{{ created_at }}"
 parent: "{{ parent_entry_id_or_stem }}"
-talk_for: "page://{{ page_slug }}"
+talk_for: "mailbox://page/{{ page_slug }}"
 state: "{{ open|accepted|rejected|resolved|withdrawn|superseded|blocked|archived }}"
 evidence:
   - "{{ evidence_uri }}"

@@ -16,7 +16,7 @@ Perception DB = raw and lightly normalized observed reality.
 Memory system = processed, summarized, selected, linked, and recalled knowledge.
 ```
 
-The current crate, process, route, and protocol method names still use `memory` because that is the existing implementation surface. The conceptual system name for this layer is **Perception DB**. The physical PostgreSQL schema for this layer is `perception`. A later naming migration may rename protocol methods, routes, crates, or process names once the contract is stable.
+The current crate, process, route, and protocol method names still use `memory` because that is the existing implementation surface. The conceptual system name for this layer is **Perception DB**. The physical PostgreSQL schema for this layer is `perception`. A later naming cleanup may rename protocol methods, routes, crates, or process names once the contract is stable.
 
 ```text
 Everything is a time-bounded object.
@@ -2471,8 +2471,8 @@ This section separates the protocol destination from the V0 build order.
 
 | Feature | Stage | Initial implementation thought |
 | --- | --- | --- |
-| Perception DB naming | Now | Use Perception DB as the conceptual name immediately. Keep existing crate/process/protocol names until a dedicated naming migration. |
-| Physical schema cutover | Now | The durable tables are `perception.*`. Reset transitional dev DBs and ship perception-only migrations for product work. |
+| Perception DB naming | Now | Use Perception DB as the conceptual name immediately. Keep existing crate/process/protocol names until a dedicated naming cleanup. |
+| Physical schema cutover | Now | The durable tables are `perception.*`. Reset transitional dev DBs and ship one current perception-only schema for product work. |
 | Source identity model | Now | Adopt `(source_id, source_record_key)` and deterministic receipts before adding more connectors. Add an adapter from current `connector_key/source_record_id/source_hash`. |
 | `memory.writeObjects` | V0 | Build this first as the single durable write protocol. Preserve COPY/staging throughput. |
 | Source cursor advancement | V0 | Implement with writes so backfills and daemon polling cannot advance after a failed durable write. |
@@ -2545,7 +2545,7 @@ Responsibilities:
 
 | Module | Owns |
 | --- | --- |
-| `db.rs` | Connection resolution, pooled or direct Postgres client wrapper, migration helpers, SQL error mapping. |
+| `db.rs` | Connection resolution, pooled or direct Postgres client wrapper, current schema helpers, SQL error mapping. |
 | `protocol.rs` | Shared request/response envelope, method enum, typed DTO exports, error shape, JSON parsing helpers. |
 | `source_identity.rs` | Deterministic UUID generation, canonical source hash, same-batch duplicate detection helpers. |
 | `write_objects.rs` | `memory.writeObjects`, COPY staging, chunk transactions, source record claims, object/edge insertion. |
@@ -2570,9 +2570,9 @@ write diagnostics to stderr
 return process status
 ```
 
-## 26.3 Perception DB V2 cutover
+## 26.3 Perception DB current schema
 
-V2 is a perception-only migration bundle. Transitional dev databases that were
+V2 is a perception-only current schema. Transitional dev databases that were
 created with prototype schemas should be reset; the product contract no longer
 keeps legacy tables active.
 
@@ -2581,7 +2581,7 @@ reset:
   ./scripts/memory-db-dev.sh reset
   ./scripts/memory-db-dev.sh provision
 
-migrations:
+current schema:
   create app, perception, and search schemas
   create perception.sources, lanes, blobs, series, source_records, objects,
     object_edges, object_density_1m, source_cursors, and search embeddings
@@ -2606,7 +2606,7 @@ read APIs:
   density defaults stay lane-oriented unless a series filter is explicit
 
 benchmark gates:
-  focused migration/write/read contract tests pass
+  focused schema/write/read contract tests pass
   10k write in bounded chunks
   5k viewport under local target
   density and hydrate paths under local targets
@@ -2618,7 +2618,7 @@ Rules:
 fresh dev DB: app + perception + search schemas exist
 transitional dev DB: reset before judging V2 behavior
 tests: assert perception.objects is the hypertable
-tests: assert bundled migrations do not include capture.*
+tests: assert current schema does not include capture.*
 tests: assert writes and reads are series-aware
 ```
 
@@ -2717,7 +2717,7 @@ Keep DTOs stable and serializable with `serde`. SQL row structs can be separate 
 
 | Method | Module | V0 behavior |
 | --- | --- | --- |
-| `memory.status` | `protocol.rs`/daemon | Return DB configured, DB reachable, migration state, and enabled sources. |
+| `memory.status` | `protocol.rs`/daemon | Return DB configured, DB reachable, schema state, and enabled sources. |
 | `memory.describe` | `protocol.rs` | Return available methods, versions, and readiness state. |
 | `memory.writeObjects` | `write_objects.rs` | Insert normalized records into `perception.source_records` and `perception.objects`, return stable receipts. |
 | `memory.ingestSources` | `ingest_sources.rs` | Run source adapters, call `writeObjects`, update cursors only after durable write success. |
@@ -2867,7 +2867,7 @@ unit:
   cursor encode/decode
   protocol envelope serialization
 
-migration:
+schema:
   fresh DB has perception schema
   perception.objects is a hypertable
   required indexes exist
@@ -2891,7 +2891,7 @@ Benchmark command target:
 
 ```bash
 cargo test -p onecontext-memory-db
-cargo run -p onecontext-memory-db --bin onecontext-memoryd -- bench --database-url "$DATABASE_URL" --sources codex,claude,imessage
+cargo run -p onecontext-memory-db --bin onecontext-memoryd -- bench --database-url "$ONECONTEXT_MEMORY_DB_URL" --sources codex,claude,imessage
 ```
 
 ---
@@ -2900,12 +2900,12 @@ cargo run -p onecontext-memory-db --bin onecontext-memoryd -- bench --database-u
 
 Each agent should preserve the shared scaffold above and avoid broad ownership drift. If two agents need the same dispatcher file, keep dispatcher edits tiny and mechanical.
 
-## Agent A: Schema, migrations, and DB harness
+## Agent A: Schema and DB harness
 
 Owns:
 
 ```text
-crates/onecontext-memory-db/migrations/
+crates/onecontext-memory-db/schema/current.sql
 crates/onecontext-memory-db/src/db.rs
 crates/onecontext-memory-db/tests/
 ```
@@ -2913,7 +2913,7 @@ crates/onecontext-memory-db/tests/
 Tasks:
 
 ```text
-1. Replace transitional migration order with a perception-only V2 bundle.
+1. Replace transitional schema order with a perception-only current schema.
 2. Create perception.sources, perception.lanes, perception.blobs, and
    perception.series.
 3. Create perception.source_records with deterministic IDs supplied by writer
@@ -2925,21 +2925,21 @@ Tasks:
 7. Add search.object_embeddings with semantic search allowed to be empty.
 8. Add perception.object_density_1m continuous aggregate.
 9. Add perception.source_cursors.
-10. Add db.rs helpers for connecting, resetting dev DBs, and checking migration
-    state.
-11. Keep migration contract tests pointed at perception.* and assert capture.*
-    is absent from the active bundle.
+10. Add db.rs helpers for connecting, resetting dev DBs, and checking current
+    schema state.
+11. Keep schema contract tests pointed at perception.* and assert capture.*
+    is absent from the active schema.
 ```
 
 Acceptance:
 
 ```text
-fresh DB migrates cleanly
+fresh DB bootstraps cleanly
 perception.objects hypertable exists
 perception.source_records uniqueness works
 perception.object_density_1m exists or degrades explicitly when unavailable
 required indexes exist
-tests prove product migrations target perception.* for new work
+tests prove product schema targets perception.* for new work
 ```
 
 ---

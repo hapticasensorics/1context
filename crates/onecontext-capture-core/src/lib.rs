@@ -1,4 +1,4 @@
-//! Shared Rust scaffold for 1Context capture bundles.
+//! Shared Rust implementation for 1Context capture bundles.
 //!
 //! This crate owns the file-level handoff contract up to READY bundle
 //! production. It does not run macOS sensors, score attention, or write durable

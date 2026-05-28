@@ -849,8 +849,8 @@ the protocol boundaries as behavior, not prose:
 - [x] Mail, notification, dispatch, ack, and ledger-only state do not change
   `wiki.publish.status` boundary fields.
 
-Current evidence: `scripts/test-agent-mail-dogfood.mjs` and
-`test-results/agent-mail-dogfood-20260525T023826Z/summary.json`.
+Historical dogfood evidence was retired with the MJS harness. Current evidence
+should come from typed wiki core, daemon, Swift bridge, or Playwright tests.
 
 ## What Would Feel Bad
 

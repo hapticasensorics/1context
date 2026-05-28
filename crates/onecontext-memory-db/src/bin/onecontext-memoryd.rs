@@ -22,8 +22,6 @@ const DEFAULT_MAX_EVENTS: usize = 1_000;
 const DEFAULT_MAX_LINES: usize = 50_000;
 const DEFAULT_SOURCES: &str = "codex,claude,imessage";
 const DATABASE_URL_ENV: &str = "ONECONTEXT_MEMORY_DB_URL";
-const LEGACY_DATABASE_URL_ENV: &str = "ONECONTEXT_MEMORY_DATABASE_URL";
-const FALLBACK_DATABASE_URL_ENV: &str = "DATABASE_URL";
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut args = std::env::args().skip(1).collect::<Vec<_>>();
@@ -613,7 +611,7 @@ where
             request_id,
             ProtocolError::new(
                 "DATABASE_UNCONFIGURED",
-                "This read method requires ONECONTEXT_MEMORY_DB_URL, ONECONTEXT_MEMORY_DATABASE_URL, DATABASE_URL, or --database-url.",
+                "This read method requires ONECONTEXT_MEMORY_DB_URL or --database-url.",
                 false,
             ),
             stats,
@@ -755,7 +753,7 @@ fn protocol_status_response() -> StatusResponse {
             configured: database.is_some(),
             reachable: None,
             url_source: database.map(|target| target.source),
-            migration_state: None,
+            schema_state: None,
         },
         enabled_sources: DEFAULT_SOURCES
             .split(',')
@@ -1523,13 +1521,8 @@ fn max_imessage_rowid(db_path: &PathBuf) -> Option<i64> {
 
 fn parse_session_profile(value: &str) -> Result<SessionIngestProfile, Box<dyn std::error::Error>> {
     match value {
-        "hot_memory" | "hot-memory" | "messages-only" | "messages_only" => {
-            Ok(SessionIngestProfile::HotMemory)
-        }
-        "compact_audit"
-        | "compact-audit"
-        | "messages-and-compact-tools"
-        | "messages_and_compact_tools" => Ok(SessionIngestProfile::CompactAudit),
+        "hot_memory" | "hot-memory" => Ok(SessionIngestProfile::HotMemory),
+        "compact_audit" | "compact-audit" => Ok(SessionIngestProfile::CompactAudit),
         "forensic" => Ok(SessionIngestProfile::Forensic),
         other => Err(format!(
             "unknown --profile {other:?}; expected hot_memory, compact_audit, or forensic"
@@ -1617,22 +1610,6 @@ fn resolve_database_target(args: &mut Vec<String>) -> Option<DatabaseTarget> {
             return Some(DatabaseTarget {
                 url,
                 source: format!("env:{DATABASE_URL_ENV}"),
-            });
-        }
-    }
-    if let Ok(url) = std::env::var(LEGACY_DATABASE_URL_ENV) {
-        if !url.trim().is_empty() {
-            return Some(DatabaseTarget {
-                url,
-                source: format!("env:{LEGACY_DATABASE_URL_ENV}"),
-            });
-        }
-    }
-    if let Ok(url) = std::env::var(FALLBACK_DATABASE_URL_ENV) {
-        if !url.trim().is_empty() {
-            return Some(DatabaseTarget {
-                url,
-                source: format!("env:{FALLBACK_DATABASE_URL_ENV}"),
             });
         }
     }
@@ -1734,7 +1711,7 @@ fn take_flag(args: &mut Vec<String>, name: &str) -> bool {
 
 fn print_usage() {
     eprintln!(
-        "usage:\n  onecontext-memoryd daemon [--home PATH] [--context-engine-root PATH] [--run-dir PATH] [--database-url URL] [--sources codex,claude,imessage] [--interval-ms N] [--max-events N] [--max-lines N] [--profile hot_memory|compact_audit|forensic] [--once]\n  onecontext-memoryd bench [--home PATH] [--database-url URL] [--sources codex,claude,imessage] [--max-events N] [--max-lines N] [--profile hot_memory|compact_audit|forensic]\n  onecontext-memoryd status [--run-dir PATH] [--context-engine-root PATH]\n  onecontext-memoryd describe\n  onecontext-memoryd queryViewport [--database-url URL] [--user-id UUID] [--start RFC3339] [--end RFC3339] [--source KEY] [--limit N]\n  onecontext-memoryd queryDensity [--start-time RFC3339] [--end-time RFC3339] [--sources codex,claude,imessage] [--bucket 1m]\n  onecontext-memoryd hydrateObjects [--object-id ID ... | --object-ids ID,ID]\n\ndatabase URL env: ONECONTEXT_MEMORY_DB_URL (legacy ONECONTEXT_MEMORY_DATABASE_URL, fallback DATABASE_URL)\nlegacy profile aliases accepted: messages-only, messages-and-compact-tools"
+        "usage:\n  onecontext-memoryd daemon [--home PATH] [--context-engine-root PATH] [--run-dir PATH] [--database-url URL] [--sources codex,claude,imessage] [--interval-ms N] [--max-events N] [--max-lines N] [--profile hot_memory|compact_audit|forensic] [--once]\n  onecontext-memoryd bench [--home PATH] [--database-url URL] [--sources codex,claude,imessage] [--max-events N] [--max-lines N] [--profile hot_memory|compact_audit|forensic]\n  onecontext-memoryd status [--run-dir PATH] [--context-engine-root PATH]\n  onecontext-memoryd describe\n  onecontext-memoryd queryViewport [--database-url URL] [--user-id UUID] [--start RFC3339] [--end RFC3339] [--source KEY] [--limit N]\n  onecontext-memoryd queryDensity [--start-time RFC3339] [--end-time RFC3339] [--sources codex,claude,imessage] [--bucket 1m]\n  onecontext-memoryd hydrateObjects [--object-id ID ... | --object-ids ID,ID]\n\ndatabase URL env: ONECONTEXT_MEMORY_DB_URL"
     );
 }
 

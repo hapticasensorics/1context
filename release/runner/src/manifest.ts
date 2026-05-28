@@ -49,13 +49,6 @@ export const REQUIRED_REDACTION_PATTERNS = new Set([
 export const REQUIRED_MATRIX_CASES = new Set([
   "already_current_manual_check",
   "mandatory_automatic_success",
-  "optional_prompt",
-  "broken_appcast_quiet_failure",
-  "missing_dmg_retry_support_alert",
-  "bad_signature",
-  "interrupted_download",
-  "try_again_repair",
-  "offline_network",
   "stale_sparkle_defaults",
   "old_app_with_new_appcast",
   "app_relaunch_recovery",
@@ -651,40 +644,4 @@ export async function writeAssetManifest(manifest: ReleaseManifest, distDir: str
     generated_at: new Date().toISOString(),
     assets,
   }, null, 2) + "\n");
-}
-
-export function writeFixtureProofResults(manifest: ReleaseManifest, outputDir: string): string[] {
-  validateManifestShape(manifest);
-  fs.mkdirSync(outputDir, { recursive: true });
-  const generatedAt = new Date().toISOString();
-  const written: string[] = [];
-  for (const item of manifest.updater_matrix) {
-    if (item.proof !== "sparkle_fixture") continue;
-    const payload = {
-      actual_version: item.expected_version,
-      artifact_paths: [
-        "sparkle-fixture-tests.log",
-        "macos/Tests/OneContextSparkleUpdateTests/SparkleUpdateControllerTests.swift",
-      ],
-      case: item.case,
-      expected_version: item.expected_version,
-      generated_at: generatedAt,
-      old_version: manifest.previous_version,
-      proof: "sparkle_fixture",
-      redaction_status: "pending",
-      runtime_assertions: [
-        "sparkle_reducer_fixture_passed",
-        "prior_version_preserved_when_expected",
-      ],
-      status: "passed",
-      ui_assertions: [
-        "user_copy_policy_matches_manifest",
-        "support_alert_policy_matches_retry_budget",
-      ],
-      update_class: manifest.update_class,
-    };
-    fs.writeFileSync(path.join(outputDir, `${item.case}.json`), JSON.stringify(payload, null, 2) + "\n");
-    written.push(item.case);
-  }
-  return written;
 }

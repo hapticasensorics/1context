@@ -99,7 +99,7 @@ optional: pg_jsonschema, postgis, pg_cron
 
 Use PostgreSQL 18 when the selected TimescaleDB distribution supports it.
 PostgreSQL 18 has native UUIDv7 generation, which is useful for insert locality.
-Until that support is assumed everywhere, the v0 migrations use
+Until that support is assumed everywhere, the current schema uses
 `gen_random_uuid()` from `pgcrypto`.
 
 ## 3. Core Design
@@ -145,14 +145,12 @@ perception.object_edges
 search.object_embeddings
 ```
 
-The older `capture.*` prototype migrations remain in the repo for existing DB
-compatibility. New product reads, writes, and docs should use the
-`perception.*` schema unless they are explicitly describing legacy migration
-support.
+The older `capture.*` prototype schema is deleted from the active product. Dev
+databases that still contain it should be reset instead of upgraded.
 
 ## 4. Extension Setup
 
-The migration set begins with:
+The current schema bootstrap begins with:
 
 ```sql
 CREATE EXTENSION IF NOT EXISTS timescaledb;
@@ -672,8 +670,8 @@ space partition: none
 ```
 
 Legacy note: `capture.captured_objects` was the prototype hypertable. The
-product hypertable for new work is `perception.objects`; keep legacy migrations
-only for existing database compatibility.
+product hypertable is `perception.objects`; reset databases that still contain
+the prototype schema.
 
 Do not immediately hash partition by `user_id`. For early local/single-user v0,
 one time partitioning dimension is simpler and easier to reason about.
@@ -714,24 +712,12 @@ For pgvector, build large HNSW indexes after bulk loading when possible. In
 production, build vector indexes concurrently when avoiding write blocking
 matters.
 
-## 20. Minimal Migration Order
+## 20. Current Schema Bootstrap
 
-The Rust crate carries versioned SQL migrations:
+The Rust crate carries one current SQL bootstrap:
 
 ```text
-001_extensions.sql
-002_schemas.sql
-003_app_users.sql
-004_capture_support_tables.sql through 012_source_records.sql
-  legacy prototype compatibility
-013_perception_support_tables.sql
-014_perception_objects.sql
-015_perception_indexes.sql
-016_perception_edges.sql
-017_perception_density.sql
-018_perception_embeddings.sql
-019_perception_source_cursors.sql
-020_reconcile_perception_embeddings.sql
+crates/onecontext-memory-db/schema/current.sql
 ```
 
 ## 21. V0 Acceptance Tests

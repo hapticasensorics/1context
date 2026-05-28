@@ -1,4 +1,5 @@
 use std::{
+    collections::BTreeSet,
     fs,
     path::{Path, PathBuf},
 };
@@ -33,6 +34,7 @@ const BUNDLE_EVENT_FILES: &[(&str, &str, bool)] = &[
     ("editor", "events/editor.events.jsonl", true),
 ];
 const DASHBOARD_REVIEW_FRAME_MAX_HEIGHT: u32 = 720;
+const DERIVED_VISUAL_FRAME_CHANGES_ID: &str = "derived-visual-frame-changes";
 const DERIVED_VISUAL_FRAME_CHANGES_FILE: &str = "derived-visual-frame-changes.events.jsonl";
 const VISUAL_FRAME_CHANGE_FULL_DIFF_THRESHOLD: f32 = 0.10;
 const VISUAL_FRAME_CHANGE_TOP_DIFF_THRESHOLD: f32 = 0.06;
@@ -44,7 +46,6 @@ pub struct BundleRun {
     pub fixture: AttentionFixture,
     pub output_path: PathBuf,
     pub dashboard_session_path: PathBuf,
-    pub compatibility_report_path: PathBuf,
 }
 
 pub fn prepare_bundle_run(bundle_path: &Path, output_path: Option<&Path>) -> Result<BundleRun> {
@@ -70,14 +71,20 @@ pub fn prepare_bundle_run(bundle_path: &Path, output_path: Option<&Path>) -> Res
     let output_path = output_path
         .map(Path::to_path_buf)
         .unwrap_or_else(|| work_dir.join("attention-filter-output.json"));
+    let output_path = normalize_output_path(&output_path)?;
     ensure_output_is_outside_bundle(&bundle_path, &output_path)?;
     let dashboard_session_path = work_dir.join("attention-dashboard-session.json");
-    let compatibility_report_path = work_dir.join("bundle-compatibility-report.json");
 
     let event_refs = event_refs_for_bundle(&bundle_path);
     let events = load_bundle_events(&bundle_path, &event_refs, time_start.timestamp_millis())?;
     let media_index = read_media_index(&bundle_path)?;
-    let candidate_frame_sets = candidate_frame_sets_from_media_index(&media_index);
+    let candidate_frame_sets =
+        candidate_frame_sets_from_media_index(&media_index, time_start.timestamp_millis());
+    if candidate_frame_sets.is_empty() {
+        bail!(
+            "READY bundle is missing required frame_2fps media records in media/media.index.jsonl"
+        );
+    }
 
     let session = DashboardSession {
         session_id: capture_id.clone(),
@@ -120,15 +127,22 @@ pub fn prepare_bundle_run(bundle_path: &Path, output_path: Option<&Path>) -> Res
         events,
     };
 
-    let report = compatibility_report(&bundle_path, &manifest, &fixture, &media_index);
-    write_json(&compatibility_report_path, &report)?;
-
-    Ok(BundleRun {
+    let mut bundle_run = BundleRun {
         fixture,
         output_path,
         dashboard_session_path,
-        compatibility_report_path,
-    })
+    };
+    if let Some(event_ref) = materialize_visual_frame_change_events(&bundle_run)? {
+        let derived_events = load_capture_events(
+            &bundle_run.fixture.root,
+            &event_ref,
+            Some(time_start.timestamp_millis()),
+        )?;
+        bundle_run.fixture.events.extend(derived_events);
+        bundle_run.fixture.session.inputs.event_refs.push(event_ref);
+    }
+
+    Ok(bundle_run)
 }
 
 pub fn write_dashboard_session(bundle_run: &BundleRun) -> Result<()> {
@@ -184,30 +198,55 @@ fn load_bundle_events(
             Some(base_epoch_ms),
         )?);
     }
+    dedupe_bundle_events(&mut events);
     Ok(events)
+}
+
+fn dedupe_bundle_events(events: &mut Vec<CaptureEvent>) {
+    let mut seen = BTreeSet::new();
+    events.retain(|event| seen.insert(bundle_event_dedupe_key(event)));
+}
+
+fn bundle_event_dedupe_key(event: &CaptureEvent) -> String {
+    if !event.id.is_empty() {
+        return event.id.clone();
+    }
+    format!("{}:{}:{}", event.event_type, event.t_ms, event.source_line)
 }
 
 fn read_media_index(bundle_path: &Path) -> Result<Vec<Value>> {
     let path = bundle_path.join("media/media.index.jsonl");
-    let Ok(text) = fs::read_to_string(&path) else {
-        return Ok(Vec::new());
-    };
+    let text = fs::read_to_string(&path).with_context(|| format!("read {}", path.display()))?;
     text.lines()
-        .filter(|line| !line.trim().is_empty())
-        .map(|line| serde_json::from_str(line).with_context(|| format!("parse {}", path.display())))
+        .enumerate()
+        .filter(|(_, line)| !line.trim().is_empty())
+        .map(|(index, line)| {
+            serde_json::from_str(line)
+                .with_context(|| format!("parse {}:{}", path.display(), index + 1))
+        })
         .collect()
 }
 
-fn candidate_frame_sets_from_media_index(media_index: &[Value]) -> Vec<CandidateFrameSet> {
-    let frame_2fps_records = media_index
+fn candidate_frame_sets_from_media_index(
+    media_index: &[Value],
+    base_epoch_ms: i64,
+) -> Vec<CandidateFrameSet> {
+    let mut frame_2fps_records = media_index
         .iter()
         .filter(|record| record.get("kind").and_then(Value::as_str) == Some("frame_2fps"))
         .filter(|record| media_record_available(record))
         .filter_map(|record| media_path(record).map(|path| (record, path)))
         .filter(|(_, path)| path.starts_with("media/frames-2fps/"))
         .collect::<Vec<_>>();
+    frame_2fps_records.sort_by_key(|(record, path)| {
+        record
+            .get("frame_index")
+            .and_then(Value::as_u64)
+            .unwrap_or_else(|| frame_index_from_path(path).unwrap_or(u64::MAX))
+    });
 
     if let Some((first_record, first_path)) = frame_2fps_records.first().copied() {
+        let frame_times_ms = frame_times_from_records(&frame_2fps_records, base_epoch_ms);
         return vec![CandidateFrameSet {
             id: "2fps".to_string(),
             root: parent_relative_path(first_path)
@@ -220,30 +259,46 @@ fn candidate_frame_sets_from_media_index(media_index: &[Value]) -> Vec<Candidate
             count: frame_2fps_records.len(),
             naming: infer_frame_naming(first_path)
                 .unwrap_or_else(|| "frame-{index:06}.jpg".to_string()),
+            frame_times_ms,
         }];
     }
 
-    let event_frame_records = media_index
+    Vec::new()
+}
+
+fn frame_times_from_records(records: &[(&Value, &str)], base_epoch_ms: i64) -> Option<Vec<u64>> {
+    let frame_times = records
         .iter()
-        .filter(|record| media_record_available(record))
-        .filter_map(|record| media_path(record))
-        .filter(|path| path.starts_with("media/event-frames/"))
-        .collect::<Vec<_>>();
+        .map(|(record, _)| {
+            media_record_epoch_ms(record)
+                .and_then(|epoch_ms| (epoch_ms >= base_epoch_ms).then_some(epoch_ms))
+                .map(|epoch_ms| (epoch_ms - base_epoch_ms) as u64)
+        })
+        .collect::<Option<Vec<_>>>()?;
 
-    if event_frame_records.is_empty() {
-        return Vec::new();
+    (frame_times.len() == records.len()).then_some(frame_times)
+}
+
+fn media_record_epoch_ms(record: &Value) -> Option<i64> {
+    record
+        .get("recorded_at")
+        .or_else(|| record.get("requested_at"))
+        .or_else(|| record.pointer("/time_range/start"))
+        .and_then(Value::as_str)
+        .and_then(crate::events::parse_rfc3339_ms)
+}
+
+fn frame_index_from_path(path: &str) -> Option<u64> {
+    let stem = Path::new(path).file_stem()?.to_string_lossy();
+    let digits = stem
+        .chars()
+        .rev()
+        .take_while(|character| character.is_ascii_digit())
+        .collect::<String>();
+    if digits.is_empty() {
+        return None;
     }
-
-    vec![CandidateFrameSet {
-        id: "bundle-media".to_string(),
-        root: "media/event-frames".to_string(),
-        fps: 1.0,
-        count: event_frame_records.len(),
-        naming: event_frame_records
-            .first()
-            .and_then(|path| infer_frame_naming(path))
-            .unwrap_or_else(|| "frame-{index:03}.jpg".to_string()),
-    }]
+    digits.chars().rev().collect::<String>().parse().ok()
 }
 
 fn media_path(record: &Value) -> Option<&str> {
@@ -282,13 +337,18 @@ fn candidate_frame_sets_json(frame_sets: &[CandidateFrameSet]) -> Vec<Value> {
     frame_sets
         .iter()
         .map(|frame_set| {
-            json!({
+            let mut value = json!({
                 "id": frame_set.id,
                 "root": frame_set.root,
                 "fps": frame_set.fps,
                 "count": frame_set.count,
                 "naming": frame_set.naming
-            })
+            });
+            if let Some(frame_times_ms) = &frame_set.frame_times_ms {
+                value["frame_times_ms"] = json!(frame_times_ms);
+                value["timing_mode"] = json!("sparse_receipt_times");
+            }
+            value
         })
         .collect()
 }
@@ -376,6 +436,12 @@ fn generate_review_frame_cache(
         let file_name = frame_file_name(&frame_set.naming, frame_index);
         let source_path = source_root.join(&file_name);
         let target_path = review_root.join(&file_name);
+        if target_path.is_file() {
+            if let Ok(dimensions) = image::image_dimensions(&target_path) {
+                output_dimensions.get_or_insert(dimensions);
+                continue;
+            }
+        }
         if let Some(parent) = target_path.parent() {
             fs::create_dir_all(parent).with_context(|| format!("create {}", parent.display()))?;
         }
@@ -389,7 +455,7 @@ fn generate_review_frame_cache(
             image.resize_exact(
                 target_width,
                 target_height,
-                image::imageops::FilterType::Lanczos3,
+                image::imageops::FilterType::Triangle,
             )
         } else {
             image
@@ -443,95 +509,6 @@ fn first_frame_dimensions(root: &Path, naming: &str) -> Option<(u32, u32)> {
     image::image_dimensions(root.join(first_frame_name)).ok()
 }
 
-fn compatibility_report(
-    bundle_path: &Path,
-    manifest: &Value,
-    fixture: &AttentionFixture,
-    media_index: &[Value],
-) -> Value {
-    let sources = read_json(&bundle_path.join("sources.json")).unwrap_or_else(|_| json!({}));
-    let known_gap_count = fs::read_to_string(bundle_path.join("quality/known_gaps.jsonl"))
-        .map(|text| text.lines().filter(|line| !line.trim().is_empty()).count())
-        .unwrap_or(0);
-    let media_available = media_index
-        .iter()
-        .filter(|record| media_record_available(record))
-        .count();
-    let media_omitted = media_index
-        .iter()
-        .filter(|record| record.get("status").and_then(Value::as_str) == Some("candidate_omitted"))
-        .count();
-
-    json!({
-        "schema_version": 1,
-        "surface": "attention_bundle_compatibility",
-        "capture_id": manifest.get("capture_id").and_then(Value::as_str),
-        "bundle_path": bundle_path,
-        "compatible_for_algorithm_events": !fixture.events.is_empty(),
-        "compatible_for_visual_dashboard": media_available > 0,
-        "event_count": fixture.events.len(),
-        "event_ref_count": fixture.session.inputs.event_refs.len(),
-        "candidate_source": if fixture.session.media.candidate_frame_sets.is_empty() {
-            "event_times_no_media"
-        } else {
-            "bundle_media_index"
-        },
-        "candidate_frame_set_count": fixture.session.media.candidate_frame_sets.len(),
-        "media_index_count": media_index.len(),
-        "media_available_count": media_available,
-        "media_candidate_omitted_count": media_omitted,
-        "known_gap_count": known_gap_count,
-        "sources": sources,
-        "problems": compatibility_problems(fixture, media_index, known_gap_count),
-        "migration_notes": [
-            "READY bundles are input evidence and intentionally do not contain attention-filter output.",
-            "The current dashboard can open generated sessions, but bundle V0 may have no video/frame cache.",
-            "When media is absent the runner uses event-time candidates so algorithm development can still exercise AX/UX/SCK fusion."
-        ]
-    })
-}
-
-fn compatibility_problems(
-    fixture: &AttentionFixture,
-    media_index: &[Value],
-    known_gap_count: usize,
-) -> Vec<Value> {
-    let mut problems = Vec::new();
-    if fixture.events.is_empty() {
-        problems.push(json!({
-            "severity": "error",
-            "code": "no_events",
-            "message": "The bundle has no timeline events for the attention runner to score."
-        }));
-    }
-    if fixture.session.media.candidate_frame_sets.is_empty() {
-        problems.push(json!({
-            "severity": "error",
-            "code": "no_fixed_frame_cache",
-            "message": "The attention dashboard needs frame_2fps media records from media/frames-2fps/ to review bundle output visually."
-        }));
-    }
-    if media_index
-        .iter()
-        .any(|record| record.get("status").and_then(Value::as_str) == Some("candidate_omitted"))
-    {
-        problems.push(json!({
-            "severity": "info",
-            "code": "media_candidates_omitted",
-            "message": "SCK indicated possible keyframes but the exporter did not include media artifacts."
-        }));
-    }
-    if known_gap_count > 0 {
-        problems.push(json!({
-            "severity": "info",
-            "code": "known_gaps_present",
-            "message": "The bundle declares degraded or inferred lanes in quality/known_gaps.jsonl.",
-            "known_gap_count": known_gap_count
-        }));
-    }
-    problems
-}
-
 fn media_record_available(record: &Value) -> bool {
     matches!(
         record.get("status").and_then(Value::as_str),
@@ -550,30 +527,28 @@ fn dashboard_session_json(bundle_run: &BundleRun) -> Result<Value> {
                 candidate_frame_sets_json(&fixture.session.media.candidate_frame_sets),
             )
         });
-    let playback_mode = if frame_cache.is_null() {
-        "bundle_event_candidates"
-    } else {
-        "frame_cache"
-    };
+    if frame_cache.is_null() {
+        bail!("READY bundle dashboard session requires frame_2fps media");
+    }
     let mut event_refs = fixture
         .session
         .inputs
         .event_refs
         .iter()
-        .map(|event_ref| {
-            json!({
-                "id": event_ref.id,
-                "kind": event_ref.kind,
-                "ref": fixture.root.join(&event_ref.path),
-                "format": event_ref.format,
-                "required": event_ref.required
-            })
-        })
+        .map(|event_ref| dashboard_event_ref_json(fixture, event_ref))
         .collect::<Vec<_>>();
-    if let Some(event_ref) =
-        write_visual_frame_change_events(bundle_run, &frame_cache, &candidate_frame_sets)?
+    if !fixture
+        .session
+        .inputs
+        .event_refs
+        .iter()
+        .any(|event_ref| event_ref.id == DERIVED_VISUAL_FRAME_CHANGES_ID)
     {
-        event_refs.push(event_ref);
+        if let Some(event_ref) =
+            write_visual_frame_change_events(bundle_run, &frame_cache, &candidate_frame_sets)?
+        {
+            event_refs.push(dashboard_event_ref_json(fixture, &event_ref));
+        }
     }
 
     Ok(json!({
@@ -596,7 +571,7 @@ fn dashboard_session_json(bundle_run: &BundleRun) -> Result<Value> {
             "video_height": fixture.session.media.video_height,
             "video_duration_ms": fixture.session.fixture.duration_ms,
             "video_fps": Value::Null,
-            "playback_mode": playback_mode,
+            "playback_mode": "frame_cache",
             "frame_cache": frame_cache,
             "candidate_frame_sets": candidate_frame_sets
         },
@@ -653,11 +628,33 @@ fn dashboard_session_json(bundle_run: &BundleRun) -> Result<Value> {
     }))
 }
 
+fn dashboard_event_ref_json(fixture: &AttentionFixture, event_ref: &EventRef) -> Value {
+    json!({
+        "id": event_ref.id,
+        "kind": event_ref.kind,
+        "ref": fixture.root.join(&event_ref.path),
+        "format": event_ref.format,
+        "required": event_ref.required
+    })
+}
+
+fn materialize_visual_frame_change_events(bundle_run: &BundleRun) -> Result<Option<EventRef>> {
+    let fixture = &bundle_run.fixture;
+    let (frame_cache, candidate_frame_sets) = dashboard_review_frame_cache_json(bundle_run)
+        .unwrap_or_else(|| {
+            (
+                dashboard_frame_cache_json(fixture),
+                candidate_frame_sets_json(&fixture.session.media.candidate_frame_sets),
+            )
+        });
+    write_visual_frame_change_events(bundle_run, &frame_cache, &candidate_frame_sets)
+}
+
 fn write_visual_frame_change_events(
     bundle_run: &BundleRun,
     frame_cache: &Value,
     candidate_frame_sets: &[Value],
-) -> Result<Option<Value>> {
+) -> Result<Option<EventRef>> {
     let Some(source) = visual_frame_source(frame_cache, candidate_frame_sets) else {
         return Ok(None);
     };
@@ -685,11 +682,8 @@ fn write_visual_frame_change_events(
             if diff.full_score >= VISUAL_FRAME_CHANGE_FULL_DIFF_THRESHOLD
                 || diff.top_band_score >= VISUAL_FRAME_CHANGE_TOP_DIFF_THRESHOLD
             {
-                let t_ms = (((frame_index.saturating_sub(1)) as f64 / source.fps as f64) * 1000.0)
-                    .round() as u64;
-                let previous_t_ms =
-                    (((previous_index.saturating_sub(1)) as f64 / source.fps as f64) * 1000.0)
-                        .round() as u64;
+                let t_ms = visual_source_frame_time_ms(&source, frame_index);
+                let previous_t_ms = visual_source_frame_time_ms(&source, *previous_index);
                 let event_time =
                     start_time + Duration::milliseconds(i64::try_from(t_ms).unwrap_or(i64::MAX));
                 let reason = if diff.top_band_score >= VISUAL_FRAME_CHANGE_TOP_DIFF_THRESHOLD {
@@ -735,13 +729,13 @@ fn write_visual_frame_change_events(
     fs::write(&path, format!("{}\n", lines.join("\n")))
         .with_context(|| format!("write {}", path.display()))?;
 
-    Ok(Some(json!({
-        "id": "derived-visual-frame-changes",
-        "kind": "capture_events",
-        "ref": path,
-        "format": "jsonl",
-        "required": false
-    })))
+    Ok(Some(EventRef {
+        id: DERIVED_VISUAL_FRAME_CHANGES_ID.to_string(),
+        kind: "capture_events".to_string(),
+        path: path.display().to_string(),
+        format: "jsonl".to_string(),
+        required: false,
+    }))
 }
 
 fn visual_frame_source(
@@ -756,12 +750,28 @@ fn visual_frame_source(
         .or_else(|| candidate_frame_sets.first())?;
     let count = frame_set.get("count")?.as_u64()? as usize;
     let naming = frame_set.get("naming")?.as_str()?.to_string();
+    let frame_times_ms = frame_set
+        .get("frame_times_ms")
+        .and_then(Value::as_array)
+        .map(|values| values.iter().filter_map(Value::as_u64).collect::<Vec<_>>())
+        .filter(|values| values.len() == count);
     Some(VisualFrameSource {
         root: PathBuf::from(root),
         fps,
         count,
         naming,
+        frame_times_ms,
     })
+}
+
+fn visual_source_frame_time_ms(source: &VisualFrameSource, frame_index: usize) -> u64 {
+    source
+        .frame_times_ms
+        .as_ref()
+        .and_then(|times| times.get(frame_index.saturating_sub(1)).copied())
+        .unwrap_or_else(|| {
+            (((frame_index.saturating_sub(1)) as f64 / source.fps as f64) * 1000.0).round() as u64
+        })
 }
 
 fn bundle_manifest_start_time(bundle_path: &Path) -> Option<DateTime<Utc>> {
@@ -771,16 +781,28 @@ fn bundle_manifest_start_time(bundle_path: &Path) -> Option<DateTime<Utc>> {
 }
 
 fn visual_frame_fingerprint(path: &Path) -> Result<VisualFrameFingerprint> {
-    let image = image::open(path)
-        .with_context(|| format!("open visual diff frame {}", path.display()))?
-        .resize_exact(
-            VISUAL_DIFF_THUMB_WIDTH,
-            VISUAL_DIFF_THUMB_HEIGHT,
-            image::imageops::FilterType::Triangle,
-        )
-        .to_luma8();
+    let image =
+        image::open(path).with_context(|| format!("open visual diff frame {}", path.display()))?;
+    let (source_width, source_height) = image.dimensions();
+    let mut pixels =
+        Vec::with_capacity((VISUAL_DIFF_THUMB_WIDTH * VISUAL_DIFF_THUMB_HEIGHT) as usize);
+    for y in 0..VISUAL_DIFF_THUMB_HEIGHT {
+        let source_y = ((u64::from(y) * u64::from(source_height))
+            / u64::from(VISUAL_DIFF_THUMB_HEIGHT))
+        .min(u64::from(source_height.saturating_sub(1))) as u32;
+        for x in 0..VISUAL_DIFF_THUMB_WIDTH {
+            let source_x = ((u64::from(x) * u64::from(source_width))
+                / u64::from(VISUAL_DIFF_THUMB_WIDTH))
+            .min(u64::from(source_width.saturating_sub(1))) as u32;
+            let pixel = image.get_pixel(source_x, source_y).0;
+            let luma =
+                (u16::from(pixel[0]) * 30 + u16::from(pixel[1]) * 59 + u16::from(pixel[2]) * 11)
+                    / 100;
+            pixels.push(luma as u8);
+        }
+    }
     Ok(VisualFrameFingerprint {
-        pixels: image.into_raw(),
+        pixels,
         width: VISUAL_DIFF_THUMB_WIDTH as usize,
         height: VISUAL_DIFF_THUMB_HEIGHT as usize,
     })
@@ -831,6 +853,7 @@ struct VisualFrameSource {
     fps: f32,
     count: usize,
     naming: String,
+    frame_times_ms: Option<Vec<u64>>,
 }
 
 struct VisualFrameFingerprint {
@@ -927,6 +950,30 @@ fn timeline_lanes_json() -> Vec<Value> {
             "events/ax.events.jsonl",
         ),
         lane(
+            "browser",
+            "Browser",
+            "browser_debug",
+            true,
+            "#22c55e",
+            "events/browser.events.jsonl",
+        ),
+        lane(
+            "editor",
+            "Editor",
+            "editor_debug",
+            true,
+            "#38bdf8",
+            "events/editor.events.jsonl",
+        ),
+        lane(
+            "terminal",
+            "Terminal",
+            "terminal_debug",
+            true,
+            "#a855f7",
+            "events/terminal.events.jsonl",
+        ),
+        lane(
             "visual-frame-changes",
             "Visual Changes",
             "visual_frame_changes",
@@ -996,6 +1043,13 @@ fn ensure_output_is_outside_bundle(bundle_path: &Path, output_path: &Path) -> Re
         );
     }
     Ok(())
+}
+
+fn normalize_output_path(path: &Path) -> Result<PathBuf> {
+    if path.is_absolute() {
+        return Ok(path.to_path_buf());
+    }
+    Ok(std::env::current_dir()?.join(path))
 }
 
 fn manifest_time(manifest: &Value, key: &str) -> Option<DateTime<Utc>> {

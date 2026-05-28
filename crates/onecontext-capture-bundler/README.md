@@ -8,7 +8,7 @@ inspection, validation, and retention commands around the shared Rust
 `onecontext-capture-core` contract:
 
 ```bash
-onecontext-capture-bundler export --start <rfc3339> --end <rfc3339> [--capture-root <path>] [--capture-id <id>] [--target active-window|all-windows|custom:<value>] [--frames-2fps-dir <path>] [--debug-video <path>] [--debug-pin] [--status-json <path>] [--ux-status-json <path>] [--sampler-json <path>] [--browser-proof-json <path>] [--dry-run]
+onecontext-capture-bundler export [--start <rfc3339>] [--end <rfc3339>] [--visual-recording-json <path>] [--capture-root <path>] [--capture-id <id>] [--target active-window|all-windows|custom:<value>] [--frames-2fps-dir <path>] [--debug-pin] [--status-json <path>] [--ux-status-json <path>] [--sampler-json <path>] [--browser-proof-json <path>] [--dry-run]
 onecontext-capture-bundler list [--capture-root <path>] [--class live|processing|failed|pinned|all]
 onecontext-capture-bundler validate --bundle <path> [--strict]
 onecontext-capture-bundler validate --capture-id <id> [--capture-root <path>]
@@ -24,6 +24,21 @@ READY validation signal before any bundle directory is written.
 
 READY bundles require the Swift screen-recording decoder's 2fps frame cache.
 By default export reads it from `<capture-root>/media/frames-2fps`; pass
-`--frames-2fps-dir` when the decoder wrote frames elsewhere. `--debug-video`
-copies the source recording into `media/debug/` for investigation only; the 2fps
-screenshots are normal capture evidence.
+`--frames-2fps-dir` when the decoder wrote frames elsewhere. Source recordings
+and other debug video stay in dev evidence storage; READY media is the 2fps
+frame cache.
+
+For algorithm-development bundles, pass the JSON emitted by
+`1context capture visual-recording`:
+
+```bash
+1context-capture-bundler export \
+  --visual-recording-json visual-recording.json \
+  --capture-root "$CAPTURE_ROOT"
+```
+
+When `--visual-recording-json` is present, `export` derives omitted
+`--start`/`--end` from `capture_started_at`/`capture_ended_at`, derives omitted
+`--frames-2fps-dir` from `frames_dir`, and ignores recorder debug video paths.
+Explicit `--start`, `--end`, and `--frames-2fps-dir` values always override the
+recorder JSON.

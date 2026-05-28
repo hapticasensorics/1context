@@ -61,7 +61,7 @@ final class MemoryDaemonProcessClientTests: XCTestCase {
       environment: ["ONECONTEXT_MEMORYD_BIN": executable.path]
     )
 
-    let payload = client.queryViewport(MemoryViewportQuery(limit: 2, source: "codex.local_sessions"))
+    let payload = try client.queryViewport(MemoryViewportQuery(limit: 2, source: "codex.local_sessions"))
     let objects = try XCTUnwrap(payload["objects"] as? [[String: Any]])
     let args = try String(contentsOf: argsFile, encoding: .utf8)
     let request = try XCTUnwrap(jsonObject(at: requestFile))
@@ -124,19 +124,19 @@ final class MemoryDaemonProcessClientTests: XCTestCase {
     )
 
     XCTAssertEqual(
-      client.hydrateObjects(MemoryObjectHydrationQuery(objectID: "object-123"))["protocol"] as? String,
+      try client.hydrateObjects(MemoryObjectHydrationQuery(objectID: "object-123"))["protocol"] as? String,
       "memory.hydrateObjects.v1"
     )
     XCTAssertEqual(
-      client.queryDensity(MemoryDensityQuery(startTime: "2026-05-24T00:00:00Z", endTime: "2026-05-24T01:00:00Z", sources: ["codex.local_sessions"]))["protocol"] as? String,
+      try client.queryDensity(MemoryDensityQuery(startTime: "2026-05-24T00:00:00Z", endTime: "2026-05-24T01:00:00Z", sources: ["codex.local_sessions"]))["protocol"] as? String,
       "memory.queryDensity.v1"
     )
     XCTAssertEqual(
-      client.queryEdges(MemoryEdgesQuery(objectID: "object-123"))["protocol"] as? String,
+      try client.queryEdges(MemoryEdgesQuery(objectID: "object-123"))["protocol"] as? String,
       "memory.queryEdges.v1"
     )
     XCTAssertEqual(
-      client.searchText(MemorySearchTextQuery(query: "ship it"))["protocol"] as? String,
+      try client.searchText(MemorySearchTextQuery(query: "ship it"))["protocol"] as? String,
       "memory.searchText.v1"
     )
 
@@ -178,31 +178,25 @@ final class MemoryDaemonProcessClientTests: XCTestCase {
       ]
     )
 
-    let payload = client.queryViewport(MemoryViewportQuery(limit: 2, source: "codex.local_sessions"))
-    let objects = try XCTUnwrap(payload["objects"] as? [Any])
-
-    XCTAssertEqual(payload["surface"] as? String, "memory_viewport")
-    XCTAssertEqual(payload["status"] as? String, "unavailable")
-    XCTAssertEqual(payload["provider"] as? String, "memory_protocol")
-    XCTAssertEqual(payload["error"] as? String, "memory_protocol_unavailable")
-    XCTAssertEqual(payload["source"] as? String, "codex.local_sessions")
-    XCTAssertEqual(payload["object_count"] as? Int, 0)
-    XCTAssertTrue(objects.isEmpty)
+    XCTAssertThrowsError(
+      try client.queryViewport(MemoryViewportQuery(limit: 2, source: "codex.local_sessions"))
+    ) { error in
+      XCTAssertTrue(error.localizedDescription.contains("protocol failed"))
+    }
     XCTAssertFalse(FileManager.default.fileExists(atPath: marker.path))
   }
 
-  func testObjectHydrationUsesProtocolUnavailableBoundary() {
-    let client = UnavailableMemoryProtocolClient()
+  func testReadMethodsThrowWhenMemorydIsMissing() {
+    let root = temporaryRoot()
+    defer { try? FileManager.default.removeItem(at: root) }
+    let client = MemoryDaemonProcessClient(
+      runtimePaths: runtimePaths(root: root),
+      environment: ["ONECONTEXT_MEMORYD_BIN": root.appendingPathComponent("missing-memoryd").path]
+    )
 
-    let payload = client
-      .hydrateObject(MemoryObjectHydrationQuery(objectID: "object-123"))
-      .payload
-
-    XCTAssertEqual(payload["surface"] as? String, "memory_object_hydration")
-    XCTAssertEqual(payload["status"] as? String, "unavailable")
-    XCTAssertEqual(payload["provider"] as? String, "memory_protocol")
-    XCTAssertEqual(payload["object_id"] as? String, "object-123")
-    XCTAssertTrue(payload["object"] is NSNull)
+    XCTAssertThrowsError(try client.hydrateObjects(MemoryObjectHydrationQuery(objectID: "object-123"))) { error in
+      XCTAssertTrue(error.localizedDescription.contains("onecontext-memoryd executable not found"))
+    }
   }
 
   private func runtimePaths(root: URL, identity: OneContextAppIdentity = .official) -> RuntimePaths {

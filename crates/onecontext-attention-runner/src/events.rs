@@ -5,6 +5,7 @@ use std::{
 };
 
 use anyhow::{Context, Result};
+use chrono::DateTime;
 use serde_json::Value;
 
 use crate::model::{CaptureEvent, EventRef};
@@ -28,6 +29,9 @@ pub fn load_capture_events(
         let value: Value = serde_json::from_str(&line)
             .with_context(|| format!("parse {} line {}", path.display(), index + 1))?;
         let epoch_ms = event_epoch_ms(&value);
+        if is_before_base_epoch(epoch_ms, base_epoch_ms) {
+            continue;
+        }
         fallback_base_epoch_ms = fallback_base_epoch_ms.or(epoch_ms);
         let event_base_epoch_ms = base_epoch_ms.or(fallback_base_epoch_ms);
         let t_ms = match (epoch_ms, event_base_epoch_ms) {
@@ -42,6 +46,7 @@ pub fn load_capture_events(
         let event_type = event_type(&value);
         let id = value
             .get("source_record_id")
+            .or_else(|| value.get("sourceRecordID"))
             .and_then(Value::as_str)
             .map(str::to_string)
             .unwrap_or_else(|| format!("{}:{}", event_ref.id, index + 1));
@@ -60,14 +65,20 @@ pub fn load_capture_events(
     Ok(events)
 }
 
+fn is_before_base_epoch(epoch_ms: Option<i64>, base_epoch_ms: Option<i64>) -> bool {
+    matches!((epoch_ms, base_epoch_ms), (Some(epoch), Some(base)) if epoch < base)
+}
+
 pub fn event_epoch_ms(value: &Value) -> Option<i64> {
     timestamp_from_key(value, "event_time_start")
+        .or_else(|| timestamp_from_key(value, "eventTimeStart"))
         .or_else(|| timestamp_from_path(value, &["payload", "started_at"]))
         .or_else(|| timestamp_from_key(value, "recordedAt"))
 }
 
 fn event_end_epoch_ms(value: &Value) -> Option<i64> {
     timestamp_from_key(value, "event_time_end")
+        .or_else(|| timestamp_from_key(value, "eventTimeEnd"))
         .or_else(|| timestamp_from_path(value, &["payload", "ended_at"]))
         .or_else(|| timestamp_from_key(value, "recordedAt"))
 }
@@ -116,6 +127,9 @@ fn number_from_path(value: &Value, path: &[&str]) -> Option<u64> {
 }
 
 pub fn parse_rfc3339_ms(value: &str) -> Option<i64> {
+    if let Ok(time) = DateTime::parse_from_rfc3339(value) {
+        return Some(time.timestamp_millis());
+    }
     let value = value.strip_suffix('Z').unwrap_or(value);
     let (date, time) = value.split_once('T')?;
     let mut date_parts = date.split('-');

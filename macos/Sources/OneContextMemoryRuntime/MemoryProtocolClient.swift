@@ -1,5 +1,6 @@
 import Darwin
 import Foundation
+import OneContextPlatform
 
 public struct MemoryViewportQuery: Sendable {
   public let limit: Int
@@ -118,28 +119,28 @@ public struct MemoryProtocolResponse {
 }
 
 public protocol MemoryProtocolClient: Sendable {
-  func send(_ request: MemoryProtocolRequest) -> MemoryProtocolResponse
+  func send(_ request: MemoryProtocolRequest) throws -> MemoryProtocolResponse
 }
 
 public extension MemoryProtocolClient {
-  func queryViewport(_ query: MemoryViewportQuery = MemoryViewportQuery()) -> MemoryProtocolResponse {
-    send(.viewport(query))
+  func queryViewport(_ query: MemoryViewportQuery = MemoryViewportQuery()) throws -> MemoryProtocolResponse {
+    try send(.viewport(query))
   }
 
-  func hydrateObject(_ query: MemoryObjectHydrationQuery) -> MemoryProtocolResponse {
-    send(.objectHydration(query))
+  func hydrateObject(_ query: MemoryObjectHydrationQuery) throws -> MemoryProtocolResponse {
+    try send(.objectHydration(query))
   }
 
-  func queryDensity(_ query: MemoryDensityQuery = MemoryDensityQuery()) -> MemoryProtocolResponse {
-    send(.density(query))
+  func queryDensity(_ query: MemoryDensityQuery = MemoryDensityQuery()) throws -> MemoryProtocolResponse {
+    try send(.density(query))
   }
 
-  func queryEdges(_ query: MemoryEdgesQuery) -> MemoryProtocolResponse {
-    send(.edges(query))
+  func queryEdges(_ query: MemoryEdgesQuery) throws -> MemoryProtocolResponse {
+    try send(.edges(query))
   }
 
-  func searchText(_ query: MemorySearchTextQuery) -> MemoryProtocolResponse {
-    send(.searchText(query))
+  func searchText(_ query: MemorySearchTextQuery) throws -> MemoryProtocolResponse {
+    try send(.searchText(query))
   }
 }
 
@@ -160,11 +161,23 @@ public struct MemoryProtocolProcessConfiguration: Sendable {
 }
 
 public enum MemoryProtocolClientFactory {
-  public static func make(configuration: MemoryProtocolProcessConfiguration?) -> MemoryProtocolClient {
+  public static func make(configuration: MemoryProtocolProcessConfiguration?) throws -> MemoryProtocolClient {
     guard let configuration else {
-      return UnavailableMemoryProtocolClient(message: "onecontext-memoryd executable not found")
+      throw MemoryProtocolClientError("onecontext-memoryd executable not found")
     }
     return MemoryProtocolProcessClient(configuration: configuration)
+  }
+}
+
+public struct MemoryProtocolClientError: Error, LocalizedError, Sendable {
+  public let message: String
+
+  public init(_ message: String) {
+    self.message = message
+  }
+
+  public var errorDescription: String? {
+    message
   }
 }
 
@@ -176,36 +189,31 @@ public final class MemoryProtocolProcessClient: MemoryProtocolClient, @unchecked
     self.configuration = configuration
   }
 
-  public func send(_ request: MemoryProtocolRequest) -> MemoryProtocolResponse {
+  public func send(_ request: MemoryProtocolRequest) throws -> MemoryProtocolResponse {
     switch request {
     case .viewport(let query):
-      return run(
+      return try run(
         arguments: protocolArguments("memory.queryViewport"),
-        fallback: unavailableViewportPayload(query: query),
         standardInput: protocolRequest(method: "memory.queryViewport", params: viewportParams(query))
       )
     case .objectHydration(let query):
-      return run(
+      return try run(
         arguments: protocolArguments("memory.hydrateObjects"),
-        fallback: unavailableObjectPayload(query: query),
         standardInput: protocolRequest(method: "memory.hydrateObjects", params: objectParams(query))
       )
     case .density(let query):
-      return run(
+      return try run(
         arguments: protocolArguments("memory.queryDensity"),
-        fallback: unavailableDensityPayload(query: query),
         standardInput: protocolRequest(method: "memory.queryDensity", params: densityParams(query))
       )
     case .edges(let query):
-      return run(
+      return try run(
         arguments: protocolArguments("memory.queryEdges"),
-        fallback: unavailableEdgesPayload(query: query),
         standardInput: protocolRequest(method: "memory.queryEdges", params: edgesParams(query))
       )
     case .searchText(let query):
-      return run(
+      return try run(
         arguments: protocolArguments("memory.searchText"),
-        fallback: unavailableSearchTextPayload(query: query),
         standardInput: protocolRequest(method: "memory.searchText", params: searchTextParams(query))
       )
     }
@@ -323,229 +331,33 @@ public final class MemoryProtocolProcessClient: MemoryProtocolClient, @unchecked
     ISO8601DateFormatter().string(from: date)
   }
 
-  private func run(arguments: [String], fallback: [String: Any], standardInput: Data? = nil) -> MemoryProtocolResponse {
-    let process = Process()
-    let stdout = Pipe()
-    let stderr = Pipe()
-    let stdin = standardInput.map { _ in Pipe() }
-    process.executableURL = configuration.executable
-    process.arguments = arguments
-    process.environment = configuration.environment
-    process.standardOutput = stdout
-    process.standardError = stderr
-    if let stdin {
-      process.standardInput = stdin
+  private func run(arguments: [String], standardInput: Data? = nil) throws -> MemoryProtocolResponse {
+    let result = try ProcessRunner.run(
+      executable: configuration.executable,
+      arguments: arguments,
+      environment: configuration.environment,
+      standardInput: standardInput,
+      timeoutSeconds: configuration.timeoutSeconds
+    )
+    if result.timedOut {
+      throw MemoryProtocolClientError("memory protocol timed out")
     }
-    do {
-      try process.run()
-      if let standardInput, let stdin {
-        stdin.fileHandleForWriting.write(standardInput)
-        try? stdin.fileHandleForWriting.close()
-      }
-    } catch {
-      return MemoryProtocolResponse(payload: fallbackPayload(fallback, error: error.localizedDescription))
-    }
-
-    let readGroup = DispatchGroup()
-    let outputBox = LockedDataBox()
-    let errorBox = LockedDataBox()
-    readGroup.enter()
-    DispatchQueue.global(qos: .utility).async {
-      let data = stdout.fileHandleForReading.readDataToEndOfFile()
-      outputBox.set(data)
-      readGroup.leave()
-    }
-    readGroup.enter()
-    DispatchQueue.global(qos: .utility).async {
-      let data = stderr.fileHandleForReading.readDataToEndOfFile()
-      errorBox.set(data)
-      readGroup.leave()
-    }
-
-    let deadline = Date().addingTimeInterval(configuration.timeoutSeconds)
-    while process.isRunning && Date() < deadline {
-      usleep(10_000)
-    }
-    if process.isRunning {
-      process.terminate()
-      usleep(100_000)
-      if process.isRunning {
-        kill(process.processIdentifier, SIGKILL)
-      }
-      process.waitUntilExit()
-      _ = readGroup.wait(timeout: .now() + 1)
-      return MemoryProtocolResponse(payload: fallbackPayload(fallback, error: "memory protocol timed out"))
-    }
-
-    process.waitUntilExit()
-    _ = readGroup.wait(timeout: .now() + 1)
-    let output = outputBox.get()
-    let errorOutput = errorBox.get()
-    guard process.terminationStatus == 0 else {
-      let message = String(decoding: errorOutput.isEmpty ? output : errorOutput, as: UTF8.self)
+    guard result.status == 0 else {
+      let message = String(decoding: result.stderr.isEmpty ? result.stdout : result.stderr, as: UTF8.self)
         .trimmingCharacters(in: .whitespacesAndNewlines)
-      return MemoryProtocolResponse(payload: fallbackPayload(fallback, error: message.isEmpty ? "memory protocol exited \(process.terminationStatus)" : message))
+      throw MemoryProtocolClientError(message.isEmpty ? "memory protocol exited \(result.status)" : message)
     }
     guard
-      let object = try? JSONSerialization.jsonObject(with: output) as? [String: Any]
+      let object = try? JSONSerialization.jsonObject(with: result.stdout) as? [String: Any]
     else {
-      return MemoryProtocolResponse(payload: fallbackPayload(fallback, error: "memory protocol returned non-object JSON"))
+      throw MemoryProtocolClientError("memory protocol returned non-object JSON")
     }
     return MemoryProtocolResponse(payload: object)
   }
-
-  private func fallbackPayload(_ payload: [String: Any], error: String) -> [String: Any] {
-    var result = payload
-    result["message"] = error
-    return result
-  }
-}
-
-public final class UnavailableMemoryProtocolClient: MemoryProtocolClient, @unchecked Sendable {
-  private let message: String
-
-  public init(message: String = "Memory Protocol bridge is not wired yet") {
-    self.message = message
-  }
-
-  public func send(_ request: MemoryProtocolRequest) -> MemoryProtocolResponse {
-    switch request {
-    case .viewport(let query):
-      return MemoryProtocolResponse(payload: unavailableViewportPayload(query: query, message: message))
-    case .objectHydration(let query):
-      return MemoryProtocolResponse(payload: unavailableObjectPayload(query: query, message: message))
-    case .density(let query):
-      return MemoryProtocolResponse(payload: unavailableDensityPayload(query: query, message: message))
-    case .edges(let query):
-      return MemoryProtocolResponse(payload: unavailableEdgesPayload(query: query, message: message))
-    case .searchText(let query):
-      return MemoryProtocolResponse(payload: unavailableSearchTextPayload(query: query, message: message))
-    }
-  }
-}
-
-private func unavailableViewportPayload(
-  query: MemoryViewportQuery,
-  message: String = "Memory Protocol unavailable"
-) -> [String: Any] {
-  [
-    "schema_version": 1,
-    "surface": "memory_viewport",
-    "protocol": "memory.queryViewport.v1",
-    "status": "unavailable",
-    "provider": "memory_protocol",
-    "protocol_status": "unavailable",
-    "error": "memory_protocol_unavailable",
-    "message": message,
-    "limit": query.cappedLimit,
-    "source": query.filterSource ?? "all",
-    "object_count": 0,
-    "shown_object_count": 0,
-    "total_object_count": 0,
-    "sources": [],
-    "objects": []
-  ]
-}
-
-private func unavailableObjectPayload(
-  query: MemoryObjectHydrationQuery,
-  message: String = "Memory Protocol unavailable"
-) -> [String: Any] {
-  [
-    "schema_version": 1,
-    "surface": "memory_object_hydration",
-    "protocol": "memory.hydrateObjects.v1",
-    "status": "unavailable",
-    "provider": "memory_protocol",
-    "protocol_status": "unavailable",
-    "error": "memory_protocol_unavailable",
-    "message": message,
-    "object_id": query.firstObjectID,
-    "object_ids": query.objectIDs,
-    "object": NSNull()
-  ]
-}
-
-private func unavailableDensityPayload(
-  query: MemoryDensityQuery,
-  message: String = "Memory Protocol unavailable"
-) -> [String: Any] {
-  [
-    "schema_version": 1,
-    "surface": "memory_density",
-    "protocol": "memory.queryDensity.v1",
-    "status": "unavailable",
-    "provider": "memory_protocol",
-    "protocol_status": "unavailable",
-    "error": "memory_protocol_unavailable",
-    "message": message,
-    "bucket": query.bucket,
-    "sources": query.sources,
-    "buckets": []
-  ]
-}
-
-private func unavailableEdgesPayload(
-  query: MemoryEdgesQuery,
-  message: String = "Memory Protocol unavailable"
-) -> [String: Any] {
-  [
-    "schema_version": 1,
-    "surface": "memory_edges",
-    "protocol": "memory.queryEdges.v1",
-    "status": "unavailable",
-    "provider": "memory_protocol",
-    "protocol_status": "unavailable",
-    "error": "memory_protocol_unavailable",
-    "message": message,
-    "object_id": query.objectID,
-    "direction": query.direction,
-    "edge_count": 0,
-    "edges": []
-  ]
-}
-
-private func unavailableSearchTextPayload(
-  query: MemorySearchTextQuery,
-  message: String = "Memory Protocol unavailable"
-) -> [String: Any] {
-  [
-    "schema_version": 1,
-    "surface": "memory_search",
-    "protocol": "memory.searchText.v1",
-    "status": "unavailable",
-    "provider": "memory_protocol",
-    "protocol_status": "unavailable",
-    "error": "memory_protocol_unavailable",
-    "message": message,
-    "query": query.query,
-    "limit": query.cappedLimit,
-    "source": query.filterSource ?? "all",
-    "object_count": 0,
-    "objects": []
-  ]
 }
 
 private extension String {
   var nilIfEmpty: String? {
     isEmpty ? nil : self
-  }
-}
-
-private final class LockedDataBox: @unchecked Sendable {
-  private let lock = NSLock()
-  private var data = Data()
-
-  func set(_ data: Data) {
-    lock.lock()
-    self.data = data
-    lock.unlock()
-  }
-
-  func get() -> Data {
-    lock.lock()
-    let value = data
-    lock.unlock()
-    return value
   }
 }

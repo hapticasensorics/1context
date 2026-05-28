@@ -296,74 +296,54 @@ final class OneContextDaemon: @unchecked Sendable {
     }, memoryStatus: { [weak self] in
       self?.memoryDaemon.status().payload ?? ["status": "unavailable"]
     }, memoryViewport: { [weak self] query in
+      guard let self else {
+        throw MemoryProtocolClientError("memory daemon unavailable")
+      }
       let limit = query["limit"].flatMap(Int.init) ?? 200
-      return self?.memoryDaemon.queryViewport(MemoryViewportQuery(
+      return try self.memoryDaemon.queryViewport(MemoryViewportQuery(
         limit: limit,
         source: query["source"],
         startTime: query["start_time"] ?? query["start"],
         endTime: query["end_time"] ?? query["end"]
-      )) ?? [
-        "schema_version": 1,
-        "surface": "memory_viewport",
-        "protocol": "memory.queryViewport.v1",
-        "status": "unavailable",
-        "object_count": 0,
-        "sources": [],
-        "objects": []
-      ]
+      ))
     }, memoryObject: { [weak self] query in
+      guard let self else {
+        throw MemoryProtocolClientError("memory daemon unavailable")
+      }
       let objectIDs = Self.csvValues(query["object_ids"] ?? query["object_id"] ?? query["id"])
-      return self?.memoryDaemon.hydrateObjects(MemoryObjectHydrationQuery(objectIDs: objectIDs)) ?? [
-        "schema_version": 1,
-        "surface": "memory_object_hydration",
-        "protocol": "memory.hydrateObjects.v1",
-        "status": "unavailable",
-        "object_ids": objectIDs,
-        "object": NSNull()
-      ]
+      return try self.memoryDaemon.hydrateObjects(MemoryObjectHydrationQuery(objectIDs: objectIDs))
     }, memoryDensity: { [weak self] query in
+      guard let self else {
+        throw MemoryProtocolClientError("memory daemon unavailable")
+      }
       let sources = Self.csvValues(query["sources"] ?? query["source"])
-      return self?.memoryDaemon.queryDensity(MemoryDensityQuery(
+      return try self.memoryDaemon.queryDensity(MemoryDensityQuery(
         startTime: query["start_time"] ?? query["start"],
         endTime: query["end_time"] ?? query["end"],
         bucket: query["bucket"] ?? "1m",
         sources: sources
-      )) ?? [
-        "schema_version": 1,
-        "surface": "memory_density",
-        "protocol": "memory.queryDensity.v1",
-        "status": "unavailable",
-        "buckets": []
-      ]
+      ))
     }, memoryEdges: { [weak self] query in
+      guard let self else {
+        throw MemoryProtocolClientError("memory daemon unavailable")
+      }
       let objectID = query["object_id"] ?? query["id"] ?? ""
-      return self?.memoryDaemon.queryEdges(MemoryEdgesQuery(
+      return try self.memoryDaemon.queryEdges(MemoryEdgesQuery(
         objectID: objectID,
         direction: query["direction"] ?? "both",
         edgeKind: query["edge_kind"],
         limit: query["limit"].flatMap(Int.init) ?? 200,
         includeObjectSummaries: query["include_object_summaries"] != "false"
-      )) ?? [
-        "schema_version": 1,
-        "surface": "memory_edges",
-        "protocol": "memory.queryEdges.v1",
-        "status": "unavailable",
-        "object_id": objectID,
-        "edges": []
-      ]
+      ))
     }, memorySearch: { [weak self] query in
-      return self?.memoryDaemon.searchText(MemorySearchTextQuery(
+      guard let self else {
+        throw MemoryProtocolClientError("memory daemon unavailable")
+      }
+      return try self.memoryDaemon.searchText(MemorySearchTextQuery(
         query: query["query"] ?? query["q"] ?? "",
         limit: query["limit"].flatMap(Int.init) ?? 50,
         source: query["source"]
-      )) ?? [
-        "schema_version": 1,
-        "surface": "memory_search",
-        "protocol": "memory.searchText.v1",
-        "status": "unavailable",
-        "query": query["query"] ?? query["q"] ?? "",
-        "objects": []
-      ]
+      ))
     })
   )
   private lazy var wikiRenderQueue = WikiRenderQueue(

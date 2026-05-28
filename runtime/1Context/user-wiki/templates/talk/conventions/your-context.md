@@ -50,7 +50,7 @@ kind: proposal
 author: "{{ author_id }}"
 created: "{{ created_at }}"
 target_section: "{{ section_name }}"
-talk_for: "page://your-context"
+talk_for: "mailbox://page/your-context"
 state: open
 evidence:
   - "{{ evidence_uri }}"

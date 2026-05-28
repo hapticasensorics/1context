@@ -4,7 +4,7 @@ use eframe::egui;
 
 use crate::{
     fixture::DashboardFixture,
-    media::FrameCacheState,
+    media::{FrameCacheState, ImageAssetCache},
     panels,
     review::ReviewState,
     timeline::{TimelineState, TimelineViewState},
@@ -14,6 +14,7 @@ pub struct AttentionDashboardApp {
     session_path: PathBuf,
     fixture: Option<DashboardFixture>,
     media: FrameCacheState,
+    image_assets: ImageAssetCache,
     timeline: TimelineState,
     timeline_view: TimelineViewState,
     review: ReviewState,
@@ -31,6 +32,7 @@ impl AttentionDashboardApp {
             session_path,
             fixture: None,
             media: FrameCacheState::default(),
+            image_assets: ImageAssetCache::new(),
             timeline: TimelineState::default(),
             timeline_view: TimelineViewState::default(),
             review: ReviewState::default(),
@@ -56,6 +58,7 @@ impl AttentionDashboardApp {
                 self.timeline = TimelineState::from_fixture(&fixture);
                 self.review = ReviewState::new(fixture.review_labels_path());
                 self.media = FrameCacheState::new(&fixture);
+                self.image_assets = ImageAssetCache::new();
                 self.fixture = Some(fixture);
                 self.last_error = None;
             }
@@ -166,9 +169,12 @@ impl AttentionDashboardApp {
             .default_size(430.0)
             .show_inside(root_ui, |ui| {
                 if let Some(fixture) = &self.fixture {
+                    let ctx = ui.ctx().clone();
                     panels::decision_panel(
                         ui,
+                        &ctx,
                         fixture,
+                        &mut self.image_assets,
                         self.current_time_ms,
                         self.selected_candidate_id.as_deref(),
                         self.selected_saved_state_id.as_deref(),

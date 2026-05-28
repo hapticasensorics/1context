@@ -1,6 +1,6 @@
 # onecontext-capture-core
 
-Rust scaffold for the 1Context capture-bundle file contract.
+Rust implementation of the 1Context capture-bundle file contract.
 
 This crate owns reusable bundle mechanics only. It does not run macOS sensors,
 score attention, decide keep/drop, build summaries, or write Timescale rows.
@@ -17,8 +17,7 @@ onecontext-capture-core:
   JSONL spool window reads, READY validation, and retention planning/audit
 
 onecontext-capture-bundler:
-  operator/debug CLI around bundle folders; export is currently a scaffold
-  receipt, not production export
+  operator/debug CLI around bundle folders and READY export validation
 
 onecontext-capture-dashboard:
   GUI/debug reader of daemon status, live spool, and bundle lifecycle tests
@@ -78,7 +77,8 @@ results.
 ```text
 1. AtomicBundleWriter creates bundles/processing/<capture_id>.partial/.
 2. The writer emits manifest.json with state="partial".
-3. The writer emits required V0 files and degraded-lane placeholders.
+3. The writer emits required V0 files, direct source records, and explicit
+   degraded quality records for missing current lanes.
 4. The writer emits READY and rewrites manifest.json with state="ready".
 5. The writer atomically promotes the directory to bundles/live/<capture_id>/.
 6. Retention later deletes expired live/failed bundles and appends
@@ -105,9 +105,8 @@ The integration contract is:
   log identity, tolerant export must fall back to source JSONL reads and emit
   degraded quality metadata rather than fail READY promotion solely because the
   accelerator is unusable.
-- Undated legacy `*.windows.jsonl` files cannot be date-pruned by filename.
-  They remain eligible for bracketing fallback until they are migrated to dated
-  logs or covered by a verified sidecar index.
+- Undated legacy `*.windows.jsonl` files are ignored by bracketing lookup; new
+  product exports require dated window logs or direct current lane records.
 - Index builders and fast readers must not assume timestamp fields appear before
   large payload fields. Fixtures should cover JSON object orderings where
   `payload` precedes `recordedAt` or `eventTimeStart`, otherwise the remaining
@@ -122,8 +121,9 @@ The integration contract is:
   treat missing bracketing offsets as an integration risk.
 
 The `window_jsonl_export_fallbacks` integration tests cover tolerant vs strict
-malformed-line behavior, appended records after index creation, undated legacy
-bracketing fallback, and raw provenance offsets for selected in-window records.
+malformed-line behavior, appended records after index creation, rejection of
+undated legacy bracketing input, and raw provenance offsets for selected
+in-window records.
 
 ## Useful Commands
 

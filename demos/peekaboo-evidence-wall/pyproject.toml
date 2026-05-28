@@ -1,6 +1,0 @@
-[project]
-name = "peekaboo-evidence-wall"
-version = "0.1.0"
-description = "Local Peekaboo screen-capture evidence wall for 1Context memory research"
-requires-python = ">=3.11"
-dependencies = []

@@ -111,12 +111,7 @@ impl Default for IncrementalIngestOptions {
 #[serde(rename_all = "snake_case")]
 pub enum SessionIngestProfile {
     #[default]
-    #[serde(alias = "messages_only", alias = "messages-only")]
     HotMemory,
-    #[serde(
-        alias = "messages_and_compact_tools",
-        alias = "messages-and-compact-tools"
-    )]
     CompactAudit,
     Forensic,
 }

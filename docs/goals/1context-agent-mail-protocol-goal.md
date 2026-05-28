@@ -260,7 +260,7 @@ the supervisor, not as an ordinary mail action.
 The current dogfood acceptance surface is:
 
 - [x] Active role delivery creates durable notifications for two live curators.
-  Evidence: `scripts/test-agent-mail-dogfood.mjs`;
+  Evidence: `retired mail dogfood harness`;
   `test-results/agent-mail-dogfood-20260525T023826Z/summary.json`.
 - [x] Steering and notification control-plane outputs omit full message bodies.
   Evidence: captured steering files plus
@@ -303,8 +303,8 @@ Post-V0 hardening checks:
 
 - [x] Keep browser-visible route checks in the wiki dogfood harness, while this
   mail harness proves `wiki.publish.status` is unchanged by mail state.
-  Evidence: `scripts/test-wiki-core-dogfood.mjs` owns route checks;
-  `scripts/test-agent-mail-dogfood.mjs` owns mail/publish-boundary checks.
+  Evidence: `retired wiki dogfood harness` owns route checks;
+  `retired mail dogfood harness` owns mail/publish-boundary checks.
 - [x] Host-facing adapter API records a `MailInjectionReceipt` /
   `MailControlEvent` for `wiki.mail.open` content delivery.
 - [ ] Codex host adapter executes the actual app-server `thread/inject_items`
@@ -470,7 +470,7 @@ Post-V0 hardening checks:
   mail, list mail, page-mailbox delivery, page talk with labels, page talk
   with explicit delivery, notification dispatch, claims, marks, ack-only
   behavior, failed-dispatch preservation, inactive supervisor dispatch, and
-  publish-status checks. Evidence: `scripts/test-agent-mail-dogfood.mjs`;
+  publish-status checks. Evidence: `retired mail dogfood harness`;
   `test-results/agent-mail-dogfood-20260525T023826Z/summary.json`.
 - [x] Capture first manual dogfood evidence under `test-results/agent-mail-*`.
   Evidence: `test-results/agent-mail-dogfood-20260521T081802Z/`,
@@ -502,7 +502,7 @@ Post-V0 hardening checks:
   `cargo test -p onecontext-wiki-daemon --no-fail-fast`;
   `swift test --package-path macos --filter WikiCoreRPCBridgeTests`;
   `uv run --with pytest pytest tests/test_wiki_core_client.py -q`;
-  `node scripts/test-agent-mail-dogfood.mjs --build`.
+  `archived mail dogfood evidence`.
 - [ ] Commit the integrated protocol with evidence paths in the final summary.
 
 ## Notes

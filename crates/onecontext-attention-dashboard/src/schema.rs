@@ -57,6 +57,7 @@ pub struct CandidateFrameSet {
     pub fps: f32,
     pub count: usize,
     pub naming: String,
+    pub frame_times_ms: Option<Vec<u64>>,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]

@@ -865,7 +865,7 @@ ON perception.timeline_projection_items
 USING GIST (user_id, projection_id, event_range);
 ```
 
-The range GiST index uses UUID equality columns, so migrations should create
+The range GiST index uses UUID equality columns, so the current schema creates
 `btree_gist` before this index.
 
 This table is allowed to be layout-specific because it is not truth. It is a
@@ -1889,7 +1889,7 @@ memory.writeRecords
 
 Do not rename protocol methods just to make the schema vocabulary prettier.
 
-## 13. Migration From Current Shape
+## 13. Current Schema Bootstrap
 
 The current implementation already has much of this shape:
 
@@ -1916,11 +1916,12 @@ The older `instance_kind`, `instance_id`, and `instance_display_name` fields
 were the predecessor to `perception.series`. They are not part of the active V2
 contract.
 
-V2 cutover implementation checklist:
+Current implementation checklist:
 
 ```text
-1. Reset dev DBs that were created with transitional migrations.
-2. Ship a bundled migration set that creates perception-only product tables.
+1. Reset dev DBs that were created with transitional schemas.
+2. Ship one current schema bootstrap that creates perception-only product
+   tables for empty dev/test databases.
 3. Create perception.series before perception.objects and
    perception.source_records require series_id.
 4. Make objects.series_id and source_records.series_id required in the V2
@@ -1939,7 +1940,7 @@ V2 cutover implementation checklist:
    reads.
 11. Keep viewport/density defaults lane-oriented; do not group density by
    series_id unless explicitly requested.
-12. Keep the active protocol and migrations free of instance_* compatibility
+12. Keep the active protocol and current schema free of instance_* compatibility
    fields.
 13. Pass write/read/idempotency contract tests and local benchmark gates before
    enabling the V2 bundle by default.

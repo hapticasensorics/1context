@@ -139,12 +139,7 @@ function routeCandidate(pathname) {
   const trimmed = clean.replace(/^\/+/, '').replace(/\/+$/, '');
   if (!trimmed || trimmed.split('/').includes('..')) return null;
 
-  const legacyTalkRoute = extname(trimmed) === '.talk';
-  const candidates = legacyTalkRoute
-    ? wantsRouteIndex
-      ? [`${trimmed}/index.html`, `${trimmed}.html`, trimmed]
-      : [trimmed, `${trimmed}.html`, `${trimmed}/index.html`]
-    : extname(trimmed)
+  const candidates = extname(trimmed)
     ? [trimmed]
     : wantsRouteIndex
       ? [`${trimmed}/index.html`, trimmed, `${trimmed}.html`]

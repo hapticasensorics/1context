@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{bail, Result};
 
 use crate::{
     fixture::AttentionFixture,
@@ -7,7 +7,7 @@ use crate::{
 
 pub fn build_candidates(fixture: &AttentionFixture) -> Result<Vec<CandidateState>> {
     let Some(frame_set) = preferred_frame_set(fixture) else {
-        return Ok(build_event_candidates(fixture));
+        bail!("attention session is missing required frame_2fps candidate frame set");
     };
     let mut candidates = Vec::with_capacity(frame_set.count);
 
@@ -38,46 +38,15 @@ pub fn build_candidates(fixture: &AttentionFixture) -> Result<Vec<CandidateState
     Ok(candidates)
 }
 
-fn build_event_candidates(fixture: &AttentionFixture) -> Vec<CandidateState> {
-    let mut times = fixture
-        .events
-        .iter()
-        .map(|event| event.t_ms.min(fixture.session.fixture.duration_ms))
-        .collect::<Vec<_>>();
-    times.sort_unstable();
-    times.dedup_by(|left, right| left.abs_diff(*right) <= 250);
-
-    if times.is_empty() {
-        times.push(0);
+fn frame_time_ms(frame_set: &CandidateFrameSet, frame_index: usize) -> u64 {
+    if let Some(t_ms) = frame_set
+        .frame_times_ms
+        .as_ref()
+        .and_then(|times| times.get(frame_index.saturating_sub(1)).copied())
+    {
+        return t_ms;
     }
 
-    times
-        .into_iter()
-        .enumerate()
-        .map(|(index, t_ms)| {
-            let nearby_events = fixture
-                .events
-                .iter()
-                .filter(|event| is_nearby_event(t_ms, event))
-                .cloned()
-                .collect();
-            let frame_id = format!("event-candidate-{index:03}");
-
-            CandidateState {
-                id: format!("candidate-{frame_id}"),
-                frame_id,
-                t_ms,
-                image_ref: "media/unavailable".to_string(),
-                nearby_events,
-                signals: Vec::new(),
-                attention_score: 0.0,
-                memory_value_score: 0.0,
-            }
-        })
-        .collect()
-}
-
-fn frame_time_ms(frame_set: &CandidateFrameSet, frame_index: usize) -> u64 {
     let fps = frame_set.fps.max(0.1) as f64;
     (((frame_index.saturating_sub(1)) as f64 / fps) * 1000.0).round() as u64
 }
@@ -94,6 +63,20 @@ fn is_nearby_event(candidate_t_ms: u64, event: &crate::model::CaptureEvent) -> b
     const PRIOR_WINDOW_MS: u64 = 1_500;
     const NEXT_WINDOW_MS: u64 = 1_500;
     const ACTION_OUTCOME_WINDOW_MS: u64 = 2_500;
+    const SCROLL_RECEIPT_WINDOW_MS: u64 = 2_500;
+
+    if event.event_type.contains("scroll_burst") {
+        let event_end_ms = event
+            .duration_ms
+            .map(|duration_ms| event.t_ms.saturating_add(duration_ms))
+            .unwrap_or(event.t_ms);
+        return candidate_t_ms >= event.t_ms
+            && candidate_t_ms <= event_end_ms.saturating_add(SCROLL_RECEIPT_WINDOW_MS);
+    }
+    if event.event_type == "attention.derived.visual_frame_change.v1" {
+        return candidate_t_ms >= event.t_ms
+            && candidate_t_ms <= event.t_ms.saturating_add(NEXT_WINDOW_MS);
+    }
 
     let post_window_ms = if is_action_event(&event.event_type) {
         ACTION_OUTCOME_WINDOW_MS

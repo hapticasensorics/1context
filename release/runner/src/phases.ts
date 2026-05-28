@@ -11,7 +11,6 @@ import {
   validateAppcast,
   validateManifest,
   writeAssetManifest,
-  writeFixtureProofResults,
 } from "./manifest.js";
 import { ensureEvidenceDirs, timeReleaseStep, writeJson, writeReleaseEvidence, writeStageTiming } from "./evidence.js";
 import { requireTool, runCapture, runCommand } from "./exec.js";
@@ -121,20 +120,6 @@ async function collectOfficialReleaseAssets(ctx: ReleaseContext): Promise<void> 
   await writeChecksumsForReleaseAssets(ctx);
   validateAppcast(ctx.manifest, fromRoot("dist", "appcast.xml"), "official");
   await writeAssetManifest(ctx.manifest, fromRoot("dist"), ctx.assetManifest);
-}
-
-async function writeSparkleFixtureProofResults(ctx: ReleaseContext): Promise<void> {
-  const testLog = path.join(ctx.evidenceDir, "sparkle-fixture-tests.log");
-  await timeReleaseStep(ctx, "prove", "run_sparkle_fixture_tests", async () => {
-    await execa("bash", ["-c", `swift test --package-path "$1" --filter OneContextSparkleUpdateTests > "$2" 2>&1`, "bash", fromRoot("macos"), testLog], {
-      cwd: ctx.root,
-      stdio: "inherit",
-      env: ctxEnv(ctx),
-    });
-  });
-  await timeReleaseStep(ctx, "prove", "write_sparkle_fixture_results", async () => {
-    writeFixtureProofResults(ctx.manifest, ctx.proofResultsDir);
-  });
 }
 
 function collectDownloadedProofResults(ctx: ReleaseContext, artifactDir: string): void {
@@ -580,7 +565,6 @@ gh_command: ${quoteCommand(cmd)}`;
   await timeReleaseStep(ctx, "prove", "download_proof_artifacts", () => runCommand("gh", ["run", "download", runId, "--repo", repo, "--dir", artifactDir], { env: ctxEnv(ctx) }));
   fs.appendFileSync(transcript, `artifact_dir=${artifactDir}\n`);
   await timeReleaseStep(ctx, "prove", "collect_proof_results", () => collectDownloadedProofResults(ctx, artifactDir));
-  await writeSparkleFixtureProofResults(ctx);
   writeReleaseEvidence(ctx, "prove");
   await timeReleaseStep(ctx, "prove", "redact_evidence", () => runCommand(fromRoot("release", "tools", "redact-evidence.sh"), [ctx.evidenceDir], { env: ctxEnv(ctx) }));
   await timeReleaseStep(ctx, "prove", "audit_evidence_redaction", () => runCommand(fromRoot("release", "tools", "audit-evidence-redaction.sh"), [ctx.evidenceDir], { env: ctxEnv(ctx) }));

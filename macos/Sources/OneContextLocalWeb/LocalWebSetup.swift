@@ -732,24 +732,10 @@ public enum LocalWebSetupInstallerError: Error, LocalizedError, Equatable {
 }
 
 private func runCapture(_ executable: String, _ arguments: [String]) -> (status: Int32, stdout: String, stderr: String) {
-  let process = Process()
-  process.executableURL = URL(fileURLWithPath: executable)
-  process.arguments = arguments
-  let stdout = Pipe()
-  let stderr = Pipe()
-  process.standardOutput = stdout
-  process.standardError = stderr
-
   do {
-    try process.run()
-    process.waitUntilExit()
+    let result = try ProcessRunner.run(executable: URL(fileURLWithPath: executable), arguments: arguments)
+    return (result.status, result.stdoutText, result.stderrText)
   } catch {
     return (1, "", error.localizedDescription)
   }
-
-  return (
-    process.terminationStatus,
-    String(data: stdout.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? "",
-    String(data: stderr.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
-  )
 }

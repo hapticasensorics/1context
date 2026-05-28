@@ -159,8 +159,40 @@ fn rank_score(candidate: &CandidateState) -> f32 {
     hard_keep_bonus
         + event_density_bonus
         + signal_diversity_bonus
+        + scroll_settle_bonus(candidate)
         + candidate.attention_score * 0.42
         + candidate.memory_value_score * 0.58
+}
+
+fn scroll_settle_bonus(candidate: &CandidateState) -> f32 {
+    let has_scroll_signal = candidate
+        .signals
+        .iter()
+        .any(|signal| signal.kind.starts_with("scroll_") && signal.kind != "scroll_noise");
+    if !has_scroll_signal {
+        return 0.0;
+    }
+
+    candidate
+        .nearby_events
+        .iter()
+        .filter(|event| event.event_type.contains("scroll_burst"))
+        .filter_map(|event| {
+            if candidate.t_ms < event.t_ms {
+                return None;
+            }
+            let duration_ms = event.duration_ms.unwrap_or(0);
+            let end_ms = event.t_ms.saturating_add(duration_ms);
+            if candidate.t_ms >= end_ms {
+                Some(0.16)
+            } else if duration_ms > 0 {
+                let progress = (candidate.t_ms - event.t_ms) as f32 / duration_ms as f32;
+                Some((progress * 0.12).clamp(0.0, 0.12))
+            } else {
+                Some(0.04)
+            }
+        })
+        .fold(0.0, f32::max)
 }
 
 fn passes_save_floor(candidate: &CandidateState) -> bool {
@@ -201,17 +233,58 @@ fn redundancy_reason(
             let same_context = !context.app_name.is_empty()
                 && context.app_name == saved_context.app_name
                 && context.window_title == saved_context.window_title;
-            let same_signal = primary_signal_kind(candidate) == primary_signal_kind(saved);
+            let same_signal = primary_signal_kind(candidate)
+                .zip(primary_signal_kind(saved))
+                .is_some_and(|(candidate_signal, saved_signal)| candidate_signal == saved_signal);
             if same_context && same_signal {
                 return Some(format!(
                     "dropped_redundant_same_context_{}ms_from_{}",
                     distance, saved.id
                 ));
             }
+
+            if same_signal {
+                if let Some(shared_ref) = shared_causal_event_ref(candidate, saved) {
+                    return Some(format!(
+                        "dropped_redundant_shared_event_{}ms_from_{}_via_{}",
+                        distance, saved.id, shared_ref
+                    ));
+                }
+            }
         }
     }
 
     None
+}
+
+fn shared_causal_event_ref(candidate: &CandidateState, saved: &CandidateState) -> Option<String> {
+    let saved_refs = saved
+        .nearby_events
+        .iter()
+        .filter(|event| is_causal_redundancy_event(&event.event_type))
+        .map(event_ref_key)
+        .collect::<BTreeSet<_>>();
+
+    candidate
+        .nearby_events
+        .iter()
+        .filter(|event| is_causal_redundancy_event(&event.event_type))
+        .map(event_ref_key)
+        .find(|event_ref| saved_refs.contains(event_ref))
+}
+
+fn is_causal_redundancy_event(event_type: &str) -> bool {
+    event_type.contains("keyboard_activity")
+        || event_type.contains("pointer")
+        || event_type.contains("scroll_burst")
+        || event_type.contains("selection")
+        || event_type.contains("shortcut")
+        || event_type.contains("focus_transition")
+        || event_type.contains("visual_frame_change")
+}
+
+fn event_ref_key(event: &crate::model::CaptureEvent) -> String {
+    format!("{}:{}", event.source_ref, event.source_line)
 }
 
 fn saved_state_from_candidate(index: usize, candidate: &CandidateState) -> SavedAttentionState {
@@ -704,16 +777,17 @@ fn provenance_refs(candidate: &CandidateState, limit: usize) -> Vec<ProvenanceRe
 }
 
 fn overlay_regions(candidate: &CandidateState) -> Vec<AttentionRegion> {
-    if let Some(region) = candidate
+    let signal_regions = candidate
         .signals
         .iter()
         .filter_map(|signal| signal.region.clone())
-        .next()
-    {
-        return vec![region];
+        .take(4)
+        .collect::<Vec<_>>();
+    if !signal_regions.is_empty() {
+        return signal_regions;
     }
 
-    candidate
+    let focused_regions = candidate
         .nearby_events
         .iter()
         .filter_map(|event| {
@@ -728,7 +802,54 @@ fn overlay_regions(candidate: &CandidateState) -> Vec<AttentionRegion> {
             })
         })
         .take(1)
-        .collect()
+        .collect::<Vec<_>>();
+    if !focused_regions.is_empty() {
+        return focused_regions;
+    }
+
+    vec![fallback_attention_region(candidate)]
+}
+
+fn fallback_attention_region(candidate: &CandidateState) -> AttentionRegion {
+    let signal_classes = canonical_signal_classes(candidate);
+    let tint = if signal_classes.iter().any(|class| class == "transition") {
+        "blue"
+    } else if signal_kinds(candidate)
+        .iter()
+        .any(|kind| kind.contains("selection") || kind.contains("copy"))
+    {
+        "yellow"
+    } else if signal_kinds(candidate)
+        .iter()
+        .any(|kind| kind.contains("outcome") || kind.contains("command"))
+    {
+        "purple"
+    } else if signal_kinds(candidate)
+        .iter()
+        .any(|kind| kind.contains("scroll") || kind.contains("coverage"))
+    {
+        "green"
+    } else if signal_kinds(candidate)
+        .iter()
+        .any(|kind| kind.contains("error"))
+    {
+        "red"
+    } else {
+        "orange"
+    };
+
+    AttentionRegion {
+        bbox: Rect {
+            x: 0.04,
+            y: 0.08,
+            width: 0.92,
+            height: 0.84,
+        },
+        score: candidate.attention_score.max(candidate.memory_value_score),
+        tint: tint.to_string(),
+        label: "attention receipt".to_string(),
+        explanation: "No source-specific region was available; highlight covers the visible content state preserved for end-of-minute review.".to_string(),
+    }
 }
 
 fn frame_rect_at(value: &Value, path: &[&str]) -> Option<Rect> {

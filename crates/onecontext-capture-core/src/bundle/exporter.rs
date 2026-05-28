@@ -22,6 +22,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 static CAPTURE_ID_COUNTER: AtomicU64 = AtomicU64::new(1);
 const EXPORTER_VERSION: &str = "capture_bundle_exporter.v0.2";
+const MAX_BRACKETING_WINDOW_SNAPSHOT_AGE_SECONDS: i64 = 30;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -67,27 +68,22 @@ pub fn export_ready_bundle(request: ExportRequest) -> CaptureCoreResult<ExportRe
             "time_end must be greater than or equal to time_start".to_string(),
         ));
     }
-    if let Some(video_path) = &request.debug_video_path {
-        if !video_path.is_file() {
-            return Err(CaptureCoreError::InvalidState(format!(
-                "--debug-video {} is not a file",
-                video_path.display()
-            )));
-        }
+    if request.debug_video_path.is_some() {
+        return Err(CaptureCoreError::InvalidState(
+            "debug video is not READY bundle media; keep recordings in dev evidence storage"
+                .to_string(),
+        ));
     }
 
     let paths = CaptureRootPaths::new(&request.capture_root);
     paths.ensure_directories()?;
     let capture_id = capture_id(request.time_start);
     let writer = AtomicBundleWriter::create(paths, capture_id.clone())?;
-    let mut optional_files = vec![
+    let optional_files = vec![
         "quality/bracketing_window_snapshot_lookup.json".to_string(),
         "quality/spool_read_report.json".to_string(),
         "quality/raw_provenance.jsonl".to_string(),
     ];
-    if request.debug_video_path.is_some() {
-        optional_files.push("media/debug/".to_string());
-    }
     let mut manifest = CaptureBundleManifest {
         schema_version: 1,
         contract_version: CONTRACT_VERSION.to_string(),
@@ -146,9 +142,6 @@ pub fn export_ready_bundle(request: ExportRequest) -> CaptureCoreResult<ExportRe
         request.time_end,
         &mut quality,
     )?;
-    routed.derive_display_snapshots_from_windows(&mut quality);
-    routed.add_inferred_connector_records(&mut quality);
-
     writer.write_raw_jsonl_lines("events/windows.jsonl", &routed.windows)?;
     writer.write_raw_jsonl_lines("events/displays.jsonl", &routed.displays)?;
     writer.write_raw_jsonl_lines("events/capture.events.jsonl", &routed.capture)?;
@@ -162,8 +155,7 @@ pub fn export_ready_bundle(request: ExportRequest) -> CaptureCoreResult<ExportRe
     let (frame_2fps_records, mut media_export_gaps) =
         write_frame_2fps_artifacts(&writer, &request, &capture_id)?;
     let frame_2fps_count = frame_2fps_records.len();
-    media_index.extend(frame_2fps_records);
-    media_index.extend(write_debug_video_artifact(&writer, &request, &capture_id)?);
+    media_index.extend(frame_2fps_records.clone());
     writer.write_jsonl_values("media/media.index.jsonl", &media_index)?;
     writer.write_json(
         "quality/bracketing_window_snapshot_lookup.json",
@@ -196,11 +188,13 @@ pub fn export_ready_bundle(request: ExportRequest) -> CaptureCoreResult<ExportRe
     let ux_status_raw = request
         .ux_status_json
         .clone()
+        .or_else(|| ux_event_tap_capability_from_capture_status(&capture_status))
         .unwrap_or_else(|| degraded_capability("UX status not supplied"));
     let ux_status = window_bound_capability(ux_status_raw, &request, "ux_event_tap");
     let samplers_raw = request
         .sampler_json
         .clone()
+        .or_else(|| samplers_capability_from_capture_status(&capture_status))
         .unwrap_or_else(|| degraded_capability("sampler status not supplied"));
     let samplers = window_bound_capability(samplers_raw, &request, "samplers");
     let browser_proof_raw = request
@@ -248,7 +242,7 @@ pub fn export_ready_bundle(request: ExportRequest) -> CaptureCoreResult<ExportRe
             &routed,
             &spool_report,
             source_envelope_refs.len(),
-            frame_2fps_count,
+            &frame_2fps_records,
         ),
     )?;
 
@@ -452,6 +446,60 @@ fn permissions_capability_from_capture_status(capture_status: &Value) -> Option<
     Some(capability)
 }
 
+fn ux_event_tap_capability_from_capture_status(capture_status: &Value) -> Option<Value> {
+    let status = nested_capture_status_value(capture_status, "ux_event_tap")?;
+    let tap_active = status.get("tap_active").and_then(Value::as_bool);
+    let lifecycle_running = status
+        .get("lifecycle_state")
+        .and_then(Value::as_str)
+        .is_some_and(|state| state == "running");
+    let ready = tap_active == Some(true) && lifecycle_running;
+    let mut capability = json!({
+        "schema_version": 1,
+        "status": if ready { "ok" } else { "degraded" },
+        "source": "capture.status.ux_event_tap",
+        "derived_from": "capabilities/capture.status.json",
+        "ux_event_tap": status
+    });
+    if !ready {
+        capability["reason"] =
+            json!("capture status reported the UX event tap as inactive or not running");
+    }
+    Some(capability)
+}
+
+fn samplers_capability_from_capture_status(capture_status: &Value) -> Option<Value> {
+    let sampler = nested_capture_status_value(capture_status, "continuous_metadata_sampler")?;
+    let enabled = sampler.get("enabled").and_then(Value::as_bool);
+    let has_error = sampler
+        .get("last_error")
+        .is_some_and(|error| !error.is_null());
+    let ready = enabled == Some(true) && !has_error;
+    let mut capability = json!({
+        "schema_version": 1,
+        "status": if ready { "ok" } else { "degraded" },
+        "source": "capture.status.continuous_metadata_sampler",
+        "derived_from": "capabilities/capture.status.json",
+        "continuous_metadata_sampler": sampler
+    });
+    if !ready {
+        capability["reason"] =
+            json!("capture status reported the metadata sampler as disabled or errored");
+    }
+    Some(capability)
+}
+
+fn nested_capture_status_value(capture_status: &Value, key: &str) -> Option<Value> {
+    capture_status
+        .get(key)
+        .or_else(|| {
+            capture_status
+                .get("capture_status")
+                .and_then(|status| status.get(key))
+        })
+        .cloned()
+}
+
 fn permission_metadata_ready(metadata: &Value) -> Option<bool> {
     let signals = metadata.get("signals")?.as_object()?;
     if signals.is_empty() {
@@ -578,6 +626,29 @@ impl RoutedSpool {
 
         let mut seen = BTreeSet::new();
         for (reason, candidate) in selected {
+            let delta_from_window_ms = if candidate.time < time_start {
+                (time_start - candidate.time).num_milliseconds()
+            } else if candidate.time > time_end {
+                (candidate.time - time_end).num_milliseconds()
+            } else {
+                0
+            };
+            if delta_from_window_ms
+                > Duration::seconds(MAX_BRACKETING_WINDOW_SNAPSHOT_AGE_SECONDS).num_milliseconds()
+            {
+                quality.window_snapshot_rejections.push(json!({
+                    "selection": reason,
+                    "reason": "bracketing_snapshot_too_stale",
+                    "snapshot_time": candidate.time.to_rfc3339(),
+                    "max_age_ms": Duration::seconds(MAX_BRACKETING_WINDOW_SNAPSHOT_AGE_SECONDS).num_milliseconds(),
+                    "delta_ms_from_capture_window": delta_from_window_ms,
+                    "capture_window": {
+                        "time_start": time_start.to_rfc3339(),
+                        "time_end": time_end.to_rfc3339()
+                    }
+                }));
+                continue;
+            }
             if seen.insert(candidate.raw.clone()) {
                 self.windows.push(candidate.raw.clone());
                 self.capture.push(candidate.raw.clone());
@@ -596,122 +667,13 @@ impl RoutedSpool {
 
         Ok(())
     }
-
-    fn derive_display_snapshots_from_windows(&mut self, quality: &mut ExportQualityMetadata) {
-        if !self.displays.is_empty() {
-            return;
-        }
-
-        for (index, raw) in self.windows.iter().enumerate() {
-            let Ok(value) = serde_json::from_str::<Value>(raw) else {
-                continue;
-            };
-            let Some(displays) = value
-                .pointer("/payload/displays")
-                .or_else(|| value.get("displays"))
-                .filter(|displays| displays.as_array().is_some_and(|items| !items.is_empty()))
-                .cloned()
-            else {
-                continue;
-            };
-            let recorded_at = event_time(&value).unwrap_or_else(Utc::now);
-            let inferred_from = record_ref(&value, "events/windows.jsonl");
-            let record = json!({
-                "schemaVersion": 1,
-                "eventType": "capture.display_snapshot",
-                "recordedAt": recorded_at.to_rfc3339(),
-                "eventTimeStart": recorded_at.to_rfc3339(),
-                "eventTimeEnd": recorded_at.to_rfc3339(),
-                "laneID": "capture.displays",
-                "sourceRecordID": format!("derived:display_snapshot:{}:{index}", recorded_at.timestamp_millis()),
-                "payload": {
-                    "displays": displays,
-                    "derived": true,
-                    "confidence": 0.9,
-                    "inferred_from": [inferred_from]
-                }
-            });
-            if let Ok(line) = serde_json::to_string(&record) {
-                self.displays.push(line);
-                quality.enrichments.push(json!({
-                    "lane_id": "capture.displays",
-                    "source": "window_snapshot_payload",
-                    "confidence": 0.9
-                }));
-            }
-        }
-    }
-
-    fn add_inferred_connector_records(&mut self, quality: &mut ExportQualityMetadata) {
-        let evidence = self.connector_evidence();
-        if self.browser.is_empty() {
-            if let Some(candidate) = evidence.iter().find(|candidate| candidate.is_browser()) {
-                if let Some(record) = inferred_connector_record(
-                    "capture.browser.inferred",
-                    "capture.browser",
-                    "browser",
-                    candidate,
-                    0.72,
-                ) {
-                    self.browser.push(record);
-                    quality
-                        .enrichments
-                        .push(candidate.enrichment("capture.browser", 0.72));
-                }
-            }
-        }
-        if self.editor.is_empty() {
-            if let Some(candidate) = evidence.iter().find(|candidate| candidate.is_editor()) {
-                if let Some(record) = inferred_connector_record(
-                    "capture.editor.inferred",
-                    "capture.editor",
-                    "editor",
-                    candidate,
-                    0.7,
-                ) {
-                    self.editor.push(record);
-                    quality
-                        .enrichments
-                        .push(candidate.enrichment("capture.editor", 0.7));
-                }
-            }
-        }
-        if self.terminal.is_empty() {
-            if let Some(candidate) = evidence.iter().find(|candidate| candidate.is_terminal()) {
-                if let Some(record) = inferred_connector_record(
-                    "capture.terminal.inferred",
-                    "capture.terminal",
-                    "terminal",
-                    candidate,
-                    0.7,
-                ) {
-                    self.terminal.push(record);
-                    quality
-                        .enrichments
-                        .push(candidate.enrichment("capture.terminal", 0.7));
-                }
-            }
-        }
-    }
-
-    fn connector_evidence(&self) -> Vec<AppEvidence> {
-        let mut evidence = Vec::new();
-        collect_app_evidence("events/windows.jsonl", &self.windows, &mut evidence);
-        collect_app_evidence("events/ax.events.jsonl", &self.ax, &mut evidence);
-        collect_app_evidence(
-            "events/sck-frame-metadata.events.jsonl",
-            &self.sck,
-            &mut evidence,
-        );
-        evidence
-    }
 }
 
 #[derive(Default)]
 struct ExportQualityMetadata {
     window_snapshot_lookup: Value,
     window_snapshot_selections: Vec<Value>,
-    enrichments: Vec<Value>,
+    window_snapshot_rejections: Vec<Value>,
 }
 
 impl ExportQualityMetadata {
@@ -729,21 +691,16 @@ impl ExportQualityMetadata {
                 extra: gap_extra([("selection", selection.clone())]),
             });
         }
-        for enrichment in &self.enrichments {
+        for rejection in &self.window_snapshot_rejections {
             records.push(KnownGapRecord {
                 schema_version: 1,
                 time: Utc::now(),
-                source_id: enrichment
-                    .get("lane_id")
-                    .and_then(Value::as_str)
-                    .unwrap_or("bundle_enrichment")
-                    .to_string(),
-                severity: "info".to_string(),
-                code: "lane_enriched_from_indirect_evidence".to_string(),
-                message: "mandatory V0 lane was populated from indirect capture evidence"
-                    .to_string(),
+                source_id: "windows".to_string(),
+                severity: "warning".to_string(),
+                code: "window_snapshot_bracket_too_stale".to_string(),
+                message: "nearest window snapshot was too far from the capture window to use as bundle evidence".to_string(),
                 blocks_ready: false,
-                extra: gap_extra([("enrichment", enrichment.clone())]),
+                extra: gap_extra([("rejection", rejection.clone())]),
             });
         }
         records
@@ -840,10 +797,6 @@ fn select_bracketing_window_snapshots(
     };
 
     let end_date = time_end.date_naive();
-    for file in files.iter().filter(|file| file.date.is_none()) {
-        scan_undated_window_snapshot_file(&file.path, time_end, &mut lookup)?;
-    }
-
     for file in files
         .iter()
         .rev()
@@ -887,37 +840,6 @@ fn window_snapshot_file_date(path: &Path) -> Option<NaiveDate> {
         return None;
     }
     NaiveDate::parse_from_str(stem, "%Y-%m-%d").ok()
-}
-
-fn scan_undated_window_snapshot_file(
-    path: &Path,
-    time_end: DateTime<Utc>,
-    lookup: &mut WindowSnapshotLookup,
-) -> CaptureCoreResult<()> {
-    lookup.metrics.files_scanned += 1;
-    let handle =
-        File::open(path).map_err(|error| CaptureCoreError::io(Some(path.to_path_buf()), error))?;
-    let mut reader = BufReader::new(handle);
-    let mut line = Vec::new();
-    loop {
-        line.clear();
-        let bytes = reader
-            .read_until(b'\n', &mut line)
-            .map_err(|error| CaptureCoreError::io(Some(path.to_path_buf()), error))?;
-        if bytes == 0 {
-            break;
-        }
-        if let Some(candidate) =
-            window_snapshot_candidate_from_line(trim_jsonl_newline(&line), &mut lookup.metrics)
-        {
-            if candidate.time <= time_end {
-                update_latest_window_snapshot(lookup, candidate);
-            } else {
-                update_nearest_window_snapshot_after(lookup, candidate);
-            }
-        }
-    }
-    Ok(())
 }
 
 fn bracketing_window_snapshots_from_tail(
@@ -1140,261 +1062,6 @@ fn trim_jsonl_newline(line: &[u8]) -> &[u8] {
     without_lf.strip_suffix(b"\r").unwrap_or(without_lf)
 }
 
-#[derive(Clone)]
-struct AppEvidence {
-    source_file: &'static str,
-    event_type: String,
-    time: Option<DateTime<Utc>>,
-    app_name: Option<String>,
-    bundle_id: Option<String>,
-    title: Option<String>,
-    window_id: Option<Value>,
-    process_id: Option<Value>,
-}
-
-impl AppEvidence {
-    fn is_browser(&self) -> bool {
-        contains_any(
-            &self.identity_text(),
-            &[
-                "com.google.chrome",
-                "org.chromium.chromium",
-                "com.apple.safari",
-                "org.mozilla.firefox",
-                "com.brave.browser",
-                "com.microsoft.edgemac",
-                "company.thebrowser.browser",
-                " google chrome",
-                " safari",
-                " firefox",
-                " chromium",
-                " brave",
-                " edge",
-                " arc",
-            ],
-        )
-    }
-
-    fn is_editor(&self) -> bool {
-        contains_any(
-            &self.identity_text(),
-            &[
-                "com.microsoft.vscode",
-                "com.apple.dt.xcode",
-                "com.todesktop.230313mzl4w4u92",
-                "dev.zed.zed",
-                "com.sublimetext",
-                "com.macromates.textmate",
-                "com.panic.nova",
-                "com.barebones.bbedit",
-                "jetbrains",
-                " visual studio code",
-                " vscode",
-                " xcode",
-                " cursor",
-                " zed",
-                " sublime",
-                " intellij",
-                " pycharm",
-                " webstorm",
-                " rustrover",
-            ],
-        )
-    }
-
-    fn is_terminal(&self) -> bool {
-        contains_any(
-            &self.identity_text(),
-            &[
-                "com.apple.terminal",
-                "com.googlecode.iterm2",
-                "dev.warp.warp-stable",
-                "io.alacritty",
-                "net.kovidgoyal.kitty",
-                "com.github.wez.wezterm",
-                "com.mitchellh.ghostty",
-                " terminal",
-                " iterm",
-                " warp",
-                " alacritty",
-                " kitty",
-                " wezterm",
-                " ghostty",
-            ],
-        )
-    }
-
-    fn identity_text(&self) -> String {
-        format!(
-            " {} {} {} ",
-            self.bundle_id.as_deref().unwrap_or_default(),
-            self.app_name.as_deref().unwrap_or_default(),
-            self.title.as_deref().unwrap_or_default()
-        )
-        .to_lowercase()
-    }
-
-    fn enrichment(&self, lane_id: &str, confidence: f32) -> Value {
-        json!({
-            "lane_id": lane_id,
-            "source": "ax_window_sck_evidence",
-            "confidence": confidence,
-            "inferred_from": [self.ref_value()]
-        })
-    }
-
-    fn ref_value(&self) -> Value {
-        json!({
-            "source_file": self.source_file,
-            "event_type": self.event_type,
-            "time": self.time.map(|time| time.to_rfc3339()),
-            "bundle_id": self.bundle_id,
-            "app_name": self.app_name,
-            "title": self.title,
-            "window_id": self.window_id
-        })
-    }
-}
-
-fn collect_app_evidence(
-    source_file: &'static str,
-    records: &[String],
-    evidence: &mut Vec<AppEvidence>,
-) {
-    for raw in records {
-        let Ok(value) = serde_json::from_str::<Value>(raw) else {
-            continue;
-        };
-        let event_type = value
-            .get("eventType")
-            .and_then(Value::as_str)
-            .unwrap_or("unknown")
-            .to_string();
-        let time = event_time(&value);
-        let payload = value.get("payload").unwrap_or(&value);
-        collect_evidence_object(
-            source_file,
-            &event_type,
-            time,
-            payload.get("target"),
-            None,
-            evidence,
-        );
-        collect_evidence_object(
-            source_file,
-            &event_type,
-            time,
-            payload.get("activeApplication"),
-            payload.get("focusedWindow"),
-            evidence,
-        );
-        collect_evidence_object(
-            source_file,
-            &event_type,
-            time,
-            payload.get("active_application"),
-            payload.get("focused_window"),
-            evidence,
-        );
-        if let Some(windows) = payload.get("windows").and_then(Value::as_array) {
-            for window in windows {
-                collect_evidence_object(
-                    source_file,
-                    &event_type,
-                    time,
-                    Some(window),
-                    None,
-                    evidence,
-                );
-            }
-        }
-    }
-}
-
-fn collect_evidence_object(
-    source_file: &'static str,
-    event_type: &str,
-    time: Option<DateTime<Utc>>,
-    app: Option<&Value>,
-    window: Option<&Value>,
-    evidence: &mut Vec<AppEvidence>,
-) {
-    let Some(app) = app else {
-        return;
-    };
-    let app_name = string_field(
-        app,
-        &["appName", "app_name", "ownerName", "owner_name", "name"],
-    );
-    let bundle_id = string_field(app, &["bundleID", "bundle_id", "bundleIdentifier"]);
-    let title = string_field(app, &["title"])
-        .or_else(|| window.and_then(|value| string_field(value, &["title"])));
-    let window_id = value_field(app, &["windowID", "window_id"])
-        .or_else(|| window.and_then(|value| value_field(value, &["windowID", "window_id"])));
-    let process_id = value_field(app, &["processID", "process_id", "appPID", "pid"]);
-    if app_name.is_none() && bundle_id.is_none() {
-        return;
-    }
-    evidence.push(AppEvidence {
-        source_file,
-        event_type: event_type.to_string(),
-        time,
-        app_name,
-        bundle_id,
-        title,
-        window_id,
-        process_id,
-    });
-}
-
-fn inferred_connector_record(
-    event_type: &str,
-    lane_id: &str,
-    connector: &str,
-    evidence: &AppEvidence,
-    confidence: f32,
-) -> Option<String> {
-    let recorded_at = evidence.time.unwrap_or_else(Utc::now);
-    let record = json!({
-        "schemaVersion": 1,
-        "eventType": event_type,
-        "recordedAt": recorded_at.to_rfc3339(),
-        "eventTimeStart": recorded_at.to_rfc3339(),
-        "eventTimeEnd": recorded_at.to_rfc3339(),
-        "laneID": lane_id,
-        "sourceRecordID": format!("inferred:{connector}:{}", recorded_at.timestamp_millis()),
-        "payload": {
-            "connector": connector,
-            "application": {
-                "app_name": evidence.app_name,
-                "bundle_id": evidence.bundle_id,
-                "process_id": evidence.process_id
-            },
-            "title": evidence.title,
-            "window_id": evidence.window_id,
-            "confidence": confidence,
-            "inferred": true,
-            "inference_method": "ax_window_sck_app_identity",
-            "inferred_from": [evidence.ref_value()]
-        }
-    });
-    serde_json::to_string(&record).ok()
-}
-
-fn contains_any(text: &str, needles: &[&str]) -> bool {
-    needles.iter().any(|needle| text.contains(needle))
-}
-
-fn string_field(value: &Value, keys: &[&str]) -> Option<String> {
-    keys.iter()
-        .find_map(|key| value.get(*key).and_then(Value::as_str))
-        .map(str::to_string)
-}
-
-fn value_field(value: &Value, keys: &[&str]) -> Option<Value> {
-    keys.iter().find_map(|key| value.get(*key).cloned())
-}
-
 fn event_time(value: &Value) -> Option<DateTime<Utc>> {
     [
         "eventTimeStart",
@@ -1485,15 +1152,18 @@ fn source_inventory_for(
             LaneSource {
                 source_id: source_id.to_string(),
                 lane_id: lane_id.to_string(),
-                status: if count > 0 {
-                    SourceStatus::Present
-                } else {
+                status: if count == 0 {
                     SourceStatus::Degraded
+                } else {
+                    SourceStatus::Present
                 },
                 required_for_v0: true,
                 record_count: count,
-                degraded_reason: (count == 0)
-                    .then(|| "mandatory V0 lane is empty in selected spool window".to_string()),
+                degraded_reason: if count == 0 {
+                    Some("mandatory V0 lane is empty in selected spool window".to_string())
+                } else {
+                    None
+                },
                 confidence: stats.max_confidence,
                 extra,
             }
@@ -1594,10 +1264,31 @@ fn known_gaps_for(
 ) -> Vec<KnownGapRecord> {
     let mut gaps = Vec::new();
     for source in &sources.sources {
+        let inferred_only = source
+            .extra
+            .get("evidence_quality")
+            .is_some_and(|quality| quality == "inferred_only")
+            && source.record_count > 0;
+        if source.status == SourceStatus::Present && inferred_only {
+            let mut extra = gap_extra([("record_count", json!(source.record_count))]);
+            extra.insert("lane_id".to_string(), json!(source.lane_id));
+            gaps.push(KnownGapRecord {
+                schema_version: 1,
+                time: Utc::now(),
+                source_id: source.source_id.clone(),
+                severity: "warning".to_string(),
+                code: "mandatory_lane_inferred_only".to_string(),
+                message: "mandatory V0 lane has records, but they are inferred from app/window evidence rather than direct connector events".to_string(),
+                blocks_ready: false,
+                extra,
+            });
+        }
         if source.status != SourceStatus::Present {
             let is_capability = source.lane_id.starts_with("capabilities/");
             let code = if is_capability {
                 "capability_proof_degraded"
+            } else if inferred_only {
+                "mandatory_lane_inferred_only"
             } else {
                 "mandatory_lane_empty"
             };
@@ -1658,12 +1349,26 @@ fn write_frame_2fps_artifacts(
         Some(frame_paths) => frame_paths,
         None => return Ok((records, gaps)),
     };
+    let frame_manifest =
+        load_frame_2fps_manifest(frame_paths.first().and_then(|path| path.parent()))?;
+    if let Some(manifest) = &frame_manifest {
+        writer.copy_file_from(
+            "media/frames-2fps/frames-2fps-manifest.jsonl",
+            &manifest.path,
+        )?;
+    }
     for (index, source_path) in frame_paths.iter().enumerate() {
         let extension = extension_lower(source_path).unwrap_or_else(|| "jpg".to_string());
         let relative_path = format!("media/frames-2fps/frame-{:06}.{extension}", index + 1);
         let byte_count = writer.copy_file_from(&relative_path, source_path)?;
-        let recorded_at = request.time_start + Duration::milliseconds(index as i64 * 500);
-        records.push(json!({
+        let manifest_record = frame_manifest
+            .as_ref()
+            .and_then(|manifest| manifest.records_by_file.get(&source_file_name(source_path)));
+        let synthetic_recorded_at = request.time_start + Duration::milliseconds(index as i64 * 500);
+        let recorded_at = manifest_record
+            .and_then(|record| parse_rfc3339(record.get("recorded_at").and_then(Value::as_str)))
+            .unwrap_or(synthetic_recorded_at);
+        let mut record = json!({
             "schema_version": 1,
             "media_id": format!("{capture_id}:frame_2fps:{:06}", index + 1),
             "capture_id": capture_id,
@@ -1683,56 +1388,119 @@ fn write_frame_2fps_artifacts(
                 "start": recorded_at.to_rfc3339(),
                 "end": recorded_at.to_rfc3339()
             },
+            "timing_source": if manifest_record.is_some() {
+                "screen_recording_decoder_manifest"
+            } else {
+                "synthetic_export_window_sample_rate"
+            },
             "debug": false,
             "original_file_name": source_file_name(source_path),
             "privacy_class": "visual_evidence",
             "retention": if request.debug_pin { "pinned_debug" } else { "ephemeral" }
-        }));
+        });
+        if let Some(manifest_record) = manifest_record {
+            enrich_frame_2fps_record_from_manifest(&mut record, manifest_record);
+        }
+        records.push(record);
     }
     Ok((records, gaps))
 }
 
-fn write_debug_video_artifact(
-    writer: &AtomicBundleWriter,
-    request: &ExportRequest,
-    capture_id: &str,
-) -> CaptureCoreResult<Vec<Value>> {
-    let mut records = Vec::new();
-    if let Some(video_path) = &request.debug_video_path {
-        if !video_path.is_file() {
-            return Err(CaptureCoreError::InvalidState(format!(
-                "--debug-video {} is not a file",
-                video_path.display()
-            )));
+struct Frame2fpsManifest {
+    path: PathBuf,
+    records_by_file: BTreeMap<String, Value>,
+}
+
+fn load_frame_2fps_manifest(
+    frame_dir: Option<&Path>,
+) -> CaptureCoreResult<Option<Frame2fpsManifest>> {
+    let Some(frame_dir) = frame_dir else {
+        return Ok(None);
+    };
+    let path = [
+        "frames-2fps-manifest.jsonl",
+        "frame-manifest.jsonl",
+        "manifest.jsonl",
+    ]
+    .iter()
+    .map(|name| frame_dir.join(name))
+    .find(|path| path.is_file());
+    let Some(path) = path else {
+        return Ok(None);
+    };
+
+    let file =
+        File::open(&path).map_err(|error| CaptureCoreError::io(Some(path.clone()), error))?;
+    let reader = BufReader::new(file);
+    let mut records_by_file = BTreeMap::new();
+    for (line_index, line) in reader.lines().enumerate() {
+        let line = line.map_err(|error| CaptureCoreError::io(Some(path.clone()), error))?;
+        let trimmed = line.trim();
+        if trimmed.is_empty() {
+            continue;
         }
-        let extension = extension_lower(video_path).unwrap_or_else(|| "bin".to_string());
-        let relative_path = format!("media/debug/screen-recording.{extension}");
-        let byte_count = writer.copy_file_from(&relative_path, video_path)?;
-        records.push(json!({
-            "schema_version": 1,
-            "media_id": format!("{capture_id}:debug_video:000001"),
-            "capture_id": capture_id,
-            "kind": "debug_screen_recording",
-            "source": "capture_bundle_debug_visuals",
-            "path": relative_path.clone(),
-            "uri": relative_path,
-            "status": "available",
-            "state": "available",
-            "storage_backend": "bundle_file",
-            "content_type": content_type_for(video_path),
-            "byte_count": byte_count,
-            "time_range": {
-                "start": request.time_start.to_rfc3339(),
-                "end": request.time_end.to_rfc3339()
-            },
-            "debug": true,
-            "original_file_name": source_file_name(video_path),
-            "privacy_class": "debug_visual_evidence",
-            "retention": if request.debug_pin { "pinned_debug" } else { "ephemeral" }
-        }));
+        let value: Value = serde_json::from_str(trimmed).map_err(|error| {
+            CaptureCoreError::InvalidState(format!(
+                "invalid 2fps frame manifest JSON at {}:{}: {error}",
+                path.display(),
+                line_index + 1
+            ))
+        })?;
+        let Some(file_name) = frame_manifest_file_name(&value) else {
+            return Err(CaptureCoreError::InvalidState(format!(
+                "2fps frame manifest record at {}:{} lacks file_name or path",
+                path.display(),
+                line_index + 1
+            )));
+        };
+        records_by_file.insert(file_name, value);
     }
 
-    Ok(records)
+    Ok(Some(Frame2fpsManifest {
+        path,
+        records_by_file,
+    }))
+}
+
+fn frame_manifest_file_name(value: &Value) -> Option<String> {
+    if let Some(file_name) = value.get("file_name").and_then(Value::as_str) {
+        return Some(file_name.to_string());
+    }
+    value
+        .get("path")
+        .and_then(Value::as_str)
+        .and_then(|path| Path::new(path).file_name())
+        .and_then(|name| name.to_str())
+        .map(str::to_string)
+}
+
+fn enrich_frame_2fps_record_from_manifest(record: &mut Value, manifest_record: &Value) {
+    let Some(object) = record.as_object_mut() else {
+        return;
+    };
+    for key in [
+        "requested_at",
+        "requested_media_time_seconds",
+        "actual_media_time_seconds",
+        "requested_to_actual_delta_milliseconds",
+        "requested_time_tolerance_before_seconds",
+        "requested_time_tolerance_after_seconds",
+        "media_zero_time",
+        "decoder_source",
+        "decoder_implementation",
+    ] {
+        if let Some(value) = manifest_record.get(key).cloned() {
+            object.insert(key.to_string(), value);
+        }
+    }
+    object.insert(
+        "frame_timing_manifest_ref".to_string(),
+        json!("media/frames-2fps/frames-2fps-manifest.jsonl"),
+    );
+    object.insert(
+        "timing_precision".to_string(),
+        json!("actual_decoded_media_time"),
+    );
 }
 
 fn collect_frame_2fps_paths(
@@ -2078,7 +1846,7 @@ fn time_alignment_for(
     routed: &RoutedSpool,
     spool_report: &SpoolReadReport,
     source_envelope_count: usize,
-    frame_2fps_count: usize,
+    frame_2fps_records: &[Value],
 ) -> Value {
     let mut source_clocks = BTreeSet::new();
     let mut summaries = Vec::new();
@@ -2114,17 +1882,30 @@ fn time_alignment_for(
             "last_time": null
         }));
     }
-    if frame_2fps_count > 0 {
+    if !frame_2fps_records.is_empty() {
+        let frame_2fps_count = frame_2fps_records.len();
+        let frame_times = frame_2fps_records
+            .iter()
+            .filter_map(|record| parse_rfc3339(record.get("recorded_at").and_then(Value::as_str)))
+            .collect::<Vec<_>>();
+        let first_time = frame_times.iter().min().copied();
+        let last_time = frame_times.iter().max().copied();
+        let timing_source = frame_2fps_records
+            .iter()
+            .filter_map(|record| record.get("timing_source").and_then(Value::as_str))
+            .next()
+            .unwrap_or("unknown");
         summaries.push(json!({
             "source_id": "frame_2fps",
             "lane_id": "capture.active_window_frames",
             "record_count": frame_2fps_count,
             "timed_record_count": frame_2fps_count,
-            "first_time": request.time_start.to_rfc3339(),
-            "last_time": request.time_end.to_rfc3339(),
+            "first_time": first_time.unwrap_or(request.time_start).to_rfc3339(),
+            "last_time": last_time.unwrap_or(request.time_end).to_rfc3339(),
             "clock_id": "media.frame_2fps.recorded_at",
             "sample_rate_fps": 2,
-            "media_kind": "frame_2fps"
+            "media_kind": "frame_2fps",
+            "timing_source": timing_source
         }));
         source_clocks.insert("media.frame_2fps.recorded_at");
     }

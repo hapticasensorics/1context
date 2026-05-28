@@ -29,9 +29,9 @@ The shell layer remains only where it is the right tool: macOS packaging, signin
 
 - [x] Add isolated `release/runner` Node package with TypeScript, tests, and typed dependencies.
 - [x] Add `.gitignore` coverage so runner dependencies/build output do not pollute git.
-- [x] Implement typed manifest loader, validator, environment export, appcast checks, asset manifest writing, clean-tree checks, and fixture proof generation.
+- [x] Implement typed manifest loader, validator, environment export, appcast checks, asset manifest writing, and clean-tree checks.
   Proof: `npm --prefix release/runner run build`, `npm --prefix release/runner test`, `./scripts/test-release-train.sh`.
-- [x] Add runner unit tests for manifest policy, appcast policy, asset manifests, fixture proof results, and clean-tree failure.
+- [x] Add runner unit tests for manifest policy, appcast policy, asset manifests, real proof matrix scope, and clean-tree failure.
   Proof: `npm --prefix release/runner test`.
 
 ### 3. Phase Orchestration

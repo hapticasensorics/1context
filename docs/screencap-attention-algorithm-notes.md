@@ -111,10 +111,11 @@ human-feedback ranker
 
 ## 4. Current Fixture
 
-The first real fixture lives at:
+Generated capture samples now live outside the active docs tree. Use an
+external sample pack when replaying this design note:
 
 ```text
-docs/assets/attention-capture-mockup/attention-debug-20260524-215739/
+<sample-pack>/
 ```
 
 Important files:
@@ -1204,10 +1205,10 @@ export type RawBufferAuditItem = {
 
 ## 14. Mockup Requirements
 
-The mockup should become a pure renderer for:
+The mockup should become a pure renderer for a generated filter output:
 
 ```text
-docs/assets/attention-capture-mockup/attention-filter-output.json
+<sample-pack>/attention-filter-output.json
 ```
 
 Required tabs:
@@ -1318,10 +1319,10 @@ captures what mattered?
 
 ### Current Fixture
 
-Use:
+Use an external sample pack with a representative one-minute capture:
 
 ```text
-attention-debug-20260524-215739
+<sample-pack-id>
 ```
 
 Expected saves:
@@ -1515,8 +1516,8 @@ agent packet says setup state
 Build the renderer first.
 
 ```text
-docs/assets/attention-capture-mockup/attention-filter-output.json
-docs/attention-capture-mockup.html
+<sample-pack>/attention-filter-output.json
+<generated-output>/attention-output-mockup.html
 ```
 
 Do not hand-maintain the mockup. The mockup should render from the same JSON

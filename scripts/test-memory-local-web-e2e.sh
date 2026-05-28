@@ -17,7 +17,7 @@ usage() {
 Usage: scripts/test-memory-local-web-e2e.sh
 
 End-to-end dev harness for the local memory viewer:
-  1. starts/provisions/migrates the dev memory DB,
+  1. starts/provisions the dev memory DB with the current schema,
   2. runs one bounded onecontext-memoryd ingest tick to write sample local adapter data,
   3. optionally builds/installs/opens 1Context Dev when ONECONTEXT_MEMORY_E2E_BUILD_APP=1,
   4. opens the local /memory viewer.
@@ -54,15 +54,14 @@ cd "$ROOT"
 echo "==> Starting dev memory DB"
 "$ROOT/scripts/memory-db-dev.sh" start
 "$ROOT/scripts/memory-db-dev.sh" provision
-"$ROOT/scripts/memory-db-dev.sh" migrate
-DATABASE_URL="$("$ROOT/scripts/memory-db-dev.sh" url)"
+MEMORY_DB_URL="$("$ROOT/scripts/memory-db-dev.sh" url)"
 
 echo "==> Building onecontext-memoryd"
 cargo build -q -p onecontext-memory-db --bin onecontext-memoryd
 
 echo "==> Writing bounded sample data through onecontext-memoryd"
 mkdir -p "$CONTEXT_ENGINE_ROOT" "$RUN_DIR"
-ONECONTEXT_MEMORY_DB_URL="$DATABASE_URL" \
+ONECONTEXT_MEMORY_DB_URL="$MEMORY_DB_URL" \
   "$ROOT/target/debug/onecontext-memoryd" daemon \
   --once \
   --context-engine-root "$CONTEXT_ENGINE_ROOT" \

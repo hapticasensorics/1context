@@ -3,8 +3,6 @@ use std::path::PathBuf;
 use anyhow::{bail, Result};
 use onecontext_attention_runner::{run_attention_filter, run_attention_filter_on_bundle};
 
-const DEFAULT_SESSION_PATH: &str = "docs/assets/attention-capture-mockup/attention-debug-20260524-215739/attention-dashboard-session.json";
-
 fn main() {
     if let Err(error) = real_main() {
         eprintln!("{error:?}");
@@ -21,8 +19,10 @@ fn real_main() -> Result<()> {
 
     let summary = if let Some(bundle) = &args.bundle {
         run_attention_filter_on_bundle(bundle, args.output.as_deref())?
+    } else if let Some(session) = &args.session {
+        run_attention_filter(session, args.output.as_deref())?
     } else {
-        run_attention_filter(&args.session, args.output.as_deref())?
+        bail!("use --session or --bundle");
     };
     println!(
         "wrote {} ({} candidates, {} saved states)",
@@ -33,15 +33,12 @@ fn real_main() -> Result<()> {
     if let Some(session_path) = summary.dashboard_session_path {
         println!("dashboard session {}", session_path.display());
     }
-    if let Some(report_path) = summary.compatibility_report_path {
-        println!("compatibility report {}", report_path.display());
-    }
     Ok(())
 }
 
 #[derive(Debug)]
 struct Args {
-    session: PathBuf,
+    session: Option<PathBuf>,
     bundle: Option<PathBuf>,
     output: Option<PathBuf>,
     help: bool,
@@ -82,7 +79,7 @@ impl Args {
         }
 
         Ok(Self {
-            session: session.unwrap_or_else(default_session_path),
+            session,
             bundle,
             output,
             help,
@@ -90,20 +87,8 @@ impl Args {
     }
 }
 
-fn default_session_path() -> PathBuf {
-    let cwd_path = PathBuf::from(DEFAULT_SESSION_PATH);
-    if cwd_path.exists() {
-        return cwd_path;
-    }
-
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .join(DEFAULT_SESSION_PATH)
-}
-
 fn print_usage() {
     println!(
-        "usage: onecontext-attention-runner [--session <attention-dashboard-session.json> | --bundle <READY capture bundle>] [--out <attention-filter-output.json>]\n\
-         default session: {DEFAULT_SESSION_PATH}"
+        "usage: onecontext-attention-runner [--session <attention-dashboard-session.json> | --bundle <READY capture bundle>] [--out <attention-filter-output.json>]"
     );
 }

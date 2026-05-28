@@ -78,7 +78,7 @@ fn parallel_page_create_processes_preserve_registry_records() {
 
 fn seed_runtime(root: &Path) {
     fs::create_dir_all(root.join("user-wiki/templates/pages")).unwrap();
-    fs::create_dir_all(root.join("user-wiki/templates/talk")).unwrap();
+    fs::create_dir_all(root.join("user-wiki/templates/talk/curators")).unwrap();
     fs::write(
         root.join("user-wiki/wiki.toml"),
         r#"
@@ -108,6 +108,7 @@ family_title = "Topics"
 type = "topic-index"
 template = "pages/context-page.md"
 talk_conventions_template = "talk/conventions.md"
+talk_curator_template = "talk/curators/topics.md"
 "#,
     )
     .unwrap();
@@ -119,6 +120,21 @@ talk_conventions_template = "talk/conventions.md"
     fs::write(
         root.join("user-wiki/templates/talk/conventions.md"),
         "# {{ title }} Talk Conventions\n",
+    )
+    .unwrap();
+    fs::write(
+        root.join("user-wiki/templates/talk/curators/topics.md"),
+        "# {{ title }} Curator\n",
+    )
+    .unwrap();
+    fs::write(
+        root.join("user-wiki/templates/talk/curators/your-context.md"),
+        "# {{ title }} Curator\n",
+    )
+    .unwrap();
+    fs::write(
+        root.join("user-wiki/templates/talk/entry.md"),
+        "---\nid: \"{{ entry_id }}\"\nkind: \"{{ kind }}\"\nauthor: \"{{ author_id }}\"\ncreated: \"{{ created_at }}\"\ntalk_for: \"{{ talk_for_uri }}\"\nstate: open\n---\n\n## {{ title }}\n\n{{ body }}\n",
     )
     .unwrap();
 }

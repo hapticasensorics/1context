@@ -389,7 +389,7 @@ pub struct StorageStatus {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub url_source: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub migration_state: Option<String>,
+    pub schema_state: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]

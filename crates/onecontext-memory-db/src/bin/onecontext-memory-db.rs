@@ -3,8 +3,8 @@ use std::path::PathBuf;
 use onecontext_memory_db::{
     default_context_for_source, default_home_dir, ingest_claude_incremental,
     ingest_codex_incremental, ingest_imessage_incremental, probe_local_sources,
-    sample_claude_objects, sample_codex_objects, sample_imessage_objects, AdapterSampleOptions,
-    IncrementalIngestOptions, LocalIngestCursors, SessionIngestProfile,
+    resolve_database_url, sample_claude_objects, sample_codex_objects, sample_imessage_objects,
+    AdapterSampleOptions, IncrementalIngestOptions, LocalIngestCursors, SessionIngestProfile,
 };
 use serde_json::json;
 
@@ -110,21 +110,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }))?
             );
         }
-        "migrate" => {
-            let database_url = database_url
-                .or_else(|| std::env::var("DATABASE_URL").ok())
-                .unwrap_or_else(|| {
-                    eprintln!("missing --database-url URL or DATABASE_URL");
-                    std::process::exit(2);
-                });
-            let report = onecontext_memory_db::migrations::apply_bundled_migrations(&database_url)?;
+        "bootstrap-schema" => {
+            let database_url = resolve_database_url(database_url.as_deref()).unwrap_or_else(|| {
+                eprintln!("missing --database-url URL or ONECONTEXT_MEMORY_DB_URL");
+                std::process::exit(2);
+            });
+            let report = onecontext_memory_db::bootstrap_current_schema(&database_url.url)?;
             println!(
                 "{}",
                 serde_json::to_string_pretty(&json!({
-                    "applied_count": report.applied.len(),
-                    "skipped_count": report.skipped.len(),
-                    "applied": report.applied,
-                    "skipped": report.skipped,
+                    "created": report.created,
+                    "validated_relation_count": report.validated_relations.len(),
+                    "validated_relations": report.validated_relations,
                 }))?
             );
         }
@@ -139,7 +136,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 fn print_usage() {
     eprintln!(
-        "usage:\n  onecontext-memory-db probe [--home PATH]\n  onecontext-memory-db sample --source codex|claude|imessage [--limit N] [--profile hot_memory|compact_audit|forensic] [--include-sensitive-text] [--home PATH]\n  onecontext-memory-db ingest --source codex|claude|imessage --cursor-file PATH [--max-events N] [--max-lines N] [--profile hot_memory|compact_audit|forensic] [--include-sensitive-text] [--home PATH]\n  onecontext-memory-db migrate [--database-url URL]\n\nlegacy profile aliases accepted: messages-only, messages-and-compact-tools"
+        "usage:\n  onecontext-memory-db probe [--home PATH]\n  onecontext-memory-db sample --source codex|claude|imessage [--limit N] [--profile hot_memory|compact_audit|forensic] [--include-sensitive-text] [--home PATH]\n  onecontext-memory-db ingest --source codex|claude|imessage --cursor-file PATH [--max-events N] [--max-lines N] [--profile hot_memory|compact_audit|forensic] [--include-sensitive-text] [--home PATH]\n  onecontext-memory-db bootstrap-schema [--database-url URL]"
     );
 }
 
@@ -167,13 +164,8 @@ fn save_cursors(
 
 fn parse_session_profile(value: &str) -> Result<SessionIngestProfile, Box<dyn std::error::Error>> {
     match value {
-        "hot_memory" | "hot-memory" | "messages-only" | "messages_only" => {
-            Ok(SessionIngestProfile::HotMemory)
-        }
-        "compact_audit"
-        | "compact-audit"
-        | "messages-and-compact-tools"
-        | "messages_and_compact_tools" => Ok(SessionIngestProfile::CompactAudit),
+        "hot_memory" | "hot-memory" => Ok(SessionIngestProfile::HotMemory),
+        "compact_audit" | "compact-audit" => Ok(SessionIngestProfile::CompactAudit),
         "forensic" => Ok(SessionIngestProfile::Forensic),
         other => Err(format!(
             "unknown --profile {other:?}; expected hot_memory, compact_audit, or forensic"

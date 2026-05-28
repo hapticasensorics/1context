@@ -302,5 +302,6 @@ The current dogfood harness treats the gateway split as an acceptance boundary:
 - Role and list route grants are agent-visible; page-mailbox delivery is
   durable, while page-watch notification routing remains deferred.
 
-Evidence: `scripts/test-agent-mail-dogfood.mjs` and
-`test-results/agent-mail-dogfood-20260525T063840Z/summary.json`.
+Historical dogfood evidence was retired with the MJS harness. Keep this
+boundary covered through typed wiki core, daemon, Swift bridge, or Playwright
+tests.

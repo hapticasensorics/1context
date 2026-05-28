@@ -1,3 +1,4 @@
+use chrono::DateTime;
 use serde_json::Value;
 
 #[derive(Debug, Clone)]
@@ -62,6 +63,9 @@ pub fn parse_capture_event(
         .or_else(|| timestamp_path(&value, &["payload", "ended_at"]))
         .or_else(|| timestamp_from_value(&value, "recordedAt"))
         .or(start_epoch_ms);
+    if is_before_base_epoch(start_epoch_ms, base_epoch_ms) {
+        return None;
+    }
     let t_ms = relative_ms(start_epoch_ms, base_epoch_ms);
     let duration_ms = match (start_epoch_ms, end_epoch_ms) {
         (Some(start), Some(end)) if end > start => Some((end - start) as u64),
@@ -115,6 +119,9 @@ pub fn timestamp_from_value(value: &Value, key: &str) -> Option<i64> {
 }
 
 pub fn parse_rfc3339_millis(value: &str) -> Option<i64> {
+    if let Ok(time) = DateTime::parse_from_rfc3339(value) {
+        return Some(time.timestamp_millis());
+    }
     let value = value.strip_suffix('Z').unwrap_or(value);
     let (date, time) = value.split_once('T')?;
     let mut date_parts = date.split('-');
@@ -146,6 +153,16 @@ pub fn parse_rfc3339_millis(value: &str) -> Option<i64> {
 }
 
 fn lane_for_event_type(event_type: &str) -> Option<&'static str> {
+    if event_type.starts_with("capture.browser") {
+        return Some("browser");
+    }
+    if event_type.starts_with("capture.terminal") {
+        return Some("terminal");
+    }
+    if event_type.starts_with("capture.editor") {
+        return Some("editor");
+    }
+
     match event_type {
         "capture.ux.keyboard_activity.v1"
         | "capture.ux.shortcut.v1"
@@ -163,6 +180,10 @@ fn lane_for_event_type(event_type: &str) -> Option<&'static str> {
         "attention.derived.visual_frame_change.v1" => Some("visual-frame-changes"),
         _ => None,
     }
+}
+
+fn is_before_base_epoch(timestamp_epoch_ms: Option<i64>, base_epoch_ms: Option<i64>) -> bool {
+    matches!((timestamp_epoch_ms, base_epoch_ms), (Some(timestamp), Some(base)) if timestamp < base)
 }
 
 fn compact_kind(event_type: &str) -> String {
@@ -219,6 +240,16 @@ fn duration_from_payload(event_type: &str, value: &Value) -> Option<u64> {
 }
 
 fn title_for_event(event_type: &str, value: &Value) -> String {
+    if event_type.starts_with("capture.browser") {
+        return format!("browser: {}", app_label(value));
+    }
+    if event_type.starts_with("capture.terminal") {
+        return format!("terminal: {}", app_label(value));
+    }
+    if event_type.starts_with("capture.editor") {
+        return format!("editor: {}", app_label(value));
+    }
+
     match event_type {
         "capture.ux.keyboard_activity.v1" => {
             let keys = number_path(value, &["payload", "keyboard_activity", "key_down_count"])
@@ -311,22 +342,56 @@ fn tooltip_for_event(
     }
     if let Some(app) = string_path(value, &["payload", "activeApplication", "appName"])
         .or_else(|| string_path(value, &["payload", "target", "appName"]))
+        .or_else(|| string_path(value, &["payload", "application", "app_name"]))
+        .or_else(|| string_path(value, &["payload", "application", "appName"]))
+        .or_else(|| {
+            string_path(
+                value,
+                &["payload", "focusedContext", "activeApplication", "appName"],
+            )
+        })
     {
         lines.push(format!("app: {app}"));
     }
     if let Some(pid) = number_path(value, &["payload", "activeApplication", "processID"])
         .or_else(|| number_path(value, &["payload", "target", "appPID"]))
+        .or_else(|| number_path(value, &["payload", "application", "process_id"]))
+        .or_else(|| {
+            number_path(
+                value,
+                &[
+                    "payload",
+                    "focusedContext",
+                    "activeApplication",
+                    "processID",
+                ],
+            )
+        })
         .or_else(|| number_path(value, &["payload", "focusedApplicationProcessID"]))
     {
         lines.push(format!("pid: {:.0}", pid));
     }
     if let Some(bundle_id) = string_path(value, &["payload", "activeApplication", "bundleID"])
         .or_else(|| string_path(value, &["payload", "target", "bundleID"]))
+        .or_else(|| string_path(value, &["payload", "application", "bundle_id"]))
+        .or_else(|| {
+            string_path(
+                value,
+                &["payload", "focusedContext", "activeApplication", "bundleID"],
+            )
+        })
     {
         lines.push(format!("bundle: {bundle_id}"));
     }
     if let Some(title) = string_path(value, &["payload", "focusedWindow", "title"])
         .or_else(|| string_path(value, &["payload", "target", "title"]))
+        .or_else(|| string_path(value, &["payload", "title"]))
+        .or_else(|| {
+            string_path(
+                value,
+                &["payload", "focusedContext", "focusedWindow", "title"],
+            )
+        })
     {
         lines.push(format!("window: {title}"));
     }
@@ -373,6 +438,14 @@ fn tooltip_for_event(
 fn app_label(value: &Value) -> String {
     string_path(value, &["payload", "activeApplication", "appName"])
         .or_else(|| string_path(value, &["payload", "target", "appName"]))
+        .or_else(|| string_path(value, &["payload", "application", "app_name"]))
+        .or_else(|| string_path(value, &["payload", "application", "appName"]))
+        .or_else(|| {
+            string_path(
+                value,
+                &["payload", "focusedContext", "activeApplication", "appName"],
+            )
+        })
         .unwrap_or("focus")
         .to_string()
 }
@@ -513,6 +586,21 @@ mod tests {
                 "visual-frame-changes",
                 "visual change: full 0.24, top 0.31",
             ),
+            (
+                r#"{"eventType":"capture.browser.navigation","payload":{"application":{"app_name":"Google Chrome"}},"recordedAt":"2026-05-25T00:00:00.000Z"}"#,
+                "browser",
+                "browser: Google Chrome",
+            ),
+            (
+                r#"{"eventType":"capture.editor.buffer_snapshot","payload":{"application":{"app_name":"Code"}},"recordedAt":"2026-05-25T00:00:00.000Z"}"#,
+                "editor",
+                "editor: Code",
+            ),
+            (
+                r#"{"eventType":"capture.terminal.command","payload":{"application":{"app_name":"Terminal"}},"recordedAt":"2026-05-25T00:00:00.000Z"}"#,
+                "terminal",
+                "terminal: Terminal",
+            ),
         ];
 
         for (line, expected_lane, expected_title) in cases {
@@ -532,5 +620,26 @@ mod tests {
         assert!(event.tooltip.contains("current pid: 19780"));
         assert!(event.tooltip.contains("trigger: pointer"));
         assert!(event.tooltip.contains("confidence: high"));
+    }
+
+    #[test]
+    fn ignores_events_before_timeline_base() {
+        let base_epoch_ms = parse_rfc3339_millis("2026-05-25T00:00:01.000Z").expect("base epoch");
+        let stale = parse_capture_event(
+            r#"{"eventType":"capture.browser.navigation","payload":{"application":{"app_name":"Chrome"}},"recordedAt":"2026-05-25T00:00:00.000Z"}"#,
+            1,
+            Some(base_epoch_ms),
+            "browser.events.jsonl",
+        );
+        let current = parse_capture_event(
+            r#"{"eventType":"capture.browser.navigation","payload":{"application":{"app_name":"Chrome"}},"recordedAt":"2026-05-25T00:00:02.000Z"}"#,
+            2,
+            Some(base_epoch_ms),
+            "browser.events.jsonl",
+        )
+        .expect("current event");
+
+        assert!(stale.is_none());
+        assert_eq!(current.event.t_ms, 1_000);
     }
 }

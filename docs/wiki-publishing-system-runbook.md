@@ -28,16 +28,8 @@ cd memory-core
 uv run --with pytest pytest tests/test_wiki_core_client.py
 ```
 
-Dogfood harness:
-
-```bash
-node scripts/test-wiki-core-dogfood.mjs
-```
-
-The dogfood harness exercises a disposable wiki fixture through create, edit,
-asset, talk, publish, browser-visible route checks, delete, and restore flows.
-Mail transport has its own proof harness:
-`node scripts/test-agent-mail-dogfood.mjs --build`.
+Current contract coverage should live in Rust, Swift, or checked-in Playwright
+tests. The old wiki and mail dogfood runners were retired during cleanup.
 
 ## Create A Runtime Fixture
 

@@ -2,6 +2,7 @@ use eframe::egui;
 
 use crate::{
     fixture::DashboardFixture,
+    media::ImageAssetCache,
     review::ReviewState,
     schema::{AttentionFilterOutput, RawBufferItem, SavedAttentionState},
 };
@@ -16,7 +17,9 @@ use super::{
 
 pub fn decision_panel(
     ui: &mut egui::Ui,
+    ctx: &egui::Context,
     fixture: &DashboardFixture,
+    image_assets: &mut ImageAssetCache,
     current_time_ms: u64,
     selected_candidate_id: Option<&str>,
     selected_saved_state_id: Option<&str>,
@@ -30,6 +33,19 @@ pub fn decision_panel(
             selected_candidate_id,
             selected_saved_state_id,
         );
+
+        ui.separator();
+        egui::CollapsingHeader::new("Minute Visual Output")
+            .default_open(true)
+            .show(ui, |ui| {
+                super::saved_states::render_minute_visual_output(
+                    ui,
+                    ctx,
+                    fixture,
+                    image_assets,
+                    selected_saved_state_id,
+                );
+            });
 
         ui.separator();
         egui::CollapsingHeader::new("Current Decision")
@@ -205,7 +221,7 @@ fn render_current_decision(
 
     if nearest_saved.is_none() && nearest_raw.is_none() {
         ui.label("No algorithm output is available for this time yet.");
-        ui.small("The placeholder fixture still renders, but there is no saved or dropped candidate to inspect.");
+        ui.small("No saved or dropped candidate is available to inspect.");
         return;
     }
 

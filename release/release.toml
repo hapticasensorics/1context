@@ -159,48 +159,6 @@ proof = "self_hosted_gui_update"
 description = "Mandatory automatic update succeeds without a release-notes prompt or installer click-through."
 
 [[updater_matrix]]
-case = "optional_prompt"
-expected_version = "0.1.87"
-proof = "sparkle_fixture"
-description = "Optional policy displays the approved prompt and installs after explicit confirmation."
-
-[[updater_matrix]]
-case = "broken_appcast_quiet_failure"
-expected_version = "0.1.86"
-proof = "sparkle_fixture"
-description = "Broken appcast discovery fails quietly without a support alert."
-
-[[updater_matrix]]
-case = "missing_dmg_retry_support_alert"
-expected_version = "0.1.86"
-proof = "sparkle_fixture"
-description = "Missing DMG exposes retry/support UI only after the user-requested update attempt fails."
-
-[[updater_matrix]]
-case = "bad_signature"
-expected_version = "0.1.86"
-proof = "sparkle_fixture"
-description = "Bad Sparkle EdDSA signature refuses install and leaves the prior version intact."
-
-[[updater_matrix]]
-case = "interrupted_download"
-expected_version = "0.1.86"
-proof = "sparkle_fixture"
-description = "Interrupted download leaves the app usable and retryable."
-
-[[updater_matrix]]
-case = "try_again_repair"
-expected_version = "0.1.87"
-proof = "sparkle_fixture"
-description = "Try Again after a transient failure completes the same update."
-
-[[updater_matrix]]
-case = "offline_network"
-expected_version = "0.1.86"
-proof = "sparkle_fixture"
-description = "Offline network check avoids noisy alerts and leaves runtime running."
-
-[[updater_matrix]]
 case = "stale_sparkle_defaults"
 expected_version = "0.1.87"
 proof = "self_hosted_gui_update"

@@ -1,7 +1,7 @@
 //! 1Context memory database contract.
 //!
 //! This crate is intentionally small: it owns the object envelope and the
-//! migration bundle before live capture adapters are wired up.
+//! current database schema bootstrap before live capture adapters are wired up.
 
 pub mod agent_session_emitter;
 pub mod agent_session_ir;
@@ -13,11 +13,11 @@ pub mod envelope;
 pub mod hydrate;
 pub mod ingest_sources;
 pub mod local_adapters;
-pub mod migrations;
 pub mod projections;
 pub mod protocol;
 pub mod query_density;
 pub mod read_viewport;
+pub mod schema;
 pub mod search;
 pub mod semantic_observation;
 pub mod source_connector;
@@ -39,9 +39,8 @@ pub use agent_session_ir::{
     AgentSessionIr, AgentSource, AgentTurnIr, AgentTurnStatus, RawEvidenceRef,
 };
 pub use db::{
-    migration_state_with_client, redact_database_url, resolve_database_url, AppliedMigrationState,
-    DatabaseUrl, DbError, MemoryDatabase, MigrationState, DATABASE_URL_ENV,
-    FALLBACK_DATABASE_URL_ENV, LEGACY_DATABASE_URL_ENV,
+    redact_database_url, resolve_database_url, DatabaseUrl, DbError, MemoryDatabase,
+    DATABASE_URL_ENV,
 };
 pub use envelope::{BlobEnvelope, CaptureEnvelope, EnvelopeValidationError};
 pub use ingest_sources::{ingest_sources_with_client, IngestSourcesError};
@@ -53,7 +52,6 @@ pub use local_adapters::{
     IncrementalIngestOptions, IncrementalIngestReport, LocalIngestCursors, SessionIngestProfile,
     SqliteIngestCursor,
 };
-pub use migrations::{migration_by_name, migration_sql_bundle, SqlMigration, MIGRATIONS};
 pub use projections::{
     list_timeline_projections, query_projection_items, ListTimelineProjectionsRequest,
     ListTimelineProjectionsResponse, QueryProjectionItemsRequest, QueryProjectionItemsResponse,
@@ -73,6 +71,11 @@ pub use protocol::{
     SearchSemanticResponse, SearchTextRequest, SearchTextResponse, SourceRecordIdentity,
     SourceRecordReceipt, StatusRequest, StatusResponse, StorageStatus, SubscribeRequest,
     SubscribeResponse, WriteObjectsRequest, WriteObjectsResponse,
+};
+pub use schema::{
+    bootstrap_current_schema, bootstrap_current_schema_with_client, current_schema_sql,
+    validate_current_schema_with_client, CurrentSchemaBootstrapReport, CurrentSchemaError,
+    CurrentSchemaStatus, CURRENT_SCHEMA_SQL, REQUIRED_CURRENT_RELATIONS,
 };
 pub use semantic_observation::{
     canonicalize_text_spans, detect_scroll_session, normalize_text_span, score_salience,

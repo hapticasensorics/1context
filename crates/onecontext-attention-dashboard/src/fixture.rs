@@ -67,6 +67,36 @@ impl DashboardFixture {
         }
     }
 
+    pub fn resolve_visual_asset(&self, path: impl AsRef<Path>) -> PathBuf {
+        let path = path.as_ref();
+        if path.is_absolute() {
+            return path.to_path_buf();
+        }
+
+        if let Some(candidate) = self.resolve_frame_cache_visual_asset(path) {
+            return candidate;
+        }
+
+        let fixture_candidate = self.fixture_root.join(path);
+        if fixture_candidate.exists() {
+            return fixture_candidate;
+        }
+
+        self.session_dir.join(path)
+    }
+
+    fn resolve_frame_cache_visual_asset(&self, path: &Path) -> Option<PathBuf> {
+        let file_name = path.file_name()?;
+        let path_text = path.to_string_lossy();
+        if !path_text.contains("frames-2fps") {
+            return None;
+        }
+        let cache = self.session.media.frame_cache.as_ref()?;
+        let root = self.resolve_fixture_asset(&cache.root);
+        let candidate = root.join(file_name);
+        candidate.exists().then_some(candidate)
+    }
+
     pub fn review_labels_path(&self) -> PathBuf {
         self.resolve(&self.session.review.labels_ref)
     }

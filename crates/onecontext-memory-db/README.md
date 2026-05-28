@@ -3,7 +3,7 @@
 Rust contract crate for the 1Context temporal object store.
 
 This crate intentionally starts below the live capture sources. It defines the
-shared `CaptureEnvelope` and carries versioned Postgres/Timescale migrations so
+shared `CaptureEnvelope` and carries the current Postgres/Timescale schema so
 screen capture, Codex/Claude logs, terminal output, files, browser events,
 iMessages, and future agent outputs can wire into one timeline model as they
 come online.
@@ -17,7 +17,7 @@ docs/memory-db-design-spec.md
 V0 crate surface:
 
 ```rust
-use onecontext_memory_db::{CaptureEnvelope, MIGRATIONS, probe_local_sources};
+use onecontext_memory_db::{current_schema_sql, CaptureEnvelope, probe_local_sources};
 ```
 
 The crate also ships the first local source adapter CLI. It does not require a
@@ -43,9 +43,7 @@ agent-session profile in `docs/coding-agent-ingest-spec.md`: user/assistant
 messages stay on the hot path, while full tool calls/results are intentionally
 skipped. Use `--profile compact_audit` for compact tool summaries in
 viewer/debug paths, and reserve `--profile forensic` for explicit investigation
-flows as the compiler grows raw evidence/blob preservation. The old
-`messages-only` and `messages-and-compact-tools` CLI names remain accepted as
-compatibility aliases, but they are not the primary surface.
+flows as the compiler grows raw evidence/blob preservation.
 
 `onecontext-memoryd` is the daemon binary. In the macOS app it is supervised by
 Swift `1contextd`; standalone commands are available for local benchmarking and

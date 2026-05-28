@@ -9,6 +9,7 @@ use std::fmt;
 use std::fs::{self, File, OpenOptions};
 use std::io::{BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};
+use url::Url;
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
@@ -29,73 +30,96 @@ impl MailAddress {
                 "invalid mail address {input:?}; expected a typed address without whitespace"
             ));
         }
-
-        if let Some(rest) = value.strip_prefix("agent://") {
-            let Some((transport, id)) = rest.split_once('/') else {
-                return Err(anyhow!(
-                    "invalid agent address {input}; expected agent://<transport>/<id>"
-                ));
-            };
-            validate_segment(transport, "agent transport")?;
-            validate_segment(id, "agent id")?;
-            return Ok(Self::Agent {
-                transport: transport.to_string(),
-                id: id.to_string(),
-            });
+        if value.contains("/../")
+            || value.ends_with("/..")
+            || value.contains("/./")
+            || value.ends_with("/.")
+        {
+            return Err(anyhow!(
+                "invalid mail address {input}; path traversal is not allowed"
+            ));
         }
 
-        if let Some(rest) = value.strip_prefix("role://") {
-            let Some((scope, role)) = rest.rsplit_once('.') else {
-                return Err(anyhow!(
-                    "invalid role address {input}; expected role://<scope>.<role>"
-                ));
-            };
-            validate_segment(scope, "role scope")?;
-            validate_segment(role, "role name")?;
-            return Ok(Self::Role {
-                scope: scope.to_string(),
-                role: role.to_string(),
-            });
-        }
+        let parsed = Url::parse(value)
+            .with_context(|| format!("invalid mail address {input}; expected typed URI address"))?;
+        validate_mail_address_url(&parsed, input)?;
 
-        if let Some(name) = value.strip_prefix("list://") {
-            validate_dotted_name(name, "list address")?;
-            return Ok(Self::List {
-                name: name.to_string(),
-            });
+        match parsed.scheme() {
+            "agent" => {
+                let transport = parsed.host_str().ok_or_else(|| {
+                    anyhow!("invalid agent address {input}; expected agent://<transport>/<id>")
+                })?;
+                let id = single_path_segment(&parsed, input, "agent", "id")?;
+                validate_segment(transport, "agent transport")?;
+                validate_segment(id, "agent id")?;
+                Ok(Self::Agent {
+                    transport: transport.to_string(),
+                    id: id.to_string(),
+                })
+            }
+            "role" => {
+                let rest = parsed.host_str().ok_or_else(|| {
+                    anyhow!("invalid role address {input}; expected role://<scope>.<role>")
+                })?;
+                require_empty_path(&parsed, input, "role")?;
+                let Some((scope, role)) = rest.rsplit_once('.') else {
+                    return Err(anyhow!(
+                        "invalid role address {input}; expected role://<scope>.<role>"
+                    ));
+                };
+                validate_segment(scope, "role scope")?;
+                validate_segment(role, "role name")?;
+                Ok(Self::Role {
+                    scope: scope.to_string(),
+                    role: role.to_string(),
+                })
+            }
+            "list" => {
+                let name = parsed.host_str().ok_or_else(|| {
+                    anyhow!("invalid list address {input}; expected list://<name>")
+                })?;
+                require_empty_path(&parsed, input, "list")?;
+                validate_dotted_name(name, "list address")?;
+                Ok(Self::List {
+                    name: name.to_string(),
+                })
+            }
+            "mailbox" => {
+                if parsed.host_str() != Some("page") {
+                    return Err(anyhow!(
+                        "invalid mailbox address {input}; expected mailbox://page/<page-id>"
+                    ));
+                }
+                let page_id = single_path_segment(&parsed, input, "mailbox", "page id")?;
+                validate_segment(page_id, "page mailbox id")?;
+                Ok(Self::PageMailbox {
+                    page_id: page_id.to_string(),
+                })
+            }
+            "thread" => {
+                let thread_id = parsed.host_str().ok_or_else(|| {
+                    anyhow!("invalid thread address {input}; expected thread://<thread-id>")
+                })?;
+                require_empty_path(&parsed, input, "thread")?;
+                validate_segment(thread_id, "thread id")?;
+                Ok(Self::Thread {
+                    thread_id: thread_id.to_string(),
+                })
+            }
+            "system" => {
+                let name = parsed.host_str().ok_or_else(|| {
+                    anyhow!("invalid system address {input}; expected system://<name>")
+                })?;
+                require_empty_path(&parsed, input, "system")?;
+                validate_dotted_name(name, "system address")?;
+                Ok(Self::System {
+                    name: name.to_string(),
+                })
+            }
+            _ => Err(anyhow!(
+                "invalid mail address {input}; expected agent://, role://, list://, mailbox://page/, thread://, or system://"
+            )),
         }
-
-        if let Some(page_id) = value.strip_prefix("mailbox://page/") {
-            validate_segment(page_id, "page mailbox id")?;
-            return Ok(Self::PageMailbox {
-                page_id: page_id.to_string(),
-            });
-        }
-
-        if let Some(page_id) = value.strip_prefix("page://") {
-            validate_segment(page_id, "page id")?;
-            return Ok(Self::PageMailbox {
-                page_id: page_id.to_string(),
-            });
-        }
-
-        if let Some(thread_id) = value.strip_prefix("thread://") {
-            validate_segment(thread_id, "thread id")?;
-            return Ok(Self::Thread {
-                thread_id: thread_id.to_string(),
-            });
-        }
-
-        if let Some(name) = value.strip_prefix("system://") {
-            validate_dotted_name(name, "system address")?;
-            return Ok(Self::System {
-                name: name.to_string(),
-            });
-        }
-
-        Err(anyhow!(
-            "invalid mail address {input}; expected agent://, role://, list://, mailbox://page/, page://, thread://, or system://"
-        ))
     }
 
     pub fn canonical(&self) -> String {
@@ -114,6 +138,51 @@ impl MailAddress {
         hash.update(self.canonical().as_bytes());
         format!("addr-{}", hex_lower(&hash.finalize()))
     }
+}
+
+fn validate_mail_address_url(parsed: &Url, input: &str) -> Result<()> {
+    if parsed.username() != ""
+        || parsed.password().is_some()
+        || parsed.port().is_some()
+        || parsed.query().is_some()
+        || parsed.fragment().is_some()
+        || parsed.cannot_be_a_base()
+    {
+        return Err(anyhow!("invalid mail address {input}; expected scheme://host[/segment] without credentials, port, query, or fragment"));
+    }
+    Ok(())
+}
+
+fn require_empty_path(parsed: &Url, input: &str, scheme: &str) -> Result<()> {
+    if !matches!(parsed.path(), "" | "/") {
+        return Err(anyhow!(
+            "invalid {scheme} address {input}; expected scheme://host with no path"
+        ));
+    }
+    Ok(())
+}
+
+fn single_path_segment<'a>(
+    parsed: &'a Url,
+    input: &str,
+    scheme: &str,
+    label: &str,
+) -> Result<&'a str> {
+    let mut segments = parsed
+        .path_segments()
+        .ok_or_else(|| {
+            anyhow!("invalid {scheme} address {input}; expected one {label} path segment")
+        })?
+        .filter(|segment| !segment.is_empty());
+    let segment = segments.next().ok_or_else(|| {
+        anyhow!("invalid {scheme} address {input}; expected one {label} path segment")
+    })?;
+    if segments.next().is_some() {
+        return Err(anyhow!(
+            "invalid {scheme} address {input}; expected one {label} path segment"
+        ));
+    }
+    Ok(segment)
 }
 
 impl fmt::Display for MailAddress {
@@ -1001,7 +1070,7 @@ impl AgentMailStore {
                 | MailAddress::PageMailbox { .. } => {}
                 _ => {
                     return Err(anyhow!(
-                        "requested routing grant must be role://, list://, page://, or mailbox://page/ address: {role}"
+                        "requested routing grant must be role://, list://, or mailbox://page/ address: {role}"
                     ))
                 }
             }
@@ -2571,10 +2640,6 @@ mod tests {
             "role://topics.curator"
         );
         assert_eq!(
-            MailAddress::parse("page://topics").unwrap().canonical(),
-            "mailbox://page/topics"
-        );
-        assert_eq!(
             MailAddress::parse("mailbox://page/topics")
                 .unwrap()
                 .canonical(),
@@ -2594,6 +2659,7 @@ mod tests {
             "",
             "page://../topics",
             "page://topic/one",
+            "page://topics",
             "agent://codex/../../x",
             "role://topics.curator/admin",
             "system://wiki render",
@@ -3008,7 +3074,7 @@ mod tests {
             "agent://codex/agent_codex_019e3f72".to_string(),
             "role://topics.curator".to_string(),
         ];
-        envelope.cc = vec!["page://topics".to_string()];
+        envelope.cc = vec!["mailbox://page/topics".to_string()];
 
         let receipt = store
             .send_mail(
@@ -3894,7 +3960,7 @@ mod tests {
         let mut envelope = sample_envelope("mailmsg_list_page_001", "list-page-key-001");
         envelope.to = vec![
             "list://wiki.reviewers".to_string(),
-            "page://topics".to_string(),
+            "mailbox://page/topics".to_string(),
         ];
 
         store

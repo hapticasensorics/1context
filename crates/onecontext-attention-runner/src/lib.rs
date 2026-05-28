@@ -35,7 +35,6 @@ pub fn run_attention_filter(session_path: &Path, output_path: Option<&Path>) -> 
     Ok(RunSummary {
         output_path: path,
         dashboard_session_path: None,
-        compatibility_report_path: None,
         candidates: output.raw_buffer_audit.len(),
         saved: output.saved_states.len(),
     })
@@ -56,7 +55,6 @@ pub fn run_attention_filter_on_bundle(
     Ok(RunSummary {
         output_path: bundle_run.output_path,
         dashboard_session_path: Some(bundle_run.dashboard_session_path),
-        compatibility_report_path: Some(bundle_run.compatibility_report_path),
         candidates: output.raw_buffer_audit.len(),
         saved: output.saved_states.len(),
     })
@@ -66,7 +64,6 @@ pub fn run_attention_filter_on_bundle(
 pub struct RunSummary {
     pub output_path: std::path::PathBuf,
     pub dashboard_session_path: Option<std::path::PathBuf>,
-    pub compatibility_report_path: Option<std::path::PathBuf>,
     pub candidates: usize,
     pub saved: usize,
 }

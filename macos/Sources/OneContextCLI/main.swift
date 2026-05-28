@@ -1029,8 +1029,7 @@ struct OneContextCLI {
       "error": [
         "code": wikiErrorCode(error),
         "message": wikiErrorMessage(error)
-      ],
-      "repair_hints": wikiRepairHints(error)
+      ]
     ]
   }
 
@@ -1131,36 +1130,6 @@ struct OneContextCLI {
       }
     }
     return error.localizedDescription
-  }
-
-  static func wikiRepairHints(_ error: Error) -> [String] {
-    if let cliError = error as? CLIError {
-      switch cliError {
-      case .unknownArgument:
-        return ["Run 1context wiki --help and remove unsupported trailing arguments."]
-      case .commandFailed(let message):
-        if message.contains("Unknown wiki subcommand") {
-          return ["Run 1context wiki --help to inspect supported wiki commands."]
-        }
-        if message.contains("requires") || message.contains("expected") {
-          return ["Run 1context wiki --help and provide the missing argument or flag."]
-        }
-        if message.contains("either") || message.contains("not both") {
-          return ["Choose one input source for the command and rerun it."]
-        }
-      }
-    }
-    if let socketError = error as? UnixSocketError {
-      switch socketError {
-      case .connectFailed, .socketFailed, .socketPathExists, .pathTooLong:
-        return ["Start the 1Context app or run a dev daemon with ONECONTEXT_DEV_SOCKET_PATH pointing at its socket."]
-      case .writeFailed, .emptyResponse, .invalidResponse:
-        return ["Retry after checking the 1Context runtime log; the daemon connection did not complete cleanly."]
-      case .rpcError:
-        return []
-      }
-    }
-    return []
   }
 
   static func printLaunchAgent(label: String, redact: Bool = false) {
@@ -1378,28 +1347,12 @@ struct OneContextCLI {
   }
 
   static func runCapture(_ executable: String, _ arguments: [String]) -> (status: Int32, stdout: String, stderr: String) {
-    let process = Process()
-    process.executableURL = URL(fileURLWithPath: executable)
-    process.arguments = arguments
-    let stdout = Pipe()
-    let stderr = Pipe()
-    process.standardOutput = stdout
-    process.standardError = stderr
-
     do {
-      try process.run()
-      process.waitUntilExit()
+      let result = try ProcessRunner.run(executable: URL(fileURLWithPath: executable), arguments: arguments)
+      return (result.status, result.stdoutText, result.stderrText)
     } catch {
       return (1, "", error.localizedDescription)
     }
-
-    let stdoutData = stdout.fileHandleForReading.readDataToEndOfFile()
-    let stderrData = stderr.fileHandleForReading.readDataToEndOfFile()
-    return (
-      process.terminationStatus,
-      String(data: stdoutData, encoding: .utf8) ?? "",
-      String(data: stderrData, encoding: .utf8) ?? ""
-    )
   }
 
 }

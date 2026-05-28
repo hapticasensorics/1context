@@ -357,7 +357,7 @@ version. `_conventions.md` stores page-local discussion rules.
 
 Talk entries should carry stable logical ids, timestamps, authorship,
 provenance, and references to evidence, artifacts, or attachments. Use
-logical ids such as `page://your-context`, `family://context/your-context`,
+logical ids such as `mailbox://page/your-context`, `family://context/your-context`,
 `artifact://run_123/screenshot`, and `evidence://observation/event_123`
 instead of raw local paths.
 

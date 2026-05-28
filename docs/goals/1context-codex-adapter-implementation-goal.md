@@ -96,7 +96,7 @@ belong in Rust.
 - [x] The Codex adapter bridge has a pure governed child-spawn policy covering
   parent allowlists, model allowlists, active child limits from inventory, and
   simple metadata/capability budgets.
-- [x] `scripts/test-codex-adapter-harness-dogfood.mjs` proves parent birth,
+- [x] `archived adapter dogfood evidence` proves parent birth,
   adapter-driven child spawn, parent/root lineage, turn accounting, and
   redacted proof recording through the bridge.
 

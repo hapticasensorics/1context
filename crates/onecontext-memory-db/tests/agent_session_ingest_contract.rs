@@ -1,10 +1,10 @@
 use chrono::{DateTime, Duration, SecondsFormat, Utc};
 use onecontext_memory_db::{
+    bootstrap_current_schema_with_client,
     codex_agent_ingest::{
         compile_codex_rollout_jsonl, parse_codex_rollout_jsonl, reduce_codex_rollout_records,
     },
     emit_agent_session_objects,
-    migrations::apply_bundled_migrations_with_client,
     write_objects::{
         plan_write_objects, write_objects_with_client, PerceptionObjectInput, WriteObjectsRequest,
     },
@@ -113,7 +113,7 @@ fn live_codex_write_objects_retry_dedupes_and_reads_back() {
     let request = write_request(records, 40);
 
     let mut client = Client::connect(&database_url, NoTls).unwrap();
-    apply_bundled_migrations_with_client(&mut client).unwrap();
+    bootstrap_current_schema_with_client(&mut client).unwrap();
 
     let started = Instant::now();
     let first = write_objects_with_client(&mut client, &request).unwrap();

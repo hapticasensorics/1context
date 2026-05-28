@@ -29,7 +29,7 @@ id: "talkmsg_ds_meta"
 kind: "proposal"
 author: "agent://worker-ds/author"
 created: "2026-05-20T14:37:00Z"
-talk_for: "page://mail-proof"
+talk_for: "mailbox://page/mail-proof"
 thread: "thread_mail_proof_render"
 subject: "Render mail metadata"
 state: open

@@ -79,8 +79,6 @@ that operators and contributors should use.
 - [Semantic Observation Output Contract](semantic-observation-output-contract.md):
   visual-first contract for attention-highlighted screenshots, full development
   composites, and up to three attended items per minute.
-- [Attention Capture Mockup](attention-capture-mockup.html): standalone HTML
-  mockup of the per-minute final output and development/debug view.
 - [Attention Dashboard Skeleton Schema](attention-dashboard-skeleton-schema.md):
   native Rust/egui judge dashboard contract for video-side review, attention
   output inspection, timeline lanes, review labels, and four-agent
@@ -126,6 +124,9 @@ that operators and contributors should use.
   into the current wiki API, architecture, runbook, and user-data spec.
 - [Archived Docs](archive/README.md) keeps historical source copies for
   provenance.
+- Generated attention mockup media, the static attention mockup page, and the
+  deterministic attention runner fixture proof were retired to
+  `recycle-bin/20260527/`.
 - The old professional-app milestone, remaining-work, and install-distribution
   checklist docs have been merged into the macOS release runbook. Keep future
   release operations there unless a new doc has a clearly separate owner.

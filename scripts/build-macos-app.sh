@@ -85,8 +85,11 @@ fi
 LOCAL_WEB_PROXY_PLIST_NAME="$LOCAL_WEB_PROXY_LABEL.plist"
 MENU_ICON_SOURCE="$MACOS_DIR/Sources/OneContextMenuBar/Resources/MenuBarIcon.png"
 CADDY_VERSION="2.11.2"
-CADDY_TOOL_ARCHIVE="$ROOT/release/tools/caddy/darwin-$ARCH/caddy-v$CADDY_VERSION-darwin-$ARCH.tar.gz"
-CADDY_TOOL_SHA256="$CADDY_TOOL_ARCHIVE.sha256"
+CADDY_TOOL_ARCHIVE_NAME="caddy-v$CADDY_VERSION-darwin-$ARCH.tar.gz"
+CADDY_TOOL_PIN_DIR="$ROOT/release/tools/caddy/darwin-$ARCH"
+CADDY_TOOL_SHA256="$CADDY_TOOL_PIN_DIR/$CADDY_TOOL_ARCHIVE_NAME.sha256"
+CADDY_TOOL_ARCHIVE="$ROOT/dist/release-tools/caddy/downloads/darwin-$ARCH/$CADDY_TOOL_ARCHIVE_NAME"
+CADDY_TOOL_URL="https://github.com/caddyserver/caddy/releases/download/v$CADDY_VERSION/$CADDY_TOOL_ARCHIVE_NAME"
 CADDY_TOOL_WORK_DIR="$ROOT/dist/release-tools/caddy/darwin-$ARCH"
 CADDY_SOURCE=""
 CADDY_NOTICE_SOURCE_DIR=""
@@ -212,9 +215,14 @@ elif [[ -z "$IDENTITY" && "$SIGNING_MODE" == "developer-id" ]]; then
 fi
 
 release_caddy_source() {
-  if [[ ! -f "$CADDY_TOOL_ARCHIVE" || ! -f "$CADDY_TOOL_SHA256" ]]; then
-    echo "Release-owned Caddy artifact is missing: $CADDY_TOOL_ARCHIVE" >&2
+  if [[ ! -f "$CADDY_TOOL_SHA256" ]]; then
+    echo "Pinned Caddy checksum is missing: $CADDY_TOOL_SHA256" >&2
     exit 1
+  fi
+
+  if [[ ! -f "$CADDY_TOOL_ARCHIVE" ]]; then
+    mkdir -p "$(dirname "$CADDY_TOOL_ARCHIVE")"
+    curl -fsSL "$CADDY_TOOL_URL" -o "$CADDY_TOOL_ARCHIVE"
   fi
 
   local expected_sha
@@ -222,7 +230,7 @@ release_caddy_source() {
   expected_sha="$(awk '{print $1}' "$CADDY_TOOL_SHA256")"
   actual_sha="$(shasum -a 256 "$CADDY_TOOL_ARCHIVE" | awk '{print $1}')"
   if [[ -z "$expected_sha" || "$actual_sha" != "$expected_sha" ]]; then
-    echo "Release-owned Caddy artifact checksum mismatch." >&2
+    echo "Pinned Caddy artifact checksum mismatch." >&2
     echo "Expected: $expected_sha" >&2
     echo "Actual:   $actual_sha" >&2
     exit 1
@@ -254,7 +262,11 @@ resolve_caddy_source() {
       CADDY_NOTICE_SOURCE_DIR="$(dirname "$host_caddy")"
       return
     fi
-    echo "Dev app build requires Caddy. Set ONECONTEXT_CADDY_PATH or add the release-owned Caddy artifact." >&2
+    if [[ -f "$CADDY_TOOL_SHA256" ]]; then
+      release_caddy_source
+      return
+    fi
+    echo "Dev app build requires Caddy. Set ONECONTEXT_CADDY_PATH, install caddy on PATH, or allow the pinned Caddy download." >&2
     exit 1
   fi
 

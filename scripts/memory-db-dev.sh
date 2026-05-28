@@ -2,7 +2,6 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-MIGRATIONS_DIR="$ROOT/crates/onecontext-memory-db/migrations"
 PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
 
 ENGINE="${ONECONTEXT_MEMORY_DB_CONTAINER_ENGINE:-}"
@@ -17,7 +16,7 @@ CONTAINER_PORT="5432"
 
 usage() {
   cat <<EOF
-usage: $0 <start|provision|migrate|verify|status|psql|url|stop|reset>
+usage: $0 <start|provision|bootstrap|verify|status|psql|url|stop|reset>
 
 Dev-only Postgres + Timescale lifecycle for the 1Context memory DB.
 
@@ -31,7 +30,7 @@ Environment overrides:
   ONECONTEXT_MEMORY_DB_PASSWORD          default: $POSTGRES_PASSWORD
   ONECONTEXT_MEMORY_DB_NAME              default: $POSTGRES_DB
 
-Default DATABASE_URL:
+Default connection URL:
   $(database_url)
 EOF
 }
@@ -46,14 +45,14 @@ main() {
     provision)
       require_engine
       start_db
-      migrate_db
+      bootstrap_db
       verify_db
       print_connection
       ;;
-    migrate)
+    bootstrap)
       require_engine
       wait_for_db
-      migrate_db
+      bootstrap_db
       ;;
     verify)
       require_engine
@@ -152,23 +151,36 @@ wait_for_db() {
   exit 1
 }
 
-migrate_db() {
+bootstrap_db() {
   local attempts=20
   local i
   for ((i = 1; i <= attempts; i++)); do
-    if (cd "$ROOT" && cargo run -q -p onecontext-memory-db --bin onecontext-memory-db -- migrate --database-url "$(database_url)"); then
+    if (cd "$ROOT" && cargo run -q -p onecontext-memory-db --bin onecontext-memory-db -- bootstrap-schema --database-url "$(database_url)"); then
       return
     fi
     sleep 1
   done
 
-  echo "migration runner did not connect successfully after ${attempts}s" >&2
+  echo "current schema bootstrap did not connect successfully after ${attempts}s" >&2
   "$ENGINE" logs --tail 100 "$CONTAINER_NAME" >&2 || true
   exit 1
 }
 
 verify_db() {
   local result
+  psql_db "$POSTGRES_DB" -Atc "
+DO \$\$
+BEGIN
+  IF to_regclass('app.schema_migrations') IS NOT NULL THEN
+    RAISE EXCEPTION 'deleted migration ledger app.schema_migrations is present; run scripts/memory-db-dev.sh reset';
+  END IF;
+  IF to_regnamespace('capture') IS NOT NULL THEN
+    RAISE EXCEPTION 'deleted capture schema is present; run scripts/memory-db-dev.sh reset';
+  END IF;
+END
+\$\$;
+"
+
   result="$(psql_db "$POSTGRES_DB" -Atc "
 SELECT
   extname
@@ -273,8 +285,25 @@ SELECT format(
 "
 
   psql_db "$POSTGRES_DB" -Atc "
-SELECT format('migrations=%s latest=%s', count(*), max(version))
-FROM app.schema_migrations;
+SELECT format('current_schema_relations=%s legacy_migration_ledger=false',
+  count(*)
+)
+FROM unnest(ARRAY[
+  'app.users',
+  'perception.sources',
+  'perception.lanes',
+  'perception.series',
+  'perception.blobs',
+  'perception.source_records',
+  'perception.objects',
+  'perception.object_edges',
+  'perception.object_density_1m',
+  'perception.source_cursors',
+  'perception.timeline_projections',
+  'perception.timeline_projection_items',
+  'search.object_embeddings'
+]) AS required_relation(name)
+WHERE to_regclass(required_relation.name) IS NOT NULL;
 "
 }
 
@@ -299,7 +328,7 @@ reset_db() {
 }
 
 print_connection() {
-  echo "DATABASE_URL=$(database_url)"
+  echo "ONECONTEXT_MEMORY_DB_URL=$(database_url)"
 }
 
 psql_db() {

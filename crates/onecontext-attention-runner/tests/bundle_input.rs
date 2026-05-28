@@ -110,7 +110,6 @@ fn ready_bundle_runs_with_2fps_bundle_frames_and_external_dashboard_session() {
         .as_ref()
         .expect("dashboard session path")
         .is_file());
-    assert!(summary.compatibility_report_path.unwrap().is_file());
 
     let output = read_json(&output_path);
     assert_eq!(
@@ -148,6 +147,37 @@ fn ready_bundle_runs_with_2fps_bundle_frames_and_external_dashboard_session() {
     assert_eq!(
         dashboard_session["media"]["candidate_frame_sets"][0]["naming"].as_str(),
         Some("frame-{index:06}.jpg")
+    );
+}
+
+#[test]
+fn ready_bundle_without_2fps_media_is_rejected() {
+    let temp = tempdir().unwrap();
+    let bundle = temp.path().join("capture/bundles/live/cap_no_media");
+    fs::create_dir_all(bundle.join("events")).unwrap();
+    fs::create_dir_all(bundle.join("media")).unwrap();
+    fs::write(bundle.join("READY"), "READY\n").unwrap();
+    write_json(
+        &bundle.join("manifest.json"),
+        &json!({
+            "schema_version": 1,
+            "contract_version": "capture-window-bundle.v0",
+            "capture_id": "cap_no_media",
+            "state": "ready",
+            "created_at": "2026-05-25T20:00:00Z",
+            "time_start": "2026-05-25T20:00:00Z",
+            "time_end": "2026-05-25T20:00:10Z"
+        }),
+    );
+    fs::write(bundle.join("events/ax.events.jsonl"), "").unwrap();
+    fs::write(bundle.join("media/media.index.jsonl"), "").unwrap();
+
+    let error = run_attention_filter_on_bundle(&bundle, None).unwrap_err();
+    assert!(
+        error
+            .to_string()
+            .contains("missing required frame_2fps media records"),
+        "{error:?}"
     );
 }
 

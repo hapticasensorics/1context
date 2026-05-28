@@ -82,6 +82,7 @@ fn signal_for_event(event: &CaptureEvent) -> Option<ExtractedSignal> {
             Some(ax_semantic_signal(event))
         }
         "capture.active_window_frame_metadata" => Some(active_window_frame_signal(event)),
+        "attention.derived.visual_frame_change.v1" => Some(visual_frame_change_signal(event)),
         event_type if event_type.contains("focus_transition") => {
             Some(focus_transition_signal(event))
         }
@@ -327,35 +328,45 @@ fn scroll_signal(event: &CaptureEvent) -> ExtractedSignal {
     let max_abs_dy = f32_child(scroll, "max_abs_dy").unwrap_or(0.0);
     let momentum_count = u64_child(scroll, "momentum_event_count").unwrap_or(0);
     let abs_dy = total_dy.abs();
+    let abs_dx = total_dx.abs();
     let velocity = if duration_ms == 0 {
         abs_dy
     } else {
         abs_dy / duration_ms as f32
     };
+    let tiny_scroll =
+        abs_dy < 4.0 && abs_dx < 4.0 && max_abs_dy < 4.0 && event_count <= 2 && duration_ms <= 100;
     let fast_skim =
         (velocity >= 1.8 && duration_ms <= 700) || (abs_dy >= 700.0 && duration_ms <= 500);
     let pause_friendly = duration_ms >= 800 && velocity <= 1.2;
-    let kind = if fast_skim {
+    let kind = if tiny_scroll {
+        "scroll_noise"
+    } else if fast_skim {
         "scroll_fast_skim"
     } else if pause_friendly {
         "scroll_pause_friendly_coverage"
     } else {
         "scroll_coverage"
     };
-    let strength = 0.34
-        + ratio(abs_dy, 1_200.0) * 0.22
-        + ratio(event_count as f32, 70.0) * 0.13
-        + ratio(duration_ms as f32, 1_800.0) * 0.08
-        + if momentum_count > 0 { 0.04 } else { 0.0 }
-        + if pause_friendly { 0.10 } else { 0.0 }
-        - if fast_skim { 0.12 } else { 0.0 };
+    let strength = if tiny_scroll {
+        0.08
+    } else {
+        0.34 + ratio(abs_dy, 1_200.0) * 0.22
+            + ratio(event_count as f32, 70.0) * 0.13
+            + ratio(duration_ms as f32, 1_800.0) * 0.08
+            + if momentum_count > 0 { 0.04 } else { 0.0 }
+            + if pause_friendly { 0.10 } else { 0.0 }
+            - if fast_skim { 0.12 } else { 0.0 }
+    };
     let target_pid = u64_at(&event.payload, &["payload", "recent_target_process_id"]);
 
     ExtractedSignal {
         kind: kind.to_string(),
         strength,
         hard_keep: false,
-        memory_value_multiplier: if fast_skim {
+        memory_value_multiplier: if tiny_scroll {
+            0.05
+        } else if fast_skim {
             0.35
         } else if pause_friendly {
             0.62
@@ -366,7 +377,9 @@ fn scroll_signal(event: &CaptureEvent) -> ExtractedSignal {
         explanation: format!(
             "reason={kind} total_dy={total_dy:.1} total_dx={total_dx:.1} velocity_points_per_ms={velocity:.2} max_abs_dy={max_abs_dy:.1} momentum_events={momentum_count} duration_ms={duration_ms} event_count={event_count} target_pid={}; {}.",
             optional_u64(target_pid),
-            if fast_skim {
+            if tiny_scroll {
+                "tiny zero-distance scroll is treated as input noise"
+            } else if fast_skim {
                 "fast skim gets coverage credit but lower memory value"
             } else if pause_friendly {
                 "slower scroll leaves a more reviewable visual receipt"
@@ -663,6 +676,37 @@ fn active_window_frame_signal(event: &CaptureEvent) -> ExtractedSignal {
         region: dirty_rect_region(&event.payload),
         explanation: format!(
             "reason={kind} dirty_area_ratio={dirty_area_ratio:.3} changed_tile_ratio={changed_tile_ratio:.3} dirty_rect_count={dirty_rect_count} estimated_dy={estimated_dy:.1} mean_pixel_diff={mean_pixel_diff:.3} update_reason={update_reason} keyboard_recent={keyboard_recent} scroll_recent={scroll_recent} should_store_keyframe={should_store_keyframe}; visual metadata adds motion evidence around the candidate."
+        ),
+    }
+}
+
+fn visual_frame_change_signal(event: &CaptureEvent) -> ExtractedSignal {
+    let full_diff_score = f32_at(&event.payload, &["payload", "full_diff_score"]).unwrap_or(0.0);
+    let top_band_diff_score =
+        f32_at(&event.payload, &["payload", "top_band_diff_score"]).unwrap_or(0.0);
+    let from_frame = u64_at(&event.payload, &["payload", "from_frame"]).unwrap_or(0);
+    let to_frame = u64_at(&event.payload, &["payload", "to_frame"]).unwrap_or(0);
+    let reason = str_at(&event.payload, &["payload", "reason"]).unwrap_or("visual frame changed");
+    let window_band_change = top_band_diff_score >= 0.06;
+    let kind = if window_band_change {
+        "visual_window_transition"
+    } else {
+        "visual_content_change"
+    };
+    let strength = (0.28
+        + ratio(full_diff_score, 0.40) * 0.28
+        + ratio(top_band_diff_score, 0.25) * 0.30
+        + if window_band_change { 0.10 } else { 0.0 })
+    .min(0.92);
+
+    ExtractedSignal {
+        kind: kind.to_string(),
+        strength,
+        hard_keep: window_band_change,
+        memory_value_multiplier: if window_band_change { 0.72 } else { 0.46 },
+        region: None,
+        explanation: format!(
+            "reason={kind} from_frame={from_frame} to_frame={to_frame} full_diff_score={full_diff_score:.3} top_band_diff_score={top_band_diff_score:.3}; {reason}."
         ),
     }
 }

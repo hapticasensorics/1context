@@ -137,66 +137,31 @@ public final class WikiLocalAPIHandler: @unchecked Sendable {
   private let fileManager: FileManager
   private let renderState: @Sendable () -> String
   private let memoryStatus: () -> [String: Any]
-  private let memoryViewport: ([String: String]) -> [String: Any]
-  private let memoryObject: ([String: String]) -> [String: Any]
-  private let memoryDensity: ([String: String]) -> [String: Any]
-  private let memoryEdges: ([String: String]) -> [String: Any]
-  private let memorySearch: ([String: String]) -> [String: Any]
+  private let memoryViewport: ([String: String]) throws -> [String: Any]
+  private let memoryObject: ([String: String]) throws -> [String: Any]
+  private let memoryDensity: ([String: String]) throws -> [String: Any]
+  private let memoryEdges: ([String: String]) throws -> [String: Any]
+  private let memorySearch: ([String: String]) throws -> [String: Any]
 
   public init(
     paths: LocalWebPaths,
     fileManager: FileManager = .default,
     renderState: @escaping @Sendable () -> String = { "idle" },
     memoryStatus: @escaping () -> [String: Any] = { ["status": "unavailable"] },
-    memoryViewport: @escaping ([String: String]) -> [String: Any] = { _ in
-      [
-        "schema_version": 1,
-        "surface": "memory_viewport",
-        "protocol": "memory.queryViewport.v1",
-        "status": "unavailable",
-        "object_count": 0,
-        "sources": [],
-        "objects": []
-      ]
+    memoryViewport: @escaping ([String: String]) throws -> [String: Any] = { _ in
+      throw WikiLocalAPIError.memoryUnavailable("memory.queryViewport is not configured")
     },
-    memoryObject: @escaping ([String: String]) -> [String: Any] = { query in
-      [
-        "schema_version": 1,
-        "surface": "memory_object_hydration",
-        "protocol": "memory.hydrateObjects.v1",
-        "status": "unavailable",
-        "object_id": query["object_id"] ?? query["id"] ?? "",
-        "object": NSNull()
-      ]
+    memoryObject: @escaping ([String: String]) throws -> [String: Any] = { _ in
+      throw WikiLocalAPIError.memoryUnavailable("memory.hydrateObjects is not configured")
     },
-    memoryDensity: @escaping ([String: String]) -> [String: Any] = { _ in
-      [
-        "schema_version": 1,
-        "surface": "memory_density",
-        "protocol": "memory.queryDensity.v1",
-        "status": "unavailable",
-        "buckets": []
-      ]
+    memoryDensity: @escaping ([String: String]) throws -> [String: Any] = { _ in
+      throw WikiLocalAPIError.memoryUnavailable("memory.queryDensity is not configured")
     },
-    memoryEdges: @escaping ([String: String]) -> [String: Any] = { query in
-      [
-        "schema_version": 1,
-        "surface": "memory_edges",
-        "protocol": "memory.queryEdges.v1",
-        "status": "unavailable",
-        "object_id": query["object_id"] ?? query["id"] ?? "",
-        "edges": []
-      ]
+    memoryEdges: @escaping ([String: String]) throws -> [String: Any] = { _ in
+      throw WikiLocalAPIError.memoryUnavailable("memory.queryEdges is not configured")
     },
-    memorySearch: @escaping ([String: String]) -> [String: Any] = { query in
-      [
-        "schema_version": 1,
-        "surface": "memory_search",
-        "protocol": "memory.searchText.v1",
-        "status": "unavailable",
-        "query": query["q"] ?? query["query"] ?? "",
-        "objects": []
-      ]
+    memorySearch: @escaping ([String: String]) throws -> [String: Any] = { _ in
+      throw WikiLocalAPIError.memoryUnavailable("memory.searchText is not configured")
     }
   ) {
     self.paths = paths
@@ -217,15 +182,25 @@ public final class WikiLocalAPIHandler: @unchecked Sendable {
     case ("GET", "/api/memory/status"):
       return .json(browserSafeMemoryPayload(memoryStatus()))
     case ("GET", "/api/memory/viewport"), ("POST", "/api/memory/viewport"):
-      return .json(browserSafeMemoryPayload(memoryViewport(memoryQueryParameters(request))))
+      return memoryResponse(surface: "memory_viewport") {
+        try memoryViewport(memoryQueryParameters(request))
+      }
     case ("GET", "/api/memory/object"), ("POST", "/api/memory/object"):
-      return .json(browserSafeMemoryPayload(memoryObject(memoryQueryParameters(request))))
+      return memoryResponse(surface: "memory_object_hydration") {
+        try memoryObject(memoryQueryParameters(request))
+      }
     case ("GET", "/api/memory/density"), ("POST", "/api/memory/density"):
-      return .json(browserSafeMemoryPayload(memoryDensity(memoryQueryParameters(request))))
+      return memoryResponse(surface: "memory_density") {
+        try memoryDensity(memoryQueryParameters(request))
+      }
     case ("GET", "/api/memory/edges"), ("POST", "/api/memory/edges"):
-      return .json(browserSafeMemoryPayload(memoryEdges(memoryQueryParameters(request))))
+      return memoryResponse(surface: "memory_edges") {
+        try memoryEdges(memoryQueryParameters(request))
+      }
     case ("GET", "/api/memory/search"), ("POST", "/api/memory/search"):
-      return .json(browserSafeMemoryPayload(memorySearch(memoryQueryParameters(request))))
+      return memoryResponse(surface: "memory_search") {
+        try memorySearch(memoryQueryParameters(request))
+      }
     case ("GET", "/api/wiki/health"):
       return .json(healthPayload())
     case ("GET", "/api/wiki/search"):
@@ -244,15 +219,32 @@ public final class WikiLocalAPIHandler: @unchecked Sendable {
     }
   }
 
+  private func memoryResponse(
+    surface: String,
+    _ action: () throws -> [String: Any]
+  ) -> WikiLocalAPIResponse {
+    do {
+      return .json(browserSafeMemoryPayload(try action()))
+    } catch {
+      return .json([
+        "schema_version": 1,
+        "surface": surface,
+        "status": "error",
+        "error": [
+          "code": "memory_protocol_error",
+          "message": error.localizedDescription
+        ]
+      ], statusCode: 503, reason: "Service Unavailable")
+    }
+  }
+
   private func healthPayload() -> [String: Any] {
     let currentRender = readJSON(
       paths.wikiCurrent
         .appendingPathComponent(".1context", isDirectory: true)
         .appendingPathComponent("current-render.json")
     )
-    let legacyPublishManifest = readJSON(paths.wikiCurrent.appendingPathComponent("publish-manifest.json"))
     let publishedAt = publishedAt(from: currentRender)
-      ?? publishedAt(from: legacyPublishManifest)
     return [
       "status": "ok",
       "service": "1context-wiki-api",
@@ -795,7 +787,7 @@ public final class WikiLocalAPIHandler: @unchecked Sendable {
           const [status, viewport, density] = await Promise.all([
             fetchJSON("/api/memory/status"),
             fetchJSON(`/api/memory/viewport?limit=180&source=${encodeURIComponent(state.source)}`),
-            fetchJSON(`/api/memory/density?bucket=1m&source=${encodeURIComponent(state.source)}`).catch(error => ({ status: "unavailable", message: error.message, buckets: [] }))
+            fetchJSON(`/api/memory/density?bucket=1m&source=${encodeURIComponent(state.source)}`)
           ]);
           const viewportProblem = protocolProblem(viewport);
           const viewportResult = protocolResult(viewport);
@@ -1283,6 +1275,7 @@ public enum WikiLocalAPIProbe {
 public enum WikiLocalAPIError: Error, LocalizedError, Equatable {
   case socketFailed(String)
   case bindFailed(String, Int, String)
+  case memoryUnavailable(String)
 
   public var errorDescription: String? {
     switch self {
@@ -1294,6 +1287,8 @@ public enum WikiLocalAPIError: Error, LocalizedError, Equatable {
       return message.isEmpty
         ? "Could not bind the 1Context wiki API listener to \(host):\(port)"
         : "Could not bind the 1Context wiki API listener to \(host):\(port): \(message)"
+    case .memoryUnavailable(let message):
+      return message.isEmpty ? "Memory protocol is unavailable" : message
     }
   }
 }

@@ -2,6 +2,7 @@
 *.log
 tmp/
 runtime-test/
+recycle-bin/
 dist/
 target/
 node_modules/
@@ -10,6 +11,10 @@ node_modules/
 .playwright-artifacts/
 .tmp-wiki-browser-*/
 test-results/
+docs/assets/attention-capture-mockup/
+demos/agent-mail-triad/static/fixtures/latest.json
+demos/peekaboo-evidence-wall/.evidence/
+demos/peekaboo-evidence-wall/__pycache__/
 scripts/__pycache__/
 .vscode/
 macos/.build/

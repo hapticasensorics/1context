@@ -14,6 +14,7 @@ pub struct FrameCacheState {
     format: String,
     naming: String,
     frame_count: Option<usize>,
+    frame_times_ms: Vec<u64>,
     max_cached_frames: usize,
     frames: HashMap<usize, LoadedFrame>,
     lru: VecDeque<usize>,
@@ -45,6 +46,14 @@ impl FrameCacheState {
             .iter()
             .find(|set| set.root == cache.root);
         let frame_count = frame_set.map(|set| set.count);
+        let frame_times_ms = frame_set
+            .and_then(|set| {
+                set.frame_times_ms
+                    .as_ref()
+                    .filter(|times| times.len() == set.count)
+            })
+            .cloned()
+            .unwrap_or_default();
         let naming = frame_set
             .map(|set| set.naming.clone())
             .unwrap_or_else(|| format!("frame-{{index:03}}.{}", cache.format));
@@ -55,6 +64,7 @@ impl FrameCacheState {
             format: cache.format.clone(),
             naming,
             frame_count,
+            frame_times_ms,
             max_cached_frames: 12,
             frames: HashMap::new(),
             lru: VecDeque::new(),
@@ -105,6 +115,14 @@ impl FrameCacheState {
     }
 
     pub fn frame_index_for_time(&self, time_ms: u64) -> usize {
+        if !self.frame_times_ms.is_empty() {
+            return match self.frame_times_ms.binary_search(&time_ms) {
+                Ok(index) => index + 1,
+                Err(0) => 1,
+                Err(insertion_index) => insertion_index,
+            };
+        }
+
         let fps = self.fps.max(0.1);
         let zero_based = ((time_ms as f32 / 1000.0) * fps).round().max(0.0) as usize;
         let frame_index = zero_based + 1;
@@ -114,6 +132,14 @@ impl FrameCacheState {
     }
 
     pub fn time_for_frame_index(&self, frame_index: usize) -> u64 {
+        if let Some(time_ms) = self
+            .frame_times_ms
+            .get(frame_index.saturating_sub(1))
+            .copied()
+        {
+            return time_ms;
+        }
+
         let fps = self.fps.max(0.1) as f64;
         let frame_index = self
             .frame_count

@@ -34,6 +34,7 @@ fn fixture() -> AttentionFixture {
                     fps: 2.0,
                     count: 1,
                     naming: "frame-{index:03}.jpg".to_string(),
+                    frame_times_ms: None,
                 }],
             },
             inputs: DashboardInputsConfig {
@@ -50,10 +51,14 @@ fn fixture() -> AttentionFixture {
 }
 
 fn candidate(events: Vec<CaptureEvent>) -> CandidateState {
+    candidate_at("candidate-001", "frame-001", 1_000, events)
+}
+
+fn candidate_at(id: &str, frame_id: &str, t_ms: u64, events: Vec<CaptureEvent>) -> CandidateState {
     CandidateState {
-        id: "candidate-001".to_string(),
-        frame_id: "frame-001".to_string(),
-        t_ms: 1_000,
+        id: id.to_string(),
+        frame_id: frame_id.to_string(),
+        t_ms,
         image_ref: "frame.jpg".to_string(),
         nearby_events: events,
         signals: Vec::new(),
@@ -201,5 +206,58 @@ fn ax_focus_truth_wins_over_nearer_sck_visual_receipt() {
     assert!(conflicts.iter().any(|conflict| {
         conflict.get("source_b").and_then(Value::as_str) == Some("sck_active_window")
             && conflict.get("severity").and_then(Value::as_str) == Some("info")
+    }));
+}
+
+#[test]
+fn shared_keyboard_episode_drops_unlabeled_duplicate_candidate() {
+    let fixture = fixture();
+    let keyboard_event = event(
+        "keyboard-burst",
+        "capture.ux.keyboard_activity.v1",
+        1_000,
+        json!({
+            "payload": {
+                "keyboard_activity": {
+                    "duration_ms": 5_000,
+                    "event_count": 60,
+                    "modified_key_event_count": 0,
+                    "auto_repeat_count": 0
+                },
+                "recent_target_process_id": 42
+            }
+        }),
+    );
+    let candidates = vec![
+        candidate_at(
+            "candidate-a",
+            "frame-001",
+            1_500,
+            vec![keyboard_event.clone()],
+        ),
+        candidate_at("candidate-b", "frame-002", 4_400, vec![keyboard_event]),
+    ];
+
+    let scored = score_candidates(&fixture, candidates).expect("score candidates");
+    let output = fuse_attention(&fixture, scored).expect("fuse output");
+    let value = serde_json::to_value(output).expect("serialize output");
+    let saved = value
+        .get("saved_states")
+        .and_then(Value::as_array)
+        .expect("saved states");
+    assert_eq!(
+        saved.len(),
+        1,
+        "shared causal keyboard burst should not create duplicate receipts"
+    );
+
+    let raw_items = value
+        .get("raw_buffer_audit")
+        .and_then(Value::as_array)
+        .expect("raw buffer");
+    assert!(raw_items.iter().any(|item| {
+        item.get("decision")
+            .and_then(Value::as_str)
+            .is_some_and(|decision| decision.contains("dropped_redundant_shared_event"))
     }));
 }

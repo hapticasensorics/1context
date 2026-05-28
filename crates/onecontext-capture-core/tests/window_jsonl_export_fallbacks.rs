@@ -25,7 +25,10 @@ fn tolerant_export_reports_malformed_window_lines_and_preserves_raw_provenance_o
     let malformed_offset = (good_line.len() + 1) as u64;
     fs::write(
         paths.windows_dir.join("2026-05-25.windows.jsonl"),
-        format!("{good_line}\n{malformed_line}\n"),
+        format!(
+            "{good_line}\n{malformed_line}\n{}\n",
+            display_snapshot_line(base)
+        ),
     )
     .unwrap();
     seed_frames_2fps(&capture_root, 2);
@@ -57,7 +60,7 @@ fn tolerant_export_reports_malformed_window_lines_and_preserves_raw_provenance_o
 
     let raw_provenance =
         read_jsonl_values(&response.bundle_path.join("quality/raw_provenance.jsonl"));
-    assert_eq!(raw_provenance.len(), 1);
+    assert_eq!(raw_provenance.len(), 2);
     assert_eq!(raw_provenance[0]["event_type"], "capture.window_snapshot");
     assert_eq!(raw_provenance[0]["raw_line_number"], 1);
     assert_eq!(raw_provenance[0]["raw_byte_offset"], 0);
@@ -126,6 +129,7 @@ fn export_includes_appended_windows_records_after_index_creation() {
 
     let mut file = OpenOptions::new().append(true).open(&log_path).unwrap();
     writeln!(file, "{}", window_snapshot_line(base, 2)).unwrap();
+    writeln!(file, "{}", display_snapshot_line(base)).unwrap();
     seed_frames_2fps(&capture_root, 2);
 
     let response = export_ready_bundle(export_request(
@@ -142,7 +146,7 @@ fn export_includes_appended_windows_records_after_index_creation() {
 
     let raw_provenance =
         read_jsonl_values(&response.bundle_path.join("quality/raw_provenance.jsonl"));
-    assert_eq!(raw_provenance.len(), 1);
+    assert_eq!(raw_provenance.len(), 2);
     assert_eq!(raw_provenance[0]["raw_line_number"], 2);
     assert_eq!(raw_provenance[0]["raw_byte_offset"], indexed_byte_count);
 
@@ -156,7 +160,7 @@ fn export_includes_appended_windows_records_after_index_creation() {
 }
 
 #[test]
-fn undated_legacy_windows_file_remains_available_for_bracketing_fallback() {
+fn undated_legacy_windows_file_is_not_used_as_bracketing_fallback() {
     let temp = tempdir().unwrap();
     let capture_root = temp.path().join("capture");
     let paths = CaptureRootPaths::new(&capture_root);
@@ -164,11 +168,7 @@ fn undated_legacy_windows_file_remains_available_for_bracketing_fallback() {
     let base = Utc.with_ymd_and_hms(2026, 5, 25, 12, 0, 0).unwrap();
     fs::write(
         paths.windows_dir.join("legacy.windows.jsonl"),
-        format!(
-            "{}\n{}\n",
-            window_snapshot_line(base - Duration::seconds(10), 1),
-            window_snapshot_line(base + Duration::seconds(10), 2)
-        ),
+        format!("{}\n", window_snapshot_line(base - Duration::hours(1), 1)),
     )
     .unwrap();
     seed_frames_2fps(&capture_root, 2);
@@ -180,19 +180,49 @@ fn undated_legacy_windows_file_remains_available_for_bracketing_fallback() {
     ))
     .unwrap();
 
-    assert_eq!(response.state, "ready");
     let exported_windows = read_jsonl_values(&response.bundle_path.join("events/windows.jsonl"));
-    assert_eq!(exported_windows.len(), 2);
-    let exported_ids: Vec<Value> = exported_windows
-        .iter()
-        .map(|record| record["payload"]["windows"][0]["windowID"].clone())
-        .collect();
-    assert_eq!(exported_ids, vec![json!(1), json!(2)]);
+    assert!(
+        exported_windows.is_empty(),
+        "undated legacy window logs should not be compatibility inputs"
+    );
+    let sources: Value = read_json(&response.bundle_path.join("sources.json"));
+    assert!(sources["sources"].as_array().unwrap().iter().any(|source| {
+        source["source_id"] == "windows"
+            && source["status"] == "degraded"
+            && source["record_count"] == 0
+    }));
+}
 
-    let known_gaps = read_jsonl_values(&response.bundle_path.join("quality/known_gaps.jsonl"));
-    assert!(known_gaps
-        .iter()
-        .any(|gap| gap["code"] == "window_snapshot_bracketed"));
+#[test]
+fn fresh_window_snapshot_focused_context_does_not_backfill_ax_lane() {
+    let temp = tempdir().unwrap();
+    let capture_root = temp.path().join("capture");
+    let paths = CaptureRootPaths::new(&capture_root);
+    paths.ensure_directories().unwrap();
+    let base = Utc.with_ymd_and_hms(2026, 5, 25, 12, 0, 0).unwrap();
+    fs::write(
+        paths.windows_dir.join("2026-05-25.windows.jsonl"),
+        format!("{}\n", window_snapshot_with_focused_context_line(base)),
+    )
+    .unwrap();
+    seed_frames_2fps(&capture_root, 2);
+
+    let response = export_ready_bundle(export_request(
+        capture_root,
+        base - Duration::seconds(1),
+        base + Duration::seconds(1),
+    ))
+    .unwrap();
+
+    let ax = read_jsonl_values(&response.bundle_path.join("events/ax.events.jsonl"));
+    assert!(
+        ax.is_empty(),
+        "window focusedContext is retained in windows, not manufactured into AX"
+    );
+    let sources: Value = read_json(&response.bundle_path.join("sources.json"));
+    assert!(sources["sources"].as_array().unwrap().iter().any(|source| {
+        source["source_id"] == "ax" && source["status"] == "degraded" && source["record_count"] == 0
+    }));
 }
 
 fn export_request(
@@ -232,6 +262,61 @@ fn window_snapshot_line(time: DateTime<Utc>, window_id: i64) -> String {
                 "bundleID": "com.haptica.synthetic",
                 "title": format!("Window {window_id}")
             }],
+            "displays": [{
+                "displayID": 1,
+                "bounds": {"x": 0, "y": 0, "width": 1512, "height": 982}
+            }]
+        }
+    }))
+    .unwrap()
+}
+
+fn window_snapshot_with_focused_context_line(time: DateTime<Utc>) -> String {
+    serde_json::to_string(&json!({
+        "schemaVersion": 1,
+        "eventType": "capture.window_snapshot",
+        "recordedAt": time.to_rfc3339(),
+        "eventTimeStart": time.to_rfc3339(),
+        "eventTimeEnd": time.to_rfc3339(),
+        "laneID": "capture.windows",
+        "sourceRecordID": "window-focused-context",
+        "payload": {
+            "windows": [{
+                "windowID": 7,
+                "ownerName": "Synthetic",
+                "bundleID": "com.haptica.synthetic",
+                "title": "Focused Window"
+            }],
+            "focusedContext": {
+                "schemaVersion": 1,
+                "generatedAt": time.to_rfc3339(),
+                "isProcessTrusted": true,
+                "status": "available",
+                "activeApplication": {
+                    "appName": "Synthetic",
+                    "bundleID": "com.haptica.synthetic",
+                    "processID": 42
+                },
+                "focusedWindow": {
+                    "title": "Focused Window",
+                    "windowID": 7
+                }
+            }
+        }
+    }))
+    .unwrap()
+}
+
+fn display_snapshot_line(time: DateTime<Utc>) -> String {
+    serde_json::to_string(&json!({
+        "schemaVersion": 1,
+        "eventType": "capture.display_snapshot",
+        "recordedAt": time.to_rfc3339(),
+        "eventTimeStart": time.to_rfc3339(),
+        "eventTimeEnd": time.to_rfc3339(),
+        "laneID": "capture.displays",
+        "sourceRecordID": "display-1",
+        "payload": {
             "displays": [{
                 "displayID": 1,
                 "bounds": {"x": 0, "y": 0, "width": 1512, "height": 982}

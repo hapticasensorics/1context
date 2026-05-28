@@ -25,10 +25,10 @@ and tests:
 ./scripts/memory-db-dev.sh provision
 ```
 
-That command starts a local Postgres + Timescale container, runs the Rust
-`onecontext-memory-db migrate` runner over
-`crates/onecontext-memory-db/migrations/*.sql`, records applied migrations in
-`app.schema_migrations`, and verifies the central `perception.*` tables.
+That command starts a local Postgres + Timescale container, creates the current
+schema from `crates/onecontext-memory-db/schema/current.sql` when the database
+is empty, rejects deleted migration/capture-era schemas, and verifies the
+central `perception.*` tables.
 
 ## Requirements
 
@@ -65,7 +65,7 @@ postgres://onecontext:onecontext_dev@127.0.0.1:15432/onecontext_memory
 
 ## Commands
 
-Start and migrate:
+Start and bootstrap the current schema:
 
 ```bash
 ./scripts/memory-db-dev.sh provision
@@ -139,7 +139,7 @@ ONECONTEXT_MEMORY_DB_NAME              database name
 For the Rust writer and daemon work, export the URL from the script:
 
 ```bash
-export DATABASE_URL="$(./scripts/memory-db-dev.sh url)"
+export ONECONTEXT_MEMORY_DB_URL="$(./scripts/memory-db-dev.sh url)"
 ```
 
 The writer path should insert validated perception objects into:
@@ -166,8 +166,8 @@ Implementation gates:
 
 ```text
 schema:
-  bundled migrations create app, perception, and search schemas only
-  bundled migrations do not create or backfill capture.* tables
+  current schema creates app, perception, and search schemas only
+  current schema does not create or backfill capture.* tables
   perception.series exists before perception.objects/source_records depend on it
   perception.source_records remains the dedupe/idempotency table
 

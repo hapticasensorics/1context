@@ -100,16 +100,11 @@ frame-cache/
   index.jsonl
 ```
 
-Existing fixture root:
+Generated capture samples are external sample packs, not checked-in product
+contracts. When using a sample pack, pass its session manifest explicitly:
 
 ```text
-docs/assets/attention-capture-mockup/attention-debug-20260524-215739/
-```
-
-Initial dashboard session path:
-
-```text
-docs/assets/attention-capture-mockup/attention-debug-20260524-215739/attention-dashboard-session.json
+onecontext-attention-dashboard --session <sample-pack>/attention-dashboard-session.json
 ```
 
 Machine-readable schema:

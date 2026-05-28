@@ -1,25 +1,12 @@
-// Sections extractor. Reads the post-frontmatter markdown body for
-// HTML-comment markers that opt sub-page rendering into the
-// pipeline. The marker syntax is intentionally invisible in the
-// rendered HTML and harmless if the renderer ignores it:
+// Sections extractor. Reads inline HTML-comment markers that opt H2
+// sections into sub-page rendering:
 //
 //   <!-- section: { slug: "2026-04-26", talk: true, date: "2026-04-26" } -->
 //   ## Today · 2026-04-26 · Sunday
 //   [content...]
 //
-// The marker MUST sit immediately before an H2 (with at most one
-// blank line between). It applies to that H2 + everything until the
-// next H2 (whether marked or not) or end-of-body — so authors don't
-// have to mark every section to opt one section in.
-//
-// Why HTML comments and not a fenced-div directive (`:::section`)?
-//   - The H2 stays the canonical heading; the TOC builder finds it
-//     unchanged. A fenced-div would need to wrap the H2 + content
-//     and then re-emit them, which complicates marked's pipeline.
-//   - Comments are invisible to the markdown rendering. Pages that
-//     also feed downstream tools (LLMs reading the .md twin) get
-//     a quiet metadata channel rather than visible directive syntax.
-//   - Authors can drop a marker on existing H2s without restructuring.
+// The marker must sit immediately before an H2, with at most one
+// blank line between.
 //
 // Returns: { sections: [{ slug, talk, date, title, anchor, body }],
 //            cleanBody: string }
@@ -29,54 +16,24 @@
 // the marker comments stripped (so the parent renders without them
 // showing up as raw HTML in a literal-comment-stripper).
 
-// Strict marker form: payload must be a `{...}` block. Catches the
-// happy case where the author wrote `<!-- section: { slug: "x" } -->`.
 const SECTION_MARKER_RE =
   /^[ \t]*<!--[ \t]*section[ \t]*:?[ \t]*(\{[\s\S]*?\})[ \t]*-->[ \t]*$/;
 
-// Loose detector — catches lines that LOOK like an attempted section
-// marker (start with `<!-- section`) but didn't match the strict form
-// above. Used to fail loudly on malformed markers (missing brace,
-// stray text) instead of silently dropping them on the floor.
 const SECTION_MARKER_LOOSE_RE = /^[ \t]*<!--[ \t]*section\b/;
 
-// Match an H2 line: `## ...`. Captures the heading text (sans `## `).
 const H2_RE = /^##[ \t]+(.+?)[ \t]*$/;
 
-// Slug format used for section sub-page filenames AND URL segments.
-// Matches the frontmatter validator's SLUG_RE so a section slug is
-// the same flavour as a page slug. Catches `../etc`, `UPPERCASE`,
-// empty strings, embedded spaces, etc. — all of which would either
-// produce a confusing filename or escape the output dir.
 const SECTION_SLUG_RE = /^[a-z0-9][a-z0-9-]{0,59}$/;
 
-// 1Context-convention slug for an anchor — must mirror toc.mjs's
-// slugifyHeading exactly so the TOC and the section anchors agree.
 import { slugifyHeading } from './toc.mjs';
 
 /**
- * Parse the section JSON-ish payload from a marker comment. The
- * payload is JSON-with-relaxed-keys (single-quoted strings allowed,
- * unquoted keys allowed). We do a forgiving normalization rather
- * than require strict JSON because authors will hand-write these.
- *
- * After parsing, validate semantic invariants:
- *   - `slug` is required and must match SECTION_SLUG_RE
- *   - `talk` if present must be boolean
- *   - `date` if present must be a YYYY-MM-DD string
- * Anything wrong → throw, so the renderer fails loudly. Silent
- * drops are how authors discover their sections didn't render
- * three deploys later.
+ * Parse the marker payload and validate the section contract.
  */
 function parseSectionPayload(raw) {
-  // Normalize: convert single-quoted strings to double-quoted, quote
-  // bare keys. This is a tiny ad-hoc parser, not a full JSON5.
   const normalized = raw
-    // Quote bare keys: { slug: "foo" } → { "slug": "foo" }
     .replace(/([{,]\s*)([A-Za-z_][A-Za-z0-9_]*)\s*:/g, '$1"$2":')
-    // Single-quoted string values → double-quoted
     .replace(/:\s*'([^']*)'/g, ': "$1"')
-    // Trailing commas before }
     .replace(/,\s*\}/g, '}');
   let parsed;
   try {
@@ -119,16 +76,6 @@ function validateSectionPayload(p, raw) {
 }
 
 /**
- * Extract sections from a markdown body. Mutates nothing; returns a
- * fresh structure. The caller chooses what to do with the sections
- * (for-you wants per-section sub-page renders; concept pages will
- * have zero sections and pass straight through).
- *
- * If the frontmatter declares a `sections:` list, that list ALSO
- * contributes section configurations (matching by `slug` to a
- * heading anchor); the marker syntax is the primary mechanism but
- * frontmatter declarations work as a fallback.
- *
  * @param {string} body
  * @param {object} [frontmatter]
  * @returns {{ sections: object[], cleanBody: string }}
@@ -175,35 +122,6 @@ export function extractSections(body, frontmatter = {}) {
       break; // first non-blank line above the H2 is the only candidate
     }
     headings.push({ line: i, text, anchor, marker });
-  }
-
-  // Third pass: any frontmatter-declared sections that haven't been
-  // matched by an inline marker. fm.sections = [{ slug, anchor,
-  // talk?, date? }] — anchor matches a heading's slugified text.
-  // If an entry references an anchor that doesn't exist in the body,
-  // throw — silent drops mean the author thinks they declared a
-  // section that never renders.
-  const fmSections = Array.isArray(frontmatter.sections) ? frontmatter.sections : [];
-  for (const fm of fmSections) {
-    if (!fm.anchor) {
-      throw new Error(
-        `frontmatter sections[] entry missing required "anchor" field: ${JSON.stringify(fm)}`
-      );
-    }
-    const h = headings.find((x) => x.anchor === fm.anchor);
-    if (!h) {
-      const known = headings.map((x) => x.anchor).join(', ') || '(none)';
-      throw new Error(
-        `frontmatter sections[] anchor "${fm.anchor}" doesn't match any H2 in the body. Known H2 anchors: ${known}`
-      );
-    }
-    if (h.marker) continue; // inline marker wins
-    if (typeof fm.slug !== 'string' || !SECTION_SLUG_RE.test(fm.slug)) {
-      throw new Error(
-        `frontmatter sections[] entry slug "${fm.slug}" must match ${SECTION_SLUG_RE}`
-      );
-    }
-    h.marker = { ...fm };
   }
 
   // Build section records. Each section's body starts at its H2 line

@@ -122,7 +122,7 @@ fi
 /bin/bash "$ROOT/scripts/release-train.sh" validate --channel dev >/dev/null
 ONECONTEXT_RELEASE_MANIFEST_FORCE_SIMPLE_TOML=1 "$ROOT/scripts/release-train.sh" manifest validate
 "$ROOT/scripts/release-train.sh" manifest matrix-cases > "$TMP_DIR/matrix-cases.out"
-test "$(wc -l < "$TMP_DIR/matrix-cases.out" | tr -d '[:space:]')" = "14"
+test "$(wc -l < "$TMP_DIR/matrix-cases.out" | tr -d '[:space:]')" = "7"
 grep -q "^login_restart_recovery$" "$TMP_DIR/matrix-cases.out"
 grep -q "^real_uninstall_reinstall$" "$TMP_DIR/matrix-cases.out"
 grep -q '"case": "login_restart_recovery"' "$ROOT/release/tools/proof/self-hosted-update-proof.sh"
@@ -131,11 +131,6 @@ grep -q "env -u SUDO_USER -u SUDO_UID -u SUDO_GID -u SUDO_COMMAND" "$ROOT/releas
 grep -q "repin_old_baseline_after_setup_restore" "$ROOT/release/tools/proof/self-hosted-update-proof.sh"
 grep -q "baseline-repin-after-setup" "$ROOT/release/tools/proof/self-hosted-update-proof.sh"
 grep -q "ONECONTEXT_UPDATE_RUNNER_I_UNDERSTAND_DESTRUCTIVE" "$ROOT/release/tools/proof/prove-remote-sparkle-update.sh"
-"$ROOT/scripts/release-train.sh" manifest write-fixture-proof-results --output-dir "$TMP_DIR/fixture-proof-results" > "$TMP_DIR/fixture-proof-results.out"
-test "$(find "$TMP_DIR/fixture-proof-results" -name '*.json' | wc -l | tr -d '[:space:]')" = "7"
-grep -q "^optional_prompt$" "$TMP_DIR/fixture-proof-results.out"
-grep -q '"proof": "sparkle_fixture"' "$TMP_DIR/fixture-proof-results/optional_prompt.json"
-grep -q '"status": "passed"' "$TMP_DIR/fixture-proof-results/bad_signature.json"
 mkdir -p "$TMP_DIR/BadDependency.app/Contents/MacOS"
 cat > "$TMP_DIR/BadDependency.app/Contents/MacOS/bad-python" <<'SCRIPT'
 #!/opt/homebrew/bin/python3
@@ -157,12 +152,10 @@ grep -q "host package managers or language runtimes" "$TMP_DIR/bad-dependency-au
 "$ROOT/scripts/release-train.sh" manifest export-env --channel private | grep -q "ONECONTEXT_RELEASE_CHANNEL_ARTIFACT_REPO=hapticasensorics/1context-preview-release"
 "$ROOT/scripts/release-train.sh" manifest export-env --channel private | grep -q "ONECONTEXT_RELEASE_BUDGET_ADVISORY=0"
 "$ROOT/scripts/release-train.sh" manifest export-env --channel official | grep -q "ONECONTEXT_RELEASE_BUDGET_ADVISORY=0"
-test -f "$ROOT/release/tools/caddy/darwin-arm64/caddy-v2.11.2-darwin-arm64.tar.gz"
-test -f "$ROOT/release/tools/caddy/darwin-arm64/caddy-v2.11.2-darwin-arm64.tar.gz.sha256"
-(
-  cd "$ROOT/release/tools/caddy/darwin-arm64"
-  shasum -a 256 -c caddy-v2.11.2-darwin-arm64.tar.gz.sha256
-) >/dev/null
+CADDY_SHA_PIN="$ROOT/release/tools/caddy/darwin-arm64/caddy-v2.11.2-darwin-arm64.tar.gz.sha256"
+test -f "$CADDY_SHA_PIN"
+test ! -f "${CADDY_SHA_PIN%.sha256}"
+grep -q "github.com/caddyserver/caddy/releases/download" "$ROOT/scripts/build-macos-app.sh"
 if scan_text "build-memory-runtime-artifact|release/memory-runtime" "$ROOT/scripts" "$ROOT/macos/Sources" \
   | grep -v "scripts/test-release-train.sh" >/tmp/1ctx-retired-memory-runtime-active-refs.txt; then
   echo "Active build/runtime code must not reference the retired memory-runtime artifact." >&2

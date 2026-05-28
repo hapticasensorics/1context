@@ -12,7 +12,6 @@ import {
   validateAppcast,
   validateManifest,
   writeAssetManifest,
-  writeFixtureProofResults,
 } from "../src/manifest.js";
 import { fromRoot } from "../src/paths.js";
 
@@ -80,16 +79,22 @@ test("asset manifest stores release-relative paths", async () => {
   assert(!JSON.stringify(payload).includes("/Users/"));
 });
 
-test("fixture proof results cover Sparkle fixture cases", () => {
+test("updater matrix only lists real proof cases", () => {
   const manifest = loadManifestFile();
-  const outputDir = tmpDir("proof-results");
-  const written = writeFixtureProofResults(manifest, outputDir);
-  assert.equal(written.length, 7);
-  assert(written.includes("optional_prompt"));
-  const badSignature = JSON.parse(fs.readFileSync(path.join(outputDir, "bad_signature.json"), "utf8")) as { status: string; proof: string };
-  assert.equal(badSignature.status, "passed");
-  assert.equal(badSignature.proof, "sparkle_fixture");
-  assert.equal(matrixCases(manifest).length, 14);
+  assert.deepEqual(matrixCases(manifest), [
+    "already_current_manual_check",
+    "mandatory_automatic_success",
+    "stale_sparkle_defaults",
+    "old_app_with_new_appcast",
+    "app_relaunch_recovery",
+    "login_restart_recovery",
+    "real_uninstall_reinstall",
+  ]);
+  assert(
+    manifest.updater_matrix.every((item) =>
+      new Set(["self_hosted_gui_update", "real_uninstall_reinstall"]).has(item.proof)
+    )
+  );
 });
 
 test("clean-tree gate rejects untracked files", async () => {

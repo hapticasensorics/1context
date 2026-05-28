@@ -49,7 +49,9 @@ impl TimelineState {
             );
         }
 
-        add_candidate_frame_events(fixture, &lanes, duration_ms, &mut events);
+        if fixture.filter_output.raw_buffer_audit.is_empty() {
+            add_candidate_frame_events(fixture, &lanes, duration_ms, &mut events);
+        }
         for item in &fixture.filter_output.raw_buffer_audit {
             events.push(TimelineEvent {
                 id: item.candidate_id.clone(),

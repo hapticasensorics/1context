@@ -1,6 +1,6 @@
 # writeObjects Index Profile
 
-Scope: Perception DB migrations 004-008 and the `write_objects` duplicate,
+Scope: the current Perception DB schema and the `write_objects` duplicate,
 mutable update, edge, and receipt paths.
 
 Dev DB snapshot used for this pass:
@@ -8,7 +8,7 @@ Dev DB snapshot used for this pass:
 - `perception.source_records`: 3014 rows
 - `perception.objects`: 3014 rows
 - `perception.object_edges`: 2 rows
-- Applied migrations: 001 through 011
+- Schema: `crates/onecontext-memory-db/schema/current.sql`
 
 ## Writer Query Shapes
 
@@ -54,7 +54,7 @@ JOIN perception.source_records target
 
 ## Current Index Coverage
 
-Migration 004 already creates:
+The current schema creates:
 
 - `UNIQUE (source_id, source_record_key)`
 - `UNIQUE (object_id)`
@@ -62,7 +62,7 @@ Migration 004 already creates:
 - `source_records_source_seen_idx`
 - `source_records_series_time_idx`
 
-Migration 007 already creates directional edge read indexes:
+The current schema creates directional edge read indexes:
 
 - `object_edges_from_idx` on `(user_id, from_object_id, edge_kind)`
 - `object_edges_to_idx` on `(user_id, to_object_id, edge_kind)`
@@ -92,7 +92,7 @@ heap page is already on the hot path for exact duplicates.
 
 ## Recommendation
 
-Do not add a new migration index for this pass.
+Do not add a new index for this pass.
 
 The current narrow unique indexes cover the writer's exact duplicate, mutable
 conflict, edge target, and receipt lookups with one-row index probes. A covering

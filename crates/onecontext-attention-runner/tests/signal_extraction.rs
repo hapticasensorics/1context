@@ -33,6 +33,7 @@ fn fixture() -> AttentionFixture {
                     fps: 2.0,
                     count: 1,
                     naming: "frame-{index:03}.jpg".to_string(),
+                    frame_times_ms: None,
                 }],
             },
             inputs: DashboardInputsConfig {
@@ -214,6 +215,29 @@ fn scroll_distinguishes_fast_skim_from_pause_friendly_coverage() {
 }
 
 #[test]
+fn zero_distance_scroll_is_noise() {
+    let scored = score_one(vec![event(
+        "capture.ux.scroll_burst.v1",
+        json!({
+            "payload": {
+                "scroll": {
+                    "duration_ms": 0,
+                    "event_count": 1,
+                    "momentum_event_count": 0,
+                    "total_dx": 0,
+                    "total_dy": 0,
+                    "max_abs_dy": 0
+                }
+            }
+        }),
+    )]);
+
+    assert_eq!(scored.signals[0].kind, "scroll_noise");
+    assert!(scored.attention_score < 0.1);
+    assert!(scored.memory_value_score < 0.01);
+}
+
+#[test]
 fn useful_ax_selection_and_value_changes_become_hard_keep() {
     let selection = score_one(vec![event(
         "capture.ax_semantic.selected_text_changed.v1",
@@ -281,4 +305,24 @@ fn static_active_window_metadata_is_low_information() {
     assert!(scored.signals[0]
         .explanation
         .contains("low-information visual penalty"));
+}
+
+#[test]
+fn derived_top_band_visual_change_marks_window_transition() {
+    let scored = score_one(vec![event(
+        "attention.derived.visual_frame_change.v1",
+        json!({
+            "payload": {
+                "from_frame": 66,
+                "to_frame": 67,
+                "full_diff_score": 0.24,
+                "top_band_diff_score": 0.31,
+                "reason": "top/window band changed between adjacent review frames"
+            }
+        }),
+    )]);
+
+    assert_eq!(scored.signals[0].kind, "visual_window_transition");
+    assert_eq!(scored.signals[0].hard_keep, Some(true));
+    assert!(scored.attention_score > 0.7);
 }

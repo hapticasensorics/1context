@@ -11,7 +11,7 @@ use onecontext_capture_core::{
     validate_ready_bundle, BundleDirectoryClass, BundleEntry, BundleState, CaptureRootPaths,
     CaptureTarget, ExportRequest, RetentionPolicy, SpoolQuery, SweepActionKind, CONTRACT_VERSION,
 };
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
 const SURFACE: &str = "capture_bundler";
@@ -57,14 +57,30 @@ fn run() -> Result<()> {
 
 fn print_usage() {
     eprintln!(
-        "usage:\n  onecontext-capture-bundler export --start <rfc3339> --end <rfc3339> [--capture-root PATH] [--capture-id ID] [--target active-window|all-windows|custom:<value>] [--frames-2fps-dir PATH] [--debug-video PATH] [--debug-pin] [--status-json PATH] [--ux-status-json PATH] [--sampler-json PATH] [--browser-proof-json PATH] [--dry-run]\n  onecontext-capture-bundler list [--capture-root PATH] [--class live|processing|failed|pinned|all]\n  onecontext-capture-bundler validate (--bundle PATH | --capture-id ID [--capture-root PATH]) [--strict]\n  onecontext-capture-bundler sweep [--capture-root PATH] [--processing-max-age-seconds N] [--live-max-age-seconds N] [--failed-max-age-seconds N] [--keep-live N] [--apply]\n  onecontext-capture-bundler status [--capture-root PATH]\n  onecontext-capture-bundler describe"
+        "usage:\n  onecontext-capture-bundler export [--start <rfc3339>] [--end <rfc3339>] [--visual-recording-json PATH] [--capture-root PATH] [--capture-id ID] [--target active-window|all-windows|custom:<value>] [--frames-2fps-dir PATH] [--debug-pin] [--status-json PATH] [--ux-status-json PATH] [--sampler-json PATH] [--browser-proof-json PATH] [--dry-run]\n  onecontext-capture-bundler list [--capture-root PATH] [--class live|processing|failed|pinned|all]\n  onecontext-capture-bundler validate (--bundle PATH | --capture-id ID [--capture-root PATH]) [--strict]\n  onecontext-capture-bundler sweep [--capture-root PATH] [--processing-max-age-seconds N] [--live-max-age-seconds N] [--failed-max-age-seconds N] [--keep-live N] [--apply]\n  onecontext-capture-bundler status [--capture-root PATH]\n  onecontext-capture-bundler describe"
     );
 }
 
 fn export_command(mut args: Vec<String>) -> Result<()> {
     let capture_root = capture_root_from_args(&mut args)?;
-    let start = required_datetime(&mut args, "--start")?;
-    let end = required_datetime(&mut args, "--end")?;
+    let start_arg = optional_datetime(&mut args, "--start")?;
+    let end_arg = optional_datetime(&mut args, "--end")?;
+    let visual_recording_json_path = take_option_path(&mut args, "--visual-recording-json");
+    let visual_recording = read_visual_recording_json(visual_recording_json_path.as_deref())?;
+    let start = match start_arg {
+        Some(start) => start,
+        None => visual_recording
+            .as_ref()
+            .map(|recording| recording.capture_started_at)
+            .ok_or_else(|| anyhow!("missing --start or --visual-recording-json"))?,
+    };
+    let end = match end_arg {
+        Some(end) => end,
+        None => visual_recording
+            .as_ref()
+            .map(|recording| recording.capture_ended_at)
+            .ok_or_else(|| anyhow!("missing --end or --visual-recording-json"))?,
+    };
     if end <= start {
         bail!("--end must be later than --start");
     }
@@ -80,8 +96,19 @@ fn export_command(mut args: Vec<String>) -> Result<()> {
     let ux_status_json_path = take_option_path(&mut args, "--ux-status-json");
     let sampler_json_path = take_option_path(&mut args, "--sampler-json");
     let browser_proof_json_path = take_option_path(&mut args, "--browser-proof-json");
-    let frames_2fps_dir = take_option_path(&mut args, "--frames-2fps-dir");
-    let debug_video_path = take_option_path(&mut args, "--debug-video");
+    let frames_2fps_dir_arg = take_option_path(&mut args, "--frames-2fps-dir");
+    let debug_video_path_arg = take_option_path(&mut args, "--debug-video");
+    let frames_2fps_dir_explicit = frames_2fps_dir_arg.is_some();
+    if debug_video_path_arg.is_some() {
+        bail!("--debug-video is retired; READY bundles use frame_2fps media only");
+    }
+    let debug_video_path_explicit = false;
+    let frames_2fps_dir = frames_2fps_dir_arg.or_else(|| {
+        visual_recording
+            .as_ref()
+            .map(|recording| recording.frames_dir.clone())
+    });
+    let debug_video_path = None;
     reject_extra_args(&args)?;
 
     if dry_run {
@@ -108,7 +135,14 @@ fn export_command(mut args: Vec<String>) -> Result<()> {
                 &sampler_json_path,
                 &browser_proof_json_path,
             ),
-            "visual_inputs": visual_inputs_json(&capture_root, &frames_2fps_dir, &debug_video_path),
+            "visual_inputs": visual_inputs_json(
+                &capture_root,
+                &visual_recording_json_path,
+                &frames_2fps_dir,
+                frames_2fps_dir_explicit,
+                &debug_video_path,
+                debug_video_path_explicit,
+            ),
             "spool_window": plan,
         }));
     }
@@ -157,7 +191,14 @@ fn export_command(mut args: Vec<String>) -> Result<()> {
         "time_range": time_range_json(start, end),
         "target": target_label(&target),
         "debug_pin": debug_pin,
-        "visual_inputs": visual_inputs_json(&capture_root, &frames_2fps_dir, &debug_video_path),
+        "visual_inputs": visual_inputs_json(
+            &capture_root,
+            &visual_recording_json_path,
+            &frames_2fps_dir,
+            frames_2fps_dir_explicit,
+            &debug_video_path,
+            debug_video_path_explicit,
+        ),
         "contract_version": CONTRACT_VERSION,
         "bundle": response,
         "validation": validation,
@@ -298,9 +339,11 @@ fn describe_command(args: Vec<String>) -> Result<()> {
                 "args": [
                     "--start <rfc3339>",
                     "--end <rfc3339>",
+                    "--visual-recording-json <path>",
                     "--capture-root <path>",
                     "--capture-id <id>",
                     "--target active-window|all-windows|custom:<value>",
+                    "--frames-2fps-dir <path>",
                     "--debug-pin",
                     "--status-json <path>",
                     "--ux-status-json <path>",
@@ -310,7 +353,8 @@ fn describe_command(args: Vec<String>) -> Result<()> {
                 ],
                 "status": "implemented",
                 "implementation": "onecontext_capture_core::export_ready_bundle",
-                "dry_run": "reads spool window and reports the non-mutating plan"
+                "dry_run": "reads spool window and reports the non-mutating plan",
+                "visual_recording_json": "derives omitted --start/--end from capture_started_at/capture_ended_at and omitted --frames-2fps-dir from frames_dir; recorder debug video paths are not READY media"
             },
             "list": {
                 "args": ["--capture-root <path>", "--class live|processing|failed|pinned|all"],
@@ -403,8 +447,13 @@ fn default_capture_root() -> PathBuf {
     }
 }
 
-fn required_datetime(args: &mut Vec<String>, name: &str) -> Result<DateTime<Utc>> {
-    let value = take_option_value(args, name).ok_or_else(|| anyhow!("missing {name}"))?;
+fn optional_datetime(args: &mut Vec<String>, name: &str) -> Result<Option<DateTime<Utc>>> {
+    take_option_value(args, name)
+        .map(|value| parse_rfc3339_datetime(&value, name))
+        .transpose()
+}
+
+fn parse_rfc3339_datetime(value: &str, name: &str) -> Result<DateTime<Utc>> {
     Ok(DateTime::parse_from_rfc3339(&value)
         .with_context(|| format!("{name} must be RFC3339"))?
         .with_timezone(&Utc))
@@ -498,6 +547,32 @@ fn read_optional_json(path: Option<&Path>, name: &str) -> Result<Option<Value>> 
     .transpose()
 }
 
+fn read_visual_recording_json(path: Option<&Path>) -> Result<Option<VisualRecordingExportHints>> {
+    path.map(|path| {
+        let bytes = fs::read(path)
+            .with_context(|| format!("read --visual-recording-json {}", path.display()))?;
+        parse_visual_recording_json(&bytes)
+            .with_context(|| format!("parse --visual-recording-json {}", path.display()))
+    })
+    .transpose()
+}
+
+fn parse_visual_recording_json(bytes: &[u8]) -> Result<VisualRecordingExportHints> {
+    let value: Value = serde_json::from_slice(bytes)?;
+    let payload = value.get("result").unwrap_or(&value);
+    let raw = VisualRecordingJson::deserialize(payload)?;
+    let capture_started_at = parse_rfc3339_datetime(&raw.capture_started_at, "capture_started_at")?;
+    let capture_ended_at = parse_rfc3339_datetime(&raw.capture_ended_at, "capture_ended_at")?;
+    if raw.frames_dir.as_os_str().is_empty() {
+        bail!("frames_dir must not be empty");
+    }
+    Ok(VisualRecordingExportHints {
+        capture_started_at,
+        capture_ended_at,
+        frames_dir: raw.frames_dir,
+    })
+}
+
 fn capability_inputs_json(
     status_json_path: &Option<PathBuf>,
     ux_status_json_path: &Option<PathBuf>,
@@ -514,20 +589,37 @@ fn capability_inputs_json(
 
 fn visual_inputs_json(
     capture_root: &Path,
+    visual_recording_json_path: &Option<PathBuf>,
     frames_2fps_dir: &Option<PathBuf>,
+    frames_2fps_dir_explicit: bool,
     debug_video_path: &Option<PathBuf>,
+    debug_video_path_explicit: bool,
 ) -> Value {
     let default_frames_dir = capture_root.join("media").join("frames-2fps");
     let effective_frames_dir = frames_2fps_dir.as_ref().unwrap_or(&default_frames_dir);
+    let frame_manifest_path = [
+        "frames-2fps-manifest.jsonl",
+        "frame-manifest.jsonl",
+        "manifest.jsonl",
+    ]
+    .iter()
+    .map(|name| effective_frames_dir.join(name))
+    .find(|path| path.is_file());
     json!({
+        "visual_recording_json": optional_path_status(visual_recording_json_path),
         "frames_2fps_dir": {
             "path": effective_frames_dir,
-            "explicit": frames_2fps_dir.is_some(),
+            "explicit": frames_2fps_dir_explicit,
             "exists": effective_frames_dir.is_dir(),
             "required_for_ready": true,
-            "source": "screen_recording_swift_decoder"
+            "source": "screen_recording_swift_decoder",
+            "timing_manifest": optional_path_status(&frame_manifest_path)
         },
-        "debug_video": optional_path_status(debug_video_path),
+        "debug_video": {
+            "path": debug_video_path,
+            "explicit": debug_video_path_explicit,
+            "exists": debug_video_path.as_ref().is_some_and(|path| path.is_file())
+        },
     })
 }
 
@@ -671,6 +763,20 @@ struct BundleSummary {
     expires_at: Option<String>,
 }
 
+#[derive(Debug, Deserialize)]
+struct VisualRecordingJson {
+    capture_started_at: String,
+    capture_ended_at: String,
+    frames_dir: PathBuf,
+}
+
+#[derive(Debug)]
+struct VisualRecordingExportHints {
+    capture_started_at: DateTime<Utc>,
+    capture_ended_at: DateTime<Utc>,
+    frames_dir: PathBuf,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -712,5 +818,66 @@ mod tests {
     fn validation_severity_stays_serializable_for_json_output() {
         let value = serde_json::to_value(ValidationSeverity::Fatal).unwrap();
         assert_eq!(value, json!("fatal"));
+    }
+
+    #[test]
+    fn visual_recording_json_provides_export_hints() {
+        let hints = parse_visual_recording_json(
+            br#"{
+                "schema_version": 1,
+                "surface": "capture_visual_recording",
+                "status": "ok",
+                "capture_started_at": "2026-05-27T20:15:10.125Z",
+                "capture_ended_at": "2026-05-27T20:16:10.625Z",
+                "frames_dir": "/tmp/visual-recordings/run/frames-2fps",
+                "video_path": "/tmp/visual-recordings/run/screen-recording.mov"
+            }"#,
+        )
+        .unwrap();
+
+        assert_eq!(
+            hints.capture_started_at.to_rfc3339(),
+            "2026-05-27T20:15:10.125+00:00"
+        );
+        assert_eq!(
+            hints.capture_ended_at.to_rfc3339(),
+            "2026-05-27T20:16:10.625+00:00"
+        );
+        assert_eq!(
+            hints.frames_dir,
+            PathBuf::from("/tmp/visual-recordings/run/frames-2fps")
+        );
+    }
+
+    #[test]
+    fn visual_recording_json_accepts_jsonrpc_result_wrapper() {
+        let hints = parse_visual_recording_json(
+            br#"{
+                "jsonrpc": "2.0",
+                "id": 1,
+                "result": {
+                    "capture_started_at": "2026-05-27T20:15:10Z",
+                    "capture_ended_at": "2026-05-27T20:16:10Z",
+                    "frames_dir": "/tmp/visual-recordings/run/frames-2fps"
+                }
+            }"#,
+        )
+        .unwrap();
+
+        assert_eq!(
+            hints.capture_started_at.to_rfc3339(),
+            "2026-05-27T20:15:10+00:00"
+        );
+    }
+
+    #[test]
+    fn visual_recording_json_requires_recorder_fields() {
+        assert!(parse_visual_recording_json(
+            br#"{
+                "capture_started_at": "2026-05-27T20:15:10Z",
+                "capture_ended_at": "2026-05-27T20:16:10Z"
+            }"#,
+        )
+        .is_err());
     }
 }

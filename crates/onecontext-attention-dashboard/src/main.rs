@@ -12,8 +12,6 @@ use anyhow::{bail, Result};
 
 use crate::app::AttentionDashboardApp;
 
-const DEFAULT_SESSION_PATH: &str = "docs/assets/attention-capture-mockup/attention-debug-20260524-215739/attention-dashboard-session.json";
-
 fn main() -> eframe::Result<()> {
     let session_path = match parse_args() {
         Ok(Some(path)) => path,
@@ -64,23 +62,12 @@ fn parse_args() -> Result<Option<PathBuf>> {
         }
     }
 
-    Ok(Some(session_path.unwrap_or_else(default_session_path)))
+    match session_path {
+        Some(path) => Ok(Some(path)),
+        None => bail!("--session requires a path"),
+    }
 }
 
 fn print_usage() {
-    println!(
-        "usage: onecontext-attention-dashboard [--session <attention-dashboard-session.json>]\n\
-         default session: {DEFAULT_SESSION_PATH}"
-    );
-}
-
-fn default_session_path() -> PathBuf {
-    let cwd_path = PathBuf::from(DEFAULT_SESSION_PATH);
-    if cwd_path.exists() {
-        return cwd_path;
-    }
-
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .join(DEFAULT_SESSION_PATH)
+    println!("usage: onecontext-attention-dashboard --session <attention-dashboard-session.json>");
 }
