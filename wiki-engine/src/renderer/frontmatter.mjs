@@ -54,6 +54,16 @@ const BOOLEAN_FIELDS = [
 // List-of-string fields — frontmatter arrays of plain strings.
 const STRING_LIST_FIELDS = ['tags', 'keywords', 'shared_with', 'related'];
 
+// List-of-object fields — frontmatter arrays of objects with their
+// own internal schema. Validation here is shallow; deeper semantic
+// checks live with the renderer code that consumes the field.
+const OBJECT_LIST_FIELDS = {
+  // sections: opt-in per-section sub-page rendering (see sections.mjs).
+  // Each entry: { slug: <string>, anchor: <string>, talk?: <bool>, date?: <string> }
+  // This is the frontmatter alternative to inline `<!-- section: ... -->` markers.
+  sections: ['slug', 'anchor'],
+};
+
 // Slugs allow lowercase alphanumeric + hyphens, and dots in the
 // middle for sibling-suffix conventions like `<base>.talk`,
 // `<base>.internal`, `<base>.private`, and combinations such as
@@ -113,6 +123,33 @@ export function parseFrontmatter(source, { slug } = {}) {
         slug,
         `field "${field}" must be a list of strings; got ${JSON.stringify(data[field])}`
       );
+    }
+  }
+
+  // 4b. Object-list fields are arrays of objects with required string keys.
+  for (const [field, requiredKeys] of Object.entries(OBJECT_LIST_FIELDS)) {
+    if (data[field] === undefined) continue;
+    if (!Array.isArray(data[field])) {
+      throw new FrontmatterError(
+        slug,
+        `field "${field}" must be a list of objects; got ${JSON.stringify(data[field])}`
+      );
+    }
+    for (const entry of data[field]) {
+      if (entry === null || typeof entry !== 'object' || Array.isArray(entry)) {
+        throw new FrontmatterError(
+          slug,
+          `field "${field}" entries must be objects; got ${JSON.stringify(entry)}`
+        );
+      }
+      for (const key of requiredKeys) {
+        if (typeof entry[key] !== 'string' || entry[key] === '') {
+          throw new FrontmatterError(
+            slug,
+            `field "${field}" entry missing required string key "${key}": ${JSON.stringify(entry)}`
+          );
+        }
+      }
     }
   }
 

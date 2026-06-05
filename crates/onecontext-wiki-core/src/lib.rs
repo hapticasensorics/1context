@@ -6318,8 +6318,6 @@ mod tests {
             added.asset.citation_uri,
             "user-wiki://page/topics/assets/topic-map.png"
         );
-        assert_eq!(added.asset.kind, "image");
-        assert_eq!(added.asset.content_role, "inline_image");
         assert_eq!(added.asset.media_type, "image/png");
         assert_eq!(added.asset.kind, "image");
         assert_eq!(added.asset.content_role, "image");

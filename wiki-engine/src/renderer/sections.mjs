@@ -8,6 +8,16 @@
 // The marker must sit immediately before an H2, with at most one
 // blank line between.
 //
+// Pages may also declare section sub-pages in frontmatter:
+//
+//   sections:
+//     - slug: "2026-04-26"
+//       anchor: "today-2026-04-26-sunday"
+//       talk: true
+//       date: "2026-04-26"
+//
+// Inline markers win when both mechanisms name the same H2.
+//
 // Returns: { sections: [{ slug, talk, date, title, anchor, body }],
 //            cleanBody: string }
 //
@@ -122,6 +132,28 @@ export function extractSections(body, frontmatter = {}) {
       break; // first non-blank line above the H2 is the only candidate
     }
     headings.push({ line: i, text, anchor, marker });
+  }
+
+  // Third pass: frontmatter-declared sections can match existing
+  // H2s by anchor. This lets authors keep section metadata in page
+  // frontmatter when HTML comments would be noisy or awkward.
+  const fmSections = Array.isArray(frontmatter.sections) ? frontmatter.sections : [];
+  for (const fm of fmSections) {
+    if (!fm.anchor) {
+      throw new Error(
+        `frontmatter sections[] entry missing required "anchor" field: ${JSON.stringify(fm)}`
+      );
+    }
+    const h = headings.find((x) => x.anchor === fm.anchor);
+    if (!h) {
+      const known = headings.map((x) => x.anchor).join(', ') || '(none)';
+      throw new Error(
+        `frontmatter sections[] anchor "${fm.anchor}" doesn't match any H2 in the body. Known H2 anchors: ${known}`
+      );
+    }
+    if (h.marker) continue;
+    validateSectionPayload(fm, `frontmatter sections[] entry ${JSON.stringify(fm)}`);
+    h.marker = { ...fm };
   }
 
   // Build section records. Each section's body starts at its H2 line

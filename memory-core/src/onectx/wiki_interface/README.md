@@ -15,24 +15,22 @@ talk files, sitemap, or publish-status rules.
   `reply_to=<message_id>` for parented replies; use `thread_id=<thread_id>` only
   when an agent is intentionally targeting an existing thread without a specific
   parent message. Omitting both keeps the legacy subject-derived thread.
-- `wiki_ensure`, `wiki_list`, `wiki_page_status`, `wiki_page_open`, `wiki_page_create`,
-  `wiki_page_write_body`, `wiki_page_patch_body`, `wiki_page_delete`,
-  `wiki_page_restore`, `wiki_reference_list`, `wiki_publish_status`, `wiki_publish`, `wiki_agent_identify`,
-  `wiki_agent_register`, `wiki_agent_heartbeat`, `wiki_agent_retire`,
-  `wiki_agent_whoami`, `wiki_agent_list`, `wiki_agent_status`,
-  `wiki_agent_inbox`, `wiki_agent_claim`, `wiki_talk_append`, `wiki_mail_inbox`,
-  `wiki_mail_subscribe`, `wiki_mail_unsubscribe`, `wiki_mail_subscriptions`,
-  `wiki_mail_mark`, `wiki_mail_claim`, `wiki_mail_mark_all`, `wiki_page_watch`,
-  `wiki_page_unwatch`, `wiki_page_assign_role`,
-  `wiki_list_create`, `wiki_list_status`, `wiki_list_members`,
-  `wiki_notify_poll`, and `wiki_notify_ack` are convenience wrappers over the
-  same client.
-- The class client also wraps the current V0 collaboration surface: agent
-  register/identify/heartbeat/retire/whoami/list/status/inbox, talk append,
-  agent-level claim, mail inbox/subscribe/unsubscribe/subscriptions/claim/mark/mark-all,
-  page watch/unwatch/role assignment, list create/status/members, and notifications. `list_status`
-  accepts `include_archived` and `include_snoozed` when an agent needs the
-  hidden-message audit view for a list.
+- `wiki_ensure`, `wiki_status`, `wiki_validate`, `wiki_list`,
+  `wiki_page_status`, `wiki_page_open`, `wiki_page_create`,
+  `wiki_page_create_all`, `wiki_page_write_body`, `wiki_page_patch_body`,
+  `wiki_page_delete`, `wiki_page_restore`, `wiki_asset_add`,
+  `wiki_asset_list`, `wiki_reference_list`, `wiki_publish_status`,
+  `wiki_publish`, `wiki_agent_identify`, `wiki_agent_heartbeat`,
+  `wiki_agent_status`, `wiki_agent_status_by_thread`, `wiki_agent_retire`,
+  `wiki_agent_inbox`, `wiki_mail_send`, `wiki_mail_open`,
+  `wiki_mail_record_injection`, `wiki_mail_claim`, `wiki_mail_mark`,
+  `wiki_mail_snooze`, `wiki_notify_poll`, `wiki_notify_ack`,
+  `wiki_notify_dispatch`, and `wiki_talk_append` are convenience wrappers over
+  the same client.
+- The class client also wraps the current collaboration surface:
+  identify/heartbeat/status/status-by-thread/retire/inbox, bodyless mail open,
+  mail injection receipt recording, mail send/claim/mark/snooze,
+  notification poll/ack/dispatch, and talk append.
 - `authoring.py` is transitional. It still writes route-plan, proposal,
   decision, preview, promotion, and legacy talk-entry records until those
   records are either moved into the Rust core or retired.

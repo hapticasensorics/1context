@@ -308,6 +308,115 @@ Section body.
   assert.match(sections[0].md, /^talk_route: \/nested\/parent\/child-section\/talk$/m);
 });
 
+test('frontmatter sections derive sub-pages by H2 anchor', () => {
+  const source = `---
+title: Parent Page
+slug: parent-page
+route: /nested/parent
+section: project
+access: private
+sections:
+  - slug: frontmatter-section
+    anchor: Child_Section
+    talk: true
+    date: "2026-05-20"
+---
+# Parent Page
+
+## Child Section
+
+Section body.
+`;
+
+  const { sections } = renderPage(source, { slug: 'parent-page' });
+
+  assert.equal(sections.length, 1);
+  assert.equal(sections[0].slug, 'frontmatter-section');
+  assert.equal(sections[0].anchor, 'Child_Section');
+  assert.equal(sections[0].frontmatter.route, '/nested/parent/frontmatter-section');
+  assert.equal(sections[0].frontmatter.parent_anchor, 'Child_Section');
+  assert.equal(sections[0].frontmatter.section_date, '2026-05-20');
+  assert.equal(sections[0].frontmatter.talk_route, '/nested/parent/frontmatter-section/talk');
+  assert.match(sections[0].md, /^route: \/nested\/parent\/frontmatter-section$/m);
+  assert.doesNotMatch(sections[0].md, /^sections:/m);
+});
+
+test('frontmatter sections fail loudly when anchor does not match an H2', () => {
+  const source = `---
+title: Parent Page
+slug: parent-page
+route: /nested/parent
+section: project
+access: private
+sections:
+  - slug: missing-section
+    anchor: not-present
+---
+# Parent Page
+
+## Child Section
+
+Section body.
+`;
+
+  assert.throws(
+    () => renderPage(source, { slug: 'parent-page' }),
+    /frontmatter sections\[\] anchor "not-present" doesn't match any H2/
+  );
+});
+
+test('inline section marker wins over matching frontmatter section entry', () => {
+  const source = `---
+title: Parent Page
+slug: parent-page
+route: /nested/parent
+section: project
+access: private
+sections:
+  - slug: frontmatter-section
+    anchor: Child_Section
+    talk: false
+---
+# Parent Page
+
+<!-- section: { slug: "inline-section", talk: true, date: "2026-05-21" } -->
+## Child Section
+
+Section body.
+`;
+
+  const { sections } = renderPage(source, { slug: 'parent-page' });
+
+  assert.equal(sections.length, 1);
+  assert.equal(sections[0].slug, 'inline-section');
+  assert.equal(sections[0].frontmatter.route, '/nested/parent/inline-section');
+  assert.equal(sections[0].frontmatter.talk_route, '/nested/parent/inline-section/talk');
+  assert.equal(sections[0].frontmatter.section_date, '2026-05-21');
+});
+
+test('frontmatter sections reject malformed object-list entries', () => {
+  const source = `---
+title: Parent Page
+slug: parent-page
+route: /nested/parent
+section: project
+access: private
+sections:
+  - slug: missing-anchor
+---
+# Parent Page
+
+## Child Section
+
+Section body.
+`;
+
+  assert.throws(
+    () => renderPage(source, { slug: 'parent-page' }),
+    /field "sections" entry missing required string key "anchor"/
+  );
+});
+
 test('render-to-dir emits rendered routes for section talk stubs', () => {
   const tmp = mkdtempSync(resolve(tmpdir(), '1ctx-section-talk-'));
   try {
