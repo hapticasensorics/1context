@@ -40,17 +40,17 @@ than revive ad hoc shell verbs.
 The clock and source import horizon are local policy in root `ports.toml`.
 By default, session ports are enabled and `since = "30d"` prevents accidental
 full-history backfills. This is only an import filter for native transcripts;
-it is not a retention policy. Imported lakestore rows do not age out when they
+it is not a retention policy. Imported Perception DB rows do not age out when they
 cross day 31. The explicit `--experience-source` path is for smoke and
 lived-experience replay, so it bypasses the live-port import horizon.
 
 Session import is intentionally chunked. Native Claude/Codex transcripts remain
 read-only; the daemon reads from their last saved byte offset, writes cleaned
-earlier prototype-style rows into the lakestore in batches, saves the cursor after each
+agent-message rows into Perception DB in batches, saves the cursor after each
 durable slice, persists parser state (`session_id`, `cwd`) for resume, and
 reports `limited` when a tick hit its configured caps. A large first backfill is
 therefore many small daemon ticks, not one blocking transaction.
 
 Swift is the native shell for macOS permissions, status, local web, and update
-behavior. Python remains the portable core for storage, ports, state machines,
+behavior. Python remains the thin portable coordinator for ports, state machines,
 and memory planning.

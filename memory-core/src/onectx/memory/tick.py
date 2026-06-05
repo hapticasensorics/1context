@@ -135,7 +135,7 @@ def run_memory_tick(
     execute_render: bool = False,
     render_family_ids: tuple[str, ...] = (),
     include_talk: bool = True,
-    record_evidence: bool = True,
+    record_evidence: bool = False,
     retry_budget: int = 0,
     execute_migrations: bool = False,
     cycle_id: str = "",
@@ -143,8 +143,9 @@ def run_memory_tick(
     if not wiki_only:
         raise MemoryTickError("only --wiki-only memory ticks are implemented")
 
-    store = LakeStore(system.storage_dir)
-    store.ensure()
+    store = LakeStore(system.storage_dir) if record_evidence or freshness_check == "always" else None
+    if store is not None:
+        store.ensure()
     normalized_sources = tuple(normalize_source(source) for source in sources if str(source).strip())
     if freshness_check not in FRESHNESS_CHECK_MODES:
         raise MemoryTickError(f"freshness_check must be one of {sorted(FRESHNESS_CHECK_MODES)}")
@@ -374,6 +375,7 @@ def run_memory_tick(
         run_id=cycle,
         path=out_dir / "runtime-invariants.json",
         checker="memory.tick",
+        record_storage=record_evidence,
     )
     payload = {
         "cycle_id": cycle,
@@ -438,6 +440,47 @@ def run_memory_tick(
     cycle_path.write_text(text, encoding="utf-8")
     content_hash = hashlib.sha256(text.encode("utf-8")).hexdigest()
     artifact_id = stable_id("artifact", "memory_cycle_tick", cycle)
+    event_name = {
+        "completed": "memory.tick.completed",
+        "blocked": "memory.tick.blocked",
+        "retryable": "memory.tick.retryable",
+        "failed": "memory.tick.failed",
+    }.get(status, "memory.tick.failed")
+    if not record_evidence:
+        evidence_rows = [
+            {
+                "evidence_id": stable_id("evidence", "memory_cycle.artifact_written", artifact_id),
+                "artifact_id": artifact_id,
+                "check_id": "memory_cycle.artifact_written",
+                "status": "passed",
+            },
+            {
+                "evidence_id": invariant_artifact.evidence_id,
+                "artifact_id": invariant_artifact.artifact_id,
+                "check_id": "runtime_invariants.passed",
+                "status": "passed" if invariant_artifact.passed else "failed",
+            },
+        ]
+        event = {
+            "event_id": stable_id("event", event_name, cycle, content_hash),
+        }
+        return MemoryTickResult(
+            cycle_id=cycle,
+            path=out_dir,
+            mode="wiki_only",
+            status=status,
+            dry_run=dry_run,
+            render_count=len(render_payloads),
+            route_count=len(route_table.routes),
+            manifest_count=len(route_table.manifests),
+            artifact_id=artifact_id,
+            content_hash=content_hash,
+            evidence_ids=tuple(row["evidence_id"] for row in evidence_rows),
+            event_id=event["event_id"],
+        )
+
+    if store is None:
+        raise MemoryTickError("record_evidence=true requires LakeStore")
     artifact = store.artifact_row(
         "memory_cycle_tick",
         artifact_id=artifact_id,
@@ -564,12 +607,6 @@ def run_memory_tick(
             )
         )
 
-    event_name = {
-        "completed": "memory.tick.completed",
-        "blocked": "memory.tick.blocked",
-        "retryable": "memory.tick.retryable",
-        "failed": "memory.tick.failed",
-    }.get(status, "memory.tick.failed")
     event = store.append_event(
         event_name,
         source="memory.tick",

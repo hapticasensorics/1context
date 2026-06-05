@@ -75,6 +75,7 @@ class AgentLaunchPlan:
             "params": dict(self.params),
             "missing": self.missing,
             "command": self.command,
+            "agent_harness_call": agent_harness_call_request(self),
         }
 
 
@@ -191,6 +192,11 @@ def render_prompt_packet(
         "## Runtime Params",
         fenced_json(plan.params),
         "",
+        "## Agent Harness Birth Request",
+        fenced_json(agent_harness_call_request(plan)),
+        "",
+        *injected_context_sections(plan),
+        "",
         "## References",
         "\n".join(f"- `{path}`" for path in plan.reference_paths) or "- none",
         "",
@@ -218,6 +224,122 @@ def render_prompt_packet(
         ]
     )
     return "\n".join(sections)
+
+
+def injected_context_sections(plan: AgentLaunchPlan) -> list[str]:
+    source_packet = str(plan.params.get("source_packet_path") or "").strip()
+    if not source_packet:
+        return []
+    path = Path(source_packet).expanduser()
+    if not path.is_file():
+        return [
+            "## Injected Session History",
+            "",
+            f"Source packet was declared but not found: `{source_packet}`",
+        ]
+    return [
+        "## Injected Session History",
+        "",
+        safe_read_text(path),
+    ]
+
+
+def agent_harness_call_request(plan: AgentLaunchPlan) -> dict[str, Any]:
+    source_packet_path = str(plan.params.get("source_packet_path") or "")
+    source_packet_kind = str(plan.params.get("source_packet_kind") or "")
+    source_status = str(plan.params.get("source_status") or "")
+    source_event_count = str(plan.params.get("source_event_count") or "0")
+    source_session_count = str(plan.params.get("source_session_count") or "0")
+    source_window_days = str(plan.params.get("source_window_days") or "0")
+    runtime = {
+        "run_id": plan.run_id,
+        "run_dir": str(plan.run_dir),
+        "workspace_dir": str(plan.workspace_dir),
+        "prompt_path": str(plan.prompt_path),
+        "launch_path": str(plan.launch_path),
+        "run_script": str(plan.script_path),
+        "command_kind": str(plan.command.get("kind") or ""),
+        "provider": plan.provider,
+        "harness_id": plan.harness_id,
+    }
+    capabilities = [
+        {
+            "id": "prompt_packet",
+            "transport": harness_transport(plan),
+            "tool_names": ["agent.prompt_packet"],
+            "config": {"prompt_path": str(plan.prompt_path)},
+            "policy": {"body_persisted_in_harness": False},
+            "proof_required": [],
+        },
+        {
+            "id": "context_injection",
+            "transport": "host_hook",
+            "tool_names": ["source_packet.perception_db_session_history"],
+            "config": {
+                "source_packet_path": source_packet_path,
+                "source_packet_kind": source_packet_kind,
+                "source_store": str(plan.params.get("source_store") or ""),
+                "source_status": source_status,
+                "source_window_days": source_window_days,
+                "source_event_count": source_event_count,
+                "source_session_count": source_session_count,
+            },
+            "policy": {"raw_session_body_redacted_from_birth_certificate": True},
+            "proof_required": ["context_injection"],
+        },
+    ]
+    if plan.job_id.startswith("memory.wiki."):
+        capabilities.append(
+            {
+                "id": "wiki_core",
+                "transport": "host_hook",
+                "tool_names": ["wiki.page.write_body", "wiki.publish", "wiki.talk.append"],
+                "config": {"surface": "onecontext-wiki-core"},
+                "policy": {"page_lifecycle_owner": "onecontext-wiki-core"},
+                "proof_required": [],
+            }
+        )
+    return {
+        "schema_version": 1,
+        "operation": "agent.harness.call",
+        "request": {
+            "unit_id": plan.run_id,
+            "role": plan.agent_id,
+            "model": plan.model,
+            "identity": {
+                "agent_id": plan.agent_id,
+                "agent_label": str(plan.agent.get("label") or plan.agent_id),
+                "job_id": plan.job_id,
+                "job_label": str(plan.job.get("label") or plan.job_id),
+                "provider": plan.provider,
+                "harness_id": plan.harness_id,
+            },
+            "instructions": {
+                "prompt_packet_path": str(plan.prompt_path),
+                "source_packet_path": source_packet_path,
+                "output_contract": "Use the prompt packet and write durable artifacts through the declared 1Context surfaces.",
+            },
+            "runtime": runtime,
+            "capabilities": capabilities,
+            "visibility": "private",
+            "metadata": {
+                "source": "memory.update_wiki",
+                "job_status": plan.status,
+                "reference_paths": list(plan.reference_paths),
+                "prompt_paths": list(plan.prompt_paths),
+                "source_status": source_status,
+                "source_window_days": source_window_days,
+                "source_event_count": source_event_count,
+                "source_session_count": source_session_count,
+            },
+        },
+    }
+
+
+def harness_transport(plan: AgentLaunchPlan) -> str:
+    if plan.harness_id == "codex-harness":
+        return "codex_skill"
+    return "host_hook"
 
 
 def command_for_harness(

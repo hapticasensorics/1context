@@ -30,6 +30,12 @@ def test_codex_launch_plan_materializes_prompt_and_run_script(tmp_path: Path, mo
     assert payload["harness"]["id"] == "codex-harness"
     assert payload["model"] == "gpt-5.5"
     assert payload["command"]["kind"] == "codex.exec"
+    assert payload["agent_harness_call"]["operation"] == "agent.harness.call"
+    assert payload["agent_harness_call"]["request"]["unit_id"] == "test-codex-run"
+    assert payload["agent_harness_call"]["request"]["role"] == "hourly-scribe"
+    capabilities = {item["id"]: item for item in payload["agent_harness_call"]["request"]["capabilities"]}
+    assert capabilities["context_injection"]["proof_required"] == ["context_injection"]
+    assert capabilities["prompt_packet"]["transport"] == "codex_skill"
     assert payload["command"]["env"]["CODEX_HOME"].endswith("test-codex-run/CODEX_HOME")
     assert payload["paths"]["run_script"].endswith("test-codex-run/run.sh")
     assert plan.prompt_path.is_file()
@@ -41,6 +47,8 @@ def test_codex_launch_plan_materializes_prompt_and_run_script(tmp_path: Path, mo
     assert "Agent: `hourly-scribe`" in prompt
     assert "Hourly Scribe" in prompt
     assert '"date": "2026-06-05"' in prompt
+    assert "## Agent Harness Birth Request" in prompt
+    assert '"operation": "agent.harness.call"' in prompt
 
     launch = json.loads(plan.launch_path.read_text(encoding="utf-8"))
     assert launch["operation"] == "agent.launch.plan"

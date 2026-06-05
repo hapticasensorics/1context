@@ -47,9 +47,8 @@ def events_between(
 ) -> list[HourEvent]:
     """Return normalized session events in [start, end), ordered by timestamp.
 
-    This intentionally starts with the simple LanceDB snapshot API already used
-    elsewhere in the repo. The helper gives renderers one boring place to grow
-    better filtering/query pushdown later.
+    This archived helper reads the old prototype event shape. Active source
+    windows should come from Perception DB queryViewport results.
     """
 
     start_dt = parse_ts(start)

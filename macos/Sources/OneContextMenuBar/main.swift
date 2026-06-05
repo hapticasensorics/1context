@@ -1368,7 +1368,21 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
     Task {
       do {
         _ = try await RuntimeController().start(startMenu: false)
-        _ = try await runtimeRPC("memory.update_wiki", params: ["provider": "codex"], timeout: 90)
+        _ = try await runtimeRPC(
+          "memory.update_wiki",
+          params: [
+            "provider": "codex",
+            "import_sources": true,
+            "import_ticks": 4,
+            "source_window_days": 30,
+            "source_max_events": 5_000,
+            "source_max_lines": 250_000,
+            "source_query_limit": 2_400,
+            "source_cursor_name": "wiki_agent_sessions_v1",
+            "trigger": "menu.update_wiki"
+          ],
+          timeout: 240
+        )
         _ = try await waitForWikiRunning(timeout: 240)
         await MainActor.run {
           self.isWikiRefreshInFlight = false

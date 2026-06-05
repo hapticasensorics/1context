@@ -24,6 +24,20 @@ private let uxEventPersistenceInterval: TimeInterval = 2.0
 private let continuousMetadataSamplerCooldownSeconds: TimeInterval = 5.0
 private let continuousMetadataSamplerDurationSeconds: TimeInterval = 0.75
 private let continuousMetadataSamplerMaxFrames = 6
+private let memoryWikiUpdateInitialDelay: TimeInterval = 10 * 60
+private let memoryWikiUpdateInterval: TimeInterval = 12 * 60 * 60
+private let memoryWikiUpdateCursorName = "wiki_agent_sessions_v1"
+private let memoryWikiBackfillImportTicks = 4
+private let memoryWikiBackfillWindowDays = 30
+private let memoryWikiBackfillMaxEvents = 5_000
+private let memoryWikiBackfillMaxLines = 250_000
+private let memoryWikiBackfillQueryLimit = 2_400
+private let memoryWikiIncrementalImportTicks = 1
+private let memoryWikiIncrementalWindowDays = 7
+private let memoryWikiIncrementalMaxEvents = 1_500
+private let memoryWikiIncrementalMaxLines = 100_000
+private let memoryWikiIncrementalQueryLimit = 1_200
+private let memoryWikiUpdateTimeoutSeconds = 240
 
 private enum CaptureDaemonError: LocalizedError {
   case snapshotTimedOut
@@ -241,6 +255,8 @@ final class OneContextDaemon: @unchecked Sendable {
   private let acceptQueue = DispatchQueue(label: "com.haptica.1contextd.accept")
   private let clientQueue = DispatchQueue(label: "com.haptica.1contextd.clients", attributes: .concurrent)
   private let wikiPublicationQueue = DispatchQueue(label: "com.haptica.1contextd.wiki-publication")
+  private let memoryWikiUpdateQueue = DispatchQueue(label: "com.haptica.1contextd.memory-wiki-update")
+  private let memoryWikiUpdateStateLock = NSLock()
   private let activeClients = DispatchSemaphore(value: maxActiveClients)
   private var listenFD: Int32 = -1
   private lazy var logger = Logger(path: paths.logPath)
@@ -264,6 +280,15 @@ final class OneContextDaemon: @unchecked Sendable {
   private var uxEventLastPersistedAt: String?
   private var uxEventLastPersistenceFlushAt: String?
   private var uxEventPersistenceError: String?
+  private var memoryWikiUpdateTimer: DispatchSourceTimer?
+  private var memoryWikiUpdateInFlight = false
+  private var memoryWikiUpdateCompletedCount = 0
+  private var memoryWikiUpdateSkippedCount = 0
+  private var memoryWikiUpdateLastTrigger: String?
+  private var memoryWikiUpdateLastStartedAt: Date?
+  private var memoryWikiUpdateLastCompletedAt: Date?
+  private var memoryWikiUpdateLastStatus: String?
+  private var memoryWikiUpdateLastError: String?
   private var uxEventTapStartupWired = false
   private var uxEventTapStartupError: String?
   private lazy var continuousMetadataSampler = ContinuousActiveWindowMetadataSampler(
@@ -387,6 +412,7 @@ final class OneContextDaemon: @unchecked Sendable {
     startMemoryDaemon()
     startWikiAPI()
     publishWikiInBackground(refresh: false)
+    startAutomaticMemoryWikiUpdateTimer()
     acceptQueue.async { [self] in
       acceptLoop()
     }
@@ -1207,41 +1233,77 @@ final class OneContextDaemon: @unchecked Sendable {
     let provider = stringParam(params["provider"]) ?? "codex"
     let executeAgents = boolParam(params["execute_agents"]) ?? false
     let importSources = boolParam(params["import_sources"]) ?? true
-    let importTicks = intParam(params["import_ticks"]) ?? 2
+    let importTicks = intParam(params["import_ticks"]) ?? memoryWikiBackfillImportTicks
+    let sourceWindowDays = intParam(params["source_window_days"]) ?? memoryWikiBackfillWindowDays
+    let sourceMaxEvents = intParam(params["source_max_events"]) ?? memoryWikiBackfillMaxEvents
+    let sourceMaxLines = intParam(params["source_max_lines"]) ?? memoryWikiBackfillMaxLines
+    let sourceQueryLimit = intParam(params["source_query_limit"]) ?? memoryWikiBackfillQueryLimit
+    let sourceCursorName = stringParam(params["source_cursor_name"]) ?? memoryWikiUpdateCursorName
     let maxConcurrent = intParam(params["max_concurrent"])
-    let timeoutSeconds = intParam(params["timeout_seconds"]) ?? 60
+    let timeoutSeconds = intParam(params["timeout_seconds"]) ?? memoryWikiUpdateTimeoutSeconds
     let runID = stringParam(params["run_id"])
+    let trigger = stringParam(params["trigger"]) ?? "memory.update_wiki.manual"
     var payload: [String: Any] = [
       "surface": "memory_update_wiki",
       "status": "accepted",
+      "trigger": trigger,
       "provider": provider,
       "execute_agents": executeAgents,
       "import_sources": importSources,
-      "import_ticks": importTicks
+      "import_ticks": importTicks,
+      "source_window_days": sourceWindowDays,
+      "source_max_events": sourceMaxEvents,
+      "source_max_lines": sourceMaxLines,
+      "source_query_limit": sourceQueryLimit
     ]
+    payload["source_cursor_name"] = sourceCursorName
 
+    guard beginMemoryWikiUpdate(trigger: trigger) else {
+      payload["status"] = "already_running"
+      payload["memory_core_status"] = "already_running"
+      payload["memory_core_error"] = "Another wiki update is already running."
+      payload["memory_update"] = memoryWikiUpdateStatusPayload()
+      payload["wiki"] = wikiPayload(pendingWikiSnapshot(health: "updating"))
+      logger.write("memory.update_wiki skipped already_running trigger=\(trigger)")
+      return payload
+    }
+
+    var finalStatus = "completed"
+    var finalError: String?
     do {
-      let wikiCoreBin = try? wikiCore.discoverExecutable()
-      payload["memory_core"] = try memoryCore.updateWiki(
+      let result = try performMemoryCoreWikiUpdate(
         provider: provider,
         runID: runID,
         executeAgents: executeAgents,
         maxConcurrent: maxConcurrent,
-        timeoutSeconds: timeoutSeconds,
         importSources: importSources,
         importTicks: importTicks,
-        runtimeRoot: paths.userContentDirectory,
-        wikiCoreBin: wikiCoreBin
+        sourceWindowDays: sourceWindowDays,
+        sourceMaxEvents: sourceMaxEvents,
+        sourceMaxLines: sourceMaxLines,
+        sourceQueryLimit: sourceQueryLimit,
+        sourceCursorName: sourceCursorName,
+        timeoutSeconds: timeoutSeconds
       )
-      payload["memory_core_status"] = "ok"
+      payload["memoryd_bin"] = result.memorydBin?.path
+      payload["memory_core"] = result.payload
+      finalStatus = memoryCoreOperationStatus(result.payload)
+      payload["memory_core_status"] = finalStatus == "failed" ? "failed" : "ok"
+      if finalStatus == "failed" {
+        finalError = "memory-core update-wiki returned failed"
+      }
     } catch {
       logger.write("memory.update_wiki memory-core unavailable: \(error.localizedDescription)")
       payload["memory_core_status"] = "unavailable"
       payload["memory_core_error"] = error.localizedDescription
+      finalStatus = "failed"
+      finalError = error.localizedDescription
     }
 
+    finishMemoryWikiUpdate(status: finalStatus, error: finalError)
     publishWikiInBackground(refresh: true)
     payload["wiki"] = wikiPayload(pendingWikiSnapshot(health: "updating"))
+    payload["memory_update"] = memoryWikiUpdateStatusPayload()
     logger.write("memory.update_wiki accepted memory_core_status=\(payload["memory_core_status"] ?? "unknown")")
     return payload
   }
@@ -1259,7 +1321,8 @@ final class OneContextDaemon: @unchecked Sendable {
       "api": wikiAPIPayload(),
       "app_status": localWebPayload(appSnapshot),
       "publish_status": publishStatus,
-      "render": publishStatus
+      "render": publishStatus,
+      "memory_update": memoryWikiUpdateStatusPayload()
     ]
     if let pid = snapshot.pid {
       payload["pid"] = Int(pid)
@@ -1444,6 +1507,194 @@ final class OneContextDaemon: @unchecked Sendable {
       trigger: refresh ? "wiki.refresh" : "wiki.prepare",
       priority: refresh ? .manual : .automatic
     )
+  }
+
+  private func startAutomaticMemoryWikiUpdateTimer() {
+    memoryWikiUpdateQueue.async { [weak self] in
+      guard let self, self.memoryWikiUpdateTimer == nil else { return }
+      let timer = DispatchSource.makeTimerSource(queue: self.memoryWikiUpdateQueue)
+      timer.schedule(
+        deadline: .now() + memoryWikiUpdateInitialDelay,
+        repeating: memoryWikiUpdateInterval,
+        leeway: .seconds(60)
+      )
+      timer.setEventHandler { [weak self] in
+        self?.performScheduledMemoryWikiUpdate()
+      }
+      self.memoryWikiUpdateTimer = timer
+      timer.resume()
+      self.logger.write(
+        "automatic memory.update_wiki timer started interval=\(Int(memoryWikiUpdateInterval))s initial_delay=\(Int(memoryWikiUpdateInitialDelay))s cursor=\(memoryWikiUpdateCursorName)"
+      )
+    }
+  }
+
+  private func performScheduledMemoryWikiUpdate() {
+    let firstProcessPass = memoryWikiUpdateCompletedRunCount() == 0
+    let trigger = firstProcessPass ? "memory.update_wiki.automatic.backfill" : "memory.update_wiki.automatic.incremental"
+    guard beginMemoryWikiUpdate(trigger: trigger) else {
+      logger.write("automatic memory.update_wiki skipped already_running")
+      return
+    }
+
+    let importTicks = firstProcessPass ? memoryWikiBackfillImportTicks : memoryWikiIncrementalImportTicks
+    let sourceWindowDays = firstProcessPass ? memoryWikiBackfillWindowDays : memoryWikiIncrementalWindowDays
+    let sourceMaxEvents = firstProcessPass ? memoryWikiBackfillMaxEvents : memoryWikiIncrementalMaxEvents
+    let sourceMaxLines = firstProcessPass ? memoryWikiBackfillMaxLines : memoryWikiIncrementalMaxLines
+    let sourceQueryLimit = firstProcessPass ? memoryWikiBackfillQueryLimit : memoryWikiIncrementalQueryLimit
+    let runID = "automatic-\(automaticWikiUpdateRunIDTimestamp())"
+
+    do {
+      let result = try performMemoryCoreWikiUpdate(
+        provider: "codex",
+        runID: runID,
+        executeAgents: false,
+        maxConcurrent: nil,
+        importSources: true,
+        importTicks: importTicks,
+        sourceWindowDays: sourceWindowDays,
+        sourceMaxEvents: sourceMaxEvents,
+        sourceMaxLines: sourceMaxLines,
+        sourceQueryLimit: sourceQueryLimit,
+        sourceCursorName: memoryWikiUpdateCursorName,
+        timeoutSeconds: memoryWikiUpdateTimeoutSeconds
+      )
+      let status = memoryCoreOperationStatus(result.payload)
+      finishMemoryWikiUpdate(status: status, error: status == "failed" ? "memory-core update-wiki returned failed" : nil)
+      publishWikiInBackground(refresh: false)
+      logger.write(
+        "automatic memory.update_wiki completed trigger=\(trigger) status=\(status) run_id=\(runID) memoryd=\(result.memorydBin?.path ?? "unavailable")"
+      )
+    } catch {
+      finishMemoryWikiUpdate(status: "failed", error: error.localizedDescription)
+      logger.write("automatic memory.update_wiki failed trigger=\(trigger): \(error.localizedDescription)")
+    }
+  }
+
+  private func performMemoryCoreWikiUpdate(
+    provider: String,
+    runID: String?,
+    executeAgents: Bool,
+    maxConcurrent: Int?,
+    importSources: Bool,
+    importTicks: Int,
+    sourceWindowDays: Int,
+    sourceMaxEvents: Int,
+    sourceMaxLines: Int,
+    sourceQueryLimit: Int,
+    sourceCursorName: String,
+    timeoutSeconds: Int
+  ) throws -> (payload: [String: Any], memorydBin: URL?) {
+    let wikiCoreBin = try? wikiCore.discoverExecutable()
+    let memorydBin = memoryDaemon.discoverExecutable()
+    let payload = try memoryCore.updateWiki(
+      provider: provider,
+      runID: runID,
+      executeAgents: executeAgents,
+      maxConcurrent: maxConcurrent,
+      timeoutSeconds: timeoutSeconds,
+      importSources: importSources,
+      importTicks: importTicks,
+      sourceWindowDays: sourceWindowDays,
+      sourceMaxEvents: sourceMaxEvents,
+      sourceMaxLines: sourceMaxLines,
+      sourceQueryLimit: sourceQueryLimit,
+      sourceCursorName: sourceCursorName,
+      memorydBin: memorydBin,
+      runtimeRoot: paths.userContentDirectory,
+      wikiCoreBin: wikiCoreBin
+    )
+    return (payload: payload, memorydBin: memorydBin)
+  }
+
+  private func memoryCoreOperationStatus(_ payload: [String: Any]) -> String {
+    if let result = payload["result"] as? [String: Any] {
+      return memoryCoreOperationStatus(result)
+    }
+    let status = (payload["status"] as? String) ?? ""
+    if status == "completed" || status == "drafted" || status == "written" {
+      return "completed"
+    }
+    if status == "ok" {
+      return "completed"
+    }
+    if status == "failed" {
+      return "failed"
+    }
+    if status.isEmpty {
+      return "completed"
+    }
+    return status
+  }
+
+  private func beginMemoryWikiUpdate(trigger: String) -> Bool {
+    memoryWikiUpdateStateLock.lock()
+    defer { memoryWikiUpdateStateLock.unlock() }
+    if memoryWikiUpdateInFlight {
+      memoryWikiUpdateSkippedCount += 1
+      return false
+    }
+    memoryWikiUpdateInFlight = true
+    memoryWikiUpdateLastTrigger = trigger
+    memoryWikiUpdateLastStartedAt = Date()
+    memoryWikiUpdateLastStatus = "running"
+    memoryWikiUpdateLastError = nil
+    return true
+  }
+
+  private func finishMemoryWikiUpdate(status: String, error: String?) {
+    memoryWikiUpdateStateLock.lock()
+    defer { memoryWikiUpdateStateLock.unlock() }
+    memoryWikiUpdateInFlight = false
+    memoryWikiUpdateCompletedCount += 1
+    memoryWikiUpdateLastCompletedAt = Date()
+    memoryWikiUpdateLastStatus = status
+    memoryWikiUpdateLastError = error
+  }
+
+  private func memoryWikiUpdateCompletedRunCount() -> Int {
+    memoryWikiUpdateStateLock.lock()
+    defer { memoryWikiUpdateStateLock.unlock() }
+    return memoryWikiUpdateCompletedCount
+  }
+
+  private func memoryWikiUpdateStatusPayload() -> [String: Any] {
+    memoryWikiUpdateStateLock.lock()
+    defer { memoryWikiUpdateStateLock.unlock() }
+    var payload: [String: Any] = [
+      "surface": "memory_update_wiki_status",
+      "state": memoryWikiUpdateInFlight ? "running" : (memoryWikiUpdateLastStatus ?? "idle"),
+      "running": memoryWikiUpdateInFlight,
+      "cursor_name": memoryWikiUpdateCursorName,
+      "automatic_interval_seconds": Int(memoryWikiUpdateInterval),
+      "automatic_initial_delay_seconds": Int(memoryWikiUpdateInitialDelay),
+      "completed_count": memoryWikiUpdateCompletedCount,
+      "skipped_count": memoryWikiUpdateSkippedCount,
+      "backfill_window_days": memoryWikiBackfillWindowDays,
+      "incremental_window_days": memoryWikiIncrementalWindowDays
+    ]
+    if let trigger = memoryWikiUpdateLastTrigger {
+      payload["last_trigger"] = trigger
+    }
+    if let started = memoryWikiUpdateLastStartedAt {
+      payload["last_started_at"] = ISO8601DateFormatter().string(from: started)
+    }
+    if let completed = memoryWikiUpdateLastCompletedAt {
+      payload["last_completed_at"] = ISO8601DateFormatter().string(from: completed)
+    }
+    if let error = memoryWikiUpdateLastError {
+      payload["last_error"] = error
+    }
+    return payload
+  }
+
+  private func automaticWikiUpdateRunIDTimestamp() -> String {
+    let formatter = DateFormatter()
+    formatter.calendar = Calendar(identifier: .gregorian)
+    formatter.locale = Locale(identifier: "en_US_POSIX")
+    formatter.timeZone = TimeZone(secondsFromGMT: 0)
+    formatter.dateFormat = "yyyyMMdd-HHmmss"
+    return formatter.string(from: Date())
   }
 
   private var wikiRenderState: String {
@@ -1711,6 +1962,7 @@ final class OneContextDaemon: @unchecked Sendable {
   private func cleanup() {
     flushUXEventAnchorsToStore(force: true)
     stopUXEventPersistenceTimer()
+    stopAutomaticMemoryWikiUpdateTimer()
     uxEventTap.stop()
     wikiAPI.stop()
     memoryDaemon.stop()
@@ -1732,6 +1984,13 @@ final class OneContextDaemon: @unchecked Sendable {
       signalLogPath = nil
     }
     logger.write("1Context runtime stopped")
+  }
+
+  private func stopAutomaticMemoryWikiUpdateTimer() {
+    memoryWikiUpdateQueue.sync {
+      memoryWikiUpdateTimer?.cancel()
+      memoryWikiUpdateTimer = nil
+    }
   }
 }
 

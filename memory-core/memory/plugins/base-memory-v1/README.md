@@ -24,8 +24,9 @@ custom-tools/      plugin tool contracts and optional implementations
 migrations/        idempotent memory contract migrations
 ```
 
-Runtime output belongs under ignored `memory/runtime/`; durable local storage
-belongs under ignored `storage/lakestore/`.
+Runtime output belongs under ignored `memory/runtime/`. Durable source memory is
+owned by Perception DB through `onecontext-memoryd`; the old LanceDB
+`storage/lakestore/` tree is archived only.
 
 ## Runtime Contract
 
@@ -47,13 +48,13 @@ verbs only when the Swift app or a production memory loop actually needs them.
 
 ## Boundaries
 
-- Memory-core owns storage semantics, memory ticks, replay planning, prompt/job
-  definitions, and state-machine evidence.
-- `onectx.wiki_interface` is the only Python boundary for memory-authored wiki
-  proposals, talk appends, preview requests, and refresh requests.
+- Memory-core owns prompt/job definitions and thin wiki-update orchestration.
+- `onecontext-memoryd` owns durable Perception DB ingestion and query.
+- `onecontext-wiki-core` owns wiki page lifecycle, talk folders, and publish
+  receipts.
+- The agent harness owns birth certificates, capabilities, and proof status.
 - Swift owns first-run defaults, user-file preservation, render scheduling,
   local-web publication, and update/install behavior.
-- `wiki-engine/` owns visible page rendering.
 
 ## Rule
 

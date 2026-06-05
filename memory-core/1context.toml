@@ -1,7 +1,7 @@
 active_plugin = "base-memory-v1"
 plugin_dirs = ["memory/plugins", "memory/runtime/plugins"]
 runtime_dir = "memory/runtime"
-storage_dir = "storage/lakestore"
+storage_dir = "storage/perception-db"
 accounts_file = "accounts.toml"
 
 [runtime_policy]

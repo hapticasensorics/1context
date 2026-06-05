@@ -358,7 +358,7 @@ def prepare_hourly_block_scribe_job(
                 "hour_experience_ids": [rendered.experience_id for rendered in rendered_hours],
                 "hour_context_sha256": hour_context_hashes,
                 "projection": {
-                    "source_truth": "lakestore.events",
+                    "source_truth": "perception_db.agent_messages",
                     "destructive": False,
                     "hour_packets_are_materialized": True,
                 },

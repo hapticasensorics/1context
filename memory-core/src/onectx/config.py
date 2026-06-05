@@ -58,7 +58,7 @@ def load_system(root: Path | str | None = None, active_plugin: str | None = None
 
     plugin_dirs = tuple(resolve_path(resolved_root, path) for path in config.get("plugin_dirs", ["memory/plugins"]))
     runtime_dir = resolve_path(resolved_root, config.get("runtime_dir", "memory/runtime"))
-    storage_dir = resolve_path(resolved_root, config.get("storage_dir", "storage/lakestore"))
+    storage_dir = resolve_path(resolved_root, config.get("storage_dir", "storage/perception-db"))
     runtime_policy = load_runtime_policy(config)
     plugin_path = find_plugin_path(selected_plugin, plugin_dirs)
     plugin = read_toml(plugin_path / "plugin.toml")
@@ -172,7 +172,7 @@ def compile_system_map(system: MemorySystem) -> dict[str, Any]:
         "runtime": {
             "dir": str(system.runtime_dir),
             "ledger": str(system.runtime_dir / "ledger" / "events.jsonl"),
-            "lakestore": str(system.storage_dir),
+            "perception_db": str(system.storage_dir),
             "runs": str(system.runtime_dir / "runs"),
             "experiences": str(system.runtime_dir / "experiences"),
             "proposals": str(system.runtime_dir / "proposals"),

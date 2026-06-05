@@ -1023,8 +1023,13 @@ fn item_source_record_key(
 
 fn record_discriminator(record: &CodexRolloutRecord) -> String {
     let line_number = record.raw_ref.line_number.unwrap_or(record.ordinal as u64);
-    let hash = record.raw_ref.sha256.as_deref().unwrap_or("missing-hash");
-    format!("line-{line_number}-{}", hash_prefix(hash, 16))
+    let raw_hash = record.raw_ref.sha256.as_deref().unwrap_or("missing-hash");
+    let record_key_hash = stable_hash(record.source_record_key.as_bytes());
+    format!(
+        "line-{line_number}-{}-record-{}",
+        hash_prefix(raw_hash, 16),
+        hash_prefix(&record_key_hash, 16)
+    )
 }
 
 fn source_fingerprint(source_uri: &str) -> String {

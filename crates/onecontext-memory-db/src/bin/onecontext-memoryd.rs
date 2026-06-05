@@ -558,16 +558,22 @@ fn protocol_ingest_request_to_agent_c(
 ) -> Result<onecontext_memory_db::ingest_sources::IngestSourcesRequest, Box<dyn std::error::Error>>
 {
     let protocol = serde_json::from_value::<onecontext_memory_db::IngestSourcesRequest>(params)?;
+    let session_profile = protocol
+        .session_profile
+        .as_deref()
+        .map(parse_session_profile)
+        .transpose()?
+        .unwrap_or_default();
     Ok(onecontext_memory_db::ingest_sources::IngestSourcesRequest {
         user_id: protocol.user_id,
         write_id: None,
         sources: protocol.sources,
-        home: None,
+        home: protocol.home,
         max_events: protocol.max_events.unwrap_or(DEFAULT_MAX_EVENTS),
-        max_lines: DEFAULT_MAX_LINES,
-        include_sensitive_text: false,
-        session_profile: SessionIngestProfile::default(),
-        cursor_name: None,
+        max_lines: protocol.max_lines.unwrap_or(DEFAULT_MAX_LINES),
+        include_sensitive_text: protocol.include_sensitive_text.unwrap_or(false),
+        session_profile,
+        cursor_name: protocol.cursor_name,
     })
 }
 

@@ -206,9 +206,12 @@ final class MemoryDaemonProcessClientTests: XCTestCase {
     let argsFile = root.appendingPathComponent("memory-core-args.txt")
     let executable = root.appendingPathComponent("1context-memory-core")
     let wikiCore = root.appendingPathComponent("One Context Dev.app/Contents/MacOS/onecontext-wiki")
+    let memoryd = root.appendingPathComponent("One Context Dev.app/Contents/MacOS/onecontext-memoryd")
     try FileManager.default.createDirectory(at: wikiCore.deletingLastPathComponent(), withIntermediateDirectories: true)
     try "#!/bin/sh\nexit 0\n".write(to: wikiCore, atomically: true, encoding: .utf8)
+    try "#!/bin/sh\nexit 0\n".write(to: memoryd, atomically: true, encoding: .utf8)
     try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: wikiCore.path)
+    try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: memoryd.path)
     let script = """
     #!/bin/sh
     printf '%s\\n' "$@" > \(shellQuoted(argsFile.path))
@@ -232,6 +235,12 @@ final class MemoryDaemonProcessClientTests: XCTestCase {
       timeoutSeconds: 30,
       importSources: true,
       importTicks: 2,
+      sourceWindowDays: 30,
+      sourceMaxEvents: 5_000,
+      sourceMaxLines: 250_000,
+      sourceQueryLimit: 2_400,
+      sourceCursorName: "wiki_backfill_30d_v1",
+      memorydBin: memoryd,
       runtimeRoot: runtimePaths(root: root).userContentDirectory,
       wikiCoreBin: wikiCore
     )
@@ -246,6 +255,12 @@ final class MemoryDaemonProcessClientTests: XCTestCase {
     XCTAssertTrue(args.contains("--max-concurrent\n2"))
     XCTAssertTrue(args.contains("--import-sources"))
     XCTAssertTrue(args.contains("--import-ticks\n2"))
+    XCTAssertTrue(args.contains("--source-window-days\n30"))
+    XCTAssertTrue(args.contains("--source-max-events\n5000"))
+    XCTAssertTrue(args.contains("--source-max-lines\n250000"))
+    XCTAssertTrue(args.contains("--source-query-limit\n2400"))
+    XCTAssertTrue(args.contains("--source-cursor-name\nwiki_backfill_30d_v1"))
+    XCTAssertTrue(args.contains("--memoryd-bin\n\(memoryd.path)"))
     XCTAssertTrue(args.contains("--runtime-root\n\(runtimePaths(root: root).userContentDirectory.path)"))
     XCTAssertTrue(args.contains("--wiki-core-bin\n\(wikiCore.path)"))
     XCTAssertTrue(args.contains("--timeout-seconds\n30"))

@@ -4,6 +4,7 @@
 //! surface is the Perception DB API described in `docs/memory-db-api-protocol-spec.md`.
 
 use std::collections::BTreeMap;
+use std::path::PathBuf;
 use std::str::FromStr;
 
 use serde::{Deserialize, Serialize};
@@ -530,6 +531,16 @@ pub struct IngestSourcesRequest {
     pub sources: Vec<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub max_events: Option<usize>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_lines: Option<usize>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub home: Option<PathBuf>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub include_sensitive_text: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub session_profile: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cursor_name: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]

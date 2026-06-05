@@ -8,9 +8,7 @@ license = "Apache-2.0"
 authors = [
     { name = "Haptica, Inc.", email = "contact@haptica.ai" },
 ]
-dependencies = [
-    "lancedb>=0.30.2",
-]
+dependencies = []
 
 [project.scripts]
 1context-memory-core = "onectx.memory_core_cli:main"
@@ -37,7 +35,6 @@ include = [
     "/memory",
     "/storage/.gitignore",
     "/storage/README.md",
-    "/storage/lakestore/README.md",
 ]
 exclude = [
     "**/__pycache__",

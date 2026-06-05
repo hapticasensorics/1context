@@ -21,7 +21,7 @@ from onectx.memory.tick import (
     validate_memory_cycle,
 )
 from onectx.memory.wiki_update import WikiUpdateError, run_wiki_update
-from onectx.storage import LakeStore, TABLE_ORDER, StorageError
+from onectx.storage import StorageError
 
 
 SCHEMA_VERSION = 1
@@ -37,7 +37,7 @@ PARAMETERIZED_CAPABILITIES = {
     "memory cycles show <cycle-id> --json",
     "memory cycles validate <cycle-id> --json",
     "memory replay-dry-run --start <date> --end <date> [--sources codex,claude-code] [--replay-run-id <id>] --json",
-    "memory update-wiki [--provider declared|codex] [--run-id <run-id>] [--execute-agents] [--max-concurrent <n>] [--timeout-seconds <n>] [--import-sources] [--import-ticks <n>] [--runtime-root <path>] [--wiki-core-bin <path>] --json",
+    "memory update-wiki [--provider declared|codex] [--run-id <run-id>] [--execute-agents] [--max-concurrent <n>] [--timeout-seconds <n>] [--import-sources] [--import-ticks <n>] [--source-window-days <n>] [--source-max-events <n>] [--source-max-lines <n>] [--source-query-limit <n>] [--source-cursor-name <name>] [--memoryd-bin <path>] [--runtime-root <path>] [--wiki-core-bin <path>] --json",
 }
 
 
@@ -66,11 +66,11 @@ def dispatch(args: list[str], *, root: Path) -> int:
 
     if shape == ("storage", "init", "--json"):
         system = load_system(root)
-        store = LakeStore(system.storage_dir)
-        counts = store.ensure()
         print_json(ok_payload("storage.init", {
             "storage_dir": str(system.storage_dir),
-            "tables": {name: counts.get(name, 0) for name in TABLE_ORDER},
+            "status": "archived",
+            "store": "perception_db",
+            "message": "LakeStore initialization is archived; onecontext-memoryd owns durable Perception DB setup.",
         }))
         return 0
 
@@ -90,6 +90,7 @@ def status_payload(root: Path) -> dict[str, Any]:
         "root": str(system.root),
         "active_plugin": system.active_plugin,
         "storage_dir": str(system.storage_dir),
+        "storage_status": "perception_db_active_lakestore_archived",
         "runtime_dir": str(system.runtime_dir),
         "capabilities": sorted({" ".join(shape) for shape in ALLOWED_SHAPES} | PARAMETERIZED_CAPABILITIES),
         "jobs": len(system_map.get("jobs", {})),
@@ -102,7 +103,7 @@ def execute_allowed_shape(args: list[str], *, root: Path) -> tuple[str, Any, int
     system = load_system(root)
 
     if args == ["memory", "tick", "--wiki-only", "--json"]:
-        result = run_memory_tick(system, wiki_only=True)
+        result = run_memory_tick(system, wiki_only=True, record_evidence=False)
         return "memory.tick", result.to_payload(), memory_tick_exit_code(result.status)
 
     if args == ["memory", "cycles", "list", "--json"]:
@@ -239,12 +240,25 @@ def is_memory_update_wiki_shape(args: list[str]) -> bool:
                 return False
             index += 2
             continue
-        if option in {"--max-concurrent", "--timeout-seconds", "--import-ticks"}:
+        if option in {
+            "--max-concurrent",
+            "--timeout-seconds",
+            "--import-ticks",
+            "--source-window-days",
+            "--source-max-events",
+            "--source-max-lines",
+            "--source-query-limit",
+        }:
             if index + 1 >= len(args) - 1 or not safe_positive_int(args[index + 1]):
                 return False
             index += 2
             continue
-        if option in {"--runtime-root", "--wiki-core-bin"}:
+        if option == "--source-cursor-name":
+            if index + 1 >= len(args) - 1 or not safe_identifier(args[index + 1]):
+                return False
+            index += 2
+            continue
+        if option in {"--runtime-root", "--wiki-core-bin", "--memoryd-bin"}:
             if index + 1 >= len(args) - 1 or not safe_path(args[index + 1]):
                 return False
             index += 2
@@ -265,6 +279,12 @@ def parse_memory_update_wiki_args(args: list[str]) -> dict[str, Any]:
         "timeout_seconds": 1800,
         "import_sources": False,
         "import_ticks": 1,
+        "source_window_days": 30,
+        "source_max_events": 5_000,
+        "source_max_lines": 250_000,
+        "source_query_limit": 2_400,
+        "source_cursor_name": "",
+        "memoryd_bin": None,
         "runtime_root": None,
         "wiki_core_bin": None,
     }
@@ -286,6 +306,18 @@ def parse_memory_update_wiki_args(args: list[str]) -> dict[str, Any]:
             parsed["timeout_seconds"] = int(value)
         elif option == "--import-ticks":
             parsed["import_ticks"] = int(value)
+        elif option == "--source-window-days":
+            parsed["source_window_days"] = int(value)
+        elif option == "--source-max-events":
+            parsed["source_max_events"] = int(value)
+        elif option == "--source-max-lines":
+            parsed["source_max_lines"] = int(value)
+        elif option == "--source-query-limit":
+            parsed["source_query_limit"] = int(value)
+        elif option == "--source-cursor-name":
+            parsed["source_cursor_name"] = value
+        elif option == "--memoryd-bin":
+            parsed["memoryd_bin"] = value
         elif option == "--runtime-root":
             parsed["runtime_root"] = value
         elif option == "--wiki-core-bin":

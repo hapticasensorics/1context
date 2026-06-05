@@ -12,11 +12,17 @@ from typing import Any, Iterable
 
 from onectx.config import MemorySystem
 from onectx.io_utils import atomic_write_json, atomic_write_text
-from onectx.storage import LakeStore, stable_id, utc_now
+from onectx.storage import stable_id, utc_now
 
 
 SOURCE_KINDS = {"user", "assistant"}
-SOURCE_NAMES = {"codex"}
+SOURCE_NAMES = {"codex", "claude"}
+WIKI_PAGE_DEFINITIONS = (
+    ("for-you", "For You"),
+    ("your-context", "Your Context"),
+    ("projects", "Projects"),
+    ("topics", "Topics"),
+)
 MAX_SNIPPET_CHARS = 260
 STOPWORDS = {
     "about",
@@ -63,6 +69,21 @@ STOPWORDS = {
 
 
 @dataclass(frozen=True)
+class WikiPriorPage:
+    page_id: str
+    source_path: Path
+    body_markdown: str
+
+    def to_payload(self, *, root: Path | None = None) -> dict[str, Any]:
+        return {
+            "page_id": self.page_id,
+            "source_path": format_path(self.source_path, root),
+            "body_sha256": stable_id("wiki-prior-page-body", self.body_markdown),
+            "bytes": len(self.body_markdown.encode("utf-8")),
+        }
+
+
+@dataclass(frozen=True)
 class WikiPageDraft:
     page_id: str
     title: str
@@ -106,6 +127,10 @@ class WikiSynthesisResult:
     writes: tuple[WikiPageWrite, ...]
     source_event_count: int
     source_session_count: int
+    source_store: str = "perception_db"
+    source_status: str = ""
+    window_days: int = 30
+    prior_pages: tuple[WikiPriorPage, ...] = ()
 
     def to_payload(self, *, root: Path | None = None) -> dict[str, Any]:
         return {
@@ -113,6 +138,11 @@ class WikiSynthesisResult:
             "path": format_path(self.path, root),
             "source_event_count": self.source_event_count,
             "source_session_count": self.source_session_count,
+            "source_store": self.source_store,
+            "source_status": self.source_status,
+            "window_days": self.window_days,
+            "prior_page_count": len(self.prior_pages),
+            "prior_pages": [page.to_payload(root=root) for page in self.prior_pages],
             "drafts": [draft.to_payload(root=root) for draft in self.drafts],
             "writes": [write.to_payload() for write in self.writes],
         }
@@ -126,11 +156,16 @@ def synthesize_and_write_wiki(
     runtime_root: Path | None = None,
     wiki_core_bin: Path | None = None,
     timeout_seconds: int = 60,
+    source_events: Iterable[dict[str, Any]] = (),
+    source_sessions: Iterable[dict[str, Any]] = (),
+    source_store: str = "perception_db",
+    source_status: str = "",
+    window_days: int = 30,
+    prior_pages: Iterable[WikiPriorPage] | None = None,
 ) -> WikiSynthesisResult:
-    store = LakeStore(system.storage_dir)
-    store.ensure()
-    source_events = meaningful_events(store)
-    source_sessions = meaningful_sessions(store)
+    source_events = meaningful_events(source_events, limit=2_400)
+    source_sessions = meaningful_sessions(source_sessions, limit=160)
+    resolved_prior_pages = tuple(prior_pages) if prior_pages is not None else load_prior_wiki_pages(runtime_root)
     drafts_dir = output_dir / "page-drafts"
     drafts = build_page_drafts(
         system,
@@ -138,6 +173,7 @@ def synthesize_and_write_wiki(
         drafts_dir=drafts_dir,
         events=source_events,
         sessions=source_sessions,
+        prior_pages=resolved_prior_pages,
     )
     for draft in drafts:
         atomic_write_text(draft.draft_path, draft.body_markdown)
@@ -169,13 +205,17 @@ def synthesize_and_write_wiki(
         writes=writes,
         source_event_count=len(source_events),
         source_session_count=len(source_sessions),
+        source_store=source_store,
+        source_status=source_status,
+        window_days=window_days,
+        prior_pages=resolved_prior_pages,
     )
     atomic_write_json(result.path, result.to_payload(root=system.root))
     return result
 
 
-def meaningful_events(store: LakeStore, *, limit: int = 360) -> list[dict[str, Any]]:
-    rows = sorted(store.rows("events", limit=0), key=event_sort_key)
+def meaningful_events(rows: Iterable[dict[str, Any]], *, limit: int = 360) -> list[dict[str, Any]]:
+    rows = sorted(list(rows), key=event_sort_key)
     result: list[dict[str, Any]] = []
     seen: set[tuple[str, str, str]] = set()
     for row in reversed(rows):
@@ -194,10 +234,10 @@ def meaningful_events(store: LakeStore, *, limit: int = 360) -> list[dict[str, A
     return list(reversed(result))
 
 
-def meaningful_sessions(store: LakeStore, *, limit: int = 40) -> list[dict[str, Any]]:
+def meaningful_sessions(rows: Iterable[dict[str, Any]], *, limit: int = 40) -> list[dict[str, Any]]:
     rows = [
         row
-        for row in store.rows("sessions", limit=0)
+        for row in rows
         if str(row.get("source") or "") in SOURCE_NAMES and int(row.get("event_count") or 0) > 0
     ]
     return sorted(rows, key=lambda row: str(row.get("last_ts") or ""))[-limit:]
@@ -210,9 +250,10 @@ def build_page_drafts(
     drafts_dir: Path,
     events: list[dict[str, Any]],
     sessions: list[dict[str, Any]],
+    prior_pages: tuple[WikiPriorPage, ...] = (),
 ) -> list[WikiPageDraft]:
     now = utc_now()
-    context = build_synthesis_context(events, sessions, now=now)
+    context = build_synthesis_context(events, sessions, prior_pages=prior_pages, now=now)
     pages = [
         ("for-you", "For You", render_for_you(context)),
         ("your-context", "Your Context", render_your_context(context)),
@@ -234,12 +275,18 @@ def build_page_drafts(
     return drafts
 
 
-def build_synthesis_context(events: list[dict[str, Any]], sessions: list[dict[str, Any]], *, now: str) -> dict[str, Any]:
+def build_synthesis_context(
+    events: list[dict[str, Any]],
+    sessions: list[dict[str, Any]],
+    *,
+    prior_pages: tuple[WikiPriorPage, ...] = (),
+    now: str,
+) -> dict[str, Any]:
     by_session: dict[str, list[dict[str, Any]]] = defaultdict(list)
     by_project: dict[str, list[dict[str, Any]]] = defaultdict(list)
     for event in events:
         by_session[str(event.get("session_id") or "")].append(event)
-        by_project[project_label(str(event.get("cwd") or ""))].append(event)
+        by_project[event_project_label(event)].append(event)
 
     recent_sessions = []
     for session in sorted(sessions, key=lambda row: str(row.get("last_ts") or ""), reverse=True)[:12]:
@@ -252,7 +299,7 @@ def build_synthesis_context(events: list[dict[str, Any]], sessions: list[dict[st
                 "session_id": session_id,
                 "source": str(session.get("source") or ""),
                 "cwd": str(session.get("cwd") or ""),
-                "project": project_label(str(session.get("cwd") or "")),
+                "project": event_project_label(session),
                 "first_ts": str(session.get("first_ts") or ""),
                 "last_ts": str(session.get("last_ts") or ""),
                 "event_count": int(session.get("event_count") or 0),
@@ -285,10 +332,13 @@ def build_synthesis_context(events: list[dict[str, Any]], sessions: list[dict[st
         "projects": project_rows[:10],
         "open_questions": open_questions,
         "terms": terms,
+        "prior_pages": {page.page_id: page for page in prior_pages},
+        "prior_summaries": {page.page_id: prior_page_summary(page.body_markdown) for page in prior_pages},
         "counts": {
             "source_events": len(events),
             "source_sessions": len(sessions),
             "projects": len(project_rows),
+            "prior_pages": len(prior_pages),
         },
     }
 
@@ -300,14 +350,14 @@ def render_for_you(context: dict[str, Any]) -> str:
     questions = context["open_questions"]
     if not sessions:
         current = [
-            "The wiki update system is installed and ready, but the current memory lake has not imported enough recent session evidence to summarize the operator safely.",
-            "Use **Update Wiki** again after Codex transcript import has fresh rows; the page will replace this bootstrap note with sourced orientation.",
+            "The wiki update system is installed and ready, but Perception DB did not return enough recent session evidence to summarize the operator safely.",
+            "Use **Update Wiki** again after Codex and Claude transcript import has fresh rows; the page will replace this bootstrap note with sourced orientation.",
         ]
     else:
         lead = sessions[0]
         current = [
             f"The freshest imported work is in **{lead['project']}**, last seen at `{lead['last_ts']}` from `{lead['source']}`.",
-            "The current memory pass is prioritizing source import, agent-role orchestration, and turning the rendered wiki from template scaffolding into evidence-backed pages.",
+            "The current memory pass is prioritizing Perception DB source import, agent-role orchestration, and turning the rendered wiki from template scaffolding into evidence-backed pages.",
         ]
     return "\n".join(
         [
@@ -325,11 +375,12 @@ def render_for_you(context: dict[str, Any]) -> str:
             "",
             *bullets([question_summary(item) for item in questions[:8]] or ["No explicit open questions were detected in the imported recent session text."]),
             "",
+            *prior_continuity_section(context, "for-you"),
             "## Useful Context",
             "",
             *bullets(
                 [
-                    f"Generated by `memory.update-wiki` at `{now}` from {context['counts']['source_events']} meaningful session events.",
+                    f"Generated by `memory.update-wiki` at `{now}` from {context['counts']['source_events']} Perception DB session events.",
                     "The update path now recreates the hired-agent roster: scribes, daily editor, source-packet roles, curators, biographer, historian, librarian, contradiction flagger, and redactor.",
                     "See [Your Context](./your-context) for durable collaboration guidance, [Projects](./projects) for active work, and [Topics](./topics) for recurring subjects.",
                 ]
@@ -435,7 +486,7 @@ def render_your_context(context: dict[str, Any]) -> str:
             *bullets(
                 [
                     "`1Context Dev.app` is the ordinary iteration target for installed-build proof.",
-                    "The memory-core source importer reads local Codex session logs into a LanceDB-backed lake.",
+                    "The active source importer reads local Codex and Claude session logs into Perception DB.",
                     "The wiki core owns page lifecycle writes and the app publish path mirrors the rendered site for local web serving.",
                 ]
             ),
@@ -460,6 +511,7 @@ def render_your_context(context: dict[str, Any]) -> str:
                 ]
             ),
             "",
+            *prior_continuity_section(context, "your-context"),
             "## Life Story",
             "",
             "This bounded update is not enough for a life-story rewrite. The long-arc biographer should only write here after a larger, explicitly reviewed source window.",
@@ -519,6 +571,7 @@ def render_projects(context: dict[str, Any]) -> str:
                 ]
             ),
             "",
+            *prior_continuity_section(context, "projects"),
             "## See Also",
             "",
             "- [Your Context](./your-context)",
@@ -554,7 +607,7 @@ def render_topics(context: dict[str, Any]) -> str:
             "",
             "## Tools",
             "",
-            *topic_bullets(terms, {"codex", "uv", "playwright", "xcode", "swiftpm", "lancedb"}),
+            *topic_bullets(terms, {"codex", "claude", "uv", "playwright", "xcode", "swiftpm", "perception", "postgres", "timescale"}),
             "",
             "## Domain",
             "",
@@ -573,6 +626,7 @@ def render_topics(context: dict[str, Any]) -> str:
             "",
             *topic_bullets(terms, {"haptica", "mox", "openai", "anthropic", "github", "apple"}),
             "",
+            *prior_continuity_section(context, "topics"),
             "## See Also",
             "",
             "- [Your Context](./your-context)",
@@ -580,6 +634,80 @@ def render_topics(context: dict[str, Any]) -> str:
             "- [For You](./for-you)",
         ]
     )
+
+
+def load_prior_wiki_pages(runtime_root: Path | None, page_ids: tuple[str, ...] | None = None) -> tuple[WikiPriorPage, ...]:
+    if runtime_root is None:
+        return ()
+    source_root = runtime_root / "user-wiki" / "source"
+    if not source_root.exists():
+        return ()
+    resolved_page_ids = page_ids or tuple(page_id for page_id, _ in WIKI_PAGE_DEFINITIONS)
+    pages: list[WikiPriorPage] = []
+    for page_id in resolved_page_ids:
+        matches = sorted(source_root.glob(f"families/*/*/source/{page_id}.md"))
+        if not matches:
+            continue
+        source_path = matches[0]
+        try:
+            text = source_path.read_text(encoding="utf-8")
+        except OSError:
+            continue
+        body = strip_markdown_frontmatter(text).strip()
+        if body:
+            pages.append(WikiPriorPage(page_id=page_id, source_path=source_path, body_markdown=body))
+    return tuple(pages)
+
+
+def prior_continuity_section(context: dict[str, Any], page_id: str) -> list[str]:
+    summary = context.get("prior_summaries", {}).get(page_id, [])
+    if not summary:
+        return []
+    return [
+        "## Existing Wiki Continuity",
+        "",
+        *bullets(summary),
+        "",
+    ]
+
+
+def prior_page_summary(body_markdown: str) -> list[str]:
+    body = strip_prior_continuity_section(strip_markdown_frontmatter(body_markdown))
+    headings = [
+        clean_text(line.lstrip("# "))
+        for line in body.splitlines()
+        if line.startswith("## ") and "Existing Wiki Continuity" not in line
+    ]
+    prior_bullets = []
+    for line in body.splitlines():
+        stripped = line.strip()
+        if not stripped.startswith("- "):
+            continue
+        text = clean_text(stripped[2:])
+        if text and "Generated by `memory.update-wiki`" not in text:
+            prior_bullets.append(text)
+        if len(prior_bullets) >= 3:
+            break
+
+    summary: list[str] = []
+    if headings:
+        summary.append("Existing sections: " + ", ".join(headings[:8]) + ".")
+    summary.extend(shorten(item, limit=220) for item in prior_bullets)
+    return summary[:4]
+
+
+def strip_markdown_frontmatter(text: str) -> str:
+    if not text.startswith("---"):
+        return text
+    lines = text.splitlines()
+    for index, line in enumerate(lines[1:], start=1):
+        if line.strip() == "---":
+            return "\n".join(lines[index + 1 :])
+    return text
+
+
+def strip_prior_continuity_section(text: str) -> str:
+    return re.sub(r"\n?## Existing Wiki Continuity\n.*?(?=\n## |\Z)", "\n", text, flags=re.S).strip()
 
 
 def write_page_drafts(
@@ -687,11 +815,11 @@ def session_signal(session: dict[str, Any]) -> str:
 
 def project_entry(project: dict[str, Any]) -> str:
     sample = first_nonempty([clean_text(item.get("text")) for item in project.get("samples", [])])
-    return f"**{project['project']}** - {project['event_count']} recent meaningful events; last imported `{project['last_ts']}`. {shorten(sample)}"
+    return f"**{project['project']}** - {project['event_count']} recent Perception DB events; last imported `{project['last_ts']}`. {shorten(sample)}"
 
 
 def question_summary(event: dict[str, Any]) -> str:
-    project = project_label(str(event.get("cwd") or ""))
+    project = event_project_label(event)
     return f"**{project}** ({event.get('ts')}): {shorten(clean_text(event.get('text')))}"
 
 
@@ -715,6 +843,19 @@ def project_label(cwd: str) -> str:
     if path.name in {"worktrees", "docs", "src"} and len(parts) > 1:
         return parts[-2]
     return path.name or "unknown"
+
+
+def event_project_label(row: dict[str, Any]) -> str:
+    project_key = str(row.get("project_key") or "").strip()
+    if project_key:
+        return project_key
+    cwd = str(row.get("cwd") or "").strip()
+    if cwd:
+        return project_label(cwd)
+    source_uri = str(row.get("source_uri") or "").strip()
+    if source_uri:
+        return project_label(source_uri)
+    return "unknown"
 
 
 def clean_text(value: Any) -> str:

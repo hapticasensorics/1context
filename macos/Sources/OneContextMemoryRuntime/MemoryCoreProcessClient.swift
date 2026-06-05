@@ -1,6 +1,8 @@
 import Foundation
 import OneContextPlatform
 
+private let memoryCoreDefaultDevMemoryDatabaseURL = "postgres://onecontext:onecontext_dev@127.0.0.1:15432/onecontext_memory?connect_timeout=1"
+
 public struct MemoryCoreProcessError: Error, LocalizedError, Sendable {
   public let message: String
 
@@ -42,6 +44,12 @@ public final class MemoryCoreProcessClient: @unchecked Sendable {
     timeoutSeconds: Int = 60,
     importSources: Bool = false,
     importTicks: Int = 1,
+    sourceWindowDays: Int = 30,
+    sourceMaxEvents: Int = 5_000,
+    sourceMaxLines: Int = 250_000,
+    sourceQueryLimit: Int = 2_400,
+    sourceCursorName: String? = nil,
+    memorydBin: URL? = nil,
     runtimeRoot: URL? = nil,
     wikiCoreBin: URL? = nil
   ) throws -> [String: Any] {
@@ -64,6 +72,16 @@ public final class MemoryCoreProcessClient: @unchecked Sendable {
     if importSources {
       arguments.append("--import-sources")
       arguments += ["--import-ticks", "\(max(1, importTicks))"]
+      arguments += ["--source-window-days", "\(max(1, sourceWindowDays))"]
+      arguments += ["--source-max-events", "\(max(1, sourceMaxEvents))"]
+      arguments += ["--source-max-lines", "\(max(1, sourceMaxLines))"]
+      arguments += ["--source-query-limit", "\(max(1, sourceQueryLimit))"]
+      if let sourceCursorName, !sourceCursorName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+        arguments += ["--source-cursor-name", sourceCursorName]
+      }
+      if let memorydBin {
+        arguments += ["--memoryd-bin", memorydBin.path]
+      }
     }
     if let runtimeRoot {
       arguments += ["--runtime-root", runtimeRoot.path]
@@ -126,6 +144,13 @@ public final class MemoryCoreProcessClient: @unchecked Sendable {
   private func processEnvironment(root: URL?) -> [String: String] {
     var env = environment
     env[OneContextAppIdentity.environmentKey] = runtimePaths.identity.environmentValue
+    if runtimePaths.identity.kind == .dev,
+      env["ONECONTEXT_MEMORY_DB_URL"]?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty != false,
+      env["ONECONTEXT_MEMORY_DATABASE_URL"]?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty != false,
+      env["DATABASE_URL"]?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty != false
+    {
+      env["ONECONTEXT_MEMORY_DB_URL"] = memoryCoreDefaultDevMemoryDatabaseURL
+    }
     if let root {
       env["ONECONTEXT_MEMORY_CORE_ROOT"] = root.path
     }

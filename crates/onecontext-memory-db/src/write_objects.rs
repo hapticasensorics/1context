@@ -1140,8 +1140,24 @@ fn write_prepared_chunk(
         WHERE source_records.source_id = stage.source_id
           AND source_records.source_record_key = stage.source_record_key
           AND source_records.source_record_hash <> stage.source_record_hash
-          AND source_records.kind IN ('agent_session', 'agent_turn')
-          AND stage.kind IN ('agent_session', 'agent_turn');
+          AND source_records.kind IN (
+            'agent_session',
+            'agent_turn',
+            'agent_message',
+            'agent_tool_summary',
+            'agent_runtime_event',
+            'agent_prompt_snapshot',
+            'agent_compaction'
+          )
+          AND stage.kind IN (
+            'agent_session',
+            'agent_turn',
+            'agent_message',
+            'agent_tool_summary',
+            'agent_runtime_event',
+            'agent_prompt_snapshot',
+            'agent_compaction'
+          );
 
         UPDATE perception.objects objects
         SET event_end = stage.event_end,
@@ -1187,11 +1203,27 @@ fn write_prepared_chunk(
           ON source_records.source_id = stage.source_id
          AND source_records.source_record_key = stage.source_record_key
          AND source_records.object_id = stage.object_id
-         AND source_records.kind IN ('agent_session', 'agent_turn')
+         AND source_records.kind IN (
+            'agent_session',
+            'agent_turn',
+            'agent_message',
+            'agent_tool_summary',
+            'agent_runtime_event',
+            'agent_prompt_snapshot',
+            'agent_compaction'
+          )
         WHERE objects.object_id = source_records.object_id
           AND objects.event_start = source_records.object_event_start
           AND objects.user_id = source_records.user_id
-          AND stage.kind IN ('agent_session', 'agent_turn')
+          AND stage.kind IN (
+            'agent_session',
+            'agent_turn',
+            'agent_message',
+            'agent_tool_summary',
+            'agent_runtime_event',
+            'agent_prompt_snapshot',
+            'agent_compaction'
+          )
           AND objects.source_record_hash IS DISTINCT FROM stage.source_record_hash;
 
         CREATE TEMP TABLE write_objects_claimed ON COMMIT DROP AS
@@ -1227,11 +1259,24 @@ fn write_prepared_chunk(
           FROM write_objects_new_rows
           ON CONFLICT (source_id, source_record_key) DO NOTHING
           RETURNING source_record_id
+        ),
+        inserted_claimed AS (
+          SELECT stage.*
+          FROM write_objects_stage stage
+          JOIN inserted_source_records inserted
+            ON inserted.source_record_id = stage.source_record_id
+        ),
+        mutable_claimed AS (
+          SELECT stage.*
+          FROM write_objects_mutable_changed stage
+          JOIN perception.source_records source_records
+            ON source_records.source_id = stage.source_id
+           AND source_records.source_record_key = stage.source_record_key
+           AND source_records.source_record_hash = stage.source_record_hash
         )
-        SELECT stage.*
-        FROM write_objects_stage stage
-        JOIN inserted_source_records inserted
-          ON inserted.source_record_id = stage.source_record_id;
+        SELECT * FROM inserted_claimed
+        UNION ALL
+        SELECT * FROM mutable_claimed;
 
         INSERT INTO perception.objects (
           event_start,
@@ -1324,7 +1369,8 @@ fn write_prepared_chunk(
           schema_version,
           confidence,
           metadata
-        FROM write_objects_claimed;
+        FROM write_objects_claimed
+        WHERE NOT mutable_update;
 
         UPDATE perception.series series
         SET record_count = series.record_count + counts.record_count,
@@ -1344,6 +1390,7 @@ fn write_prepared_chunk(
             min(event_start) AS first_event_start,
             max(event_end) AS last_event_end
           FROM write_objects_claimed
+          WHERE NOT mutable_update
           GROUP BY series_id
         ) counts
         WHERE series.series_id = counts.series_id;
@@ -1624,7 +1671,16 @@ fn update_exact_duplicate_seen_counts(
 }
 
 fn is_mutable_container_kind(kind: &str) -> bool {
-    matches!(kind, "agent_session" | "agent_turn")
+    matches!(
+        kind,
+        "agent_session"
+            | "agent_turn"
+            | "agent_message"
+            | "agent_tool_summary"
+            | "agent_runtime_event"
+            | "agent_prompt_snapshot"
+            | "agent_compaction"
+    )
 }
 
 fn copy_prepared_records(
@@ -2217,6 +2273,22 @@ mod tests {
         let error = plan_write_objects(&request).unwrap_err();
 
         assert_eq!(error.code(), "SOURCE_IDENTITY_HASH_CONFLICT_IN_BATCH");
+    }
+
+    #[test]
+    fn agent_derived_objects_are_mutable_for_incremental_session_reduction() {
+        for kind in [
+            "agent_session",
+            "agent_turn",
+            "agent_message",
+            "agent_tool_summary",
+            "agent_runtime_event",
+            "agent_prompt_snapshot",
+            "agent_compaction",
+        ] {
+            assert!(is_mutable_container_kind(kind), "{kind} should be mutable");
+        }
+        assert!(!is_mutable_container_kind("observation"));
     }
 
     #[test]

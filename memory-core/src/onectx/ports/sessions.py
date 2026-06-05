@@ -117,7 +117,7 @@ def import_session_port(
 
     # `since` is a source import horizon, not a storage-retention policy.
     # It gates which native transcript rows/files are eligible to import on
-    # this tick. It must never be used to prune already-imported lakestore rows.
+    # this tick. It must never be used to prune already-imported Perception DB rows.
     cutoff = None if source_root else cutoff_for_port(port)
     files = resolve_port_files(root, port, source_root=source_root)
     result.files_seen = len(files)

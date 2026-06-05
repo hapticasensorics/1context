@@ -4,7 +4,7 @@ label = "Hourly Scribe"
 agent = "hourly-scribe"
 tools = []
 prompt_paths = ["prompts/hourly-scribe-task.md"]
-inputs = ["storage.lakestore.events", "runtime.experience_packet"]
+inputs = ["perception_db.agent_messages", "runtime.experience_packet", "source_packet.perception_db_session_history"]
 outputs = ["hourly_talk_entry"]
 
 [params]

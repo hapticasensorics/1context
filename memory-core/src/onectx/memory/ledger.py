@@ -8,8 +8,6 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from onectx.storage import LakeStore, storage_dir_path
-
 try:
     import fcntl
 except ImportError:  # pragma: no cover - non-Unix fallback
@@ -34,18 +32,6 @@ class Ledger:
             }
             with self.path.open("a", encoding="utf-8") as handle:
                 handle.write(json.dumps(record, sort_keys=True, default=str) + "\n")
-            storage_path = self.storage_path or storage_dir_path(runtime_dir_for_ledger_path(self.path))
-            LakeStore(storage_path).append_event(
-                event,
-                ts=record["ts"],
-                source="runtime-ledger",
-                actor=str(record.get("agent_id") or record.get("hired_agent_uuid") or ""),
-                subject=str(record.get("plugin_id") or ""),
-                hired_agent_uuid=str(record.get("hired_agent_uuid") or ""),
-                run_id=str(record.get("run_id") or ""),
-                text=str(record.get("summary") or ""),
-                payload=record,
-            )
             return record
 
     def read(self, *, limit: int | None = None) -> list[dict[str, Any]]:

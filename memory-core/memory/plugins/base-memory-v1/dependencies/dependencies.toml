@@ -13,13 +13,14 @@ purpose = "Required to load this plugin's state_machines/*.py definitions. The l
 
 [[dependencies]]
 id = "lancedb-lakestore"
-label = "LanceDB Lakestore"
+label = "LanceDB Lakestore (archived)"
 kind = "storage_engine"
-required = true
+required = false
 engine = "lancedb"
 version_spec = ">=0.30,<0.31"
 path = "storage/lakestore"
-purpose = "Required for runtime events, session archives, artifacts, evidence, and document surfaces. The host provides the local LanceDB/Lance store; the plugin writes through src/onectx/storage."
+status = "archived"
+purpose = "Archived prototype storage for older runtime events, session archives, artifacts, evidence, and document surfaces. The active wiki update/backfill path now reads Codex and Claude session history through the Perception DB API exposed by onecontext-memoryd."
 
 [[dependencies]]
 id = "openai-models"

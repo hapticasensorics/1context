@@ -4,9 +4,14 @@ This directory contains the Python memory engine being integrated behind the
 public macOS shell.
 
 The public Swift app owns installation, lifecycle, diagnostics, permissions,
-hooks, update behavior, wiki rendering, and wiki publication. The memory core
-owns storage semantics, memory ticks, replay dry-runs, route planning, and
-future agentic memory logic.
+hooks, update behavior, wiki rendering, and wiki publication. Rust 1Context
+components own the durable infrastructure: Perception DB via
+`onecontext-memoryd`, wiki page lifecycle via `onecontext-wiki-core`, and agent
+provenance via the agent harness.
+
+The Python memory core is now a thin orchestration shim for the wiki-update
+workflow and legacy prompt/job manifests. It should not grow a parallel storage
+system where a mature 1Context surface already exists.
 
 The boundary is a subprocess contract. For local development:
 
@@ -31,6 +36,7 @@ memory cycles list --json
 memory cycles show <cycle-id> --json
 memory cycles validate <cycle-id> --json
 memory replay-dry-run --start <ts> --end <ts> [--sources a,b] [--replay-run-id id] --json
+memory update-wiki [options] --json
 ```
 
 Successful output is wrapped as:
@@ -46,7 +52,7 @@ Runtime outputs are intentionally ignored by git:
 
 ```text
 memory-core/memory/runtime/
-memory-core/storage/lakestore/*.lance
+memory-core/storage/lakestore/
 ```
 
 Do not add user wiki content, screenshots, session images, generated storage, or

@@ -830,6 +830,9 @@ fn common_payload(
     payload.insert("agent_source".to_string(), json!(session.source.as_str()));
     payload.insert("source_id".to_string(), json!(session.source_id));
     payload.insert("session_id".to_string(), json!(session.session_id));
+    payload.insert("source_uri".to_string(), json!(session.source_uri));
+    payload.insert("cwd".to_string(), json!(session.cwd));
+    payload.insert("project_key".to_string(), json!(session.project_key));
     payload.insert("turn_id".to_string(), json!(turn_id));
     payload.insert("projections".to_string(), json!(projections));
     payload.insert("raw_ref".to_string(), json!(raw_ref));

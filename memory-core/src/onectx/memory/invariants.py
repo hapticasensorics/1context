@@ -245,6 +245,7 @@ def write_runtime_invariant_report_artifact(
     run_id: str = "",
     path: Path | None = None,
     checker: str = "memory.runtime_invariants",
+    record_storage: bool = False,
 ) -> RuntimeInvariantReportArtifact:
     resolved_run_id = run_id or str(report.get("run_id") or stable_id("runtime-invariants", utc_now()))
     resolved_path = path or system.runtime_dir / "invariants" / f"{resolved_run_id}.json"
@@ -256,6 +257,19 @@ def write_runtime_invariant_report_artifact(
     passed = bool(summary.get("passed"))
     silent_noops = int(summary.get("silent_noops") or 0)
     artifact_id = stable_id("artifact", "runtime_invariant_report", resolved_run_id, content_hash)
+    if not record_storage:
+        evidence_id = stable_id("evidence", "runtime_invariants.passed", artifact_id, passed)
+        event_id = stable_id("event", "runtime_invariants.report_written", artifact_id, passed)
+        return RuntimeInvariantReportArtifact(
+            artifact_id=artifact_id,
+            evidence_id=evidence_id,
+            event_id=event_id,
+            path=resolved_path,
+            content_hash=content_hash,
+            bytes=len(text.encode("utf-8")),
+            passed=passed,
+            silent_noops=silent_noops,
+        )
 
     store = LakeStore(system.storage_dir)
     store.ensure()

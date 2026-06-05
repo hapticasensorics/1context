@@ -107,14 +107,14 @@ def build() -> Machine:
 
     machine.clock("daemon", source="supervised_tick_or_schedule")
     machine.clock("activity", source="codex_claude_session_events")
-    machine.clock("ledger", source="append_only_lakestore_events")
+    machine.clock("ledger", source="append_only_runtime_receipts")
     machine.clock("filesystem", source="workspace_and_wiki_changes")
     machine.clock("human", source="operator_message_or_approval")
 
     machine.artifact(
         "runtime_events",
-        kind="lakestore_table",
-        path="{storage}/events",
+        kind="perception_db_view",
+        path="perception-db://agent_messages",
         schema="runtime_event.v1",
         policies=["append_only", "ordered_by_timestamp"],
         description=(
@@ -125,8 +125,8 @@ def build() -> Machine:
     )
     machine.artifact(
         "importer_cursor",
-        kind="lakestore_cursor",
-        path="{storage}/importers/{source}.json",
+        kind="perception_db_cursor",
+        path="perception-db://source-cursors/{source}",
         schema="runtime_importer_cursor.v1",
         policies=["source_freshness_gate", "append_only_history"],
         description=(
@@ -389,7 +389,7 @@ def build() -> Machine:
         "memory_cycle.artifact_written",
         checks=[
             "cycle.json exists under memory/runtime/cycles/{cycle_id}",
-            "lakestore artifact row points at the cycle file",
+            "cycle file is recorded in the runtime receipt ledger",
             "artifact content_hash matches the current cycle file",
             "cycle payload records state_machine, scope, preflight, steps, recovery, and DSL contract",
         ],

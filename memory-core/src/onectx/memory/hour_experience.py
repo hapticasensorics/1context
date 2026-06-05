@@ -497,7 +497,7 @@ def render_stream(
         lines.extend(
             [
                 "> This is a cleaned, bounded transcript for agent cognition. "
-                "Events outside this projection were omitted from the prompt path; provenance remains in meta.yaml and lakestore.",
+                "Events outside this projection were omitted from the prompt path; provenance remains in meta.yaml and Perception DB.",
                 "",
             ]
         )
@@ -663,7 +663,7 @@ def projection_policy(experience_mode: str) -> dict[str, Any]:
         return {
             "name": MESSAGES_ONLY_EXPERIENCE_MODE,
             "source_table": "events",
-            "source_truth": "lakestore.events",
+            "source_truth": "perception_db.agent_messages",
             "destructive": False,
             "selection": "all user and assistant messages; no sampling",
             "included_event_kinds": ["user", "assistant"],
@@ -673,7 +673,7 @@ def projection_policy(experience_mode: str) -> dict[str, Any]:
     return {
         "name": FULL_TRANSCRIPT_EXPERIENCE_MODE,
         "source_table": "events",
-        "source_truth": "lakestore.events",
+        "source_truth": "perception_db.agent_messages",
         "destructive": False,
         "selection": f"user, assistant, tool_use, and tool_result events capped to {MAX_STREAM_EVENTS_PER_STREAM} per stream",
         "included_event_kinds": ["user", "assistant", "tool_use", "tool_result"],

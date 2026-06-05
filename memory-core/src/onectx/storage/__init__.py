@@ -7,110 +7,79 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-import lancedb
-import pyarrow as pa
-
 
 TABLE_ORDER = ("events", "sessions", "artifacts", "evidence", "documents")
 
-TABLE_SCHEMAS: dict[str, pa.Schema] = {
-    "events": pa.schema(
-        [
-            ("event_id", pa.string()),
-            ("hash", pa.string()),
-            ("session_id", pa.string()),
-            ("ts", pa.string()),
-            ("event", pa.string()),
-            ("source", pa.string()),
-            ("kind", pa.string()),
-            ("actor", pa.string()),
-            ("subject", pa.string()),
-            ("cwd", pa.string()),
-            ("char_count", pa.int64()),
-            ("state_machine", pa.string()),
-            ("scope", pa.string()),
-            ("hired_agent_uuid", pa.string()),
-            ("run_id", pa.string()),
-            ("artifact_id", pa.string()),
-            ("evidence_id", pa.string()),
-            ("text", pa.string()),
-            ("payload_json", pa.string()),
-        ]
+TABLE_FIELDS: dict[str, tuple[str, ...]] = {
+    "events": (
+        "event_id",
+        "hash",
+        "session_id",
+        "ts",
+        "event",
+        "source",
+        "kind",
+        "actor",
+        "subject",
+        "cwd",
+        "char_count",
+        "state_machine",
+        "scope",
+        "hired_agent_uuid",
+        "run_id",
+        "artifact_id",
+        "evidence_id",
+        "text",
+        "payload_json",
     ),
-    "sessions": pa.schema(
-        [
-            ("session_id", pa.string()),
-            ("source", pa.string()),
-            ("cwd", pa.string()),
-            ("first_ts", pa.string()),
-            ("last_ts", pa.string()),
-            ("event_count", pa.int64()),
-            ("metadata_json", pa.string()),
-        ]
+    "sessions": ("session_id", "source", "cwd", "first_ts", "last_ts", "event_count", "metadata_json"),
+    "artifacts": (
+        "artifact_id",
+        "ts",
+        "kind",
+        "uri",
+        "path",
+        "content_type",
+        "content_hash",
+        "bytes",
+        "source",
+        "state",
+        "text",
+        "metadata_json",
     ),
-    "artifacts": pa.schema(
-        [
-            ("artifact_id", pa.string()),
-            ("ts", pa.string()),
-            ("kind", pa.string()),
-            ("uri", pa.string()),
-            ("path", pa.string()),
-            ("content_type", pa.string()),
-            ("content_hash", pa.string()),
-            ("bytes", pa.int64()),
-            ("source", pa.string()),
-            ("state", pa.string()),
-            ("text", pa.string()),
-            ("metadata_json", pa.string()),
-        ]
+    "evidence": (
+        "evidence_id",
+        "ts",
+        "artifact_id",
+        "check_id",
+        "status",
+        "checker",
+        "text",
+        "checks_json",
+        "payload_json",
     ),
-    "evidence": pa.schema(
-        [
-            ("evidence_id", pa.string()),
-            ("ts", pa.string()),
-            ("artifact_id", pa.string()),
-            ("check_id", pa.string()),
-            ("status", pa.string()),
-            ("checker", pa.string()),
-            ("text", pa.string()),
-            ("checks_json", pa.string()),
-            ("payload_json", pa.string()),
-        ]
-    ),
-    "documents": pa.schema(
-        [
-            ("document_id", pa.string()),
-            ("ts", pa.string()),
-            ("kind", pa.string()),
-            ("uri", pa.string()),
-            ("path", pa.string()),
-            ("title", pa.string()),
-            ("text", pa.string()),
-            ("source", pa.string()),
-            ("metadata_json", pa.string()),
-        ]
-    ),
+    "documents": ("document_id", "ts", "kind", "uri", "path", "title", "text", "source", "metadata_json"),
 }
+INTEGER_FIELDS = {"char_count", "event_count", "bytes"}
 
 
 class StorageError(RuntimeError):
-    """Raised when the local lakestore cannot be opened or written."""
+    """Raised when archived prototype storage is accidentally invoked."""
 
 
 @dataclass(frozen=True)
 class LakeStore:
-    """Tiny LanceDB-backed lake store for runtime records.
+    """Archived LanceDB-backed prototype store.
 
-    The store deliberately starts as a few append-friendly tables. Exact table
-    schemas live here so state-machine experiments have one stable place to
-    write events, artifacts, and evidence.
+    Perception DB, accessed through `onecontext-memoryd`, is the active durable
+    memory substrate. This class remains only so old imports fail loudly instead
+    of silently reviving the prototype lake.
     """
 
     path: Path
 
     def connect(self):
-        self.path.mkdir(parents=True, exist_ok=True)
-        return lancedb.connect(self.path)
+        raise StorageError("LakeStore is archived; use the Perception DB API through onecontext-memoryd.")
 
     def ensure(self) -> dict[str, int | None]:
         db = self.connect()
@@ -265,8 +234,8 @@ class LakeStore:
         table.add(normalized)
 
     def rows(self, table_name: str, *, limit: int = 20) -> list[dict[str, Any]]:
-        if table_name not in TABLE_SCHEMAS:
-            raise StorageError(f"unknown lakestore table {table_name!r}")
+        if table_name not in TABLE_FIELDS:
+            raise StorageError(f"unknown archived LakeStore table {table_name!r}")
         db = self.connect()
         if table_name not in set(list_tables(db)):
             return []
@@ -280,8 +249,8 @@ class LakeStore:
         return None
 
     def column_values(self, table_name: str, field_name: str) -> set[str]:
-        if table_name not in TABLE_SCHEMAS:
-            raise StorageError(f"unknown lakestore table {table_name!r}")
+        if table_name not in TABLE_FIELDS:
+            raise StorageError(f"unknown archived LakeStore table {table_name!r}")
         db = self.connect()
         if table_name not in set(list_tables(db)):
             return set()
@@ -317,11 +286,7 @@ class LakeStore:
 
 
 def ensure_table(db: Any, table_name: str):
-    if table_name not in TABLE_SCHEMAS:
-        raise StorageError(f"unknown lakestore table {table_name!r}")
-    if table_name in set(list_tables(db)):
-        return db.open_table(table_name)
-    return db.create_table(table_name, schema=TABLE_SCHEMAS[table_name])
+    raise StorageError("LakeStore tables are archived; use the Perception DB schema.")
 
 
 def list_tables(db: Any) -> list[str]:
@@ -334,16 +299,16 @@ def list_tables(db: Any) -> list[str]:
 
 
 def normalize_row(table_name: str, values: dict[str, Any]) -> dict[str, Any]:
-    schema = TABLE_SCHEMAS[table_name]
+    fields = TABLE_FIELDS[table_name]
     row: dict[str, Any] = {}
-    for field in schema:
-        value = values.get(field.name)
-        if pa.types.is_integer(field.type):
-            row[field.name] = int(value or 0)
-        elif field.name.endswith("_json"):
-            row[field.name] = stable_json(value)
+    for field in fields:
+        value = values.get(field)
+        if field in INTEGER_FIELDS:
+            row[field] = int(value or 0)
+        elif field.endswith("_json"):
+            row[field] = stable_json(value)
         else:
-            row[field.name] = "" if value is None else str(value)
+            row[field] = "" if value is None else str(value)
     return row
 
 
@@ -370,5 +335,5 @@ def utc_now() -> str:
 
 def storage_dir_path(runtime_dir: Path) -> Path:
     if runtime_dir.name == "runtime" and runtime_dir.parent.name == "memory":
-        return runtime_dir.parent.parent / "storage" / "lakestore"
-    return runtime_dir / "lakestore"
+        return runtime_dir.parent.parent / "storage" / "perception-db"
+    return runtime_dir / "perception-db"
