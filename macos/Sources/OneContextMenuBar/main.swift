@@ -614,7 +614,7 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
   private let menu = NSMenu()
   private let stateItem = NSMenuItem(title: RuntimeState.checking.title, action: nil, keyEquivalent: "")
   private let openWikiItem = NSMenuItem(title: "Open Wiki", action: #selector(openWiki), keyEquivalent: "")
-  private let refreshWikiItem = NSMenuItem(title: "Refresh Wiki", action: #selector(refreshWiki), keyEquivalent: "")
+  private let refreshWikiItem = NSMenuItem(title: "Update Wiki", action: #selector(refreshWiki), keyEquivalent: "")
   private let settingsItem = NSMenuItem(title: "Settings", action: nil, keyEquivalent: "")
   private let settingsMenu = NSMenu()
   private let versionItem = NSMenuItem(title: "", action: nil, keyEquivalent: "")
@@ -991,7 +991,7 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
       stateItem.title = stateTitle
       renderedStateTitle = stateTitle
     }
-    refreshWikiItem.title = isWikiRefreshInFlight ? "Refreshing Wiki..." : "Refresh Wiki"
+    refreshWikiItem.title = isWikiRefreshInFlight ? "Updating Wiki..." : "Update Wiki"
     refreshWikiItem.isEnabled = !isWikiRefreshInFlight
     let setupReady = cachedRequiredSetupReady
     setupItem.title = isLocalWebSetupInFlight ? "Granting Setup..." : setupReady ? "Setup..." : "Finish Setup..."
@@ -1368,7 +1368,7 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
     Task {
       do {
         _ = try await RuntimeController().start(startMenu: false)
-        _ = try await wikiRPC("wiki.refresh", timeout: 5)
+        _ = try await runtimeRPC("memory.update_wiki", params: ["provider": "codex"], timeout: 90)
         _ = try await waitForWikiRunning(timeout: 240)
         await MainActor.run {
           self.isWikiRefreshInFlight = false
@@ -2002,13 +2002,20 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
   }
 
   private func wikiRPC(_ method: String, timeout: TimeInterval) async throws -> WikiMenuSnapshot {
+    WikiMenuSnapshot(payload: try await runtimeRPC(method, timeout: timeout))
+  }
+
+  private func runtimeRPC(
+    _ method: String,
+    params: [String: Any] = [:],
+    timeout: TimeInterval
+  ) async throws -> [String: Any] {
     let deadline = Date().addingTimeInterval(timeout)
     var lastError: Error?
     let clientTimeout = Int32(max(2_000, min(120_000, Int(timeout * 1_000))))
     repeat {
       do {
-        let payload = try UnixJSONRPCClient(timeoutMilliseconds: clientTimeout).call(method: method)
-        return WikiMenuSnapshot(payload: payload)
+        return try UnixJSONRPCClient(timeoutMilliseconds: clientTimeout).call(method: method, params: params)
       } catch {
         lastError = error
         try await Task.sleep(nanoseconds: 250_000_000)

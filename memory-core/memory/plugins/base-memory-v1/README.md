@@ -39,6 +39,7 @@ uv run --project memory-core 1context-memory-core memory cycles list --json
 uv run --project memory-core 1context-memory-core memory cycles show <cycle-id> --json
 uv run --project memory-core 1context-memory-core memory cycles validate <cycle-id> --json
 uv run --project memory-core 1context-memory-core memory replay-dry-run --start <ts> --end <ts> --json
+uv run --project memory-core 1context-memory-core memory update-wiki --provider codex --json
 ```
 
 Do not add a broad developer CLI back for convenience. Add explicit contract

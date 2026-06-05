@@ -21,6 +21,8 @@ final class WikiRenderCoordinatorTests: XCTestCase {
     XCTAssertEqual(result.status, WikiRenderStatus.published)
     XCTAssertTrue(FileManager.default.fileExists(atPath: current.appendingPathComponent("your-context.html").path))
     XCTAssertTrue(FileManager.default.fileExists(atPath: current.appendingPathComponent("your-context.md").path))
+    XCTAssertTrue(FileManager.default.fileExists(atPath: current.appendingPathComponent("__1context/health").path))
+    XCTAssertTrue(FileManager.default.fileExists(atPath: current.appendingPathComponent("api/wiki/search.json").path))
     XCTAssertEqual(sourceState.status, .published)
     XCTAssertEqual(currentState.status, .published)
     XCTAssertEqual(sourceState.sourceSite, "user-wiki://site")

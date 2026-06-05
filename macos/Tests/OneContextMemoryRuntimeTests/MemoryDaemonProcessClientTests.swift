@@ -199,6 +199,59 @@ final class MemoryDaemonProcessClientTests: XCTestCase {
     }
   }
 
+  func testMemoryCoreUpdateWikiUsesEnvironmentOverride() throws {
+    let root = temporaryRoot()
+    defer { try? FileManager.default.removeItem(at: root) }
+    try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+    let argsFile = root.appendingPathComponent("memory-core-args.txt")
+    let executable = root.appendingPathComponent("1context-memory-core")
+    let wikiCore = root.appendingPathComponent("One Context Dev.app/Contents/MacOS/onecontext-wiki")
+    try FileManager.default.createDirectory(at: wikiCore.deletingLastPathComponent(), withIntermediateDirectories: true)
+    try "#!/bin/sh\nexit 0\n".write(to: wikiCore, atomically: true, encoding: .utf8)
+    try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: wikiCore.path)
+    let script = """
+    #!/bin/sh
+    printf '%s\\n' "$@" > \(shellQuoted(argsFile.path))
+    cat <<'JSON'
+    {"status":"ok","schema_version":1,"command":"memory.update-wiki","result":{"operation":"memory.update_wiki","status":"completed","planned_count":17}}
+    JSON
+    """
+    try script.write(to: executable, atomically: true, encoding: .utf8)
+    try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: executable.path)
+
+    let client = MemoryCoreProcessClient(
+      runtimePaths: runtimePaths(root: root),
+      environment: ["ONECONTEXT_MEMORY_CORE_BIN": executable.path]
+    )
+
+    let payload = try client.updateWiki(
+      provider: "codex",
+      runID: "manual-run",
+      executeAgents: true,
+      maxConcurrent: 2,
+      timeoutSeconds: 30,
+      importSources: true,
+      importTicks: 2,
+      runtimeRoot: runtimePaths(root: root).userContentDirectory,
+      wikiCoreBin: wikiCore
+    )
+    let result = try XCTUnwrap(payload["result"] as? [String: Any])
+    let args = try String(contentsOf: argsFile, encoding: .utf8)
+
+    XCTAssertEqual(payload["command"] as? String, "memory.update-wiki")
+    XCTAssertEqual(result["planned_count"] as? Int, 17)
+    XCTAssertTrue(args.contains("memory\nupdate-wiki\n--provider\ncodex"))
+    XCTAssertTrue(args.contains("--run-id\nmanual-run"))
+    XCTAssertTrue(args.contains("--execute-agents"))
+    XCTAssertTrue(args.contains("--max-concurrent\n2"))
+    XCTAssertTrue(args.contains("--import-sources"))
+    XCTAssertTrue(args.contains("--import-ticks\n2"))
+    XCTAssertTrue(args.contains("--runtime-root\n\(runtimePaths(root: root).userContentDirectory.path)"))
+    XCTAssertTrue(args.contains("--wiki-core-bin\n\(wikiCore.path)"))
+    XCTAssertTrue(args.contains("--timeout-seconds\n30"))
+    XCTAssertTrue(args.hasSuffix("--json\n"))
+  }
+
   private func runtimePaths(root: URL, identity: OneContextAppIdentity = .official) -> RuntimePaths {
     RuntimePaths(
       userContentDirectory: root.appendingPathComponent("1Context", isDirectory: true),

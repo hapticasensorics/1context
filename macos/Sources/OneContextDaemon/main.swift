@@ -246,6 +246,7 @@ final class OneContextDaemon: @unchecked Sendable {
   private lazy var logger = Logger(path: paths.logPath)
   private lazy var localWeb = CaddyManager(runtimePaths: paths)
   private lazy var memoryDaemon = MemoryDaemonProcessClient(runtimePaths: paths)
+  private lazy var memoryCore = MemoryCoreProcessClient(runtimePaths: paths)
   private lazy var captureLogStore = OneContextCaptureLogStore(runtimePaths: paths)
   private lazy var axSemanticEventAggregator = AXSemanticEventAggregator(capacity: 256)
   private let axSemanticPersistenceQueue = DispatchQueue(label: "com.haptica.1contextd.ax-semantic-persistence")
@@ -639,6 +640,9 @@ final class OneContextDaemon: @unchecked Sendable {
         logger.write("memory.benchmark failed: \(error.localizedDescription)")
         return encode(error: error.localizedDescription, id: id)
       }
+    case "memory.update_wiki":
+      logger.write("memory.update_wiki requested")
+      return encode(result: memoryUpdateWikiPayload(params: params), id: id)
     case "wiki.status":
       let snapshot = wikiStatus()
       return encode(result: wikiPayload(snapshot), id: id)
@@ -1167,10 +1171,79 @@ final class OneContextDaemon: @unchecked Sendable {
     }
   }
 
+  private func boolParam(_ value: Any?) -> Bool? {
+    switch value {
+    case let bool as Bool:
+      return bool
+    case let number as NSNumber:
+      return number.boolValue
+    case let string as String:
+      let normalized = string.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+      if ["1", "true", "yes", "y"].contains(normalized) {
+        return true
+      }
+      if ["0", "false", "no", "n"].contains(normalized) {
+        return false
+      }
+      return nil
+    default:
+      return nil
+    }
+  }
+
+  private func stringParam(_ value: Any?) -> String? {
+    guard let string = value as? String else { return nil }
+    let trimmed = string.trimmingCharacters(in: .whitespacesAndNewlines)
+    return trimmed.isEmpty ? nil : trimmed
+  }
+
   private func memoryBenchmarkPayload(params: [String: Any]) throws -> [String: Any] {
     let maxEvents = params["max_events"] as? Int ?? 1_000
     let maxLines = params["max_lines"] as? Int ?? 50_000
     return try memoryDaemon.benchmark(maxEvents: maxEvents, maxLines: maxLines)
+  }
+
+  private func memoryUpdateWikiPayload(params: [String: Any]) -> [String: Any] {
+    let provider = stringParam(params["provider"]) ?? "codex"
+    let executeAgents = boolParam(params["execute_agents"]) ?? false
+    let importSources = boolParam(params["import_sources"]) ?? true
+    let importTicks = intParam(params["import_ticks"]) ?? 2
+    let maxConcurrent = intParam(params["max_concurrent"])
+    let timeoutSeconds = intParam(params["timeout_seconds"]) ?? 60
+    let runID = stringParam(params["run_id"])
+    var payload: [String: Any] = [
+      "surface": "memory_update_wiki",
+      "status": "accepted",
+      "provider": provider,
+      "execute_agents": executeAgents,
+      "import_sources": importSources,
+      "import_ticks": importTicks
+    ]
+
+    do {
+      let wikiCoreBin = try? wikiCore.discoverExecutable()
+      payload["memory_core"] = try memoryCore.updateWiki(
+        provider: provider,
+        runID: runID,
+        executeAgents: executeAgents,
+        maxConcurrent: maxConcurrent,
+        timeoutSeconds: timeoutSeconds,
+        importSources: importSources,
+        importTicks: importTicks,
+        runtimeRoot: paths.userContentDirectory,
+        wikiCoreBin: wikiCoreBin
+      )
+      payload["memory_core_status"] = "ok"
+    } catch {
+      logger.write("memory.update_wiki memory-core unavailable: \(error.localizedDescription)")
+      payload["memory_core_status"] = "unavailable"
+      payload["memory_core_error"] = error.localizedDescription
+    }
+
+    publishWikiInBackground(refresh: true)
+    payload["wiki"] = wikiPayload(pendingWikiSnapshot(health: "updating"))
+    logger.write("memory.update_wiki accepted memory_core_status=\(payload["memory_core_status"] ?? "unknown")")
+    return payload
   }
 
   private func wikiPayload(_ snapshot: LocalWebSnapshot) -> [String: Any] {

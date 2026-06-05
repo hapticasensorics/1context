@@ -368,6 +368,10 @@ rsync -a \
   "$ROOT/wiki-engine/" \
   "$WIKI_ENGINE_RESOURCE_DIR/"
 
+if [[ "${ONECONTEXT_RELEASE_CHANNEL:-}" == "dev" ]]; then
+  printf '%s\n' "$ROOT/memory-core" > "$RESOURCES_DIR/DevMemoryCoreRoot.txt"
+fi
+
 MANIFEST_WRITTEN=0
 write_runtime_defaults_manifest() {
   local git_commit

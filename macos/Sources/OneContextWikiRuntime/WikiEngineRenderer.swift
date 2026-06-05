@@ -203,6 +203,7 @@ public final class WikiEngineRenderer: @unchecked Sendable {
       ]
     }
     process.currentDirectoryURL = config.engineDirectory
+    process.environment = rendererEnvironment()
     process.standardInput = FileHandle.nullDevice
 
     let stdout = Pipe()
@@ -236,6 +237,57 @@ public final class WikiEngineRenderer: @unchecked Sendable {
       buffer.append(pipe.fileHandleForReading.readDataToEndOfFile())
       group.leave()
     }
+  }
+
+  private func rendererEnvironment() -> [String: String] {
+    var environment = ProcessInfo.processInfo.environment
+    environment["PATH"] = developerToolPath(existing: environment["PATH"])
+    return environment
+  }
+
+  private func developerToolPath(existing: String?) -> String {
+    var parts: [String] = []
+    for item in [existing ?? ""] + nvmNodeBinPaths() + [
+      "\(FileManager.default.homeDirectoryForCurrentUser.path)/.local/bin",
+      "\(FileManager.default.homeDirectoryForCurrentUser.path)/.cargo/bin",
+      "/opt/homebrew/bin",
+      "/opt/homebrew/sbin",
+      "/usr/local/bin",
+      "/usr/bin",
+      "/bin",
+      "/usr/sbin",
+      "/sbin"
+    ] where !item.isEmpty {
+      for segment in item.split(separator: ":").map(String.init) where !segment.isEmpty && !parts.contains(segment) {
+        parts.append(segment)
+      }
+    }
+    return parts.joined(separator: ":")
+  }
+
+  private func nvmNodeBinPaths() -> [String] {
+    let versionsRoot = FileManager.default.homeDirectoryForCurrentUser
+      .appendingPathComponent(".nvm", isDirectory: true)
+      .appendingPathComponent("versions", isDirectory: true)
+      .appendingPathComponent("node", isDirectory: true)
+    guard let versionDirectories = try? FileManager.default.contentsOfDirectory(
+      at: versionsRoot,
+      includingPropertiesForKeys: [.isDirectoryKey],
+      options: [.skipsHiddenFiles]
+    ) else {
+      return []
+    }
+    return versionDirectories
+      .filter { url in
+        guard let values = try? url.resourceValues(forKeys: [.isDirectoryKey]) else {
+          return false
+        }
+        return values.isDirectory == true
+      }
+      .sorted {
+        $0.lastPathComponent.localizedStandardCompare($1.lastPathComponent) == .orderedDescending
+      }
+      .map { $0.appendingPathComponent("bin", isDirectory: true).path }
   }
 }
 

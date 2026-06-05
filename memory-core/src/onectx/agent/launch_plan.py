@@ -99,7 +99,7 @@ def build_agent_launch_plan(
     harness_id = resolve_harness_id(agent, requested_provider)
     harness = require_record(system.harnesses, harness_id, "harness")
     resolved_provider = provider_for_harness(harness_id, agent, requested_provider)
-    resolved_model = resolve_model(agent, resolved_provider, model)
+    resolved_model = resolve_model(agent, resolved_provider, model, requested_provider=requested_provider)
     timestamp = utc_now()
     resolved_run_id = run_id or stable_id("agent_run", job_id, resolved_provider, timestamp)
     run_dir = system.runtime_dir / "agent-sessions" / resolved_run_id
@@ -232,6 +232,7 @@ def command_for_harness(
     if harness_id == "codex-harness":
         codex_home = run_dir / "CODEX_HOME"
         final_message = run_dir / "final-message.md"
+        env = developer_tool_env({"CODEX_HOME": str(codex_home)})
         argv = [
             "codex",
             "exec",
@@ -257,14 +258,15 @@ def command_for_harness(
         ]
         return {
             "kind": "codex.exec",
-            "available": bool(shutil.which("codex")),
+            "available": bool(shutil.which("codex", path=env.get("PATH"))),
             "cwd": str(workspace_dir),
-            "env": {"CODEX_HOME": str(codex_home)},
+            "env": env,
             "stdin_path": str(prompt_path),
             "argv": argv,
-            "shell": shell_join(argv, env={"CODEX_HOME": str(codex_home)}) + f" < {shlex.quote(str(prompt_path))}",
+            "shell": shell_join(argv, env=env) + f" < {shlex.quote(str(prompt_path))}",
         }
     if harness_id == "claude-code":
+        env = developer_tool_env()
         argv = [
             "claude",
             "--print",
@@ -286,12 +288,12 @@ def command_for_harness(
         ]
         return {
             "kind": "claude.print",
-            "available": bool(shutil.which("claude")),
+            "available": bool(shutil.which("claude", path=env.get("PATH"))),
             "cwd": str(workspace_dir),
-            "env": {},
+            "env": env,
             "stdin_path": str(prompt_path),
             "argv": argv,
-            "shell": shell_join(argv) + f" \"$(cat {shlex.quote(str(prompt_path))})\"",
+            "shell": shell_join(argv, env=env) + f" \"$(cat {shlex.quote(str(prompt_path))})\"",
         }
     raise AgentLaunchPlanError(f"unsupported harness for launch planning: {harness_id}")
 
@@ -329,6 +331,40 @@ def maybe_link_codex_auth(plan: AgentLaunchPlan) -> None:
     target.symlink_to(source)
 
 
+def developer_tool_env(extra: dict[str, str] | None = None) -> dict[str, str]:
+    env = dict(extra or {})
+    existing = os.environ.get("PATH", "")
+    home = Path.home()
+    path_parts: list[str] = []
+    for item in (
+        existing,
+        *nvm_node_bin_paths(home),
+        str(home / ".local/bin"),
+        str(home / ".cargo/bin"),
+        "/opt/homebrew/bin",
+        "/opt/homebrew/sbin",
+        "/usr/local/bin",
+        "/usr/bin",
+        "/bin",
+        "/usr/sbin",
+        "/sbin",
+    ):
+        for part in item.split(":"):
+            if part and part not in path_parts:
+                path_parts.append(part)
+    env["PATH"] = ":".join(path_parts)
+    return env
+
+
+def nvm_node_bin_paths(home: Path) -> list[str]:
+    versions_root = home / ".nvm" / "versions" / "node"
+    try:
+        versions = sorted((path for path in versions_root.iterdir() if path.is_dir()), key=lambda path: path.name, reverse=True)
+    except OSError:
+        return []
+    return [str(path / "bin") for path in versions]
+
+
 def resolve_harness_id(agent: dict[str, Any], provider: str) -> str:
     if provider == "declared":
         harness_id = optional_str(agent.get("harness"))
@@ -355,13 +391,15 @@ def provider_for_harness(harness_id: str, agent: dict[str, Any], requested_provi
     return "unknown"
 
 
-def resolve_model(agent: dict[str, Any], provider: str, override: str) -> str:
+def resolve_model(agent: dict[str, Any], provider: str, override: str, *, requested_provider: str) -> str:
     if override:
         return override
     if provider == "codex":
         return os.environ.get("ONECONTEXT_CODEX_MODEL", "gpt-5.5")
     if provider == "claude":
-        return optional_str(agent.get("model")) or os.environ.get("ONECONTEXT_CLAUDE_MODEL", "opus")
+        if requested_provider == "declared":
+            return optional_str(agent.get("model")) or os.environ.get("ONECONTEXT_CLAUDE_MODEL", "opus")
+        return os.environ.get("ONECONTEXT_CLAUDE_MODEL", "opus")
     return optional_str(agent.get("model")) or ""
 
 

@@ -12,7 +12,7 @@ Example shape:
 id = "memory-researcher"
 version = "0.1.0"
 harness = "codex-harness"
-provider = "openai"
+provider = "codex"
 model = "gpt-5.5"
 tools = ["raw_data.query"]
 prompt_paths = ["prompts/memory-researcher.md"]

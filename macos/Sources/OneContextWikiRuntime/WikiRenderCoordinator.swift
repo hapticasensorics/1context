@@ -259,5 +259,20 @@ public final class WikiRenderCoordinator: @unchecked Sendable {
     }
     try fileManager.moveItem(at: nextSite, to: currentSite)
     try RuntimePermissions.ensurePrivateDirectory(currentSite)
+    try writeAppSupportFiles()
+  }
+
+  private func writeAppSupportFiles() throws {
+    try RuntimePermissions.ensurePrivateDirectory(currentSite.appendingPathComponent("__1context", isDirectory: true))
+    try RuntimePermissions.ensurePrivateDirectory(currentSite.appendingPathComponent("api/wiki", isDirectory: true))
+    try writeStaticJSON(["status": "ok", "service": "1context-local-web"], to: currentSite.appendingPathComponent("__1context/health"))
+    try writeStaticJSON(["query": "", "matches": [], "pages": []], to: currentSite.appendingPathComponent("api/wiki/search.json"))
+    try writeStaticJSON(["bookmarks": []], to: currentSite.appendingPathComponent("api/wiki/bookmarks.json"))
+    try writeStaticJSON([:], to: currentSite.appendingPathComponent("api/wiki/state.json"))
+  }
+
+  private func writeStaticJSON(_ object: [String: Any], to url: URL) throws {
+    let data = try JSONSerialization.data(withJSONObject: object, options: [.sortedKeys])
+    try RuntimePermissions.writePrivateData(data, to: url)
   }
 }

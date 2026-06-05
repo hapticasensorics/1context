@@ -18,11 +18,11 @@ The current runner-adjacent verb is:
 It resolves a job, agent profile, harness, prompt fragments, references, model,
 and runtime params into a session packet under
 `memory/runtime/agent-sessions/<run-id>/`. The packet includes `prompt.md`,
-`launch.json`, `run.sh`, and a workspace directory. Use `--provider claude` for a
-Claude Code packet, `--provider codex` for a Codex CLI packet, or omit provider
-to use the agent's declared harness. State machines still own the decision of
-which job to hire and which completion event should fire after the session
-finishes.
+`launch.json`, `run.sh`, and a workspace directory. The base-memory-v1 wiki
+roles declare the Codex CLI harness by default; use `--provider codex` to make
+that explicit, or omit provider to use the agent's declared Codex harness. State
+machines still own the decision of which job to hire and which completion event
+should fire after the session finishes.
 
 Completion vocabulary:
 

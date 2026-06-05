@@ -1,8 +1,8 @@
 id = "contradiction-flagger"
 version = "0.1.0"
-harness = "claude-code"
-provider = "claude"
-model = "opus"
+harness = "codex-harness"
+provider = "codex"
+model = "gpt-5.5"
 tools = []
 prompt_paths = ["prompts/agent-profile.md"]
 reference_paths = ["prompts/contradiction-flagger.md"]
