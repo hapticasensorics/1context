@@ -7,6 +7,11 @@ from pathlib import Path
 from typing import Any
 
 from onectx.config import ConfigError, compile_system_map, load_system
+from onectx.agent.launch_plan import (
+    AgentLaunchPlanError,
+    build_agent_launch_plan,
+    parse_param_pairs,
+)
 from onectx.memory.replay import ReplayError, run_replay_dry_run
 from onectx.memory.tick import (
     MemoryTickError,
@@ -26,6 +31,12 @@ ALLOWED_SHAPES = {
     ("memory", "tick", "--wiki-only", "--json"),
     ("memory", "cycles", "list", "--json"),
 }
+PARAMETERIZED_CAPABILITIES = {
+    "agent launch-plan <job-id> [--provider declared|codex|claude] [--model <model>] [--run-id <run-id>] [--param key=value] --json",
+    "memory cycles show <cycle-id> --json",
+    "memory cycles validate <cycle-id> --json",
+    "memory replay-dry-run --start <date> --end <date> [--sources codex,claude-code] [--replay-run-id <id>] --json",
+}
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -34,7 +45,7 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
       return dispatch(args, root=root)
-    except (ConfigError, StorageError, MemoryCoreContractError) as exc:
+    except (ConfigError, StorageError, MemoryCoreContractError, AgentLaunchPlanError) as exc:
       print_json(error_payload("contract_error", str(exc)))
       return 1
     except Exception as exc:  # pragma: no cover - final safety net for subprocess callers
@@ -78,7 +89,7 @@ def status_payload(root: Path) -> dict[str, Any]:
         "active_plugin": system.active_plugin,
         "storage_dir": str(system.storage_dir),
         "runtime_dir": str(system.runtime_dir),
-        "capabilities": sorted(" ".join(shape) for shape in ALLOWED_SHAPES),
+        "capabilities": sorted({" ".join(shape) for shape in ALLOWED_SHAPES} | PARAMETERIZED_CAPABILITIES),
         "jobs": len(system_map.get("jobs", {})),
         "agents": len(system.agents),
         "state_machines": len(system.state_machines),
@@ -107,6 +118,11 @@ def execute_allowed_shape(args: list[str], *, root: Path) -> tuple[str, Any, int
         replay_args = parse_replay_args(args[2:-1])
         result = run_replay_dry_run(system, **replay_args)
         return "memory.replay-dry-run", result.to_payload(), 0
+
+    if is_agent_launch_plan_shape(args):
+        launch_args = parse_agent_launch_plan_args(args[2:-1])
+        result = build_agent_launch_plan(system, **launch_args)
+        return "agent.launch-plan", result.to_payload(root=system.root), 0
 
     raise MemoryCoreContractError(f"unsupported memory-core command: {' '.join(args) or '(empty)'}")
 
@@ -145,6 +161,8 @@ def parse_replay_args(args: list[str]) -> dict[str, Any]:
 
 
 def is_allowed_parameterized_shape(args: list[str]) -> bool:
+    if is_agent_launch_plan_shape(args):
+        return True
     if is_cycle_shape(args, "show") or is_cycle_shape(args, "validate"):
         return True
     if len(args) >= 6 and args[:2] == ["memory", "replay-dry-run"] and args[-1] == "--json":
@@ -177,6 +195,56 @@ def is_allowed_parameterized_shape(args: list[str]) -> bool:
     return False
 
 
+def is_agent_launch_plan_shape(args: list[str]) -> bool:
+    if len(args) < 4 or args[:2] != ["agent", "launch-plan"] or args[-1] != "--json":
+        return False
+    if not safe_identifier(args[2]):
+        return False
+    index = 3
+    while index < len(args) - 1:
+        option = args[index]
+        if option in {"--provider", "--model", "--run-id"}:
+            if index + 1 >= len(args) - 1 or not safe_identifier(args[index + 1]):
+                return False
+            index += 2
+            continue
+        if option == "--param":
+            if index + 1 >= len(args) - 1 or not safe_param_pair(args[index + 1]):
+                return False
+            index += 2
+            continue
+        return False
+    return True
+
+
+def parse_agent_launch_plan_args(args: list[str]) -> dict[str, Any]:
+    parsed: dict[str, Any] = {
+        "job_id": args[0],
+        "provider": "declared",
+        "model": "",
+        "run_id": "",
+        "params": {},
+    }
+    params: list[str] = []
+    index = 1
+    while index < len(args):
+        option = args[index]
+        value = args[index + 1]
+        if option == "--provider":
+            parsed["provider"] = value
+        elif option == "--model":
+            parsed["model"] = value
+        elif option == "--run-id":
+            parsed["run_id"] = value
+        elif option == "--param":
+            params.append(value)
+        else:
+            raise MemoryCoreContractError(f"unsupported launch-plan option: {option}")
+        index += 2
+    parsed["params"] = parse_param_pairs(params)
+    return parsed
+
+
 def is_cycle_shape(args: list[str], verb: str) -> bool:
     return (
         len(args) == 5
@@ -193,6 +261,13 @@ def safe_scalar(value: str) -> bool:
 def safe_identifier(value: str) -> bool:
     allowed = set("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._:-,")
     return safe_scalar(value) and value not in {".", ".."} and all(character in allowed for character in value)
+
+
+def safe_param_pair(value: str) -> bool:
+    if "=" not in value or "\0" in value or len(value) > 512:
+        return False
+    key, _ = value.split("=", 1)
+    return safe_identifier(key)
 
 
 def ok_payload(command: str, result: Any) -> dict[str, Any]:

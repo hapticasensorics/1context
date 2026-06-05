@@ -5,10 +5,24 @@ prompt fragments, permissions, expected inputs, expected outputs, and completion
 states. Runtime params belong in the hire/cycle artifact that requested the
 work, not in the static job definition.
 
-This folder is definition-only. The removed broad `uv run 1context ...` CLI is
-not the contract. The app-facing memory-core executable exposes only narrow
-JSON commands through `1context-memory-core`; future job execution should add
-explicit contract verbs only when the app or production memory loop needs them.
+This folder is definition-first. The removed broad `uv run 1context ...` CLI is
+not the contract. The app-facing memory-core executable exposes only narrow JSON
+commands through `1context-memory-core`.
+
+The current runner-adjacent verb is:
+
+```bash
+1context-memory-core agent launch-plan memory.hourly.scribe --provider codex --json
+```
+
+It resolves a job, agent profile, harness, prompt fragments, references, model,
+and runtime params into a session packet under
+`memory/runtime/agent-sessions/<run-id>/`. The packet includes `prompt.md`,
+`launch.json`, `run.sh`, and a workspace directory. Use `--provider claude` for a
+Claude Code packet, `--provider codex` for a Codex CLI packet, or omit provider
+to use the agent's declared harness. State machines still own the decision of
+which job to hire and which completion event should fire after the session
+finishes.
 
 Completion vocabulary:
 
