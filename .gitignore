@@ -12,6 +12,8 @@ node_modules/
 .tmp-wiki-browser-*/
 test-results/
 docs/assets/attention-capture-mockup/
+docs/assets/**/*.mov
+docs/assets/**/*.mp4
 demos/agent-mail-triad/static/fixtures/latest.json
 demos/peekaboo-evidence-wall/.evidence/
 demos/peekaboo-evidence-wall/__pycache__/

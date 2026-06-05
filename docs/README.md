@@ -37,6 +37,8 @@ that operators and contributors should use.
   local proof, update policy, and self-hosted Mac proof guidance.
 - [Development And Release Notes](development.md): maintainer details for local
   files, local web, tests, and packaging.
+- [Public Export Workflow](public-export-workflow.md): private-source to
+  public-repository export contract and local dry-run/apply commands.
 - [Roadmap](../ROADMAP.md): current product and release-train priorities.
 
 ## Contracts

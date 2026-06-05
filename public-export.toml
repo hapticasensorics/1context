@@ -1,0 +1,52 @@
+[source]
+repo = "../1Context"
+ref = "codex/public-product-source"
+
+[export]
+allow = [
+  ".github",
+  "AGENTS.md",
+  "CODEOWNERS",
+  "Cargo.lock",
+  "Cargo.toml",
+  "LICENSE",
+  "PERMISSIONS.md",
+  "README.md",
+  "RELEASE_NOTES.md",
+  "ROADMAP.md",
+  "SECURITY.md",
+  "VERSION",
+  "browser-extension",
+  "crates",
+  "devtools",
+  "docs",
+  "macos",
+  "memory-core",
+  "package-lock.json",
+  "package.json",
+  "playwright.config.cjs",
+  "release",
+  "runtime",
+  "scripts",
+  "wiki-engine",
+]
+
+deny = [
+  ".1context/**",
+  ".playwright-cli/**",
+  ".playwright-mcp/**",
+  ".pytest_cache/**",
+  ".venv/**",
+  "agent/**",
+  "content/**",
+  "deploy.sh",
+  "experiments/**",
+  "MORNING.md",
+  "quick-deploy.sh",
+  "rendered/**",
+  "screen-capture-plugin-public/**",
+  "sessions/**",
+  "src/**",
+  "system/**",
+  "tests/**",
+]
