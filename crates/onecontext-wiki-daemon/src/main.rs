@@ -334,8 +334,12 @@ fn run(mut args: Vec<String>) -> Result<()> {
             let now = now_rfc3339();
             let lease_expires_at = (Utc::now() + Duration::seconds(ttl_seconds))
                 .to_rfc3339_opts(SecondsFormat::Secs, true);
+            let allowed_roles = roles
+                .iter()
+                .map(|role| MailAddress::parse(role).map(|address| address.canonical()))
+                .collect::<Result<_>>()?;
             let policy = AgentGrantPolicy {
-                allowed_roles: roles.iter().cloned().collect(),
+                allowed_roles,
                 allowed_capabilities: capabilities.iter().cloned().collect(),
             };
             let record = AgentMailStore::new(root.join("context-engine")).identify_agent(
@@ -643,8 +647,15 @@ fn run(mut args: Vec<String>) -> Result<()> {
                 "schema_version": 1,
                 "status": "ok",
                 "operation": "wiki.mail.open",
+                "agent_id": agent_id,
+                "delivery_id": delivery_id,
                 "delivery": opened.delivery,
-                "message": opened.message,
+                "message": {
+                    "message_id": opened.message.envelope.message_id,
+                    "envelope": opened.message.envelope,
+                    "body_sha256": opened.message.body_sha256,
+                    "body_bytes": opened.message.body_bytes,
+                },
                 "content_delivery": opened.content_delivery,
             }))
         }
@@ -2756,6 +2767,52 @@ mod tests {
             operation_for_command("wiki.mail.record_injection"),
             "wiki.mail.record_injection"
         );
+    }
+
+    #[test]
+    fn agent_identify_canonicalizes_page_role_shorthand_for_grants() {
+        let temp = TempDir::new().unwrap();
+        let root = temp.path().join("1Context");
+        let root_arg = root.to_string_lossy().to_string();
+
+        run(vec![
+            "--root".to_string(),
+            root_arg.clone(),
+            "agent-identify".to_string(),
+            "--thread-id".to_string(),
+            "daemon-page-agent".to_string(),
+            "--role".to_string(),
+            "page://topics".to_string(),
+            "--capability".to_string(),
+            "wiki.mail".to_string(),
+        ])
+        .unwrap();
+
+        let store = AgentMailStore::new(root.join("context-engine"));
+        let status = store
+            .agent_status_by_thread("daemon-page-agent", "2026-05-21T07:01:00Z")
+            .unwrap();
+        let agent = status.agent.unwrap();
+        assert_eq!(agent.granted_roles, vec!["mailbox://page/topics"]);
+
+        run(vec![
+            "--root".to_string(),
+            root_arg,
+            "mail-send".to_string(),
+            "--from".to_string(),
+            agent.primary_address.clone(),
+            "--to".to_string(),
+            "page://topics".to_string(),
+            "--subject".to_string(),
+            "Page shorthand".to_string(),
+            "--body".to_string(),
+            "Page shorthand body.".to_string(),
+        ])
+        .unwrap();
+
+        let rows = store.agent_inbox(&agent.agent_id).unwrap();
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].recipient, "mailbox://page/topics");
     }
 
     #[test]

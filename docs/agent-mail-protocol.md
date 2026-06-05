@@ -660,9 +660,9 @@ request:
 }
 ```
 
-The CLI and dogfood harness expose `content_delivery.items` so tests can prove
-the body is present only in the injection request. A production Codex adapter
-should execute the injection, record the app-server response, and avoid training
+The CLI returns an empty `content_delivery.items` array. The Codex adapter builds
+the transient `thread/inject_items` request from the authorized open result and
+message body, executes it, records the app-server response, and avoids training
 agents to scrape a raw tool-result body.
 
 Host adapters record that app-server boundary through:

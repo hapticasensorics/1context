@@ -41,9 +41,10 @@ pub use hook_manager::{
     CodexStopGuardContext, CodexStopGuardDecision, CodexStopGuardPlan,
 };
 pub use injection_bridge::{
-    AuthorizedInjectionTarget, BodylessContentDeliveryRequest, BodylessMailOpenResult,
-    BodylessOpenedMessageSummary, CodexInjectionJob, InjectionJobStatus,
-    InjectionReceiptAndProofPlan, InjectionReceiptPlan, InjectionReceiptResult,
+    build_transient_open_injection_items, AuthorizedInjectionTarget,
+    BodylessContentDeliveryRequest, BodylessMailOpenResult, BodylessOpenedMessageSummary,
+    CodexInjectionJob, InjectionJobStatus, InjectionReceiptAndProofPlan, InjectionReceiptPlan,
+    InjectionReceiptResult,
 };
 pub use live_app_server::{
     initialize_request, json_rpc_request, live_app_server_dogfood_phases,
