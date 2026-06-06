@@ -26,6 +26,9 @@ that operators and contributors should use.
   contract for the Codex-specific runtime bridge that owns app-server calls,
   hook installation, wake dispatch, body injection, event mirroring, and
   adapter proof.
+- [Agent Orchestration Runtime Contract](agent-orchestration-runtime-contract.md):
+  main-branch decision that release orchestration is harness-only; Codex runs
+  bounded worker turns and does not own native subagent scheduling.
 - [Codex Hook Control And Mail Wakeup Spec](codex-hook-control-spec.md):
   control-plane contract for Codex steering, lifecycle hooks, notification
   dispatch, and autonomous mail correctness.

@@ -21,6 +21,9 @@ Codex transport state to durable 1Context agent identity.
 ## Decision
 
 Build a thin, strict Codex adapter beside the Rust core and generic MCP gateway.
+The main-branch release mode is harness-only orchestration: the adapter starts,
+resumes, injects into, steers, and observes bounded Codex worker threads, but it
+does not grant Codex-native subagent scheduling as a product capability.
 
 ```text
 1context-core
@@ -56,6 +59,9 @@ agent receives wakeup
 - Do not make MCP responsible for Codex lifecycle control.
 - Do not make hook scripts call the Codex app-server recursively on the same
   transport.
+- Do not rely on native Codex subagent or multi-agent V2 behavior for release
+  orchestration. If that becomes useful again, keep it outside main until it has
+  a hard runtime capability proof and a separate accepted contract.
 - Do not expose host-only dispatch, injection, hook install, or app-server
   methods to ordinary agents.
 - Do not treat Codex `thread_id` as durable agent identity. It is a transport

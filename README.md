@@ -41,9 +41,9 @@ This public preview is early, but the app shell is real and polished:
 - no product telemetry and no upload of project data in this preview
 
 Memory collection and memory writing are still manual in this release. The
-automatic screen activity pipeline, passive remembering, and multi-agent wiki
-editing system are in active development. Today, 1Context is best understood as
-the polished public shell plus the first local wiki path.
+automatic screen activity pipeline, passive remembering, and harness-owned
+multi-agent wiki editing system are in active development. Today, 1Context is
+best understood as the polished public shell plus the first local wiki path.
 
 ![The local 1Context wiki template](docs/assets/readme/local-your-context.png)
 

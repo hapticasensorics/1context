@@ -17,9 +17,9 @@ This crate owns the adapter seams described in
 
 It does not own mail truth, wiki truth, MCP tool behavior, or Codex native
 session files. Those stay in the Rust core, MCP gateway, and Codex runtime.
-Codex subagents should be represented as harness child units; the adapter may
-use Codex-native subagent mechanics under the hood, but 1Context identity,
-lineage, and lifecycle stay in the harness.
+Release orchestration is harness-only: every 1Context worker is represented as
+a harness unit, and the adapter runs bounded Codex worker turns without granting
+native Codex subagent scheduling.
 
 ## Local Proof
 
