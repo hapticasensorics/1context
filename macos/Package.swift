@@ -11,7 +11,8 @@ let package = Package(
     .executable(name: "1context", targets: ["OneContextCLI"]),
     .executable(name: "1contextd", targets: ["OneContextDaemon"]),
     .executable(name: "1context-local-web-proxy", targets: ["OneContextLocalWebProxy"]),
-    .executable(name: "OneContextMenuBar", targets: ["OneContextMenuBar"])
+    .executable(name: "OneContextMenuBar", targets: ["OneContextMenuBar"]),
+    .executable(name: "OneContextAgentOfficePreview", targets: ["OneContextAgentOfficePreview"])
   ],
   dependencies: [
     .package(url: "https://github.com/sparkle-project/Sparkle", from: "2.9.1")
@@ -43,7 +44,7 @@ let package = Package(
     ),
     .target(
       name: "OneContextSetup",
-      dependencies: ["OneContextLocalWeb", "OneContextPlatform"]
+      dependencies: ["OneContextLocalWeb", "OneContextPlatform", "OneContextAgentRuntime"]
     ),
     .target(
       name: "OneContextLocalWeb",
@@ -66,6 +67,10 @@ let package = Package(
       dependencies: ["OneContextCore", "OneContextPlatform"]
     ),
     .target(
+      name: "OneContextAgentOffice",
+      dependencies: ["OneContextCore", "OneContextPlatform", "OneContextAgentRuntime"]
+    ),
+    .target(
       name: "OneContextSupervisor",
       dependencies: ["OneContextCore", "OneContextPlatform", "OneContextProtocol"]
     ),
@@ -81,8 +86,12 @@ let package = Package(
       name: "OneContextLocalWebProxy"
     ),
     .executableTarget(
+      name: "OneContextAgentOfficePreview",
+      dependencies: ["OneContextAgentOffice"]
+    ),
+    .executableTarget(
       name: "OneContextMenuBar",
-      dependencies: ["OneContextCore", "OneContextPlatform", "OneContextProtocol", "OneContextSupervisor", "OneContextInstall", "OneContextLocalWeb", "OneContextSetup", "OneContextUpdate", "OneContextSparkleUpdate"],
+      dependencies: ["OneContextCore", "OneContextPlatform", "OneContextProtocol", "OneContextSupervisor", "OneContextInstall", "OneContextLocalWeb", "OneContextSetup", "OneContextUpdate", "OneContextSparkleUpdate", "OneContextAgentOffice"],
       exclude: ["Resources"],
       linkerSettings: [
         .unsafeFlags(["-Xlinker", "-rpath", "-Xlinker", "@executable_path/../Frameworks"])
@@ -135,6 +144,10 @@ let package = Package(
     .testTarget(
       name: "OneContextAgentRuntimeTests",
       dependencies: ["OneContextAgentRuntime"]
+    ),
+    .testTarget(
+      name: "OneContextAgentOfficeTests",
+      dependencies: ["OneContextAgentOffice"]
     ),
     .testTarget(
       name: "OneContextSupervisorTests",

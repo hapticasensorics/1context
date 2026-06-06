@@ -2663,6 +2663,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "onecontext-context-engine"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "onecontext-agent-harness-core",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "tempfile",
+ "toml 0.8.23",
+]
+
+[[package]]
 name = "onecontext-memory-db"
 version = "0.1.0"
 dependencies = [

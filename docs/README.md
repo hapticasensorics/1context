@@ -22,6 +22,10 @@ that operators and contributors should use.
 - [Agent Tool Gateway](agent-tool-gateway.md): generic agent-facing tool
   contract with one consolidated backend and two visible toolsets,
   `toolset-mail` and `toolset-wiki`.
+- [Context Engine Release Boundary](context-engine-release-boundary.md): current
+  decision to make the Rust `onecontext-context-engine` binary the release
+  wiki-company orchestrator and stop using Python `memory-core` as the product
+  path.
 - [1Context Codex Adapter Spec](1context-codex-adapter-spec.md): implementation
   contract for the Codex-specific runtime bridge that owns app-server calls,
   hook installation, wake dispatch, body injection, event mirroring, and

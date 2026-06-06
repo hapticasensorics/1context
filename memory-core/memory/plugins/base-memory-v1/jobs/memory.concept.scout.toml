@@ -20,4 +20,4 @@ deny = ["raw_data.query"]
 
 [completion]
 done = ["concept_candidate_proposal.valid"]
-failure = ["missing_output", "invalid_frontmatter", "claude_error"]
+failure = ["missing_output", "invalid_frontmatter", "model_error"]

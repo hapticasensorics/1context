@@ -29,17 +29,31 @@ runtime/
       site/
 
     context-engine/
+      orchestrators/
+        wiki-company-orchestrator-v1/
+          orchestrator.toml
+          phases.toml
+          packet-policy.toml
+          routing.toml
+          receipts.toml
       agents/
-      jobs/
-      prompts/
-      inbox/
-      proposals/
-      decisions/
-      runs/
-      artifacts/
-      observations/
-      ledgers/
-      indexes/
+        directory/
+        harness/
+        policies/
+      mail/
+        mailboxes/
+        threads/
+      packs/
+        wiki-company-v1/
+          plugin.toml
+          providers.toml
+          native-memory.toml
+          linking.toml
+          harnesses/
+          agents/
+          jobs/
+          prompts/
+          lived-experiences/
 
   Library/
     Application Support/
@@ -82,17 +96,26 @@ runtime/Library/Application Support/1Context/
 source, talk pages, templates, assets, and static site export.
 
 `runtime/1Context/context-engine/` is the blessed repo copy of the agent
-workspace: prompts, roles, jobs, inbox tasks, proposals, decisions, runs,
-artifacts, observations, ledgers, and index manifests.
+workspace: the shipped wiki-company pack, the wiki-company orchestrator policy,
+persistent agent identity/proof folders, and Agent Mail folders.
+
+The Rust `onecontext-context-engine` binary is the release owner for orchestration
+inside this folder. Python `memory-core` can remain as a prototype/reference
+source during development, but release wiki-company updates should be expressed
+through Context Engine plus Agent Mail, not a Python checkout.
 
 `runtime/Library/Application Support/1Context/` is app machinery: local web
 mirrors, sockets, staging, setup state, and rebuildable derived indexes.
 
-The user-owned rebuild contract belongs under the context engine:
+For now, wiki-company execution history is mail-first:
 
 ```text
-runtime/1Context/context-engine/indexes/
+runtime/1Context/context-engine/mail/threads/wiki-company.jsonl
 ```
+
+Do not reintroduce a `runs/` filesystem hierarchy, top-level proposal warehouse,
+or context-engine index ledger until the Postgres/Timescale execution-history
+design exists.
 
 ## Runtime Test
 

@@ -21,13 +21,12 @@ JOBS_BY_BOUNDARY: dict[str, tuple[str, ...]] = {
     "hour": ("memory.hourly.block_scribe",),
     "day": ("memory.daily.editor",),
     "week": (
+        "memory.wiki.biographer",
         "memory.wiki.for_you_curator",
         "memory.wiki.context_curator",
-        "memory.wiki.biographer",
-        "memory.wiki.librarian_sweep",
-        "memory.wiki.contradiction_flagger",
+        "memory.wiki.librarian",
     ),
-    "month": ("memory.wiki.librarian_sweep", "memory.wiki.redactor"),
+    "month": ("memory.wiki.librarian",),
 }
 
 

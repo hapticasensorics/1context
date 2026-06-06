@@ -7,6 +7,20 @@ fn current_schema_is_perception_only() {
     assert!(sql.contains("CREATE EXTENSION IF NOT EXISTS timescaledb"));
     assert!(sql.contains("create_hypertable"));
     assert!(sql.contains("CREATE SCHEMA IF NOT EXISTS perception"));
+    assert!(sql.contains("CREATE TABLE IF NOT EXISTS perception.schema_migrations"));
+    let migration_ledger_sql = sql
+        .split("CREATE TABLE IF NOT EXISTS perception.schema_migrations")
+        .nth(1)
+        .and_then(|tail| tail.split("CREATE TABLE IF NOT EXISTS app.users").next())
+        .expect("schema migration ledger should precede app.users");
+    assert!(migration_ledger_sql.contains("version BIGINT PRIMARY KEY"));
+    assert!(migration_ledger_sql.contains("name TEXT NOT NULL UNIQUE"));
+    assert!(migration_ledger_sql.contains("checksum TEXT NOT NULL"));
+    assert!(migration_ledger_sql.contains("app_version TEXT"));
+    assert!(migration_ledger_sql.contains("destructive_bootstrap BOOLEAN NOT NULL DEFAULT false"));
+    assert!(!migration_ledger_sql.contains("description TEXT NOT NULL"));
+    assert!(!migration_ledger_sql.contains("metadata JSONB"));
+    assert!(!migration_ledger_sql.contains("INSERT INTO perception.schema_migrations"));
     assert!(sql.contains("CREATE TABLE IF NOT EXISTS perception.sources"));
     assert!(sql.contains("CREATE TABLE IF NOT EXISTS perception.lanes"));
     assert!(sql.contains("CREATE TABLE IF NOT EXISTS perception.series"));
@@ -20,7 +34,7 @@ fn current_schema_is_perception_only() {
     assert!(sql.contains("CREATE TABLE IF NOT EXISTS search.object_embeddings"));
     assert!(!sql.contains("capture."));
     assert!(!sql.contains("captured_objects"));
-    assert!(!sql.contains("schema_migrations"));
+    assert!(!sql.contains("app.schema_migrations"));
 }
 
 #[test]
@@ -29,6 +43,7 @@ fn required_relations_match_current_read_write_surface() {
         REQUIRED_CURRENT_RELATIONS,
         &[
             "app.users",
+            "perception.schema_migrations",
             "perception.sources",
             "perception.lanes",
             "perception.series",

@@ -1,0 +1,30 @@
+id = "wiki-company-packet-policy-v1"
+version = "0.1.0"
+
+[windows]
+recent_first_days = 3
+backfill_days = 30
+backfill_order = "oldest_to_newest_after_recent_first"
+incremental_unit = "new_sessions_since_last_mail_receipt"
+
+[context_budget]
+model_context_tokens = 258000
+source_context_fraction = 0.62
+target_source_tokens = 160000
+min_source_tokens = 20000
+split_when_estimated_tokens_exceed = 160000
+reserve_for_prompt_mail_and_receipts = true
+
+[packet_shape]
+raw_history_roles = ["memory.hourly.scribe", "memory.hourly.block_scribe"]
+downstream_roles_read_scribe_artifacts = true
+drop_tool_noise_by_default = true
+keep_failures_commands_paths_commits_tests_and_user_decisions = true
+batch_adjacent_quiet_hours = true
+split_busy_hours_by_session_or_subhour = true
+
+[cache]
+enabled = true
+key = "source_packet_hash"
+skip_unchanged_scribe_packets = true
+rerun_downstream_when_new_scribe_artifacts_arrive = true

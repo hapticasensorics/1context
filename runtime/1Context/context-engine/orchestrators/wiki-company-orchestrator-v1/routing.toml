@@ -1,0 +1,48 @@
+id = "wiki-company-routing-v1"
+version = "0.1.0"
+default_thread = "mail://wiki-company"
+
+[[routes]]
+from_role = "memory.hourly.scribe"
+to = ["role://memory.wiki.for_you_editor"]
+cc = ["mailbox://wiki-company"]
+
+[[routes]]
+from_role = "memory.hourly.block_scribe"
+to = ["role://memory.wiki.for_you_editor"]
+cc = ["mailbox://wiki-company"]
+
+[[routes]]
+from_role = "memory.hourly.aggregate_scribe"
+to = ["role://memory.wiki.for_you_editor"]
+cc = ["mailbox://wiki-company"]
+
+[[routes]]
+from_role = "memory.wiki.for_you_editor"
+to = ["role://memory.wiki.for_you_curator"]
+cc = ["role://memory.wiki.librarian", "mailbox://page/for-you"]
+
+[[routes]]
+from_role = "memory.wiki.biographer"
+to = ["role://memory.wiki.context_curator"]
+cc = ["role://memory.wiki.librarian", "mailbox://wiki-company"]
+
+[[routes]]
+from_role = "memory.wiki.librarian"
+to = ["role://memory.wiki.for_you_curator", "role://memory.wiki.context_curator"]
+cc = ["mailbox://wiki-company"]
+
+[[routes]]
+from_role = "memory.wiki.contradiction_flagger"
+to = ["role://memory.wiki.for_you_curator", "role://memory.wiki.context_curator"]
+cc = ["mailbox://wiki-company"]
+
+[[routes]]
+from_role = "memory.wiki.for_you_curator"
+to = ["mailbox://page/for-you"]
+cc = ["mailbox://wiki-company"]
+
+[[routes]]
+from_role = "memory.wiki.context_curator"
+to = ["mailbox://page/your-context"]
+cc = ["mailbox://wiki-company"]

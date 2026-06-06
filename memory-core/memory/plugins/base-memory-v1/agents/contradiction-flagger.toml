@@ -8,6 +8,9 @@ prompt_paths = ["prompts/agent-profile.md"]
 reference_paths = ["prompts/contradiction-flagger.md"]
 experience = []
 
+[model_policy]
+reasoning_effort = "xhigh"
+
 [memory]
 mode = "runtime_lived_experience"
 attach = "new"

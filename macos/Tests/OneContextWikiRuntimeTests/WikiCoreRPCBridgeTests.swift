@@ -98,6 +98,30 @@ final class WikiCoreRPCBridgeTests: XCTestCase {
     ])
   }
 
+  func testPublishPassesDiscoveredNodeExecutable() throws {
+    let recorder = RecordingCore()
+    let bridge = WikiCoreRPCBridge(
+      call: recorder.call,
+      defaultWikiEngineDirectory: "/opt/1Context/WikiEngine",
+      defaultNodeExecutable: "/opt/homebrew/bin/node"
+    )
+
+    _ = try bridge.call(method: "wiki.publish", params: ["trigger": "rpc-proof", "force": true])
+
+    XCTAssertEqual(recorder.calls, [
+      [
+        "publish",
+        "--wiki-engine",
+        "/opt/1Context/WikiEngine",
+        "--node",
+        "/opt/homebrew/bin/node",
+        "--trigger",
+        "rpc-proof",
+        "--force"
+      ]
+    ])
+  }
+
   func testPageCreateMapsConsumerParamsToExplicitPlacementFlags() throws {
     let recorder = RecordingCore()
     let bridge = WikiCoreRPCBridge(call: recorder.call)

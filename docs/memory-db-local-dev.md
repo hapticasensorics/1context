@@ -5,7 +5,7 @@ section: development
 access: private
 summary: "Developer lifecycle for the local Postgres + Timescale memory DB."
 status: draft
-last_updated: 2026-05-24
+last_updated: 2026-06-06
 toc_enabled: true
 talk_enabled: false
 agent_view_enabled: true
@@ -15,11 +15,35 @@ footer_enabled: true
 
 # 1Context Memory DB Local Dev
 
-This is the dev-only lifecycle for the memory DB backing the temporal object
+This is the developer lifecycle for the memory DB backing the temporal object
 store described in [Memory DB Design Spec](memory-db-design-spec.md).
 
-The goal is a boring local database target for the Rust writer, daemon, viewer,
-and tests:
+The app and release runtime use managed Postgres by default. `onecontext-memoryd`
+starts a private bundled PostgreSQL 17 cluster, connects through a private Unix
+socket, creates the `onecontext` app role without superuser privileges, creates
+required extensions through the bootstrap superuser, and then runs schema
+bootstrap through the app role.
+
+Build or refresh the release-grade local bundle with:
+
+```bash
+./scripts/build-managed-postgres-source.sh
+```
+
+Verify a staged bundle without allowing host build fingerprints:
+
+```bash
+./scripts/verify-managed-postgres-bundle.sh runtime/managed-postgres/macos-arm64
+./scripts/smoke-managed-postgres-bundle.sh --run runtime/managed-postgres/macos-arm64
+```
+
+The verify and smoke helpers can still inspect a Homebrew-origin development
+bundle with `--allow-host-fingerprints`, but that mode is not release-acceptable.
+
+## External Dev Helper
+
+The container helper is now explicitly for `external_postgres` development and
+comparison. It is not a product runtime dependency.
 
 ```bash
 ./scripts/memory-db-dev.sh provision
@@ -123,10 +147,11 @@ ONECONTEXT_MEMORY_DB_NAME              database name
 
 ## Writer Handoff
 
-For the Rust writer and daemon work, export the URL from the script:
+For external-mode Rust writer and daemon work, export the URL from the script:
 
 ```bash
 export ONECONTEXT_MEMORY_DB_URL="$(./scripts/memory-db-dev.sh url)"
+export ONECONTEXT_STORAGE_BACKEND=external_postgres
 ```
 
 The writer path should insert validated perception objects into:

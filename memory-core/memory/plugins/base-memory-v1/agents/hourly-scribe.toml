@@ -5,8 +5,13 @@ provider = "codex"
 model = "gpt-5.5"
 tools = []
 prompt_paths = ["prompts/hourly-scribe.md"]
-reference_paths = ["prompts/hourly-scribe-task.md"]
+reference_paths = ["prompts/hourly-scribe-task.md", "prompts/wiki-talk-style-guide.md"]
 experience = []
+
+[model_policy]
+reasoning_effort = "high"
+usable_context_tokens = 258400
+context_fraction = 0.62
 
 [memory]
 mode = "runtime_lived_experience"

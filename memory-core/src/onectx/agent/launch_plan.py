@@ -25,6 +25,7 @@ class AgentLaunchPlan:
     agent_id: str
     harness_id: str
     model: str
+    model_policy: dict[str, Any]
     status: str
     run_dir: Path
     workspace_dir: Path
@@ -63,6 +64,7 @@ class AgentLaunchPlan:
                 "source_path": self.harness.get("source_path", ""),
             },
             "model": self.model,
+            "model_policy": dict(self.model_policy),
             "paths": {
                 "run_dir": format_path(self.run_dir, root),
                 "workspace_dir": format_path(self.workspace_dir, root),
@@ -101,6 +103,7 @@ def build_agent_launch_plan(
     harness = require_record(system.harnesses, harness_id, "harness")
     resolved_provider = provider_for_harness(harness_id, agent, requested_provider)
     resolved_model = resolve_model(agent, resolved_provider, model, requested_provider=requested_provider)
+    model_policy = resolve_model_policy(agent)
     timestamp = utc_now()
     resolved_run_id = run_id or stable_id("agent_run", job_id, resolved_provider, timestamp)
     run_dir = system.runtime_dir / "agent-sessions" / resolved_run_id
@@ -122,6 +125,7 @@ def build_agent_launch_plan(
         run_dir=run_dir,
         workspace_dir=workspace_dir,
         prompt_path=prompt_path,
+        model_policy=model_policy,
     )
     plan = AgentLaunchPlan(
         run_id=resolved_run_id,
@@ -130,6 +134,7 @@ def build_agent_launch_plan(
         agent_id=agent_id,
         harness_id=harness_id,
         model=resolved_model,
+        model_policy=model_policy,
         status=compiled_job.get("status", "unknown"),
         run_dir=run_dir,
         workspace_dir=workspace_dir,
@@ -182,6 +187,7 @@ def render_prompt_packet(
         f"Harness: `{plan.harness_id}`",
         f"Provider: `{plan.provider}`",
         f"Model: `{plan.model}`",
+        f"Model policy: `{json.dumps(plan.model_policy, sort_keys=True)}`",
         "",
         "## Job Contract",
         fenced_json(redact_source_paths(plan.job)),
@@ -218,6 +224,7 @@ def render_prompt_packet(
             "",
             "- Stay inside the job permissions and output contract.",
             "- Prefer durable artifacts and concise proof over chatty status.",
+            "- Your required job receipt is the final message written by the harness adapter. Include these fields: status, evidence, proposed_wiki_talk, page_change_summary (added, updated, removed, merged, left_unchanged), next_agent_requests, next_state_machine_event.",
             "- If the job is underspecified, produce a clear blocked/needs_approval result instead of guessing.",
             "- End with the artifact paths, evidence checks, and next state-machine event you believe should fire.",
             "",
@@ -293,7 +300,7 @@ def agent_harness_call_request(plan: AgentLaunchPlan) -> dict[str, Any]:
             {
                 "id": "wiki_core",
                 "transport": "host_hook",
-                "tool_names": ["wiki.page.write_body", "wiki.publish", "wiki.talk.append"],
+                "tool_names": wiki_core_tool_names_for_job(plan.job_id),
                 "config": {"surface": "onecontext-wiki-core"},
                 "policy": {"page_lifecycle_owner": "onecontext-wiki-core"},
                 "proof_required": [],
@@ -306,6 +313,7 @@ def agent_harness_call_request(plan: AgentLaunchPlan) -> dict[str, Any]:
             "unit_id": plan.run_id,
             "role": plan.agent_id,
             "model": plan.model,
+            "model_policy": dict(plan.model_policy),
             "identity": {
                 "agent_id": plan.agent_id,
                 "agent_label": str(plan.agent.get("label") or plan.agent_id),
@@ -331,6 +339,7 @@ def agent_harness_call_request(plan: AgentLaunchPlan) -> dict[str, Any]:
                 "source_window_days": source_window_days,
                 "source_event_count": source_event_count,
                 "source_session_count": source_session_count,
+                "model_policy": dict(plan.model_policy),
             },
         },
     }
@@ -350,6 +359,7 @@ def command_for_harness(
     run_dir: Path,
     workspace_dir: Path,
     prompt_path: Path,
+    model_policy: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     if harness_id == "codex-harness":
         codex_home = run_dir / "CODEX_HOME"
@@ -378,12 +388,20 @@ def command_for_harness(
             f'model_instructions_file="{system.plugin_path / "prompts/codex-harness.instructions.md"}"',
             "-",
         ]
+        reasoning_effort = optional_str((model_policy or {}).get("reasoning_effort"))
+        if reasoning_effort:
+            argv[-1:-1] = [
+                "-c",
+                f'model_reasoning_effort="{reasoning_effort}"',
+            ]
         return {
             "kind": "codex.exec",
             "available": bool(shutil.which("codex", path=env.get("PATH"))),
             "cwd": str(workspace_dir),
             "env": env,
             "stdin_path": str(prompt_path),
+            "final_message_path": str(final_message),
+            "model_policy": dict(model_policy or {}),
             "argv": argv,
             "shell": shell_join(argv, env=env) + f" < {shlex.quote(str(prompt_path))}",
         }
@@ -414,6 +432,7 @@ def command_for_harness(
             "cwd": str(workspace_dir),
             "env": env,
             "stdin_path": str(prompt_path),
+            "model_policy": dict(model_policy or {}),
             "argv": argv,
             "shell": shell_join(argv, env=env) + f" \"$(cat {shlex.quote(str(prompt_path))})\"",
         }
@@ -513,6 +532,17 @@ def provider_for_harness(harness_id: str, agent: dict[str, Any], requested_provi
     return "unknown"
 
 
+def wiki_core_tool_names_for_job(job_id: str) -> list[str]:
+    page_write_jobs = {
+        "memory.wiki.for_you_curator",
+        "memory.wiki.context_curator",
+        "memory.wiki.redactor",
+    }
+    if job_id in page_write_jobs:
+        return ["wiki.page.write_body", "wiki.page.patch_body", "wiki.publish", "wiki.talk.append"]
+    return ["wiki.talk.append"]
+
+
 def resolve_model(agent: dict[str, Any], provider: str, override: str, *, requested_provider: str) -> str:
     if override:
         return override
@@ -523,6 +553,57 @@ def resolve_model(agent: dict[str, Any], provider: str, override: str, *, reques
             return optional_str(agent.get("model")) or os.environ.get("ONECONTEXT_CLAUDE_MODEL", "opus")
         return os.environ.get("ONECONTEXT_CLAUDE_MODEL", "opus")
     return optional_str(agent.get("model")) or ""
+
+
+def resolve_model_policy(agent: dict[str, Any]) -> dict[str, Any]:
+    raw = agent.get("model_policy", {})
+    if raw is None:
+        raw = {}
+    if not isinstance(raw, dict):
+        raise AgentLaunchPlanError(f"agent {agent.get('id')!r} model_policy must be a table")
+
+    policy: dict[str, Any] = {}
+    reasoning_effort = optional_str(raw.get("reasoning_effort"))
+    if reasoning_effort:
+        if reasoning_effort not in {"none", "minimal", "low", "medium", "high", "xhigh"}:
+            raise AgentLaunchPlanError(
+                f"agent {agent.get('id')!r} model_policy.reasoning_effort must be one of none, minimal, low, medium, high, xhigh"
+            )
+        policy["reasoning_effort"] = reasoning_effort
+
+    usable_context_tokens = optional_positive_int(raw.get("usable_context_tokens"))
+    if usable_context_tokens is not None:
+        policy["usable_context_tokens"] = usable_context_tokens
+
+    context_fraction = optional_positive_float(raw.get("context_fraction"))
+    if context_fraction is not None:
+        policy["context_fraction"] = context_fraction
+
+    return policy
+
+
+def optional_positive_int(value: Any) -> int | None:
+    if value is None or value == "":
+        return None
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError) as exc:
+        raise AgentLaunchPlanError(f"model_policy usable_context_tokens must be an integer, got {value!r}") from exc
+    if parsed < 1:
+        raise AgentLaunchPlanError("model_policy usable_context_tokens must be >= 1")
+    return parsed
+
+
+def optional_positive_float(value: Any) -> float | None:
+    if value is None or value == "":
+        return None
+    try:
+        parsed = float(value)
+    except (TypeError, ValueError) as exc:
+        raise AgentLaunchPlanError(f"model_policy context_fraction must be a number, got {value!r}") from exc
+    if parsed <= 0:
+        raise AgentLaunchPlanError("model_policy context_fraction must be > 0")
+    return parsed
 
 
 def resolve_prompt_paths(system: MemorySystem, agent: dict[str, Any], job: dict[str, Any]) -> tuple[Path, ...]:

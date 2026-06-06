@@ -15,7 +15,8 @@ public struct WikiEngineRendererConfig: Equatable, Sendable {
   public static func discover(
     environment: [String: String] = ProcessInfo.processInfo.environment,
     resourceURL: URL? = Bundle.main.resourceURL,
-    executableURL: URL? = Bundle.main.executableURL
+    executableURL: URL? = Bundle.main.executableURL,
+    nodeSearchPaths: [String]? = nil
   ) -> WikiEngineRendererConfig? {
     guard let engine = discoverEngineDirectory(
       environment: environment,
@@ -24,8 +25,7 @@ public struct WikiEngineRendererConfig: Equatable, Sendable {
     ) else {
       return nil
     }
-    let nodePath = environment["ONECONTEXT_NODE"] ?? "/usr/bin/env"
-    let nodeExecutable = URL(fileURLWithPath: nodePath)
+    let nodeExecutable = discoverNodeExecutable(environment: environment, nodeSearchPaths: nodeSearchPaths)
     return WikiEngineRendererConfig(
       nodeExecutable: nodeExecutable,
       engineDirectory: engine,
@@ -61,6 +61,38 @@ public struct WikiEngineRendererConfig: Equatable, Sendable {
       return candidate
     }
     return nil
+  }
+
+  private static func discoverNodeExecutable(environment: [String: String], nodeSearchPaths: [String]?) -> URL {
+    if let nodePath = environment["ONECONTEXT_NODE"], !nodePath.isEmpty {
+      return URL(fileURLWithPath: nodePath)
+    }
+    for path in candidateNodePaths(environment: environment, nodeSearchPaths: nodeSearchPaths) {
+      if FileManager.default.isExecutableFile(atPath: path) {
+        return URL(fileURLWithPath: path)
+      }
+    }
+    return URL(fileURLWithPath: "/usr/bin/env")
+  }
+
+  private static func candidateNodePaths(environment: [String: String], nodeSearchPaths: [String]?) -> [String] {
+    if let nodeSearchPaths {
+      return nodeSearchPaths
+    }
+    let pathEntries = (environment["PATH"] ?? "")
+      .split(separator: ":", omittingEmptySubsequences: true)
+      .map { String($0) + "/node" }
+    return dedupePaths(pathEntries + ["/opt/homebrew/bin/node", "/usr/local/bin/node", "/usr/bin/node"])
+  }
+
+  private static func dedupePaths(_ paths: [String]) -> [String] {
+    var seen = Set<String>()
+    var result: [String] = []
+    for path in paths where !path.isEmpty && !seen.contains(path) {
+      seen.insert(path)
+      result.append(path)
+    }
+    return result
   }
 }
 

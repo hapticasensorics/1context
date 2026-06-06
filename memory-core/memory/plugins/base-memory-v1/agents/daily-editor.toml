@@ -5,9 +5,12 @@ provider = "codex"
 model = "gpt-5.5"
 tools = []
 prompt_paths = ["prompts/daily-editor.md"]
-reference_paths = ["prompts/daily-editor-task.md"]
+reference_paths = ["prompts/for-you-editor-task.md", "prompts/wiki-talk-style-guide.md"]
 experience = []
 
+[model_policy]
+reasoning_effort = "high"
+
 [memory]
-mode = "runtime_lived_experience"
-attach = "new"
+mode = "persistent"
+attach = "last_for_job"

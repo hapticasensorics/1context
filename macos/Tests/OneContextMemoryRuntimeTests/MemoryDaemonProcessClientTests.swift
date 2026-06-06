@@ -147,6 +147,118 @@ final class MemoryDaemonProcessClientTests: XCTestCase {
     XCTAssertTrue(args.contains("protocol memory.searchText --request-json -"))
   }
 
+  func testStorageReadinessMethodsUseRustProtocolProcess() throws {
+    let root = temporaryRoot()
+    defer { try? FileManager.default.removeItem(at: root) }
+    try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+    let argsFile = root.appendingPathComponent("memoryd-args.txt")
+    let requestsFile = root.appendingPathComponent("memoryd-requests.jsonl")
+    let executable = root.appendingPathComponent("onecontext-memoryd")
+    let script = """
+    #!/bin/sh
+    printf '%s\\n' "$*" >> \(shellQuoted(argsFile.path))
+    request="$(cat)"
+    printf '%s\\n' "$request" >> \(shellQuoted(requestsFile.path))
+    method="$(printf '%s' "$request" | /usr/bin/python3 -c 'import json,sys; print(json.load(sys.stdin)["method"])')"
+    printf '{"schema_version":1,"surface":"perception_db","protocol":"%s.v1","status":"ok","provider":"onecontext-memoryd"}\\n' "$method"
+    """
+    try script.write(to: executable, atomically: true, encoding: .utf8)
+    try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: executable.path)
+
+    let client = MemoryDaemonProcessClient(
+      runtimePaths: runtimePaths(root: root),
+      environment: ["ONECONTEXT_MEMORYD_BIN": executable.path]
+    )
+
+    XCTAssertEqual(try client.storageHealth(MemoryStorageHealthQuery(reason: "launch"))["protocol"] as? String, "memory.storageHealth.v1")
+    XCTAssertEqual(try client.ensureStorageReady(MemoryEnsureStorageReadyQuery(reason: "launch", repair: true))["protocol"] as? String, "memory.ensureStorageReady.v1")
+    XCTAssertEqual(try client.ensureRecentBackfill(MemoryEnsureRecentBackfillQuery(reason: "launch", windowHours: 24, blockUntilReady: true, minDensityBuckets: 2))["protocol"] as? String, "memory.ensureRecentBackfill.v1")
+    XCTAssertEqual(try client.repairStorage(MemoryRepairStorageQuery(reason: "manual"))["protocol"] as? String, "memory.repairStorage.v1")
+    XCTAssertEqual(try client.storageDiagnostics(MemoryStorageDiagnosticsQuery(includeLogs: true, redact: false))["protocol"] as? String, "memory.storageDiagnostics.v1")
+
+    let args = try String(contentsOf: argsFile, encoding: .utf8)
+    XCTAssertTrue(args.contains("protocol memory.storageHealth --request-json -"))
+    XCTAssertTrue(args.contains("protocol memory.ensureStorageReady --request-json -"))
+    XCTAssertTrue(args.contains("protocol memory.ensureRecentBackfill --request-json -"))
+    XCTAssertTrue(args.contains("protocol memory.repairStorage --request-json -"))
+    XCTAssertTrue(args.contains("protocol memory.storageDiagnostics --request-json -"))
+
+    let requests = try String(contentsOf: requestsFile, encoding: .utf8)
+      .split(separator: "\n")
+      .compactMap { try? JSONSerialization.jsonObject(with: Data($0.utf8)) as? [String: Any] }
+    let ensureReady = try XCTUnwrap(requests.first { $0["method"] as? String == "memory.ensureStorageReady" }?["params"] as? [String: Any])
+    let recentBackfill = try XCTUnwrap(requests.first { $0["method"] as? String == "memory.ensureRecentBackfill" }?["params"] as? [String: Any])
+    let diagnostics = try XCTUnwrap(requests.first { $0["method"] as? String == "memory.storageDiagnostics" }?["params"] as? [String: Any])
+    XCTAssertEqual(ensureReady["repair"] as? Bool, true)
+    XCTAssertEqual(recentBackfill["window_hours"] as? Int, 24)
+    XCTAssertEqual(recentBackfill["block_until_ready"] as? Bool, true)
+    XCTAssertEqual(recentBackfill["min_density_buckets"] as? Int, 2)
+    XCTAssertEqual(diagnostics["include_logs"] as? Bool, true)
+    XCTAssertEqual(diagnostics["redact"] as? Bool, false)
+  }
+
+  func testManagedStorageIsDefaultWithoutExplicitDatabaseURL() throws {
+    let root = temporaryRoot()
+    defer { try? FileManager.default.removeItem(at: root) }
+    try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+    let envFile = root.appendingPathComponent("memoryd-env.txt")
+    let executable = root.appendingPathComponent("onecontext-memoryd")
+    let script = """
+    #!/bin/sh
+    printf '%s\\n%s\\n' "$ONECONTEXT_STORAGE_BACKEND" "$ONECONTEXT_MEMORY_DB_URL" > \(shellQuoted(envFile.path))
+    cat >/dev/null
+    printf '%s\\n' '{"schema_version":1,"surface":"perception_db","protocol":"memory.storageHealth.v1","status":"ok","provider":"onecontext-memoryd"}'
+    """
+    try script.write(to: executable, atomically: true, encoding: .utf8)
+    try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: executable.path)
+
+    let client = MemoryDaemonProcessClient(
+      runtimePaths: runtimePaths(root: root, identity: .dev),
+      environment: ["ONECONTEXT_MEMORYD_BIN": executable.path]
+    )
+
+    _ = try client.storageHealth()
+    let lines = try String(contentsOf: envFile, encoding: .utf8)
+      .split(separator: "\n", omittingEmptySubsequences: false)
+      .map(String.init)
+
+    XCTAssertEqual(lines.first, "managed_postgres")
+    XCTAssertEqual(lines.dropFirst().first, "")
+  }
+
+  func testExplicitDatabaseURLSelectsExternalStorageBackend() throws {
+    let root = temporaryRoot()
+    defer { try? FileManager.default.removeItem(at: root) }
+    try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+    let envFile = root.appendingPathComponent("memoryd-env.txt")
+    let executable = root.appendingPathComponent("onecontext-memoryd")
+    let script = """
+    #!/bin/sh
+    printf '%s\\n%s\\n' "$ONECONTEXT_STORAGE_BACKEND" "$ONECONTEXT_MEMORY_DB_URL" > \(shellQuoted(envFile.path))
+    cat >/dev/null
+    printf '%s\\n' '{"schema_version":1,"surface":"perception_db","protocol":"memory.storageHealth.v1","status":"ok","provider":"onecontext-memoryd"}'
+    """
+    try script.write(to: executable, atomically: true, encoding: .utf8)
+    try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: executable.path)
+
+    let explicit = "postgres://example.test/dev-memory"
+    let client = MemoryDaemonProcessClient(
+      runtimePaths: runtimePaths(root: root, identity: .dev),
+      environment: [
+        "ONECONTEXT_MEMORYD_BIN": executable.path,
+        "DATABASE_URL": explicit
+      ]
+    )
+
+    _ = try client.storageHealth()
+    let lines = try String(contentsOf: envFile, encoding: .utf8)
+      .split(separator: "\n", omittingEmptySubsequences: false)
+      .map(String.init)
+
+    XCTAssertEqual(lines.first, "external_postgres")
+    XCTAssertEqual(lines.dropFirst().first, explicit)
+  }
+
   func testViewportDoesNotUseLegacyPSQLOrJSONLProviders() throws {
     let root = temporaryRoot()
     defer { try? FileManager.default.removeItem(at: root) }
@@ -197,74 +309,6 @@ final class MemoryDaemonProcessClientTests: XCTestCase {
     XCTAssertThrowsError(try client.hydrateObjects(MemoryObjectHydrationQuery(objectID: "object-123"))) { error in
       XCTAssertTrue(error.localizedDescription.contains("onecontext-memoryd executable not found"))
     }
-  }
-
-  func testMemoryCoreUpdateWikiUsesEnvironmentOverride() throws {
-    let root = temporaryRoot()
-    defer { try? FileManager.default.removeItem(at: root) }
-    try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
-    let argsFile = root.appendingPathComponent("memory-core-args.txt")
-    let executable = root.appendingPathComponent("1context-memory-core")
-    let wikiCore = root.appendingPathComponent("One Context Dev.app/Contents/MacOS/onecontext-wiki")
-    let memoryd = root.appendingPathComponent("One Context Dev.app/Contents/MacOS/onecontext-memoryd")
-    try FileManager.default.createDirectory(at: wikiCore.deletingLastPathComponent(), withIntermediateDirectories: true)
-    try "#!/bin/sh\nexit 0\n".write(to: wikiCore, atomically: true, encoding: .utf8)
-    try "#!/bin/sh\nexit 0\n".write(to: memoryd, atomically: true, encoding: .utf8)
-    try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: wikiCore.path)
-    try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: memoryd.path)
-    let script = """
-    #!/bin/sh
-    printf '%s\\n' "$@" > \(shellQuoted(argsFile.path))
-    cat <<'JSON'
-    {"status":"ok","schema_version":1,"command":"memory.update-wiki","result":{"operation":"memory.update_wiki","status":"completed","planned_count":17}}
-    JSON
-    """
-    try script.write(to: executable, atomically: true, encoding: .utf8)
-    try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: executable.path)
-
-    let client = MemoryCoreProcessClient(
-      runtimePaths: runtimePaths(root: root),
-      environment: ["ONECONTEXT_MEMORY_CORE_BIN": executable.path]
-    )
-
-    let payload = try client.updateWiki(
-      provider: "codex",
-      runID: "manual-run",
-      executeAgents: true,
-      maxConcurrent: 2,
-      timeoutSeconds: 30,
-      importSources: true,
-      importTicks: 2,
-      sourceWindowDays: 30,
-      sourceMaxEvents: 5_000,
-      sourceMaxLines: 250_000,
-      sourceQueryLimit: 2_400,
-      sourceCursorName: "wiki_backfill_30d_v1",
-      memorydBin: memoryd,
-      runtimeRoot: runtimePaths(root: root).userContentDirectory,
-      wikiCoreBin: wikiCore
-    )
-    let result = try XCTUnwrap(payload["result"] as? [String: Any])
-    let args = try String(contentsOf: argsFile, encoding: .utf8)
-
-    XCTAssertEqual(payload["command"] as? String, "memory.update-wiki")
-    XCTAssertEqual(result["planned_count"] as? Int, 17)
-    XCTAssertTrue(args.contains("memory\nupdate-wiki\n--provider\ncodex"))
-    XCTAssertTrue(args.contains("--run-id\nmanual-run"))
-    XCTAssertTrue(args.contains("--execute-agents"))
-    XCTAssertTrue(args.contains("--max-concurrent\n2"))
-    XCTAssertTrue(args.contains("--import-sources"))
-    XCTAssertTrue(args.contains("--import-ticks\n2"))
-    XCTAssertTrue(args.contains("--source-window-days\n30"))
-    XCTAssertTrue(args.contains("--source-max-events\n5000"))
-    XCTAssertTrue(args.contains("--source-max-lines\n250000"))
-    XCTAssertTrue(args.contains("--source-query-limit\n2400"))
-    XCTAssertTrue(args.contains("--source-cursor-name\nwiki_backfill_30d_v1"))
-    XCTAssertTrue(args.contains("--memoryd-bin\n\(memoryd.path)"))
-    XCTAssertTrue(args.contains("--runtime-root\n\(runtimePaths(root: root).userContentDirectory.path)"))
-    XCTAssertTrue(args.contains("--wiki-core-bin\n\(wikiCore.path)"))
-    XCTAssertTrue(args.contains("--timeout-seconds\n30"))
-    XCTAssertTrue(args.hasSuffix("--json\n"))
   }
 
   private func runtimePaths(root: URL, identity: OneContextAppIdentity = .official) -> RuntimePaths {

@@ -6,12 +6,16 @@ model = "gpt-5.5"
 tools = []
 prompt_paths = ["prompts/agent-profile.md"]
 reference_paths = [
-  "prompts/context-curator.md",
+  "prompts/wiki-curator.md",
+  "prompts/wiki-talk-style-guide.md",
   "prompts/your-context-talk-conventions.md",
   "prompts/operator-touched-convention.md",
 ]
 experience = []
 
+[model_policy]
+reasoning_effort = "xhigh"
+
 [memory]
-mode = "runtime_lived_experience"
-attach = "new"
+mode = "persistent"
+attach = "last_for_job"

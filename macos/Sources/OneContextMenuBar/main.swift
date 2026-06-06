@@ -1,6 +1,7 @@
 import AppKit
 import Darwin
 import Foundation
+import OneContextAgentOffice
 import OneContextCore
 import OneContextInstall
 import OneContextLocalWeb
@@ -13,6 +14,7 @@ import OneContextUpdate
 
 private enum Constants {
   static let appName = "1Context"
+  static let memoryWarmupWindowHours = 72
   static let runtimeRefreshMinimumInterval: TimeInterval = 5
   static let localWebStartupRetryDelays: [TimeInterval] = [1, 3, 10]
   static let setupReadinessPollInterval: TimeInterval = 1
@@ -206,6 +208,7 @@ private final class AppSetupWindowController: NSWindowController {
 
   private let messageLabel = NSTextField(labelWithString: "")
   private let localWikiRow = SetupRequirementRow(title: "Local Wiki Access")
+  private let codexRuntimeRow = SetupRequirementRow(title: "Codex Runtime")
   private let screenRecordingRow = SetupRequirementRow(title: "Screen & System Audio Recording")
   private let accessibilityRow = SetupRequirementRow(title: "Accessibility")
   private let inputMonitoringRow = SetupRequirementRow(title: "Input Monitoring")
@@ -266,6 +269,20 @@ private final class AppSetupWindowController: NSWindowController {
       status: localStatus,
       action: localAction,
       detail: nil
+    )
+    let codexStatus: SetupRequirementRow.Status
+    switch snapshot.codexRuntime.status {
+    case .ready, .limited:
+      codexStatus = .granted
+    case .checking:
+      codexStatus = .working("Checking")
+    case .unavailable:
+      codexStatus = .required
+    }
+    codexRuntimeRow.render(
+      status: codexStatus,
+      action: nil,
+      detail: snapshot.codexRuntime.userDetail
     )
     renderRequiredPermissionRow(
       screenRecordingRow,
@@ -339,6 +356,9 @@ private final class AppSetupWindowController: NSWindowController {
 
     stack.addArrangedSubview(localWikiRow)
     localWikiRow.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
+
+    stack.addArrangedSubview(codexRuntimeRow)
+    codexRuntimeRow.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
 
     stack.addArrangedSubview(screenRecordingRow)
     screenRecordingRow.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
@@ -611,10 +631,12 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
   private var renderGeneration = 0
   private var lastRuntimeRefreshStartedAt: Date?
   private var setupReadinessTimer: Timer?
+  private var isAgentOfficeVisible = false
   private let menu = NSMenu()
   private let stateItem = NSMenuItem(title: RuntimeState.checking.title, action: nil, keyEquivalent: "")
   private let openWikiItem = NSMenuItem(title: "Open Wiki", action: #selector(openWiki), keyEquivalent: "")
   private let refreshWikiItem = NSMenuItem(title: "Update Wiki", action: #selector(refreshWiki), keyEquivalent: "")
+  private let watchAgentsItem = NSMenuItem(title: "Watch Agents", action: #selector(watchAgents), keyEquivalent: "")
   private let settingsItem = NSMenuItem(title: "Settings", action: nil, keyEquivalent: "")
   private let settingsMenu = NSMenu()
   private let versionItem = NSMenuItem(title: "", action: nil, keyEquivalent: "")
@@ -634,6 +656,14 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
   private let localWeb = CaddyManager()
   private let localWebQueue = DispatchQueue(label: "com.haptica.1context.menu.local-web")
   private lazy var sparkleUpdater = SparkleUpdateController()
+  private lazy var agentOfficeController: AgentOfficeWindowController = {
+    let controller = AgentOfficeWindowController(runtimePaths: RuntimePaths.current())
+    controller.onVisibilityChanged = { [weak self] isVisible in
+      self?.isAgentOfficeVisible = isVisible
+      self?.refreshMenuItems()
+    }
+    return controller
+  }()
   private lazy var setupWindowController: AppSetupWindowController = {
     let controller = AppSetupWindowController()
     controller.onGrantLocalWikiAccess = { [weak self] in
@@ -929,6 +959,7 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
     menu.addItem(stateItem)
     menu.addItem(openWikiItem)
     menu.addItem(refreshWikiItem)
+    menu.addItem(watchAgentsItem)
 
     versionItem.isEnabled = false
     settingsMenu.addItem(versionItem)
@@ -953,6 +984,7 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
       stateItem,
       openWikiItem,
       refreshWikiItem,
+      watchAgentsItem,
       settingsItem,
       versionItem,
       autoPublishCadenceItem,
@@ -993,6 +1025,8 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
     }
     refreshWikiItem.title = isWikiRefreshInFlight ? "Updating Wiki..." : "Update Wiki"
     refreshWikiItem.isEnabled = !isWikiRefreshInFlight
+    watchAgentsItem.title = isAgentOfficeVisible ? "Hide Agents" : "Watch Agents"
+    watchAgentsItem.state = isAgentOfficeVisible ? .on : .off
     let setupReady = cachedRequiredSetupReady
     setupItem.title = isLocalWebSetupInFlight ? "Granting Setup..." : setupReady ? "Setup..." : "Finish Setup..."
     setupItem.isEnabled = true
@@ -1249,6 +1283,14 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
     showSetupWindow(message: nil)
   }
 
+  @objc private func watchAgents() {
+    if isAgentOfficeVisible || agentOfficeController.isOfficeVisible {
+      agentOfficeController.closeOffice()
+    } else {
+      agentOfficeController.show()
+    }
+  }
+
   @objc private func setWikiAutoPublishCadence(_ sender: NSMenuItem) {
     guard let rawValue = sender.representedObject as? String,
       let cadence = WikiAutomaticPublishCadence.parse(rawValue)
@@ -1369,21 +1411,30 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
       do {
         _ = try await RuntimeController().start(startMenu: false)
         _ = try await runtimeRPC(
-          "memory.update_wiki",
+          "memory.ensureStorageReady",
+          params: ["reason": "wiki_refresh"],
+          timeout: 30
+        )
+        _ = try await runtimeRPC(
+          "memory.ensureRecentBackfill",
           params: [
-            "provider": "codex",
-            "import_sources": true,
-            "import_ticks": 4,
-            "source_window_days": 30,
-            "source_max_events": 5_000,
-            "source_max_lines": 250_000,
-            "source_query_limit": 2_400,
-            "source_cursor_name": "wiki_agent_sessions_v1",
+            "reason": "wiki_refresh",
+            "window_hours": Constants.memoryWarmupWindowHours,
+            "block_until_ready": false
+          ],
+          timeout: 30
+        )
+        _ = try await runtimeRPC(
+          "context_engine.update_wiki",
+          params: [
+            "execute_agents": true,
+            "max_concurrent": 5,
+            "source_window_days": 3,
             "trigger": "menu.update_wiki"
           ],
-          timeout: 240
+          timeout: 1800
         )
-        _ = try await waitForWikiRunning(timeout: 240)
+        _ = try await waitForWikiRunning(timeout: 1800)
         await MainActor.run {
           self.isWikiRefreshInFlight = false
           self.refreshMenuItems()

@@ -2,6 +2,14 @@
 
 This ledger tracks files moved out of the active product tree during cleanup.
 
+## 2026-06-05 Context Engine Cutover
+
+- `macos/Sources/OneContextMemoryRuntime/MemoryCoreProcessClient.swift` was
+  removed from the active Swift runtime.
+  - Python `memory-core` is no longer the release wiki-company process bridge.
+    `ContextEngineProcessClient` now owns the Swift process boundary to the Rust
+    `onecontext-context-engine` binary.
+
 ## 2026-05-27 Cleanup
 
 - `docs/assets/attention-capture-mockup/` -> `recycle-bin/20260527/docs/assets/attention-capture-mockup/`

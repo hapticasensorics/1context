@@ -5,5 +5,5 @@ storage_dir = "storage/perception-db"
 accounts_file = "accounts.toml"
 
 [runtime_policy]
-max_concurrent_agents = 8
+max_concurrent_agents = 5
 default_harness_isolation = "account_clean"

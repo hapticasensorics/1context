@@ -1,5 +1,6 @@
 import XCTest
 import AVFoundation
+import OneContextAgentRuntime
 import OneContextLocalWeb
 import OneContextSetup
 
@@ -96,6 +97,32 @@ final class AppSetupTests: XCTestCase {
     XCTAssertEqual(readiness.requiredSetupSummary, "Remembering requires Screen & System Audio Recording.")
   }
 
+  func testCodexRuntimeIsRequiredSetupWhenUnavailable() {
+    let readiness = OneContextAppReadiness.snapshot(
+      localWebDiagnostics: diagnostics(
+        setup: localHTTPSSetup(ready: true),
+        caddyExecutableExists: true,
+        caddyExecutableIsExecutable: true
+      ),
+      rememberingPermissions: rememberingPermissions(ready: true),
+      codexRuntime: CodexRuntimeCapabilitySnapshot(
+        status: .unavailable,
+        mode: .unavailable,
+        selectedBinaryPath: nil,
+        userTitle: "Codex Runtime",
+        userDetail: "Install or sign in to Codex so 1Context can wake wiki agents.",
+        nativeMultiAgentV2: false,
+        plaintextMultiAgentV2: false,
+        harnessOnlyAgents: false,
+        probeSummary: "test"
+      )
+    )
+
+    XCTAssertEqual(readiness.state, .needsSetup)
+    XCTAssertFalse(readiness.requiredSetupReady)
+    XCTAssertEqual(readiness.requiredSetupSummary, "Codex Runtime is required for wiki agents.")
+  }
+
   func testInputMonitoringIsRequiredSetup() {
     let readiness = OneContextAppReadiness.snapshot(
       localWebDiagnostics: diagnostics(
@@ -172,6 +199,8 @@ final class AppSetupTests: XCTestCase {
     let text = OneContextAppSetupDiagnostics.render(setup).joined(separator: "\n")
 
     XCTAssertTrue(text.contains("Local Wiki Access: Granted"))
+    XCTAssertTrue(text.contains("Codex Runtime: Granted"))
+    XCTAssertTrue(text.contains("Codex Runtime Detail: Using installed Codex."))
     XCTAssertTrue(text.contains("Screen & System Audio Recording: Granted"))
     XCTAssertTrue(text.contains("Accessibility: Required"))
     XCTAssertTrue(text.contains("Input Monitoring: Granted"))

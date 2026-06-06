@@ -65,6 +65,83 @@ without shipping a source checkout inside the app.
 
 ![The 1Context menu bar app](docs/assets/readme/menu-bar.png)
 
+## The Memory Company
+
+The in-development memory writer is organized like a small editorial company.
+Agents are born for a run through the 1Context harness, do one role-bound job,
+leave receipts, talk to each other through wiki talk and Agent Mail, and then
+the wiki is revised from their accepted work.
+
+The roles are stable even though the agents are temporary:
+
+- **Run Planner** reads Perception/Timescale metadata and creates bounded work
+  packets. It is deterministic, not an LLM.
+- **Scribes** read raw history packets and write evidence-rich observations.
+- **Aggregate Scribes** combine split shards into canonical hourly memory.
+- **Daily Editor** turns hourly notes into a day-level synthesis.
+- **Biographer** updates durable facts about the person and their work.
+- **Historian** keeps chronology and origin stories coherent.
+- **Librarian** tracks cited resources, concepts, source material, and
+  cleanup candidates; it proposes removals, merges, and archives for stale
+  generated junk.
+- **Concept Scout** notices reusable ideas that deserve their own pages.
+- **Contradiction Flagger** finds stale, contradicted, or superseded claims.
+- **Context Curator** decides what future agents should remember.
+- **For You Curator** decides what belongs in the readable personal wiki.
+- **Publisher** renders and validates the wiki after accepted changes.
+
+The demo path starts with the last three days so the wiki feels alive quickly,
+then continues the 30-day backfill oldest-to-newest in the background. The same
+company handles both modes. Backfill starts with planning, then runs in resumable
+waves:
+
+```mermaid
+flowchart TD
+  trigger["Refresh Wiki button<br/>or nightly daemon"] --> planner["Run Planner<br/>Perception/Timescale metadata"]
+  planner --> packets["Bounded work packets<br/>day -> hour -> session -> shard"]
+  packets --> scribes["Scribe Wave<br/>raw history, about 160k tokens each"]
+
+  scribes --> talk["Talk + Agent Mail<br/>receipts, proposals, objections"]
+  scribes --> aggregate["Hour Aggregate Wave<br/>canonical hourly memory"]
+  aggregate --> editor["Daily Editor Wave<br/>day-level synthesis"]
+  editor --> specialists["Specialist Wave<br/>biographer, historian, librarian, curators"]
+  specialists --> curator["Promotion Wave<br/>accepted wiki changes"]
+  curator --> publish["Publish + Validate<br/>rendered local wiki"]
+
+  talk -. informs .-> editor
+  talk -. informs .-> specialists
+  publish --> cursor["Checkpoint Cursors<br/>resume from completed work"]
+  cursor --> planner
+```
+
+Only scribes read raw transcript history. Editors, biographers, librarians, and
+curators read scribe artifacts, daily syntheses, talk notes, and the current
+wiki. That keeps the system fast and gives each role a clean job boundary. Only
+curator/publisher roles promote accepted material into page bodies.
+
+With Codex `gpt-5.5` in the local Codex harness, the effective agent context
+window is about 258k tokens. 1Context targets roughly 62% of that for raw scribe
+history, about 160k tokens, leaving roughly 98k tokens for the role prompt, mail
+context, current wiki excerpts, final receipts, output, and safety margin.
+
+The default effort policy is role-based:
+
+```text
+high:  scribes, aggregate scribes, daily editor, historian, librarian, concept scout
+xhigh: biographer, context curator, for-you curator, contradiction flagger, redactor
+```
+
+The important behavior is revision, not accumulation. Raw history is immutable,
+scribe notes are durable observations, specialists propose corrections, and the
+wiki page remains the current best edited view. The librarian sweep makes junk
+removal explicit: every backfill wave can propose remove / merge / archive /
+keep decisions, and curator/publisher roles apply the accepted page-body
+changes. If later backfill proves an earlier claim was shallow, stale, or wrong,
+the readable page should remove or replace the stale claim. The talk trail
+explains why. The For You page should be polished for professional use while
+keeping entertaining, specific details when they are true; daily pages can stay
+more chronological underneath it.
+
 ## Install
 
 Requires Apple Silicon and macOS 13 Ventura or newer.

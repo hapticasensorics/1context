@@ -556,6 +556,7 @@ export function envForManifest(manifest: ReleaseManifest, manifestPath: string, 
     ONECONTEXT_APP_BUNDLE_NAME: channel === "dev" ? "1Context Dev" : "1Context",
     ONECONTEXT_APP_DISPLAY_NAME: channel === "dev" ? "1Context Dev" : "1Context",
     ONECONTEXT_BUNDLE_IDENTIFIER: channel === "dev" ? "com.haptica.1context.dev" : "com.haptica.1context",
+    ONECONTEXT_INCLUDE_MANAGED_POSTGRES: channel === "dev" ? "auto" : "1",
     ONECONTEXT_LOCAL_WEB_PROXY_LABEL: channel === "dev"
       ? "com.haptica.1context.dev.local-web-proxy"
       : "com.haptica.1context.local-web-proxy",

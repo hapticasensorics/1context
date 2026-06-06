@@ -1,0 +1,112 @@
+id = "codex-app-server"
+version = "0.1.0"
+kind = "agent_harness"
+label = "Codex App Server"
+runner = "onecontext-codex-adapter"
+transport = "codex-app-server"
+command = "onecontext-codex-adapter spawn-child"
+primary_memory_format = "codex-app-server-thread"
+purpose = "Run a Codex-backed wiki agent as a harness-born 1Context unit through the Codex app-server adapter."
+
+endpoint_protocols = [
+  "codex-app-server",
+]
+
+default_tools = [
+  "agent.mail.read",
+  "agent.mail.write",
+  "wiki.page.read",
+  "wiki.page.write_body",
+  "wiki.publish",
+  "wiki.talk.append",
+  "perception.query",
+  "artifact.write",
+]
+
+receives = [
+  "agent_identity",
+  "job_contract",
+  "prompt_bundle",
+  "mail_context",
+  "wiki_context",
+  "source_packet",
+  "tool_policy",
+]
+
+captures = [
+  "harness_birth_certificate",
+  "harness_turn_start",
+  "context_injection_receipt",
+  "adapter_events",
+  "final_message",
+  "talk_receipt",
+  "mail_receipt",
+  "harness_turn_complete",
+  "usage",
+]
+
+[execution]
+owner = "onecontext-agent-harness"
+adapter = "onecontext-codex-adapter"
+mode = "app_server_turn"
+spawn_command = "onecontext-codex-adapter spawn-child"
+proof_command = "onecontext-codex-adapter record-proof"
+thread_binding = "codex-app-server"
+internal_default = true
+user_facing_cli_required = false
+
+[runtime_policy]
+default_native_multi_agent_v2 = false
+agent_flag = "native_multi_agent_v2"
+notes = "The single Codex app-server harness defaults native MAv2 off. Agents with runtime.native_multi_agent_v2 = true receive native MAv2 immediately."
+
+required_sequence = [
+  "agent.harness.call_or_birth",
+  "agent.harness.start-turn",
+  "context_engine.inject_mail_context",
+  "onecontext-codex-adapter.spawn-child",
+  "onecontext-codex-adapter.record-adapter-events",
+  "agent.final_message.required",
+  "wiki.talk.append.delivery_mode_mail",
+  "agent.harness.complete-turn",
+]
+
+[auth]
+default_mode = "existing_codex_app_login"
+modes = [
+  "existing_codex_app_login",
+]
+existing_codex_app_login = "Use the signed-in Codex app / ChatGPT Pro account already available to the local app-server transport."
+auth_secret_recorded = false
+
+[prompt_control]
+model_instructions_file = "prompts/codex-app-server.instructions.md"
+load_project_agents_md = false
+developer_instructions = true
+mail_context_appendix = true
+final_message_required = true
+
+[proofs]
+birth_certificate = true
+turn_start = true
+context_injection = true
+adapter_events = true
+final_message = true
+talk_append = true
+mail_delivery = true
+turn_complete = true
+
+[permissions]
+approval_policy = "never"
+workspace_writes = "bounded_by_job"
+network = true
+web_search = true
+
+[tool_gateway]
+wiki = "onecontext-wiki-core"
+mail = "agent-mail"
+perception = "onecontext-memory-db"
+adapter = "onecontext-codex-adapter"
+
+[legacy_notes]
+codex_exec = "Not a release transport. Old codex exec prompt-script behavior belongs in retired docs or memory-core donor history, not in this shipped pack."

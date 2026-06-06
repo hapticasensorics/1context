@@ -8,6 +8,9 @@ prompt_paths = ["prompts/agent-profile.md"]
 reference_paths = ["prompts/hourly-answerer.md", "prompts/for-you-talk-conventions.md"]
 experience = []
 
+[model_policy]
+reasoning_effort = "high"
+
 [memory]
 mode = "runtime_lived_experience"
 attach = "new"

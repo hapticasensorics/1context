@@ -1,5 +1,0 @@
-schema_version = 1
-
-[indexes]
-index_dir = "~/Library/Application Support/1Context/indexes"
-rebuild_from = ["user-wiki", "context-engine"]

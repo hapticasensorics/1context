@@ -46,6 +46,12 @@ test("manifest validates and exports dev channel policy", async () => {
   assert.equal(env.ONECONTEXT_APP_IDENTITY, "dev");
   assert.equal(env.ONECONTEXT_APP_BUNDLE_NAME, "1Context Dev");
   assert.equal(env.ONECONTEXT_BUNDLE_IDENTIFIER, "com.haptica.1context.dev");
+  assert.equal(env.ONECONTEXT_INCLUDE_MANAGED_POSTGRES, "auto");
+  assert.equal(
+    envForManifest(manifest, fromRoot("release", "release.toml"), "official")
+      .ONECONTEXT_INCLUDE_MANAGED_POSTGRES,
+    "1",
+  );
 });
 
 test("release train dev build dry-run writes timing evidence", async () => {

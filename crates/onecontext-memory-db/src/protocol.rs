@@ -145,6 +145,11 @@ impl Default for ProtocolStats {
 pub enum MethodName {
     Status,
     Describe,
+    StorageHealth,
+    EnsureStorageReady,
+    EnsureRecentBackfill,
+    RepairStorage,
+    StorageDiagnostics,
     WriteObjects,
     IngestSources,
     QueryViewport,
@@ -158,9 +163,14 @@ pub enum MethodName {
 }
 
 impl MethodName {
-    pub const ALL_V0: [MethodName; 12] = [
+    pub const ALL_V0: [MethodName; 17] = [
         MethodName::Status,
         MethodName::Describe,
+        MethodName::StorageHealth,
+        MethodName::EnsureStorageReady,
+        MethodName::EnsureRecentBackfill,
+        MethodName::RepairStorage,
+        MethodName::StorageDiagnostics,
         MethodName::WriteObjects,
         MethodName::IngestSources,
         MethodName::QueryViewport,
@@ -177,6 +187,11 @@ impl MethodName {
         match self {
             Self::Status => "memory.status",
             Self::Describe => "memory.describe",
+            Self::StorageHealth => "memory.storageHealth",
+            Self::EnsureStorageReady => "memory.ensureStorageReady",
+            Self::EnsureRecentBackfill => "memory.ensureRecentBackfill",
+            Self::RepairStorage => "memory.repairStorage",
+            Self::StorageDiagnostics => "memory.storageDiagnostics",
             Self::WriteObjects => "memory.writeObjects",
             Self::IngestSources => "memory.ingestSources",
             Self::QueryViewport => "memory.queryViewport",
@@ -203,6 +218,7 @@ impl MethodName {
     pub fn state(self) -> MethodState {
         match self {
             Self::Status | Self::Describe => MethodState::Ready,
+            Self::StorageHealth | Self::EnsureStorageReady => MethodState::Ready,
             Self::WriteObjects | Self::IngestSources => MethodState::Ready,
             Self::QueryViewport
             | Self::QueryDensity
@@ -210,6 +226,9 @@ impl MethodName {
             | Self::QueryEdges
             | Self::SearchText
             | Self::Explain => MethodState::Ready,
+            Self::EnsureRecentBackfill | Self::RepairStorage | Self::StorageDiagnostics => {
+                MethodState::Ready
+            }
             Self::SearchSemantic | Self::Subscribe => MethodState::Stub,
         }
     }
@@ -218,6 +237,11 @@ impl MethodName {
         match self {
             Self::Status => "StatusRequest",
             Self::Describe => "DescribeRequest",
+            Self::StorageHealth => "StorageHealthRequest",
+            Self::EnsureStorageReady => "EnsureStorageReadyRequest",
+            Self::EnsureRecentBackfill => "EnsureRecentBackfillRequest",
+            Self::RepairStorage => "RepairStorageRequest",
+            Self::StorageDiagnostics => "StorageDiagnosticsRequest",
             Self::WriteObjects => "WriteObjectsRequest",
             Self::IngestSources => "IngestSourcesRequest",
             Self::QueryViewport => "QueryViewportRequest",
@@ -235,6 +259,11 @@ impl MethodName {
         match self {
             Self::Status => "StatusResponse",
             Self::Describe => "DescribeResponse",
+            Self::StorageHealth => "StorageHealth",
+            Self::EnsureStorageReady => "StorageHealth",
+            Self::EnsureRecentBackfill => "RecentBackfillHealth",
+            Self::RepairStorage => "StorageHealth",
+            Self::StorageDiagnostics => "StorageDiagnostics",
             Self::WriteObjects => "WriteObjectsResponse",
             Self::IngestSources => "IngestSourcesResponse",
             Self::QueryViewport => "QueryViewportResponse",
@@ -264,6 +293,17 @@ impl FromStr for MethodName {
         match without_prefix {
             "status" => Ok(Self::Status),
             "describe" => Ok(Self::Describe),
+            "storageHealth" | "storage-health" | "storage_health" => Ok(Self::StorageHealth),
+            "ensureStorageReady" | "ensure-storage-ready" | "ensure_storage_ready" => {
+                Ok(Self::EnsureStorageReady)
+            }
+            "ensureRecentBackfill" | "ensure-recent-backfill" | "ensure_recent_backfill" => {
+                Ok(Self::EnsureRecentBackfill)
+            }
+            "repairStorage" | "repair-storage" | "repair_storage" => Ok(Self::RepairStorage),
+            "storageDiagnostics" | "storage-diagnostics" | "storage_diagnostics" => {
+                Ok(Self::StorageDiagnostics)
+            }
             "writeObjects" | "write-objects" | "write_objects" => Ok(Self::WriteObjects),
             "ingestSources" | "ingest-sources" | "ingest_sources" => Ok(Self::IngestSources),
             "queryViewport" | "viewport" | "query-viewport" | "query_viewport" => {
@@ -391,6 +431,114 @@ pub struct StorageStatus {
     pub url_source: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub schema_state: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum StorageBackend {
+    ManagedPostgres,
+    ExternalPostgres,
+    Disabled,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+pub struct StorageHealthRequest {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reason: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct EnsureStorageReadyRequest {
+    pub reason: String,
+    #[serde(default)]
+    pub repair: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct EnsureRecentBackfillRequest {
+    pub reason: String,
+    #[serde(default = "default_recent_backfill_window_hours")]
+    pub window_hours: u32,
+    #[serde(default)]
+    pub block_until_ready: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub min_density_buckets: Option<u32>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct RepairStorageRequest {
+    pub reason: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct StorageDiagnosticsRequest {
+    #[serde(default)]
+    pub include_logs: bool,
+    #[serde(default = "default_true")]
+    pub redact: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ExtensionHealth {
+    pub name: String,
+    pub required: bool,
+    pub installed: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub version: Option<String>,
+    pub preload_required: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub preload_active: Option<bool>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct RecentBackfillHealth {
+    pub status: String,
+    pub window_hours: u32,
+    pub density_ready: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub event_count: Option<i64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub session_count: Option<i64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub last_successful_ingest_ts: Option<i64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub message: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct StorageHealth {
+    pub backend: StorageBackend,
+    pub status: String,
+    pub ready: bool,
+    pub storage_ready: bool,
+    pub recent_history_ready: bool,
+    pub user_action_required: bool,
+    pub safe_to_retry: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub schema_state: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub schema_version: Option<i64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub expected_schema_version: Option<i64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub app_support_dir: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pgdata_dir: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub socket_dir: Option<String>,
+    #[serde(default)]
+    pub required_extensions: Vec<ExtensionHealth>,
+    pub recent_backfill: RecentBackfillHealth,
+    pub message: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub detail: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct StorageDiagnostics {
+    pub ok: bool,
+    pub status: String,
+    pub message: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
@@ -1015,6 +1163,10 @@ fn default_search_limit() -> usize {
     50
 }
 
+fn default_recent_backfill_window_hours() -> u32 {
+    72
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1035,6 +1187,26 @@ mod tests {
         assert_eq!(
             describe.methods["memory.searchSemantic"].state,
             MethodState::Stub
+        );
+        assert_eq!(
+            describe.methods["memory.storageHealth"].state,
+            MethodState::Ready
+        );
+        assert_eq!(
+            describe.methods["memory.ensureStorageReady"].state,
+            MethodState::Ready
+        );
+        assert_eq!(
+            describe.methods["memory.ensureRecentBackfill"].state,
+            MethodState::Ready
+        );
+        assert_eq!(
+            describe.methods["memory.repairStorage"].state,
+            MethodState::Ready
+        );
+        assert_eq!(
+            describe.methods["memory.storageDiagnostics"].state,
+            MethodState::Ready
         );
         assert_eq!(
             describe.methods["memory.subscribe"].state,

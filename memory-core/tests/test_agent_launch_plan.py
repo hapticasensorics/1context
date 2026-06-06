@@ -29,10 +29,17 @@ def test_codex_launch_plan_materializes_prompt_and_run_script(tmp_path: Path, mo
     assert payload["provider"] == "codex"
     assert payload["harness"]["id"] == "codex-harness"
     assert payload["model"] == "gpt-5.5"
+    assert payload["model_policy"]["reasoning_effort"] == "high"
+    assert payload["model_policy"]["usable_context_tokens"] == 258400
+    assert payload["model_policy"]["context_fraction"] == 0.62
     assert payload["command"]["kind"] == "codex.exec"
+    assert 'model_reasoning_effort="high"' in payload["command"]["argv"]
+    assert payload["command"]["model_policy"]["reasoning_effort"] == "high"
     assert payload["agent_harness_call"]["operation"] == "agent.harness.call"
     assert payload["agent_harness_call"]["request"]["unit_id"] == "test-codex-run"
     assert payload["agent_harness_call"]["request"]["role"] == "hourly-scribe"
+    assert payload["agent_harness_call"]["request"]["model_policy"]["reasoning_effort"] == "high"
+    assert payload["agent_harness_call"]["request"]["metadata"]["model_policy"]["reasoning_effort"] == "high"
     capabilities = {item["id"]: item for item in payload["agent_harness_call"]["request"]["capabilities"]}
     assert capabilities["context_injection"]["proof_required"] == ["context_injection"]
     assert capabilities["prompt_packet"]["transport"] == "codex_skill"
@@ -52,7 +59,70 @@ def test_codex_launch_plan_materializes_prompt_and_run_script(tmp_path: Path, mo
 
     launch = json.loads(plan.launch_path.read_text(encoding="utf-8"))
     assert launch["operation"] == "agent.launch.plan"
+    assert launch["model_policy"]["reasoning_effort"] == "high"
     assert launch["paths"]["prompt"].endswith("test-codex-run/prompt.md")
+
+
+def test_biographer_codex_launch_plan_uses_xhigh_model_policy(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    system = replace(load_system(PROJECT_ROOT), runtime_dir=tmp_path / "runtime")
+
+    plan = build_agent_launch_plan(
+        system,
+        job_id="memory.wiki.biographer",
+        provider="codex",
+        run_id="test-biographer-run",
+    )
+    payload = plan.to_payload(root=system.root)
+
+    assert payload["agent"]["id"] == "biographer"
+    assert payload["model"] == "gpt-5.5"
+    assert payload["model_policy"]["reasoning_effort"] == "xhigh"
+    assert 'model_reasoning_effort="xhigh"' in payload["command"]["argv"]
+    assert payload["agent_harness_call"]["request"]["model_policy"]["reasoning_effort"] == "xhigh"
+    capabilities = {item["id"]: item for item in payload["agent_harness_call"]["request"]["capabilities"]}
+    assert capabilities["wiki_core"]["tool_names"] == ["wiki.talk.append"]
+
+
+def test_curator_codex_launch_plan_gets_page_write_tools(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    system = replace(load_system(PROJECT_ROOT), runtime_dir=tmp_path / "runtime")
+
+    plan = build_agent_launch_plan(
+        system,
+        job_id="memory.wiki.for_you_curator",
+        provider="codex",
+        run_id="test-curator-run",
+    )
+    payload = plan.to_payload(root=system.root)
+
+    capabilities = {item["id"]: item for item in payload["agent_harness_call"]["request"]["capabilities"]}
+    assert capabilities["wiki_core"]["tool_names"] == [
+        "wiki.page.write_body",
+        "wiki.page.patch_body",
+        "wiki.publish",
+        "wiki.talk.append",
+    ]
+
+
+def test_librarian_sweep_is_cleanup_only_and_reports_removals(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    system = replace(load_system(PROJECT_ROOT), runtime_dir=tmp_path / "runtime")
+
+    plan = build_agent_launch_plan(
+        system,
+        job_id="memory.wiki.librarian_sweep",
+        provider="codex",
+        run_id="test-librarian-sweep-run",
+    )
+    payload = plan.to_payload(root=system.root)
+
+    capabilities = {item["id"]: item for item in payload["agent_harness_call"]["request"]["capabilities"]}
+    assert capabilities["wiki_core"]["tool_names"] == ["wiki.talk.append"]
+    prompt = plan.prompt_path.read_text(encoding="utf-8")
+    assert "remove / merge / archive / keep" in prompt
+    assert "Removed-proposed" in prompt
+    assert "page_change_summary (added, updated, removed, merged, left_unchanged)" in prompt
 
 
 def test_claude_launch_plan_uses_declared_agent_model_and_harness(tmp_path: Path, monkeypatch) -> None:

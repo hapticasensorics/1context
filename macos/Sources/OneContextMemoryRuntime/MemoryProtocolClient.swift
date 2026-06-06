@@ -102,12 +102,72 @@ public struct MemorySearchTextQuery: Sendable {
   }
 }
 
+public struct MemoryStorageHealthQuery: Sendable {
+  public let reason: String?
+
+  public init(reason: String? = nil) {
+    self.reason = reason?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
+  }
+}
+
+public struct MemoryEnsureStorageReadyQuery: Sendable {
+  public let reason: String
+  public let repair: Bool
+
+  public init(reason: String = "swift", repair: Bool = false) {
+    self.reason = reason.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty ?? "swift"
+    self.repair = repair
+  }
+}
+
+public struct MemoryEnsureRecentBackfillQuery: Sendable {
+  public let reason: String
+  public let windowHours: Int
+  public let blockUntilReady: Bool
+  public let minDensityBuckets: Int?
+
+  public init(
+    reason: String = "swift",
+    windowHours: Int = 72,
+    blockUntilReady: Bool = false,
+    minDensityBuckets: Int? = nil
+  ) {
+    self.reason = reason.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty ?? "swift"
+    self.windowHours = max(windowHours, 1)
+    self.blockUntilReady = blockUntilReady
+    self.minDensityBuckets = minDensityBuckets.map { max($0, 1) }
+  }
+}
+
+public struct MemoryRepairStorageQuery: Sendable {
+  public let reason: String
+
+  public init(reason: String = "swift") {
+    self.reason = reason.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty ?? "swift"
+  }
+}
+
+public struct MemoryStorageDiagnosticsQuery: Sendable {
+  public let includeLogs: Bool
+  public let redact: Bool
+
+  public init(includeLogs: Bool = false, redact: Bool = true) {
+    self.includeLogs = includeLogs
+    self.redact = redact
+  }
+}
+
 public enum MemoryProtocolRequest: Sendable {
   case viewport(MemoryViewportQuery)
   case objectHydration(MemoryObjectHydrationQuery)
   case density(MemoryDensityQuery)
   case edges(MemoryEdgesQuery)
   case searchText(MemorySearchTextQuery)
+  case storageHealth(MemoryStorageHealthQuery)
+  case ensureStorageReady(MemoryEnsureStorageReadyQuery)
+  case ensureRecentBackfill(MemoryEnsureRecentBackfillQuery)
+  case repairStorage(MemoryRepairStorageQuery)
+  case storageDiagnostics(MemoryStorageDiagnosticsQuery)
 }
 
 public struct MemoryProtocolResponse {
@@ -141,6 +201,26 @@ public extension MemoryProtocolClient {
 
   func searchText(_ query: MemorySearchTextQuery) throws -> MemoryProtocolResponse {
     try send(.searchText(query))
+  }
+
+  func storageHealth(_ query: MemoryStorageHealthQuery = MemoryStorageHealthQuery()) throws -> MemoryProtocolResponse {
+    try send(.storageHealth(query))
+  }
+
+  func ensureStorageReady(_ query: MemoryEnsureStorageReadyQuery = MemoryEnsureStorageReadyQuery()) throws -> MemoryProtocolResponse {
+    try send(.ensureStorageReady(query))
+  }
+
+  func ensureRecentBackfill(_ query: MemoryEnsureRecentBackfillQuery = MemoryEnsureRecentBackfillQuery()) throws -> MemoryProtocolResponse {
+    try send(.ensureRecentBackfill(query))
+  }
+
+  func repairStorage(_ query: MemoryRepairStorageQuery = MemoryRepairStorageQuery()) throws -> MemoryProtocolResponse {
+    try send(.repairStorage(query))
+  }
+
+  func storageDiagnostics(_ query: MemoryStorageDiagnosticsQuery = MemoryStorageDiagnosticsQuery()) throws -> MemoryProtocolResponse {
+    try send(.storageDiagnostics(query))
   }
 }
 
@@ -215,6 +295,31 @@ public final class MemoryProtocolProcessClient: MemoryProtocolClient, @unchecked
       return try run(
         arguments: protocolArguments("memory.searchText"),
         standardInput: protocolRequest(method: "memory.searchText", params: searchTextParams(query))
+      )
+    case .storageHealth(let query):
+      return try run(
+        arguments: protocolArguments("memory.storageHealth"),
+        standardInput: protocolRequest(method: "memory.storageHealth", params: storageHealthParams(query))
+      )
+    case .ensureStorageReady(let query):
+      return try run(
+        arguments: protocolArguments("memory.ensureStorageReady"),
+        standardInput: protocolRequest(method: "memory.ensureStorageReady", params: ensureStorageReadyParams(query))
+      )
+    case .ensureRecentBackfill(let query):
+      return try run(
+        arguments: protocolArguments("memory.ensureRecentBackfill"),
+        standardInput: protocolRequest(method: "memory.ensureRecentBackfill", params: ensureRecentBackfillParams(query))
+      )
+    case .repairStorage(let query):
+      return try run(
+        arguments: protocolArguments("memory.repairStorage"),
+        standardInput: protocolRequest(method: "memory.repairStorage", params: repairStorageParams(query))
+      )
+    case .storageDiagnostics(let query):
+      return try run(
+        arguments: protocolArguments("memory.storageDiagnostics"),
+        standardInput: protocolRequest(method: "memory.storageDiagnostics", params: storageDiagnosticsParams(query))
       )
     }
   }
@@ -312,6 +417,44 @@ public final class MemoryProtocolProcessClient: MemoryProtocolClient, @unchecked
       "query": query.query,
       "filters": filters,
       "limit": query.cappedLimit
+    ]
+  }
+
+  private func storageHealthParams(_ query: MemoryStorageHealthQuery) -> [String: Any] {
+    var params: [String: Any] = [:]
+    if let reason = query.reason {
+      params["reason"] = reason
+    }
+    return params
+  }
+
+  private func ensureStorageReadyParams(_ query: MemoryEnsureStorageReadyQuery) -> [String: Any] {
+    [
+      "reason": query.reason,
+      "repair": query.repair
+    ]
+  }
+
+  private func ensureRecentBackfillParams(_ query: MemoryEnsureRecentBackfillQuery) -> [String: Any] {
+    var params: [String: Any] = [
+      "reason": query.reason,
+      "window_hours": query.windowHours,
+      "block_until_ready": query.blockUntilReady
+    ]
+    if let minDensityBuckets = query.minDensityBuckets {
+      params["min_density_buckets"] = minDensityBuckets
+    }
+    return params
+  }
+
+  private func repairStorageParams(_ query: MemoryRepairStorageQuery) -> [String: Any] {
+    ["reason": query.reason]
+  }
+
+  private func storageDiagnosticsParams(_ query: MemoryStorageDiagnosticsQuery) -> [String: Any] {
+    [
+      "include_logs": query.includeLogs,
+      "redact": query.redact
     ]
   }
 

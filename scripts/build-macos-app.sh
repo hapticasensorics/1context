@@ -96,6 +96,9 @@ CADDY_NOTICE_SOURCE_DIR=""
 RUNTIME_DEFAULTS_WORK_DIR="$ROOT/dist/runtime-defaults"
 RUNTIME_DEFAULTS_RESOURCE_DIR="$RESOURCES_DIR/RuntimeDefaults"
 WIKI_ENGINE_RESOURCE_DIR="$RESOURCES_DIR/WikiEngine"
+MANAGED_POSTGRES_SOURCE_DIR="$ROOT/runtime/managed-postgres/macos-arm64"
+MANAGED_POSTGRES_RESOURCE_DIR="$RESOURCES_DIR/managed-postgres/macos-arm64"
+INCLUDE_MANAGED_POSTGRES="${ONECONTEXT_INCLUDE_MANAGED_POSTGRES:-auto}"
 SPARKLE_FEED_URL="$ONECONTEXT_SPARKLE_FEED_URL"
 SPARKLE_PUBLIC_ED_KEY="${ONECONTEXT_SPARKLE_PUBLIC_ED_KEY:-}"
 UPDATE_OPTIONAL_PROMPT_TITLE="$ONECONTEXT_UPDATE_OPTIONAL_PROMPT_TITLE"
@@ -277,6 +280,44 @@ resolve_caddy_source() {
   release_caddy_source
 }
 
+package_managed_postgres() {
+  local verify_script="$ROOT/scripts/verify-managed-postgres-bundle.sh"
+  local source_dir="$MANAGED_POSTGRES_SOURCE_DIR"
+  local mode="$INCLUDE_MANAGED_POSTGRES"
+
+  case "$mode" in
+    1|true|yes|auto) ;;
+    0|false|no)
+      return
+      ;;
+    *)
+      echo "Unsupported ONECONTEXT_INCLUDE_MANAGED_POSTGRES value: $mode" >&2
+      exit 1
+      ;;
+  esac
+
+  if [[ ! -f "$source_dir/manifest.json" ]]; then
+    if [[ "$mode" == "auto" ]]; then
+      return
+    fi
+    echo "Managed Postgres packaging was requested but no staged bundle exists at $source_dir." >&2
+    exit 1
+  fi
+
+  if ! "$verify_script" "$source_dir" >/dev/null; then
+    if [[ "$mode" == "auto" ]]; then
+      echo "Skipping invalid staged managed Postgres bundle at $source_dir." >&2
+      return
+    fi
+    echo "Managed Postgres packaging was requested but the staged bundle is invalid." >&2
+    exit 1
+  fi
+
+  mkdir -p "$(dirname "$MANAGED_POSTGRES_RESOURCE_DIR")"
+  ditto "$source_dir" "$MANAGED_POSTGRES_RESOURCE_DIR"
+  "$verify_script" "$MANAGED_POSTGRES_RESOURCE_DIR" >/dev/null
+}
+
 swift build --package-path "$MACOS_DIR" -c release --arch "$ARCH"
 BIN_DIR="$(swift build --package-path "$MACOS_DIR" -c release --arch "$ARCH" --show-bin-path)"
 cargo build --release --package onecontext-wiki-daemon
@@ -284,11 +325,13 @@ cargo build --release --package onecontext-memory-db --bin onecontext-memoryd
 cargo build --release --package onecontext-capture-dashboard --bin onecontext-capture-dashboard
 cargo build --release --package onecontext-agent-harness-daemon --bin onecontext-agent-harness
 cargo build --release --package onecontext-codex-adapter --bin onecontext-codex-adapter
+cargo build --release --package onecontext-context-engine --bin onecontext-context-engine
 WIKI_CORE_BIN="$ROOT/target/release/onecontext-wiki"
 MEMORYD_BIN="$ROOT/target/release/onecontext-memoryd"
 CAPTURE_DASHBOARD_BIN="$ROOT/target/release/onecontext-capture-dashboard"
 AGENT_HARNESS_BIN="$ROOT/target/release/onecontext-agent-harness"
 CODEX_ADAPTER_BIN="$ROOT/target/release/onecontext-codex-adapter"
+CONTEXT_ENGINE_BIN="$ROOT/target/release/onecontext-context-engine"
 
 rm -rf "$APP_DIR"
 mkdir -p "$MACOS_APP_DIR" "$RESOURCES_DIR" "$FRAMEWORKS_DIR" "$LAUNCH_DAEMONS_DIR"
@@ -301,13 +344,18 @@ cp "$MEMORYD_BIN" "$MACOS_APP_DIR/onecontext-memoryd"
 cp "$CAPTURE_DASHBOARD_BIN" "$MACOS_APP_DIR/onecontext-capture-dashboard"
 cp "$AGENT_HARNESS_BIN" "$MACOS_APP_DIR/onecontext-agent-harness"
 cp "$CODEX_ADAPTER_BIN" "$MACOS_APP_DIR/onecontext-codex-adapter"
+cp "$CONTEXT_ENGINE_BIN" "$MACOS_APP_DIR/onecontext-context-engine"
 cp "$BIN_DIR/1context-local-web-proxy" "$RESOURCES_DIR/1context-local-web-proxy"
 cp "$MENU_ICON_SOURCE" "$RESOURCES_DIR/MenuBarIcon.png"
+while IFS= read -r resource_bundle; do
+  ditto "$resource_bundle" "$RESOURCES_DIR/$(basename "$resource_bundle")"
+done < <(find "$BIN_DIR" -maxdepth 1 -type d -name '*.bundle' -print)
 if [[ ! -d "$BIN_DIR/Sparkle.framework" ]]; then
   echo "SwiftPM did not build Sparkle.framework beside OneContextMenuBar." >&2
   exit 1
 fi
 ditto "$BIN_DIR/Sparkle.framework" "$FRAMEWORKS_DIR/Sparkle.framework"
+package_managed_postgres
 CADDY_BUNDLE_DIR="$RESOURCES_DIR/local-web/caddy"
 resolve_caddy_source
 if [[ -z "$CADDY_SOURCE" || ! -x "$CADDY_SOURCE" ]]; then
@@ -568,6 +616,11 @@ if [[ "$SIGNING_MODE" == "developer-id" || "$SIGNING_MODE" == "apple-development
   codesign_release \
     --sign "$IDENTITY" \
     "$FRAMEWORKS_DIR/Sparkle.framework" >/dev/null
+  if [[ -d "$MANAGED_POSTGRES_RESOURCE_DIR" ]]; then
+    while IFS= read -r managed_pg_file; do
+      codesign_release --sign "$IDENTITY" "$managed_pg_file" >/dev/null
+    done < <(find "$MANAGED_POSTGRES_RESOURCE_DIR" -type f \( -perm -0100 -o -perm -0010 -o -perm -0001 -o -name '*.dylib' \) -print | LC_ALL=C sort)
+  fi
   codesign_release \
     --identifier "$BUNDLE_IDENTIFIER.caddy" \
     --sign "$IDENTITY" \
@@ -623,6 +676,11 @@ if [[ "$SIGNING_MODE" == "developer-id" || "$SIGNING_MODE" == "apple-development
     "$APP_DIR" >/dev/null
 elif command -v codesign >/dev/null 2>&1; then
   codesign --force --deep --sign - "$FRAMEWORKS_DIR/Sparkle.framework" >/dev/null
+  if [[ -d "$MANAGED_POSTGRES_RESOURCE_DIR" ]]; then
+    while IFS= read -r managed_pg_file; do
+      codesign_adhoc_runtime "$managed_pg_file" >/dev/null
+    done < <(find "$MANAGED_POSTGRES_RESOURCE_DIR" -type f \( -perm -0100 -o -perm -0010 -o -perm -0001 -o -name '*.dylib' \) -print | LC_ALL=C sort)
+  fi
   codesign_adhoc_runtime "$CADDY_BUNDLE_DIR/caddy" >/dev/null
   codesign_adhoc_runtime --entitlements "$MACOS_DIR/entitlements.plist" "$MACOS_APP_DIR/1context-cli" >/dev/null
   codesign_adhoc_runtime --entitlements "$MACOS_DIR/entitlements.plist" "$MACOS_APP_DIR/1contextd" >/dev/null
@@ -631,6 +689,7 @@ elif command -v codesign >/dev/null 2>&1; then
   codesign_adhoc_runtime --entitlements "$MACOS_DIR/entitlements.plist" "$MACOS_APP_DIR/onecontext-capture-dashboard" >/dev/null
   codesign_adhoc_runtime --entitlements "$MACOS_DIR/entitlements.plist" "$MACOS_APP_DIR/onecontext-agent-harness" >/dev/null
   codesign_adhoc_runtime --entitlements "$MACOS_DIR/entitlements.plist" "$MACOS_APP_DIR/onecontext-codex-adapter" >/dev/null
+  codesign_adhoc_runtime --entitlements "$MACOS_DIR/entitlements.plist" "$MACOS_APP_DIR/onecontext-context-engine" >/dev/null
   codesign_adhoc_runtime --entitlements "$MACOS_DIR/entitlements.plist" "$RESOURCES_DIR/1context-local-web-proxy" >/dev/null
   codesign_adhoc_runtime --entitlements "$MACOS_DIR/entitlements.plist" "$MACOS_APP_DIR/1Context" >/dev/null
   write_runtime_defaults_manifest

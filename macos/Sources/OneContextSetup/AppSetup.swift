@@ -1,12 +1,14 @@
 import Foundation
+import OneContextAgentRuntime
 import OneContextLocalWeb
 
 public struct OneContextAppSetupSnapshot: Codable, Equatable, Sendable {
   public let localWikiAccess: LocalWebSetupSnapshot
   public let rememberingPermissions: OneContextRememberingPermissionsSnapshot
+  public let codexRuntime: CodexRuntimeCapabilitySnapshot
 
   public var requiredReady: Bool {
-    localWikiAccess.ready && rememberingPermissions.requiredReady
+    localWikiAccess.ready && rememberingPermissions.requiredReady && codexRuntime.requiredReady
   }
 
   public var localWikiStatus: String {
@@ -21,15 +23,20 @@ public struct OneContextAppSetupSnapshot: Codable, Equatable, Sendable {
     if !rememberingPermissions.requiredReady {
       blockers.append(rememberingPermissions.requiredSummary)
     }
+    if !codexRuntime.requiredReady {
+      blockers.append(codexRuntime.blockingSummary)
+    }
     return blockers.isEmpty ? "1Context setup is complete." : blockers.joined(separator: " ")
   }
 
   public init(
     localWikiAccess: LocalWebSetupSnapshot,
-    rememberingPermissions: OneContextRememberingPermissionsSnapshot
+    rememberingPermissions: OneContextRememberingPermissionsSnapshot,
+    codexRuntime: CodexRuntimeCapabilitySnapshot = .assumedInstalledReady()
   ) {
     self.localWikiAccess = localWikiAccess
     self.rememberingPermissions = rememberingPermissions
+    self.codexRuntime = codexRuntime
   }
 }
 
@@ -76,16 +83,21 @@ public struct OneContextAppReadinessSnapshot: Codable, Equatable, Sendable {
 
 public enum OneContextAppSetup {
   public static func current() -> OneContextAppSetupSnapshot {
-    snapshot(localWikiAccess: LocalWebSetupInstaller().status())
+    snapshot(
+      localWikiAccess: LocalWebSetupInstaller().status(),
+      codexRuntime: CodexRuntimeCapability.loadOrProbeAndPersist()
+    )
   }
 
   public static func snapshot(
     localWikiAccess: LocalWebSetupSnapshot,
-    rememberingPermissions: OneContextRememberingPermissionsSnapshot = OneContextSystemPermissions.current()
+    rememberingPermissions: OneContextRememberingPermissionsSnapshot = OneContextSystemPermissions.current(),
+    codexRuntime: CodexRuntimeCapabilitySnapshot = .assumedInstalledReady()
   ) -> OneContextAppSetupSnapshot {
     OneContextAppSetupSnapshot(
       localWikiAccess: localWikiAccess,
-      rememberingPermissions: rememberingPermissions
+      rememberingPermissions: rememberingPermissions,
+      codexRuntime: codexRuntime
     )
   }
 }
@@ -94,16 +106,21 @@ public enum OneContextAppReadiness {
   public static func current(
     localWeb: CaddyManager = CaddyManager()
   ) -> OneContextAppReadinessSnapshot {
-    snapshot(localWebDiagnostics: localWeb.diagnostics())
+    snapshot(
+      localWebDiagnostics: localWeb.diagnostics(),
+      codexRuntime: CodexRuntimeCapability.loadOrProbeAndPersist()
+    )
   }
 
   public static func snapshot(
     localWebDiagnostics: LocalWebDiagnostics,
-    rememberingPermissions: OneContextRememberingPermissionsSnapshot = OneContextSystemPermissions.current()
+    rememberingPermissions: OneContextRememberingPermissionsSnapshot = OneContextSystemPermissions.current(),
+    codexRuntime: CodexRuntimeCapabilitySnapshot = .assumedInstalledReady()
   ) -> OneContextAppReadinessSnapshot {
     let setup = OneContextAppSetup.snapshot(
       localWikiAccess: localWebDiagnostics.setup,
-      rememberingPermissions: rememberingPermissions
+      rememberingPermissions: rememberingPermissions,
+      codexRuntime: codexRuntime
     )
     let state: OneContextAppReadinessState
     if !setup.requiredReady {
@@ -128,7 +145,9 @@ public enum OneContextAppSetupDiagnostics {
   ) -> [String] {
     var lines = [
       "Local Wiki Access: \(snapshot.localWikiStatus)",
-      "Local Wiki URL: \(snapshot.localWikiAccess.targetURL)"
+      "Local Wiki URL: \(snapshot.localWikiAccess.targetURL)",
+      "Codex Runtime: \(snapshot.codexRuntime.displayStatus)",
+      "Codex Runtime Detail: \(snapshot.codexRuntime.userDetail)"
     ]
     lines.append(contentsOf: snapshot.rememberingPermissions.diagnosticPermissions.map {
       "\($0.title): \($0.displayStatus)"
@@ -150,6 +169,7 @@ public enum OneContextAppReadinessDiagnostics {
       "App Readiness: \(display(snapshot.state))",
       "Required Setup: \(snapshot.requiredSetupReady ? "ready" : "needs setup")",
       "Setup Summary: \(snapshot.requiredSetupSummary)",
+      "Codex Runtime: \(snapshot.setup.codexRuntime.userDetail)",
       "Local Wiki: \(snapshot.localWeb.running ? "reachable" : snapshot.localWeb.health)",
       "Local Wiki URL: \(snapshot.localWeb.url)"
     ]

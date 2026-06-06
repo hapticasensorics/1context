@@ -3,8 +3,6 @@ import Foundation
 import OneContextCore
 import OneContextPlatform
 
-private let defaultDevMemoryDatabaseURL = "postgres://onecontext:onecontext_dev@127.0.0.1:15432/onecontext_memory?connect_timeout=1"
-
 public struct MemoryDaemonSnapshot {
   public let configured: Bool
   public let running: Bool
@@ -63,7 +61,7 @@ public final class MemoryDaemonProcessClient: @unchecked Sendable {
   ) {
     self.runtimePaths = runtimePaths
     self.fileManager = fileManager
-    self.environment = Self.environmentWithDevMemoryDefaults(
+    self.environment = Self.environmentWithStorageDefaults(
       environment,
       identity: runtimePaths.identity
     )
@@ -204,6 +202,41 @@ public final class MemoryDaemonProcessClient: @unchecked Sendable {
       .payload
   }
 
+  public func storageHealth(_ query: MemoryStorageHealthQuery = MemoryStorageHealthQuery()) throws -> [String: Any] {
+    try MemoryProtocolClientFactory
+      .make(configuration: protocolConfiguration())
+      .storageHealth(query)
+      .payload
+  }
+
+  public func ensureStorageReady(_ query: MemoryEnsureStorageReadyQuery = MemoryEnsureStorageReadyQuery()) throws -> [String: Any] {
+    try MemoryProtocolClientFactory
+      .make(configuration: protocolConfiguration())
+      .ensureStorageReady(query)
+      .payload
+  }
+
+  public func ensureRecentBackfill(_ query: MemoryEnsureRecentBackfillQuery = MemoryEnsureRecentBackfillQuery()) throws -> [String: Any] {
+    try MemoryProtocolClientFactory
+      .make(configuration: protocolConfiguration())
+      .ensureRecentBackfill(query)
+      .payload
+  }
+
+  public func repairStorage(_ query: MemoryRepairStorageQuery = MemoryRepairStorageQuery()) throws -> [String: Any] {
+    try MemoryProtocolClientFactory
+      .make(configuration: protocolConfiguration())
+      .repairStorage(query)
+      .payload
+  }
+
+  public func storageDiagnostics(_ query: MemoryStorageDiagnosticsQuery = MemoryStorageDiagnosticsQuery()) throws -> [String: Any] {
+    try MemoryProtocolClientFactory
+      .make(configuration: protocolConfiguration())
+      .storageDiagnostics(query)
+      .payload
+  }
+
   public func viewport(limit: Int = 200, source: String? = nil) throws -> [String: Any] {
     try queryViewport(MemoryViewportQuery(limit: limit, source: source))
   }
@@ -231,19 +264,33 @@ public final class MemoryDaemonProcessClient: @unchecked Sendable {
     return env
   }
 
-  private static func environmentWithDevMemoryDefaults(
+  private static func environmentWithStorageDefaults(
     _ environment: [String: String],
     identity: OneContextAppIdentity
   ) -> [String: String] {
-    guard identity.kind == .dev else { return environment }
     var env = environment
-    if env["ONECONTEXT_MEMORY_DB_URL"]?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty != false,
-      env["ONECONTEXT_MEMORY_DATABASE_URL"]?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty != false,
-      env["DATABASE_URL"]?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty != false
-    {
-      env["ONECONTEXT_MEMORY_DB_URL"] = defaultDevMemoryDatabaseURL
+    let explicitDatabaseURL = normalizedExplicitDatabaseURL(from: env)
+    if let explicitDatabaseURL {
+      env["ONECONTEXT_MEMORY_DB_URL"] = explicitDatabaseURL
+    }
+    if env["ONECONTEXT_STORAGE_BACKEND"]?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty != false {
+      env["ONECONTEXT_STORAGE_BACKEND"] = explicitDatabaseURL == nil ? "managed_postgres" : "external_postgres"
+    }
+    if identity.kind == .dev, explicitDatabaseURL == nil {
+      env.removeValue(forKey: "ONECONTEXT_MEMORY_DB_URL")
     }
     return env
+  }
+
+  private static func normalizedExplicitDatabaseURL(from environment: [String: String]) -> String? {
+    for key in ["ONECONTEXT_MEMORY_DB_URL", "ONECONTEXT_MEMORY_DATABASE_URL", "DATABASE_URL"] {
+      if let value = environment[key]?.trimmingCharacters(in: .whitespacesAndNewlines),
+        !value.isEmpty
+      {
+        return value
+      }
+    }
+    return nil
   }
 
   private func executableCandidates() -> [URL] {

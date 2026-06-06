@@ -1160,7 +1160,7 @@ fn write_prepared_chunk(
           );
 
         UPDATE perception.objects objects
-        SET event_end = stage.event_end,
+        SET event_end = GREATEST(stage.event_end, objects.event_start + INTERVAL '1 microsecond'),
             source_record_hash = stage.source_record_hash,
             series_id = stage.series_id,
             lane_id = stage.lane_id,

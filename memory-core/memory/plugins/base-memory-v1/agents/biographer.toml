@@ -5,8 +5,11 @@ provider = "codex"
 model = "gpt-5.5"
 tools = []
 prompt_paths = ["prompts/agent-profile.md"]
-reference_paths = ["prompts/biographer.md", "prompts/operator-touched-convention.md"]
+reference_paths = ["prompts/biographer.md", "prompts/wiki-talk-style-guide.md", "prompts/operator-touched-convention.md"]
 experience = []
+
+[model_policy]
+reasoning_effort = "xhigh"
 
 [memory]
 mode = "runtime_lived_experience"

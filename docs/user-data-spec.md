@@ -414,10 +414,10 @@ templates/
 Templates initialize pages and talk. They do not own those files after page
 creation. Once a template has created a user file, the user file wins.
 
-Global agent prompts belong in `context-engine/prompts`, not
-`user-wiki/templates`. Page-local talk conventions and curator instructions
-belong with the page's talk folder because they define how that page should be
-discussed.
+Global agent prompts belong in a context-engine pack such as
+`context-engine/packs/wiki-company-v1/prompts`, not `user-wiki/templates`.
+Page-local talk conventions and curator instructions belong with the page's
+talk folder because they define how that page should be discussed.
 
 ## Static Site Export
 
@@ -467,16 +467,33 @@ and backup-worthy, but it is not the clean static wiki export.
 
 ```text
 ~/1Context/context-engine/
+  orchestrators/
+    wiki-company-orchestrator-v1/
+      orchestrator.toml
+      phases.toml
+      packet-policy.toml
+      routing.toml
+      receipts.toml
+
+  packs/
+    wiki-company-v1/
+      plugin.toml
+      providers.toml
+      native-memory.toml
+      linking.toml
+      harnesses/
+      agents/
+      jobs/
+      prompts/
+      lived-experiences/
+
   agents/
     directory/
-
-  jobs/
-
-  prompts/
-    shared/
-    e08-for-you/
+    harness/
+    policies/
 
   mail/
+    threads/
     messages/
     bodies/
     deliveries.jsonl
@@ -487,35 +504,24 @@ and backup-worthy, but it is not the clean static wiki export.
     control-events.jsonl
     dead-letter.jsonl
 
-  notifications/
-    outbox.jsonl
-    attempts.jsonl
-    cursors/
-
-  agents/deferred/
-    roles/
-    tools/
-    policies/
-    subscriptions/
   mail/deferred/
     subscriptions.jsonl
     lists.jsonl
-  proposals/
-  decisions/
-  runs/
-  artifacts/
-  observations/
-  ledgers/
-  indexes/
 ```
 
 Directory meanings:
 
 | Directory | Stores |
 | --- | --- |
+| `orchestrators/wiki-company-orchestrator-v1` | shipped default orchestration policy: phases, packet policy, routing, and required receipts |
+| `packs/wiki-company-v1` | shipped default company definitions: prompts, agents, jobs, harnesses, providers, and pack metadata |
+| `packs/wiki-company-v1/lived-experiences` | seed continuity records for newly created agent identities |
+| `packs/wiki-company-v1/linking.toml` | policy for attaching lived experience, native memory, and mail context to a job turn |
+| `packs/wiki-company-v1/native-memory.toml` | native session/history formats the company can use for continuity or ingest |
 | `agents/directory` | live and recently-live agent registrations, transport pointers, leases, and retirement events |
-| `jobs/` | reusable job definitions |
-| `prompts/` | global prompt files and prompt packs |
+| `agents/harness` | harness unit records, birth certificates, turn state, and adapter proof receipts |
+| `agents/policies` | user-editable policies that apply across pack defaults |
+| `mail/threads` | human-readable update and coordination receipts, including `wiki-company.jsonl` |
 | `mail/messages` | immutable accepted mail envelopes, partitioned by date |
 | `mail/bodies` | immutable accepted markdown bodies, partitioned by date |
 | `mail/deliveries.jsonl` | append-only delivery truth for each recipient |
@@ -525,22 +531,17 @@ Directory meanings:
 | `mail/injection-receipts.jsonl` | host-facing records that an authorized `wiki.mail.open` body was injected or failed to inject into a Codex thread |
 | `mail/control-events.jsonl` | hook, app-server, injection, and supervisor decisions that shape agent runtime behavior without becoming message truth |
 | `mail/dead-letter.jsonl` | inspectable failed or exhausted delivery attempts |
-| `notifications/outbox.jsonl` | durable wakeup hints for eligible agents; contains envelope metadata, not full bodies |
-| `notifications/attempts.jsonl` | dispatch attempts, steering outcomes, retry evidence, and failures |
-| `notifications/cursors` | optional per-agent notification cursors |
-| `agents/deferred` | later role/tool/policy/subscription shapes after V0 delivery is stable |
 | `mail/deferred` | later list and subscription indexes after V0 delivery is stable |
-| `proposals/` | immutable proposed changes and patch series |
-| `decisions/` | accepted, rejected, deferred, withdrawn, or superseded outcomes |
-| `runs/` | replay/debug records for agent work |
-| `artifacts/` | previews, patches, validations, and proof bundles |
-| `observations/` | source material and captured inputs |
-| `ledgers/` | append-only operational JSONL |
-| `indexes/` | user-owned manifests and rebuild state for derived indexes |
 
 The context engine can reference wiki pages and artifacts with logical ids.
 Canonical wiki publication happens only after accepted changes land in
 `user-wiki`.
+
+Do not add top-level `runs/`, `proposals/`, `decisions/`, `artifacts/`,
+`observations/`, `ledgers/`, or `indexes/` as placeholder file databases. For
+the current release slice, mail records what the company did. Rich execution
+history should be designed against Postgres/Timescale instead of grown
+piecemeal in the filesystem.
 
 ## Context Engine File Classes
 
@@ -561,14 +562,11 @@ Proposals are immutable suggested changes. New versions create new files rather
 than overwriting old versions. Decisions record whether a proposal is accepted,
 rejected, deferred, withdrawn, or superseded.
 
-Runs are replay/debug records. Artifacts are outputs, not conversation.
-Observations are source material for memory work. Ledgers are append-only JSONL.
-
 Detailed write protocol, proposal promotion, route plans, render requests,
-lists, and governance storage belong to their own contracts. Agent mail and
-notification wakeups are owned by the Agent Mail Protocol; do not add ad hoc
-wiki mail state under `context-engine` without first updating that protocol and
-this user-data spec.
+lists, execution history, and governance storage belong to their own contracts.
+Agent mail and notification wakeups are owned by the Agent Mail Protocol; do not
+add ad hoc wiki mail state under `context-engine` without first updating that
+protocol and this user-data spec.
 
 ## Indexes And Search
 
@@ -588,9 +586,10 @@ context-engine/**/*.json
 context-engine/**/*.jsonl
 ```
 
-Every important source file, talk entry, attachment, proposal, decision,
-render result, and operational event should be readable from `user-wiki` or
-`context-engine` without a hidden database.
+Every important wiki source file, talk entry, attachment, render result, and
+Agent Mail receipt should be readable from `user-wiki` or `context-engine`.
+Heavy execution history may be database-owned once the Postgres/Timescale
+contract exists.
 
 Heavy derived indexes belong under Application Support:
 
@@ -598,18 +597,10 @@ Heavy derived indexes belong under Application Support:
 ~/Library/Application Support/1Context/indexes/
 ```
 
-User-owned index manifests and rebuild state live under:
-
-```text
-~/1Context/context-engine/indexes/
-  index-manifest.toml
-  rebuilds.jsonl
-```
-
 The app must be able to delete and rebuild Application Support indexes from
-`user-wiki`, `context-engine`, and index manifests. A missing or corrupt index
-may degrade retrieval, routing, inbox speed, or semantic search, but it must
-not erase memory or block Open Wiki.
+`user-wiki`, `context-engine`, and database-backed source contracts. A missing
+or corrupt index may degrade retrieval, routing, inbox speed, or semantic
+search, but it must not erase memory or block Open Wiki.
 
 ## Application Support
 
