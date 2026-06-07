@@ -1,0 +1,8 @@
+schema_version = 1
+id = "projects"
+title = "Projects"
+page_id = "projects"
+slug = "projects"
+route = "/projects"
+type = "project-index"
+template = "pages/e08/projects.md"

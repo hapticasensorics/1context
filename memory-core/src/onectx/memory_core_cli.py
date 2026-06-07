@@ -7,11 +7,6 @@ from pathlib import Path
 from typing import Any
 
 from onectx.config import ConfigError, compile_system_map, load_system
-from onectx.agent.launch_plan import (
-    AgentLaunchPlanError,
-    build_agent_launch_plan,
-    parse_param_pairs,
-)
 from onectx.memory.replay import ReplayError, run_replay_dry_run
 from onectx.memory.tick import (
     MemoryTickError,
@@ -20,7 +15,6 @@ from onectx.memory.tick import (
     run_memory_tick,
     validate_memory_cycle,
 )
-from onectx.memory.wiki_update import WikiUpdateError, run_wiki_update
 from onectx.storage import StorageError
 
 
@@ -33,11 +27,9 @@ ALLOWED_SHAPES = {
     ("memory", "cycles", "list", "--json"),
 }
 PARAMETERIZED_CAPABILITIES = {
-    "agent launch-plan <job-id> [--provider declared|codex|claude] [--model <model>] [--run-id <run-id>] [--param key=value] --json",
     "memory cycles show <cycle-id> --json",
     "memory cycles validate <cycle-id> --json",
     "memory replay-dry-run --start <date> --end <date> [--sources codex,claude-code] [--replay-run-id <id>] --json",
-    "memory update-wiki [--provider declared|codex] [--run-id <run-id>] [--execute-agents] [--max-concurrent <n>] [--timeout-seconds <n>] [--import-sources] [--import-ticks <n>] [--source-window-days <n>] [--source-max-events <n>] [--source-max-lines <n>] [--source-query-limit <n>] [--source-cursor-name <name>] [--memoryd-bin <path>] [--runtime-root <path>] [--wiki-core-bin <path>] --json",
 }
 
 
@@ -47,7 +39,7 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
       return dispatch(args, root=root)
-    except (ConfigError, StorageError, MemoryCoreContractError, AgentLaunchPlanError, WikiUpdateError) as exc:
+    except (ConfigError, StorageError, MemoryCoreContractError) as exc:
       print_json(error_payload("contract_error", str(exc)))
       return 1
     except Exception as exc:  # pragma: no cover - final safety net for subprocess callers
@@ -122,16 +114,6 @@ def execute_allowed_shape(args: list[str], *, root: Path) -> tuple[str, Any, int
         result = run_replay_dry_run(system, **replay_args)
         return "memory.replay-dry-run", result.to_payload(), 0
 
-    if is_agent_launch_plan_shape(args):
-        launch_args = parse_agent_launch_plan_args(args[2:-1])
-        result = build_agent_launch_plan(system, **launch_args)
-        return "agent.launch-plan", result.to_payload(root=system.root), 0
-
-    if is_memory_update_wiki_shape(args):
-        update_args = parse_memory_update_wiki_args(args[2:-1])
-        result = run_wiki_update(system, **update_args)
-        return "memory.update-wiki", result.to_payload(root=system.root), 0 if result.status == "completed" else 1
-
     raise MemoryCoreContractError(f"unsupported memory-core command: {' '.join(args) or '(empty)'}")
 
 
@@ -169,10 +151,6 @@ def parse_replay_args(args: list[str]) -> dict[str, Any]:
 
 
 def is_allowed_parameterized_shape(args: list[str]) -> bool:
-    if is_memory_update_wiki_shape(args):
-        return True
-    if is_agent_launch_plan_shape(args):
-        return True
     if is_cycle_shape(args, "show") or is_cycle_shape(args, "validate"):
         return True
     if len(args) >= 6 and args[:2] == ["memory", "replay-dry-run"] and args[-1] == "--json":
@@ -205,157 +183,6 @@ def is_allowed_parameterized_shape(args: list[str]) -> bool:
     return False
 
 
-def is_agent_launch_plan_shape(args: list[str]) -> bool:
-    if len(args) < 4 or args[:2] != ["agent", "launch-plan"] or args[-1] != "--json":
-        return False
-    if not safe_identifier(args[2]):
-        return False
-    index = 3
-    while index < len(args) - 1:
-        option = args[index]
-        if option in {"--provider", "--model", "--run-id"}:
-            if index + 1 >= len(args) - 1 or not safe_identifier(args[index + 1]):
-                return False
-            index += 2
-            continue
-        if option == "--param":
-            if index + 1 >= len(args) - 1 or not safe_param_pair(args[index + 1]):
-                return False
-            index += 2
-            continue
-        return False
-    return True
-
-
-def is_memory_update_wiki_shape(args: list[str]) -> bool:
-    if len(args) < 4 or args[:2] != ["memory", "update-wiki"] or args[-1] != "--json":
-        return False
-    index = 2
-    while index < len(args) - 1:
-        option = args[index]
-        if option in {"--provider", "--run-id"}:
-            if index + 1 >= len(args) - 1 or not safe_identifier(args[index + 1]):
-                return False
-            if option == "--provider" and args[index + 1] not in {"codex", "declared"}:
-                return False
-            index += 2
-            continue
-        if option in {
-            "--max-concurrent",
-            "--timeout-seconds",
-            "--import-ticks",
-            "--source-window-days",
-            "--source-max-events",
-            "--source-max-lines",
-            "--source-query-limit",
-        }:
-            if index + 1 >= len(args) - 1 or not safe_positive_int(args[index + 1]):
-                return False
-            index += 2
-            continue
-        if option == "--source-cursor-name":
-            if index + 1 >= len(args) - 1 or not safe_identifier(args[index + 1]):
-                return False
-            index += 2
-            continue
-        if option in {"--runtime-root", "--wiki-core-bin", "--memoryd-bin"}:
-            if index + 1 >= len(args) - 1 or not safe_path(args[index + 1]):
-                return False
-            index += 2
-            continue
-        if option in {"--execute-agents", "--import-sources"}:
-            index += 1
-            continue
-        return False
-    return True
-
-
-def parse_memory_update_wiki_args(args: list[str]) -> dict[str, Any]:
-    parsed: dict[str, Any] = {
-        "provider": "codex",
-        "run_id": "",
-        "execute_agents": False,
-        "max_concurrent": None,
-        "timeout_seconds": 1800,
-        "import_sources": False,
-        "import_ticks": 1,
-        "source_window_days": 30,
-        "source_max_events": 5_000,
-        "source_max_lines": 250_000,
-        "source_query_limit": 2_400,
-        "source_cursor_name": "",
-        "memoryd_bin": None,
-        "runtime_root": None,
-        "wiki_core_bin": None,
-    }
-    index = 0
-    while index < len(args):
-        option = args[index]
-        if option in {"--execute-agents", "--import-sources"}:
-            parsed[option.removeprefix("--").replace("-", "_")] = True
-            index += 1
-            continue
-        value = args[index + 1]
-        if option == "--provider":
-            parsed["provider"] = value
-        elif option == "--run-id":
-            parsed["run_id"] = value
-        elif option == "--max-concurrent":
-            parsed["max_concurrent"] = int(value)
-        elif option == "--timeout-seconds":
-            parsed["timeout_seconds"] = int(value)
-        elif option == "--import-ticks":
-            parsed["import_ticks"] = int(value)
-        elif option == "--source-window-days":
-            parsed["source_window_days"] = int(value)
-        elif option == "--source-max-events":
-            parsed["source_max_events"] = int(value)
-        elif option == "--source-max-lines":
-            parsed["source_max_lines"] = int(value)
-        elif option == "--source-query-limit":
-            parsed["source_query_limit"] = int(value)
-        elif option == "--source-cursor-name":
-            parsed["source_cursor_name"] = value
-        elif option == "--memoryd-bin":
-            parsed["memoryd_bin"] = value
-        elif option == "--runtime-root":
-            parsed["runtime_root"] = value
-        elif option == "--wiki-core-bin":
-            parsed["wiki_core_bin"] = value
-        else:
-            raise MemoryCoreContractError(f"unsupported update-wiki option: {option}")
-        index += 2
-    return parsed
-
-
-def parse_agent_launch_plan_args(args: list[str]) -> dict[str, Any]:
-    parsed: dict[str, Any] = {
-        "job_id": args[0],
-        "provider": "declared",
-        "model": "",
-        "run_id": "",
-        "params": {},
-    }
-    params: list[str] = []
-    index = 1
-    while index < len(args):
-        option = args[index]
-        value = args[index + 1]
-        if option == "--provider":
-            parsed["provider"] = value
-        elif option == "--model":
-            parsed["model"] = value
-        elif option == "--run-id":
-            parsed["run_id"] = value
-        elif option == "--param":
-            params.append(value)
-        else:
-            raise MemoryCoreContractError(f"unsupported launch-plan option: {option}")
-        index += 2
-    parsed["params"] = parse_param_pairs(params)
-    return parsed
-
-
 def is_cycle_shape(args: list[str], verb: str) -> bool:
     return (
         len(args) == 5
@@ -372,24 +199,6 @@ def safe_scalar(value: str) -> bool:
 def safe_identifier(value: str) -> bool:
     allowed = set("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._:-,")
     return safe_scalar(value) and value not in {".", ".."} and all(character in allowed for character in value)
-
-
-def safe_param_pair(value: str) -> bool:
-    if "=" not in value or "\0" in value or len(value) > 512:
-        return False
-    key, _ = value.split("=", 1)
-    return safe_identifier(key)
-
-
-def safe_positive_int(value: str) -> bool:
-    try:
-        return int(value) > 0
-    except ValueError:
-        return False
-
-
-def safe_path(value: str) -> bool:
-    return bool(value) and len(value) <= 4096 and "\0" not in value and not value.startswith("-")
 
 
 def ok_payload(command: str, result: Any) -> dict[str, Any]:

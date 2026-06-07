@@ -233,6 +233,51 @@ final class PathAndPermissionTests: XCTestCase {
     XCTAssertEqual(try mode(URL(fileURLWithPath: preferencesPath)), 0o600)
   }
 
+  func testWikiAutomaticUpdateSettingsPersistToSharedPreferencesPlist() throws {
+    let root = FileManager.default.temporaryDirectory
+      .appendingPathComponent("1ctx-update-settings-\(UUID().uuidString)", isDirectory: true)
+    defer { try? FileManager.default.removeItem(at: root) }
+    let preferencesPath = root.appendingPathComponent("com.haptica.1context.plist").path
+
+    XCTAssertEqual(
+      OneContextAppSettings.wikiAutomaticUpdateCadence(preferencesPath: preferencesPath),
+      .defaultValue
+    )
+    XCTAssertEqual(
+      OneContextAppSettings.wikiAgentConcurrencyLimit(preferencesPath: preferencesPath),
+      .defaultValue
+    )
+
+    try OneContextAppSettings.setWikiAutomaticUpdateCadence(.oneHour, preferencesPath: preferencesPath)
+    try OneContextAppSettings.setWikiAgentConcurrencyLimit(.twelve, preferencesPath: preferencesPath)
+
+    XCTAssertEqual(
+      OneContextAppSettings.wikiAutomaticUpdateCadence(preferencesPath: preferencesPath),
+      .oneHour
+    )
+    XCTAssertEqual(
+      OneContextAppSettings.wikiAgentConcurrencyLimit(preferencesPath: preferencesPath),
+      .twelve
+    )
+
+    try OneContextAppSettings.setWikiAutomaticUpdateCadence(.disabled, preferencesPath: preferencesPath)
+    try OneContextAppSettings.setWikiAgentConcurrencyLimit(.noLimit, preferencesPath: preferencesPath)
+
+    XCTAssertEqual(
+      OneContextAppSettings.wikiAutomaticUpdateCadence(preferencesPath: preferencesPath),
+      .disabled
+    )
+    XCTAssertEqual(
+      OneContextAppSettings.wikiAgentConcurrencyLimit(preferencesPath: preferencesPath),
+      .noLimit
+    )
+    XCTAssertEqual(
+      OneContextAppSettings.wikiAgentConcurrencyLimit(preferencesPath: preferencesPath).contextEngineArgumentValue,
+      WikiAgentConcurrencyLimit.noLimitArgumentValue
+    )
+    XCTAssertEqual(try mode(URL(fileURLWithPath: preferencesPath)), 0o600)
+  }
+
   private func mode(_ url: URL) throws -> Int {
     let attrs = try FileManager.default.attributesOfItem(atPath: url.path)
     return (attrs[.posixPermissions] as? NSNumber)?.intValue ?? -1

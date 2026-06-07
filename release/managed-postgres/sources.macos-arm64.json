@@ -1,0 +1,38 @@
+{
+  "schema": "1context.managed-postgres.sources.v1",
+  "arch": "macos-arm64",
+  "components": [
+    {
+      "name": "postgresql",
+      "version": "17.10",
+      "url": "https://ftp.postgresql.org/pub/source/v17.10/postgresql-17.10.tar.bz2",
+      "sha256": "078a03516dcdbdb705fecaf415ea3d13a956c589e46f09fed68a06fb00598c90",
+      "archive": "postgresql-17.10.tar.bz2",
+      "license": "PostgreSQL"
+    },
+    {
+      "name": "openssl",
+      "version": "3.6.2",
+      "url": "https://www.openssl.org/source/openssl-3.6.2.tar.gz",
+      "sha256": "aaf51a1fe064384f811daeaeb4ec4dce7340ec8bd893027eee676af31e83a04f",
+      "archive": "openssl-3.6.2.tar.gz",
+      "license": "Apache-2.0"
+    },
+    {
+      "name": "timescaledb",
+      "version": "2.27.2",
+      "url": "https://github.com/timescale/timescaledb/archive/refs/tags/2.27.2.tar.gz",
+      "sha256": "ba47569618b8b8e6b2d58ee27bb0429b8f7954dac3edbcf1ff6ecd6bdc479316",
+      "archive": "timescaledb-2.27.2.tar.gz",
+      "license": "Timescale License"
+    },
+    {
+      "name": "pgvector",
+      "version": "0.8.2",
+      "url": "https://github.com/pgvector/pgvector/archive/refs/tags/v0.8.2.tar.gz",
+      "sha256": "69f4019389af05dc1c9548deb8628e62878e6e207c03907f2b8af2016472cdaa",
+      "archive": "pgvector-0.8.2.tar.gz",
+      "license": "PostgreSQL"
+    }
+  ]
+}

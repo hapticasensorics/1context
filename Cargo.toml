@@ -5,6 +5,7 @@ members = [
   "crates/onecontext-attention-dashboard",
   "crates/onecontext-attention-runner",
   "crates/onecontext-codex-adapter",
+  "crates/onecontext-context-engine",
   "crates/onecontext-capture-bundler",
   "crates/onecontext-capture-core",
   "crates/onecontext-capture-dashboard",

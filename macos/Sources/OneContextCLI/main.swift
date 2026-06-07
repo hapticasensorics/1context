@@ -3,6 +3,7 @@ import Foundation
 import OneContextCapture
 import OneContextInstall
 import OneContextLocalWeb
+import OneContextMemoryRuntime
 import OneContextCore
 import OneContextPlatform
 import OneContextProtocol
@@ -292,6 +293,78 @@ struct OneContextCLI {
     } catch {
       print("  Health: no response")
       print("  Error: \(error.localizedDescription)")
+    }
+
+    print("  Storage:")
+    do {
+      let payload = try MemoryDaemonProcessClient(runtimePaths: RuntimePaths.current())
+        .storageHealth(MemoryStorageHealthQuery(reason: "diagnose"))
+      let health = (payload["result"] as? [String: Any]) ?? payload
+      printMemoryStorageHealth(health, redact: redact)
+    } catch {
+      print("    Health: no response")
+      print("    Error: \(displayPath(error.localizedDescription, redact: redact))")
+    }
+  }
+
+  static func printMemoryStorageHealth(_ health: [String: Any], redact: Bool) {
+    print("    Backend: \(health["backend"] as? String ?? "unknown")")
+    print("    Status: \(health["status"] as? String ?? "unknown")")
+    print("    Ready: \(yesNo((health["ready"] as? Bool) == true))")
+    print("    Storage Ready: \(yesNo((health["storage_ready"] as? Bool) == true))")
+    print("    Recent History Ready: \(yesNo((health["recent_history_ready"] as? Bool) == true))")
+    if let schemaState = health["schema_state"] as? String {
+      print("    Schema State: \(schemaState)")
+    }
+    if let schemaVersion = health["schema_version"] {
+      print("    Schema Version: \(schemaVersion)")
+    }
+    if let expectedSchemaVersion = health["expected_schema_version"] {
+      print("    Expected Schema Version: \(expectedSchemaVersion)")
+    }
+    if let socketDir = health["socket_dir"] as? String {
+      print("    Socket Dir: \(displayPath(socketDir, redact: redact))")
+    }
+    if let pgdataDir = health["pgdata_dir"] as? String {
+      print("    PGDATA Dir: \(displayPath(pgdataDir, redact: redact))")
+    }
+    if let appSupportDir = health["app_support_dir"] as? String {
+      print("    App Support Dir: \(displayPath(appSupportDir, redact: redact))")
+    }
+    if let bundlePrefix = health["bundle_prefix"] as? String {
+      print("    Bundle Prefix: \(displayPath(bundlePrefix, redact: redact))")
+    }
+    if let postgresVersion = health["bundle_postgres_version"] as? String {
+      print("    Bundle PostgreSQL: \(postgresVersion)")
+    }
+    if let timescaleVersion = health["bundle_timescale_version"] as? String {
+      print("    Bundle TimescaleDB: \(timescaleVersion)")
+    }
+    if let buildID = health["bundle_build_id"] as? String {
+      print("    Bundle Build ID: \(buildID)")
+    }
+    if let extensions = health["required_extensions"] as? [[String: Any]], !extensions.isEmpty {
+      for ext in extensions {
+        let name = ext["name"] as? String ?? "unknown"
+        let installed = (ext["installed"] as? Bool) == true
+        let version = ext["version"] as? String
+        let preloadRequired = (ext["preload_required"] as? Bool) == true
+        let preload = ext["preload_active"] as? Bool
+        var parts = [installed ? "installed" : "missing"]
+        if let version {
+          parts.append("version=\(version)")
+        }
+        if preloadRequired {
+          parts.append("preload=\(preload.map(yesNo) ?? "unknown")")
+        }
+        print("    Extension \(name): \(parts.joined(separator: ", "))")
+      }
+    }
+    if let message = health["message"] as? String {
+      print("    Message: \(displayPath(message, redact: redact))")
+    }
+    if let detail = health["detail"] as? String {
+      print("    Detail: \(displayPath(detail, redact: redact))")
     }
   }
 

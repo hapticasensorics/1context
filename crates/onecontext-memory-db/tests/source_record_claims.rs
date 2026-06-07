@@ -295,6 +295,35 @@ fn live_perception_write_objects_exact_and_mutable_container_fast_paths() {
         Some("session-v3".to_string())
     );
     assert_eq!(object_count(&mut client, &object_id), 1);
+
+    let mut backwards_session = shifted_session.clone();
+    backwards_session.event_start = timestamp(50);
+    backwards_session.event_end = timestamp(51);
+    backwards_session.text_value = Some("session-v4".to_string());
+    backwards_session.display_text = Some("Mutable session container v4".to_string());
+    backwards_session.payload = json!({"session": "fast-path", "version": 4});
+    let backwards = write_perception_objects(
+        &mut client,
+        &user_id,
+        &uuid_for(run_seed, 124),
+        std::slice::from_ref(&backwards_session),
+    )
+    .unwrap();
+    assert_eq!(backwards.receipts[0].object_id, object_id);
+    assert!(!backwards.receipts[0].inserted);
+    assert_eq!(
+        source_record_object_event_start(&mut client, &source_id, &session.source_record_key),
+        original_object_event_start
+    );
+    assert!(
+        object_event_end(&mut client, &object_id) > original_object_event_start,
+        "mutable update event_end must remain after the preserved object_event_start"
+    );
+    assert_eq!(
+        object_text_value(&mut client, &object_id),
+        Some("session-v4".to_string())
+    );
+    assert_eq!(object_count(&mut client, &object_id), 1);
     assert_eq!(
         relation_state(
             &mut client,
@@ -543,6 +572,20 @@ fn object_text_value(client: &mut Client, object_id: &str) -> Option<String> {
         )
         .unwrap()
         .get("text_value")
+}
+
+fn object_event_end(client: &mut Client, object_id: &str) -> DateTime<Utc> {
+    client
+        .query_one(
+            r#"
+            SELECT event_end
+            FROM perception.objects
+            WHERE object_id::text = $1
+            "#,
+            &[&object_id],
+        )
+        .unwrap()
+        .get("event_end")
 }
 
 fn relation_state(

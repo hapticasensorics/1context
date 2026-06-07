@@ -110,6 +110,170 @@ async function writeChecksumsForReleaseAssets(ctx: ReleaseContext): Promise<void
   });
 }
 
+function sha256File(filePath: string): string {
+  return crypto.createHash("sha256").update(fs.readFileSync(filePath)).digest("hex");
+}
+
+function readJsonFile<T = Record<string, unknown>>(filePath: string): T {
+  return JSON.parse(fs.readFileSync(filePath, "utf8")) as T;
+}
+
+function managedPostgresRuntimePrefix(): string {
+  return process.env.ONECONTEXT_MANAGED_POSTGRES_SOURCE_DIR ?? fromRoot("release", "managed-postgres", "runtime", "macos-arm64");
+}
+
+function managedPostgresSourceLock(): string {
+  return process.env.ONECONTEXT_MANAGED_POSTGRES_SOURCE_LOCK ?? fromRoot("release", "managed-postgres", "sources.macos-arm64.json");
+}
+
+function managedPostgresMode(ctx: ReleaseContext): "off" | "auto" | "required" {
+  return ctx.policy.managed_postgres;
+}
+
+type ManagedPostgresComponent = {
+  archive: string;
+  license: string;
+  name: string;
+  sha256: string;
+  url: string;
+  version: string;
+};
+
+function normalizeManagedPostgresComponents(value: unknown): ManagedPostgresComponent[] {
+  if (!Array.isArray(value)) return [];
+  return value.map((item) => {
+    const record = (item ?? {}) as Record<string, unknown>;
+    return {
+      archive: String(record.archive ?? ""),
+      license: String(record.license ?? ""),
+      name: String(record.name ?? ""),
+      sha256: String(record.sha256 ?? ""),
+      url: String(record.url ?? ""),
+      version: String(record.version ?? ""),
+    };
+  }).sort((left, right) => left.name.localeCompare(right.name));
+}
+
+function componentsEqual(left: unknown, right: unknown): boolean {
+  return JSON.stringify(normalizeManagedPostgresComponents(left)) === JSON.stringify(normalizeManagedPostgresComponents(right));
+}
+
+type ManagedPostgresRuntimeMatch = {
+  current: boolean;
+  reason: string;
+};
+
+function managedPostgresRuntimeMatch(prefix: string, sourceLockPath: string): ManagedPostgresRuntimeMatch {
+  const sbomPath = path.join(prefix, "managed-postgres-sbom.json");
+  const manifestPath = path.join(prefix, "manifest.json");
+  if (!fs.existsSync(manifestPath)) return { current: false, reason: `missing manifest: ${manifestPath}` };
+  if (!fs.existsSync(sbomPath)) return { current: false, reason: `missing SBOM: ${sbomPath}` };
+  if (!fs.existsSync(sourceLockPath)) return { current: false, reason: `missing source lock: ${sourceLockPath}` };
+  const sourceLock = readJsonFile<{ schema?: string; arch?: string; components?: unknown }>(sourceLockPath);
+  const sbom = readJsonFile<{ schema?: string; arch?: string; source_lock?: { schema?: string }; components?: unknown }>(sbomPath);
+  if (sbom.schema !== "1context.managed-postgres.sbom.v1") return { current: false, reason: `unexpected SBOM schema: ${String(sbom.schema)}` };
+  if (sbom.arch !== sourceLock.arch) return { current: false, reason: `arch mismatch: sbom=${String(sbom.arch)} lock=${String(sourceLock.arch)}` };
+  if (sbom.source_lock?.schema !== sourceLock.schema) {
+    return { current: false, reason: `source lock schema mismatch: sbom=${String(sbom.source_lock?.schema)} lock=${String(sourceLock.schema)}` };
+  }
+  if (!componentsEqual(sbom.components, sourceLock.components)) return { current: false, reason: "source components differ from SBOM components" };
+  return { current: true, reason: "source lock and SBOM match" };
+}
+
+function managedPostgresRuntimeMatchesSourceLock(prefix: string, sourceLockPath: string): boolean {
+  return managedPostgresRuntimeMatch(prefix, sourceLockPath).current;
+}
+
+async function verifyManagedPostgresBundle(target: string): Promise<void> {
+  await runCommand(fromRoot("scripts", "verify-managed-postgres-bundle.sh"), ["--require-sbom", target]);
+}
+
+async function prepareManagedPostgresRuntime(ctx: ReleaseContext): Promise<void> {
+  const mode = managedPostgresMode(ctx);
+  if (mode === "off") return;
+  const prefix = managedPostgresRuntimePrefix();
+  const sourceLock = managedPostgresSourceLock();
+  const force = process.env.ONECONTEXT_MANAGED_POSTGRES_REBUILD === "1";
+  const match = managedPostgresRuntimeMatch(prefix, sourceLock);
+  if (!force && match.current) {
+    const verify = await execa("bash", [fromRoot("scripts", "verify-managed-postgres-bundle.sh"), "--require-sbom", prefix], {
+      cwd: ctx.root,
+      env: ctxEnv(ctx),
+      reject: false,
+    });
+    if (verify.exitCode === 0) {
+      console.log(`[release-build] managed Postgres runtime is current: ${prefix}`);
+      return;
+    }
+  }
+  if (force) {
+    console.log("[release-build] managed Postgres runtime rebuild forced by ONECONTEXT_MANAGED_POSTGRES_REBUILD=1.");
+  } else {
+    console.log(`[release-build] managed Postgres runtime is stale: ${match.reason}`);
+  }
+  if (mode === "auto" && process.env.ONECONTEXT_MANAGED_POSTGRES_BUILD_AUTO !== "1") {
+    console.log("[release-build] managed Postgres auto mode did not find a current staged runtime; build step skipped.");
+    return;
+  }
+  const args = ["--dest", prefix, "--source-lock", sourceLock];
+  const jobs = process.env.ONECONTEXT_MANAGED_POSTGRES_BUILD_JOBS?.trim() ?? "";
+  if (jobs) args.push("--jobs", jobs);
+  await runCommand(fromRoot("scripts", "build-managed-postgres-runtime.sh"), args, { env: ctxEnv(ctx) });
+}
+
+function collectManagedPostgresBundleEvidence(ctx: ReleaseContext, appBundlePath: string): void {
+  if (managedPostgresMode(ctx) === "off") return;
+  const outputDir = path.join(ctx.evidenceDir, "perception-db-ultra-max");
+  fs.mkdirSync(outputDir, { recursive: true });
+  const sourceLockPath = managedPostgresSourceLock();
+  const appPrefix = path.join(appBundlePath, "Contents", "Resources", "managed-postgres", "macos-arm64");
+  const manifestPath = path.join(appPrefix, "manifest.json");
+  const sbomPath = path.join(appPrefix, "managed-postgres-sbom.json");
+  assertRelease(fs.existsSync(manifestPath), `Installed app managed Postgres manifest is missing: ${manifestPath}`);
+  assertRelease(fs.existsSync(sbomPath), `Installed app managed Postgres SBOM is missing: ${sbomPath}`);
+  fs.copyFileSync(sourceLockPath, path.join(outputDir, "sources.macos-arm64.json"));
+  fs.copyFileSync(manifestPath, path.join(outputDir, "manifest.json"));
+  fs.copyFileSync(sbomPath, path.join(outputDir, "managed-postgres-sbom.json"));
+  const manifest = readJsonFile<Record<string, unknown>>(manifestPath);
+  const sbom = readJsonFile<{ components?: unknown }>(sbomPath);
+  writeJson(path.join(outputDir, "bundle-summary.json"), {
+    schema_version: "1context.perception-db-ultra-max.release-bundle-summary.v1",
+    channel: ctx.channel,
+    policy: managedPostgresMode(ctx),
+    app: path.join("dist", path.basename(appBundlePath)),
+    app_resource_prefix: path.join("Contents", "Resources", "managed-postgres", "macos-arm64"),
+    source_lock_sha256: sha256File(sourceLockPath),
+    manifest_sha256: sha256File(manifestPath),
+    sbom_sha256: sha256File(sbomPath),
+    bundle: {
+      build_id: manifest.build_id,
+      postgres_major: manifest.postgres_major,
+      postgres_version: manifest.postgres_version,
+      timescale_version: manifest.timescale_version,
+    },
+    components: sbom.components ?? [],
+  });
+}
+
+async function runInstalledManagedPostgresProof(ctx: ReleaseContext, appBundlePath: string, buildEnv: Record<string, string>): Promise<void> {
+  if (managedPostgresMode(ctx) === "off") return;
+  const outputDir = path.join(ctx.evidenceDir, "perception-db-ultra-max");
+  fs.mkdirSync(outputDir, { recursive: true });
+  const ingestSources = process.env.ONECONTEXT_RELEASE_PERCEPTION_DB_INGEST_SOURCES ?? process.env.ONECONTEXT_RELEASE_MANAGED_POSTGRES_INGEST_SOURCES ?? "codex,claude";
+  const maxEvents = process.env.ONECONTEXT_RELEASE_PERCEPTION_DB_MAX_EVENTS ?? process.env.ONECONTEXT_RELEASE_MANAGED_POSTGRES_MAX_EVENTS ?? "1000";
+  const maxLines = process.env.ONECONTEXT_RELEASE_PERCEPTION_DB_MAX_LINES ?? process.env.ONECONTEXT_RELEASE_MANAGED_POSTGRES_MAX_LINES ?? "50000";
+  const requireData = process.env.ONECONTEXT_RELEASE_PERCEPTION_DB_REQUIRE_INGEST_DATA ?? process.env.ONECONTEXT_RELEASE_MANAGED_POSTGRES_REQUIRE_INGEST_DATA ?? "1";
+  const args = [
+    "--app", appBundlePath,
+    "--evidence", path.join(outputDir, "installed-smoke.json"),
+  ];
+  if (ingestSources.trim()) {
+    args.push("--ingest-sources", ingestSources, "--max-events", maxEvents, "--max-lines", maxLines);
+    if (requireData !== "0") args.push("--require-ingest-data");
+  }
+  await runCommand(fromRoot("scripts", "test-installed-app-managed-postgres.sh"), args, { env: ctxEnv(ctx, buildEnv) });
+}
+
 async function collectOfficialReleaseAssets(ctx: ReleaseContext): Promise<void> {
   const artifact = fromRoot("dist", `1Context-${ctx.version}-macos-arm64.dmg`);
   const appcast = fromRoot("dist", "sparkle-updates", "appcast.xml");
@@ -179,6 +343,7 @@ export async function phaseBuild(ctx: ReleaseContext, args: string[]): Promise<v
   const buildEnv: Record<string, string> = {
     ONECONTEXT_VERSION: ctx.version,
     ONECONTEXT_SIGNING_MODE: ctx.policy.signing_mode,
+    ONECONTEXT_MANAGED_POSTGRES_SOURCE_DIR: managedPostgresRuntimePrefix(),
     ...permissionTestBuildEnv(ctx.channel === "dev" ? process.env.ONECONTEXT_PERMISSION_TEST_ID : undefined),
   };
   if (ctx.policy.signing_mode === "apple-development") {
@@ -196,12 +361,17 @@ export async function phaseBuild(ctx: ReleaseContext, args: string[]): Promise<v
     assertRelease(buildEnv.ONECONTEXT_SPARKLE_PUBLIC_ED_KEY.length > 0, `No Sparkle public key found for account '${process.env.SPARKLE_KEY_ACCOUNT ?? "com.haptica.1context.sparkle"}'. Create or restore the Sparkle EdDSA key in the release keychain.`);
   }
 
+  await timeReleaseStep(ctx, "build", "prepare_perception_db_ultra_max_runtime", () => prepareManagedPostgresRuntime(ctx));
+  await timeReleaseStep(ctx, "build", "verify_perception_db_ultra_max_runtime", () => verifyManagedPostgresBundle(managedPostgresRuntimePrefix()));
   await timeReleaseStep(ctx, "build", "build_app_bundle", () => runCommand(fromRoot("scripts", "build-macos-app.sh"), [], { env: ctxEnv(ctx, buildEnv) }));
   const appBundleName = buildEnv.ONECONTEXT_APP_BUNDLE_NAME || ctx.env.ONECONTEXT_APP_BUNDLE_NAME || "1Context";
   const appBundlePath = fromRoot("dist", `${appBundleName}.app`);
+  await timeReleaseStep(ctx, "build", "verify_embedded_perception_db_ultra_max_runtime", () => verifyManagedPostgresBundle(appBundlePath));
+  collectManagedPostgresBundleEvidence(ctx, appBundlePath);
   if (ctx.channel === "dev") {
     await timeReleaseStep(ctx, "build", "create_dmg", () => runCommand(fromRoot("release", "tools", "create-macos-dmg.sh"), [appBundlePath, ctx.dmg], { env: ctxEnv(ctx, buildEnv), stdout: "ignore" }));
     await timeReleaseStep(ctx, "build", "validate_dmg", () => runCommand(fromRoot("release", "tools", "validate-macos-dmg.sh"), [ctx.dmg], { env: ctxEnv(ctx, { ...buildEnv, ALLOW_UNNOTARIZED: "1" }) }));
+    await timeReleaseStep(ctx, "build", "installed_perception_db_ultra_max_smoke", () => runInstalledManagedPostgresProof(ctx, appBundlePath, buildEnv));
     writeReleaseEvidence(ctx, `build-${ctx.channel}`);
     await timeReleaseStep(ctx, "build", "redact_evidence", () => runCommand(fromRoot("release", "tools", "redact-evidence.sh"), [ctx.evidenceDir], { env: ctxEnv(ctx, buildEnv) }));
     await timeReleaseStep(ctx, "build", "audit_evidence_redaction", () => runCommand(fromRoot("release", "tools", "audit-evidence-redaction.sh"), [ctx.evidenceDir], { env: ctxEnv(ctx, buildEnv) }));
@@ -236,6 +406,7 @@ export async function phaseBuild(ctx: ReleaseContext, args: string[]): Promise<v
       fs.copyFileSync(fromRoot("dist", "sparkle-updates", "appcast.xml"), fromRoot("dist", ctx.channel, "appcast.xml"));
     }
   }
+  await timeReleaseStep(ctx, "build", "installed_perception_db_ultra_max_smoke", () => runInstalledManagedPostgresProof(ctx, appBundlePath, buildEnv));
   writeReleaseEvidence(ctx, `build-${ctx.channel}`);
   await timeReleaseStep(ctx, "build", "redact_evidence", () => runCommand(fromRoot("release", "tools", "redact-evidence.sh"), [ctx.evidenceDir], { env: ctxEnv(ctx, buildEnv) }));
   await timeReleaseStep(ctx, "build", "audit_evidence_redaction", () => runCommand(fromRoot("release", "tools", "audit-evidence-redaction.sh"), [ctx.evidenceDir], { env: ctxEnv(ctx, buildEnv) }));

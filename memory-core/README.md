@@ -1,6 +1,6 @@
 # 1Context Memory Core
 
-This directory contains the Python memory engine being integrated behind the
+This directory contains the remaining Python memory helpers used behind the
 public macOS shell.
 
 The public Swift app owns installation, lifecycle, diagnostics, permissions,
@@ -9,9 +9,9 @@ components own the durable infrastructure: Perception DB via
 `onecontext-memoryd`, wiki page lifecycle via `onecontext-wiki-core`, and agent
 provenance via the agent harness.
 
-The Python memory core is now a thin orchestration shim for the wiki-update
-workflow and legacy prompt/job manifests. It should not grow a parallel storage
-system where a mature 1Context surface already exists.
+The Python memory core no longer owns the wiki-company update path. The app
+calls `onecontext-context-engine update-wiki`; Python remains for narrow
+developer-facing memory helpers such as ticks, cycles, and replay dry runs.
 
 The boundary is a subprocess contract. For local development:
 
@@ -36,7 +36,6 @@ memory cycles list --json
 memory cycles show <cycle-id> --json
 memory cycles validate <cycle-id> --json
 memory replay-dry-run --start <ts> --end <ts> [--sources a,b] [--replay-run-id id] --json
-memory update-wiki [options] --json
 ```
 
 Successful output is wrapped as:

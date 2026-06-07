@@ -33,6 +33,7 @@ export function writeReleaseEvidence(ctx: ReleaseContext, phase: string): void {
       redaction_report: "redaction-report.json",
       runner_attestation: "runner-attestation.json",
       timing_summary: "timing-summary.json",
+      perception_db_ultra_max: "perception-db-ultra-max/*.json",
       proof_results: "proof-results/*.json",
     },
   });

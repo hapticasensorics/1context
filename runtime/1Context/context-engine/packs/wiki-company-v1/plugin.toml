@@ -1,0 +1,5 @@
+id = "wiki-company-v1"
+version = "0.1.0"
+schema_version = "0.1"
+title = "Wiki Company V1"
+summary = "The default 1Context wiki company: preserved agent prompts, role identities, job contracts, and the Codex app-server harness."

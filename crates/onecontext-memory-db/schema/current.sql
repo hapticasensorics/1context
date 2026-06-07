@@ -9,6 +9,15 @@ CREATE SCHEMA IF NOT EXISTS app;
 CREATE SCHEMA IF NOT EXISTS perception;
 CREATE SCHEMA IF NOT EXISTS search;
 
+CREATE TABLE IF NOT EXISTS perception.schema_migrations (
+  version BIGINT PRIMARY KEY,
+  name TEXT NOT NULL UNIQUE,
+  checksum TEXT NOT NULL,
+  applied_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  app_version TEXT,
+  destructive_bootstrap BOOLEAN NOT NULL DEFAULT false
+);
+
 CREATE TABLE IF NOT EXISTS app.users (
   user_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   email TEXT UNIQUE,

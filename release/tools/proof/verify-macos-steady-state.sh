@@ -60,6 +60,19 @@ assert_diagnose_healthy() {
   grep -q "Local Web:" "$diagnose_file" || fail "local web block missing in $(basename "$diagnose_file")"
   grep -q "  Health: OK" "$diagnose_file" || fail "local web health was not OK in $(basename "$diagnose_file")"
   grep -q "  Setup Ready: yes" "$diagnose_file" || fail "setup was not ready in $(basename "$diagnose_file")"
+  grep -q "  Storage:" "$diagnose_file" || fail "memory storage block missing in $(basename "$diagnose_file")"
+  grep -q "    Backend: managed_postgres" "$diagnose_file" || fail "memory storage backend was not managed_postgres in $(basename "$diagnose_file")"
+  grep -q "    Status: ready" "$diagnose_file" || fail "Perception DB Ultra Max was not ready in $(basename "$diagnose_file")"
+  grep -q "    Storage Ready: yes" "$diagnose_file" || fail "Perception DB Ultra Max storage readiness was not yes in $(basename "$diagnose_file")"
+  grep -q "    Schema State: valid" "$diagnose_file" || fail "Perception DB Ultra Max schema state was not valid in $(basename "$diagnose_file")"
+  grep -q "    Extension timescaledb: installed" "$diagnose_file" || fail "TimescaleDB extension was not installed in $(basename "$diagnose_file")"
+  grep -q "    Extension timescaledb: .*preload=yes" "$diagnose_file" || fail "TimescaleDB preload was not active in $(basename "$diagnose_file")"
+  grep -q "    Extension pg_stat_statements: installed" "$diagnose_file" || fail "pg_stat_statements extension was not installed in $(basename "$diagnose_file")"
+  grep -q "    Extension pg_stat_statements: .*preload=yes" "$diagnose_file" || fail "pg_stat_statements preload was not active in $(basename "$diagnose_file")"
+  if lsof -nP -iTCP:15432 -sTCP:LISTEN >/dev/null 2>&1; then
+    lsof -nP -iTCP:15432 -sTCP:LISTEN > "$EVIDENCE_DIR/tcp-15432-listener-$name.txt" 2>&1 || true
+    fail "TCP listener exists on 15432 during $name"
+  fi
   grep -Eq "state = running|pid = [0-9]+" "$runtime_launchctl" || fail "runtime launch agent was not running in $(basename "$runtime_launchctl")"
   grep -q "path =" "$menu_launchctl" || fail "menu launch agent was not loaded in $(basename "$menu_launchctl")"
   assert_menu_alive "$name"

@@ -71,7 +71,7 @@ let package = Package(
     ),
     .executableTarget(
       name: "OneContextCLI",
-      dependencies: ["OneContextCore", "OneContextPlatform", "OneContextProtocol", "OneContextSupervisor", "OneContextInstall", "OneContextLocalWeb", "OneContextSetup", "OneContextUpdate", "OneContextCapture"]
+      dependencies: ["OneContextCore", "OneContextPlatform", "OneContextProtocol", "OneContextSupervisor", "OneContextInstall", "OneContextLocalWeb", "OneContextSetup", "OneContextUpdate", "OneContextCapture", "OneContextMemoryRuntime"]
     ),
     .executableTarget(
       name: "OneContextDaemon",

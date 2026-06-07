@@ -102,12 +102,82 @@ public struct MemorySearchTextQuery: Sendable {
   }
 }
 
+public struct MemoryStorageHealthQuery: Sendable {
+  public let reason: String?
+
+  public init(reason: String? = nil) {
+    self.reason = reason?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
+  }
+}
+
+public struct MemoryEnsureStorageReadyQuery: Sendable {
+  public let reason: String
+  public let repair: Bool
+
+  public init(reason: String = "swift", repair: Bool = false) {
+    self.reason = reason.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty ?? "swift"
+    self.repair = repair
+  }
+}
+
+public struct MemoryEnsureRecentBackfillQuery: Sendable {
+  public let reason: String
+  public let windowHours: Int
+  public let blockUntilReady: Bool
+  public let minDensityBuckets: Int?
+
+  public init(
+    reason: String = "swift",
+    windowHours: Int = 72,
+    blockUntilReady: Bool = false,
+    minDensityBuckets: Int? = nil
+  ) {
+    self.reason = reason.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty ?? "swift"
+    self.windowHours = max(windowHours, 1)
+    self.blockUntilReady = blockUntilReady
+    self.minDensityBuckets = minDensityBuckets.map { max($0, 1) }
+  }
+}
+
+public struct MemoryRepairStorageQuery: Sendable {
+  public let reason: String
+
+  public init(reason: String = "swift") {
+    self.reason = reason.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty ?? "swift"
+  }
+}
+
+public struct MemoryStorageLifecycleQuery: Sendable {
+  public let reason: String
+
+  public init(reason: String = "swift") {
+    self.reason = reason.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty ?? "swift"
+  }
+}
+
+public struct MemoryStorageDiagnosticsQuery: Sendable {
+  public let includeLogs: Bool
+  public let redact: Bool
+
+  public init(includeLogs: Bool = false, redact: Bool = true) {
+    self.includeLogs = includeLogs
+    self.redact = redact
+  }
+}
+
 public enum MemoryProtocolRequest: Sendable {
   case viewport(MemoryViewportQuery)
   case objectHydration(MemoryObjectHydrationQuery)
   case density(MemoryDensityQuery)
   case edges(MemoryEdgesQuery)
   case searchText(MemorySearchTextQuery)
+  case storageHealth(MemoryStorageHealthQuery)
+  case ensureStorageReady(MemoryEnsureStorageReadyQuery)
+  case ensureRecentBackfill(MemoryEnsureRecentBackfillQuery)
+  case repairStorage(MemoryRepairStorageQuery)
+  case stopStorage(MemoryStorageLifecycleQuery)
+  case restartStorage(MemoryStorageLifecycleQuery)
+  case storageDiagnostics(MemoryStorageDiagnosticsQuery)
 }
 
 public struct MemoryProtocolResponse {
@@ -141,6 +211,34 @@ public extension MemoryProtocolClient {
 
   func searchText(_ query: MemorySearchTextQuery) throws -> MemoryProtocolResponse {
     try send(.searchText(query))
+  }
+
+  func storageHealth(_ query: MemoryStorageHealthQuery = MemoryStorageHealthQuery()) throws -> MemoryProtocolResponse {
+    try send(.storageHealth(query))
+  }
+
+  func ensureStorageReady(_ query: MemoryEnsureStorageReadyQuery = MemoryEnsureStorageReadyQuery()) throws -> MemoryProtocolResponse {
+    try send(.ensureStorageReady(query))
+  }
+
+  func ensureRecentBackfill(_ query: MemoryEnsureRecentBackfillQuery = MemoryEnsureRecentBackfillQuery()) throws -> MemoryProtocolResponse {
+    try send(.ensureRecentBackfill(query))
+  }
+
+  func repairStorage(_ query: MemoryRepairStorageQuery = MemoryRepairStorageQuery()) throws -> MemoryProtocolResponse {
+    try send(.repairStorage(query))
+  }
+
+  func stopStorage(_ query: MemoryStorageLifecycleQuery = MemoryStorageLifecycleQuery()) throws -> MemoryProtocolResponse {
+    try send(.stopStorage(query))
+  }
+
+  func restartStorage(_ query: MemoryStorageLifecycleQuery = MemoryStorageLifecycleQuery()) throws -> MemoryProtocolResponse {
+    try send(.restartStorage(query))
+  }
+
+  func storageDiagnostics(_ query: MemoryStorageDiagnosticsQuery = MemoryStorageDiagnosticsQuery()) throws -> MemoryProtocolResponse {
+    try send(.storageDiagnostics(query))
   }
 }
 
@@ -216,6 +314,41 @@ public final class MemoryProtocolProcessClient: MemoryProtocolClient, @unchecked
         arguments: protocolArguments("memory.searchText"),
         standardInput: protocolRequest(method: "memory.searchText", params: searchTextParams(query))
       )
+    case .storageHealth(let query):
+      return try run(
+        arguments: protocolArguments("memory.storageHealth"),
+        standardInput: protocolRequest(method: "memory.storageHealth", params: storageHealthParams(query))
+      )
+    case .ensureStorageReady(let query):
+      return try run(
+        arguments: protocolArguments("memory.ensureStorageReady"),
+        standardInput: protocolRequest(method: "memory.ensureStorageReady", params: ensureStorageReadyParams(query))
+      )
+    case .ensureRecentBackfill(let query):
+      return try run(
+        arguments: protocolArguments("memory.ensureRecentBackfill"),
+        standardInput: protocolRequest(method: "memory.ensureRecentBackfill", params: ensureRecentBackfillParams(query))
+      )
+    case .repairStorage(let query):
+      return try run(
+        arguments: protocolArguments("memory.repairStorage"),
+        standardInput: protocolRequest(method: "memory.repairStorage", params: repairStorageParams(query))
+      )
+    case .stopStorage(let query):
+      return try run(
+        arguments: protocolArguments("memory.stopStorage"),
+        standardInput: protocolRequest(method: "memory.stopStorage", params: storageLifecycleParams(query))
+      )
+    case .restartStorage(let query):
+      return try run(
+        arguments: protocolArguments("memory.restartStorage"),
+        standardInput: protocolRequest(method: "memory.restartStorage", params: storageLifecycleParams(query))
+      )
+    case .storageDiagnostics(let query):
+      return try run(
+        arguments: protocolArguments("memory.storageDiagnostics"),
+        standardInput: protocolRequest(method: "memory.storageDiagnostics", params: storageDiagnosticsParams(query))
+      )
     }
   }
 
@@ -234,10 +367,7 @@ public final class MemoryProtocolProcessClient: MemoryProtocolClient, @unchecked
   }
 
   private func viewportParams(_ query: MemoryViewportQuery) -> [String: Any] {
-    var filters: [String: Any] = [:]
-    if let source = query.filterSource {
-      filters["source_types"] = [source]
-    }
+    let filters = sourceFilters(query.filterSource.map { [$0] } ?? [])
     let time = viewportTimeRange(startTime: query.startTime, endTime: query.endTime)
     return [
       "user_id": Self.localUserID,
@@ -275,10 +405,7 @@ public final class MemoryProtocolProcessClient: MemoryProtocolClient, @unchecked
     if let endTime = query.endTime?.trimmingCharacters(in: .whitespacesAndNewlines), !endTime.isEmpty {
       time["end"] = endTime
     }
-    var filters: [String: Any] = [:]
-    if !query.sources.isEmpty {
-      filters["source_types"] = query.sources
-    }
+    let filters = sourceFilters(query.sources)
     return [
       "user_id": Self.localUserID,
       "time": time,
@@ -303,15 +430,83 @@ public final class MemoryProtocolProcessClient: MemoryProtocolClient, @unchecked
   }
 
   private func searchTextParams(_ query: MemorySearchTextQuery) -> [String: Any] {
-    var filters: [String: Any] = [:]
-    if let source = query.filterSource {
-      filters["source_types"] = [source]
-    }
+    let filters = sourceFilters(query.filterSource.map { [$0] } ?? [])
     return [
       "user_id": Self.localUserID,
       "query": query.query,
       "filters": filters,
       "limit": query.cappedLimit
+    ]
+  }
+
+  private func sourceFilters(_ sources: [String]) -> [String: Any] {
+    let normalizedSources = sources
+      .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+      .filter { !$0.isEmpty && $0 != "all" }
+    var sourceIDs: [String] = []
+    var sourceTypes: [String] = []
+    var sourceKeys: [String] = []
+    for source in normalizedSources {
+      if UUID(uuidString: source) != nil {
+        sourceIDs.append(source)
+      } else if source.contains(".") {
+        sourceKeys.append(source)
+      } else {
+        sourceTypes.append(source)
+      }
+    }
+    var filters: [String: Any] = [:]
+    if !sourceIDs.isEmpty {
+      filters["source_ids"] = sourceIDs
+    }
+    if !sourceTypes.isEmpty {
+      filters["source_types"] = sourceTypes
+    }
+    if !sourceKeys.isEmpty {
+      filters["source_keys"] = sourceKeys
+    }
+    return filters
+  }
+
+  private func storageHealthParams(_ query: MemoryStorageHealthQuery) -> [String: Any] {
+    var params: [String: Any] = [:]
+    if let reason = query.reason {
+      params["reason"] = reason
+    }
+    return params
+  }
+
+  private func ensureStorageReadyParams(_ query: MemoryEnsureStorageReadyQuery) -> [String: Any] {
+    [
+      "reason": query.reason,
+      "repair": query.repair
+    ]
+  }
+
+  private func ensureRecentBackfillParams(_ query: MemoryEnsureRecentBackfillQuery) -> [String: Any] {
+    var params: [String: Any] = [
+      "reason": query.reason,
+      "window_hours": query.windowHours,
+      "block_until_ready": query.blockUntilReady
+    ]
+    if let minDensityBuckets = query.minDensityBuckets {
+      params["min_density_buckets"] = minDensityBuckets
+    }
+    return params
+  }
+
+  private func repairStorageParams(_ query: MemoryRepairStorageQuery) -> [String: Any] {
+    ["reason": query.reason]
+  }
+
+  private func storageLifecycleParams(_ query: MemoryStorageLifecycleQuery) -> [String: Any] {
+    ["reason": query.reason]
+  }
+
+  private func storageDiagnosticsParams(_ query: MemoryStorageDiagnosticsQuery) -> [String: Any] {
+    [
+      "include_logs": query.includeLogs,
+      "redact": query.redact
     ]
   }
 

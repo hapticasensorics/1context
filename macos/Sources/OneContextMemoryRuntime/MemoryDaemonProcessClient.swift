@@ -3,8 +3,6 @@ import Foundation
 import OneContextCore
 import OneContextPlatform
 
-private let defaultDevMemoryDatabaseURL = "postgres://onecontext:onecontext_dev@127.0.0.1:15432/onecontext_memory?connect_timeout=1"
-
 public struct MemoryDaemonSnapshot {
   public let configured: Bool
   public let running: Bool
@@ -42,6 +40,14 @@ public struct MemoryDaemonProcessError: Error, LocalizedError {
 }
 
 public final class MemoryDaemonProcessClient: @unchecked Sendable {
+  private struct PIDRecord {
+    let pid: Int32
+    let executable: String?
+    let startedAtMilliseconds: Int?
+    let kind: String?
+    let trusted: Bool
+  }
+
   private let runtimePaths: RuntimePaths
   private let fileManager: FileManager
   private let environment: [String: String]
@@ -63,7 +69,7 @@ public final class MemoryDaemonProcessClient: @unchecked Sendable {
   ) {
     self.runtimePaths = runtimePaths
     self.fileManager = fileManager
-    self.environment = Self.environmentWithDevMemoryDefaults(
+    self.environment = Self.environmentWithStorageDefaults(
       environment,
       identity: runtimePaths.identity
     )
@@ -89,7 +95,7 @@ public final class MemoryDaemonProcessClient: @unchecked Sendable {
     do {
       try RuntimePermissions.ensurePrivateDirectory(runtimePaths.runDirectory)
       try RuntimePermissions.ensurePrivateDirectory(runtimePaths.contextEngineDirectory)
-      terminateExistingHelperIfNeeded(log: log)
+      terminateExistingHelperIfNeeded(expectedExecutable: executable, log: log)
       let process = Process()
       process.executableURL = executable
       process.arguments = daemonArguments()
@@ -117,6 +123,8 @@ public final class MemoryDaemonProcessClient: @unchecked Sendable {
   }
 
   public func stop() {
+    _ = try? stopStorage(MemoryStorageLifecycleQuery(reason: "app-shutdown"))
+
     processLock.lock()
     let process = self.process
     self.process = nil
@@ -204,6 +212,55 @@ public final class MemoryDaemonProcessClient: @unchecked Sendable {
       .payload
   }
 
+  public func storageHealth(_ query: MemoryStorageHealthQuery = MemoryStorageHealthQuery()) throws -> [String: Any] {
+    try MemoryProtocolClientFactory
+      .make(configuration: protocolConfiguration())
+      .storageHealth(query)
+      .payload
+  }
+
+  public func ensureStorageReady(_ query: MemoryEnsureStorageReadyQuery = MemoryEnsureStorageReadyQuery()) throws -> [String: Any] {
+    try MemoryProtocolClientFactory
+      .make(configuration: protocolConfiguration())
+      .ensureStorageReady(query)
+      .payload
+  }
+
+  public func ensureRecentBackfill(_ query: MemoryEnsureRecentBackfillQuery = MemoryEnsureRecentBackfillQuery()) throws -> [String: Any] {
+    try MemoryProtocolClientFactory
+      .make(configuration: protocolConfiguration())
+      .ensureRecentBackfill(query)
+      .payload
+  }
+
+  public func repairStorage(_ query: MemoryRepairStorageQuery = MemoryRepairStorageQuery()) throws -> [String: Any] {
+    try MemoryProtocolClientFactory
+      .make(configuration: protocolConfiguration())
+      .repairStorage(query)
+      .payload
+  }
+
+  public func stopStorage(_ query: MemoryStorageLifecycleQuery = MemoryStorageLifecycleQuery()) throws -> [String: Any] {
+    try MemoryProtocolClientFactory
+      .make(configuration: protocolConfiguration())
+      .stopStorage(query)
+      .payload
+  }
+
+  public func restartStorage(_ query: MemoryStorageLifecycleQuery = MemoryStorageLifecycleQuery()) throws -> [String: Any] {
+    try MemoryProtocolClientFactory
+      .make(configuration: protocolConfiguration())
+      .restartStorage(query)
+      .payload
+  }
+
+  public func storageDiagnostics(_ query: MemoryStorageDiagnosticsQuery = MemoryStorageDiagnosticsQuery()) throws -> [String: Any] {
+    try MemoryProtocolClientFactory
+      .make(configuration: protocolConfiguration())
+      .storageDiagnostics(query)
+      .payload
+  }
+
   public func viewport(limit: Int = 200, source: String? = nil) throws -> [String: Any] {
     try queryViewport(MemoryViewportQuery(limit: limit, source: source))
   }
@@ -231,19 +288,37 @@ public final class MemoryDaemonProcessClient: @unchecked Sendable {
     return env
   }
 
-  private static func environmentWithDevMemoryDefaults(
+  private static func environmentWithStorageDefaults(
     _ environment: [String: String],
     identity: OneContextAppIdentity
   ) -> [String: String] {
-    guard identity.kind == .dev else { return environment }
     var env = environment
-    if env["ONECONTEXT_MEMORY_DB_URL"]?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty != false,
-      env["ONECONTEXT_MEMORY_DATABASE_URL"]?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty != false,
-      env["DATABASE_URL"]?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty != false
-    {
-      env["ONECONTEXT_MEMORY_DB_URL"] = defaultDevMemoryDatabaseURL
+    let explicitDatabaseURL = normalizedExplicitDatabaseURL(from: env)
+    if let explicitDatabaseURL {
+      env["ONECONTEXT_MEMORY_DB_URL"] = explicitDatabaseURL
+    }
+    if env["ONECONTEXT_STORAGE_BACKEND"]?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty != false {
+      env["ONECONTEXT_STORAGE_BACKEND"] = explicitDatabaseURL == nil ? "managed_postgres" : "external_postgres"
+    }
+    if identity.kind == .dev, explicitDatabaseURL == nil {
+      env.removeValue(forKey: "ONECONTEXT_MEMORY_DB_URL")
     }
     return env
+  }
+
+  private static func normalizedExplicitDatabaseURL(from environment: [String: String]) -> String? {
+    let keys = [
+      "ONECONTEXT_MEMORY_DB_URL",
+      "ONECONTEXT_MEMORY_DATABASE_URL"
+    ] + (environment["ONECONTEXT_ALLOW_GENERIC_DATABASE_URL"] == "1" ? ["DATABASE_URL"] : [])
+    for key in keys {
+      if let value = environment[key]?.trimmingCharacters(in: .whitespacesAndNewlines),
+        !value.isEmpty
+      {
+        return value
+      }
+    }
+    return nil
   }
 
   private func executableCandidates() -> [URL] {
@@ -285,24 +360,31 @@ public final class MemoryDaemonProcessClient: @unchecked Sendable {
     runtimePaths.runDirectory.appendingPathComponent("memoryd.pid")
   }
 
-  private func terminateExistingHelperIfNeeded(log: @escaping @Sendable (String) -> Void) {
-    guard let text = try? String(contentsOf: pidPath, encoding: .utf8),
-      let pid = Int32(text.trimmingCharacters(in: .whitespacesAndNewlines)),
-      pid > 0,
-      processIsAlive(pid)
-    else {
+  private func terminateExistingHelperIfNeeded(expectedExecutable: URL, log: @escaping @Sendable (String) -> Void) {
+    guard let record = readPIDRecord(), record.pid > 0 else {
+      return
+    }
+    guard processIsAlive(record.pid) else {
+      try? fileManager.removeItem(at: pidPath)
+      return
+    }
+    guard pidRecord(record, matchesExpectedExecutable: expectedExecutable) else {
+      log("memory daemon ignored untrusted pid file pid=\(record.pid)")
+      try? fileManager.removeItem(at: pidPath)
       return
     }
 
-    log("memory daemon terminating stale helper pid=\(pid)")
-    kill(pid, SIGTERM)
+    log("memory daemon terminating stale helper pid=\(record.pid)")
+    kill(record.pid, SIGTERM)
     for _ in 0..<20 {
       usleep(50_000)
-      if !processIsAlive(pid) {
+      if !processIsAlive(record.pid) {
         return
       }
     }
-    kill(pid, SIGKILL)
+    if pidRecord(record, matchesExpectedExecutable: expectedExecutable) {
+      kill(record.pid, SIGKILL)
+    }
   }
 
   private func processIsAlive(_ pid: Int32) -> Bool {
@@ -310,6 +392,72 @@ public final class MemoryDaemonProcessClient: @unchecked Sendable {
       return true
     }
     return errno == EPERM
+  }
+
+  private func readPIDRecord() -> PIDRecord? {
+    guard let data = try? Data(contentsOf: pidPath) else {
+      return nil
+    }
+    if let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+      let pid = int32Value(object["pid"])
+    {
+      return PIDRecord(
+        pid: pid,
+        executable: object["executable"] as? String,
+        startedAtMilliseconds: object["started_at_ms"] as? Int,
+        kind: object["kind"] as? String,
+        trusted: true
+      )
+    }
+    guard let text = String(data: data, encoding: .utf8),
+      let pid = Int32(text.trimmingCharacters(in: .whitespacesAndNewlines))
+    else {
+      return nil
+    }
+    return PIDRecord(
+      pid: pid,
+      executable: nil,
+      startedAtMilliseconds: nil,
+      kind: nil,
+      trusted: false
+    )
+  }
+
+  private func pidRecord(_ record: PIDRecord, matchesExpectedExecutable expectedExecutable: URL) -> Bool {
+    guard record.trusted,
+      record.kind == "onecontext-memoryd",
+      let recordedExecutable = record.executable
+    else {
+      return false
+    }
+    let expectedPath = expectedExecutable.standardizedFileURL.path
+    guard URL(fileURLWithPath: recordedExecutable).standardizedFileURL.path == expectedPath,
+      liveExecutablePath(for: record.pid).map({ URL(fileURLWithPath: $0).standardizedFileURL.path }) == expectedPath
+    else {
+      return false
+    }
+    _ = record.startedAtMilliseconds
+    return true
+  }
+
+  private func liveExecutablePath(for pid: Int32) -> String? {
+    var buffer = [CChar](repeating: 0, count: 4_096)
+    let count = proc_pidpath(pid, &buffer, UInt32(buffer.count))
+    guard count > 0 else {
+      return nil
+    }
+    let bytes = buffer.prefix { $0 != 0 }.map { UInt8(bitPattern: $0) }
+    return String(decoding: bytes, as: UTF8.self)
+  }
+
+  private func int32Value(_ value: Any?) -> Int32? {
+    if let value = value as? Int, value > 0, value <= Int(Int32.max) {
+      return Int32(value)
+    }
+    if let value = value as? NSNumber, value.int64Value > 0, value.int64Value <= Int64(Int32.max) {
+      return value.int32Value
+    }
+    return nil
   }
 
   private func readStatus() -> [String: Any] {

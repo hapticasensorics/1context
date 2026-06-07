@@ -1,0 +1,7 @@
+title: "Talk - For You"
+talk_for: "mailbox://page/for-you"
+page: "user-wiki://source/families/for-you/for-you/source/for-you.md"
+route: "/for-you"
+talk_route: "/for-you/talk"
+status: open
+schema_version: 1

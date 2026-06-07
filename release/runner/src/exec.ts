@@ -23,7 +23,9 @@ export async function runCommand(command: string, args: string[] = [], options: 
   const base = useInheritedStdio
     ? { cwd: repoRoot, env: process.env, stdio: "inherit" as const }
     : { cwd: repoRoot, env: process.env };
-  await execa(command, args, {
+  const executable = command.endsWith(".sh") ? "bash" : command;
+  const executableArgs = command.endsWith(".sh") ? [command, ...args] : args;
+  await execa(executable, executableArgs, {
     ...base,
     ...options,
   });

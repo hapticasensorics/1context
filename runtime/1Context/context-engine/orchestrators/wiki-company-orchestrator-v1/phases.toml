@@ -1,0 +1,48 @@
+[[phases]]
+id = "import_perception"
+label = "Import source events"
+owner = "onecontext-context-engine"
+reads_raw_history = false
+durable_receipt = "context-engine/mail/threads/wiki-company.jsonl"
+
+[[phases]]
+id = "plan_scribe_packets"
+label = "Plan bounded scribe packets"
+owner = "onecontext-context-engine"
+reads_raw_history = false
+durable_receipt = "context-engine/mail/threads/wiki-company.jsonl"
+
+[[phases]]
+id = "wake_scribes"
+label = "Wake scribe agents"
+owner = "onecontext-agent-harness"
+reads_raw_history = true
+durable_receipt = "context-engine/mail/threads/wiki-company.jsonl"
+
+[[phases]]
+id = "for_you_editor"
+label = "Review proposals and current For You page"
+owner = "onecontext-agent-harness"
+reads_raw_history = false
+durable_receipt = "context-engine/mail/threads/wiki-company.jsonl"
+
+[[phases]]
+id = "specialists"
+label = "Wake biographer, librarian, historian, and contradiction roles as needed"
+owner = "onecontext-agent-harness"
+reads_raw_history = false
+durable_receipt = "context-engine/mail/threads/wiki-company.jsonl"
+
+[[phases]]
+id = "curators"
+label = "Curate accepted page changes"
+owner = "onecontext-agent-harness"
+reads_raw_history = false
+durable_receipt = "context-engine/mail/threads/wiki-company.jsonl"
+
+[[phases]]
+id = "publish"
+label = "Write pages and publish wiki"
+owner = "onecontext-wiki-core"
+reads_raw_history = false
+durable_receipt = "context-engine/mail/threads/wiki-company.jsonl"

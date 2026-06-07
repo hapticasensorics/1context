@@ -17,6 +17,7 @@ private enum Constants {
   static let localWebStartupRetryDelays: [TimeInterval] = [1, 3, 10]
   static let setupReadinessPollInterval: TimeInterval = 1
   static let setupReadinessPollTimeout: TimeInterval = 120
+  static let wikiUpdateRPCTimeout: TimeInterval = 20 * 60
   static let lastLaunchedVersionDefaultsKey = "OneContextLastLaunchedVersion"
   static let lastShownPostInstallVersionDefaultsKey = "OneContextLastShownPostInstallMessageVersion"
 }
@@ -618,6 +619,18 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
   private let settingsItem = NSMenuItem(title: "Settings", action: nil, keyEquivalent: "")
   private let settingsMenu = NSMenu()
   private let versionItem = NSMenuItem(title: "", action: nil, keyEquivalent: "")
+  private let autoUpdateCadenceItem = NSMenuItem(title: "Auto-Update", action: nil, keyEquivalent: "")
+  private let autoUpdateCadenceMenu = NSMenu()
+  private let autoUpdateDisabledItem = NSMenuItem(title: "Disabled", action: #selector(setWikiAutoUpdateCadence), keyEquivalent: "")
+  private let autoUpdateTwelveHoursItem = NSMenuItem(title: "12 Hrs", action: #selector(setWikiAutoUpdateCadence), keyEquivalent: "")
+  private let autoUpdateOneHourItem = NSMenuItem(title: "1 Hr", action: #selector(setWikiAutoUpdateCadence), keyEquivalent: "")
+  private let autoUpdateConstantItem = NSMenuItem(title: "Constant", action: #selector(setWikiAutoUpdateCadence), keyEquivalent: "")
+  private let agentConcurrencyLimitItem = NSMenuItem(title: "Agent Limit", action: nil, keyEquivalent: "")
+  private let agentConcurrencyLimitMenu = NSMenu()
+  private let agentConcurrencyThreeItem = NSMenuItem(title: "3", action: #selector(setWikiAgentConcurrencyLimit), keyEquivalent: "")
+  private let agentConcurrencyFiveItem = NSMenuItem(title: "5", action: #selector(setWikiAgentConcurrencyLimit), keyEquivalent: "")
+  private let agentConcurrencyTwelveItem = NSMenuItem(title: "12", action: #selector(setWikiAgentConcurrencyLimit), keyEquivalent: "")
+  private let agentConcurrencyNoLimitItem = NSMenuItem(title: "No Limit", action: #selector(setWikiAgentConcurrencyLimit), keyEquivalent: "")
   private let autoPublishCadenceItem = NSMenuItem(title: "Auto-Publish", action: nil, keyEquivalent: "")
   private let autoPublishCadenceMenu = NSMenu()
   private let autoPublishNoLimitItem = NSMenuItem(title: "No Limit", action: #selector(setWikiAutoPublishCadence), keyEquivalent: "")
@@ -932,6 +945,26 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
 
     versionItem.isEnabled = false
     settingsMenu.addItem(versionItem)
+    autoUpdateDisabledItem.representedObject = WikiAutomaticUpdateCadence.disabled.rawValue
+    autoUpdateTwelveHoursItem.representedObject = WikiAutomaticUpdateCadence.twelveHours.rawValue
+    autoUpdateOneHourItem.representedObject = WikiAutomaticUpdateCadence.oneHour.rawValue
+    autoUpdateConstantItem.representedObject = WikiAutomaticUpdateCadence.constant.rawValue
+    autoUpdateCadenceMenu.addItem(autoUpdateDisabledItem)
+    autoUpdateCadenceMenu.addItem(autoUpdateTwelveHoursItem)
+    autoUpdateCadenceMenu.addItem(autoUpdateOneHourItem)
+    autoUpdateCadenceMenu.addItem(autoUpdateConstantItem)
+    autoUpdateCadenceItem.submenu = autoUpdateCadenceMenu
+    settingsMenu.addItem(autoUpdateCadenceItem)
+    agentConcurrencyThreeItem.representedObject = WikiAgentConcurrencyLimit.three.rawValue
+    agentConcurrencyFiveItem.representedObject = WikiAgentConcurrencyLimit.five.rawValue
+    agentConcurrencyTwelveItem.representedObject = WikiAgentConcurrencyLimit.twelve.rawValue
+    agentConcurrencyNoLimitItem.representedObject = WikiAgentConcurrencyLimit.noLimit.rawValue
+    agentConcurrencyLimitMenu.addItem(agentConcurrencyThreeItem)
+    agentConcurrencyLimitMenu.addItem(agentConcurrencyFiveItem)
+    agentConcurrencyLimitMenu.addItem(agentConcurrencyTwelveItem)
+    agentConcurrencyLimitMenu.addItem(agentConcurrencyNoLimitItem)
+    agentConcurrencyLimitItem.submenu = agentConcurrencyLimitMenu
+    settingsMenu.addItem(agentConcurrencyLimitItem)
     autoPublishNoLimitItem.representedObject = WikiAutomaticPublishCadence.noLimit.rawValue
     autoPublishOneMinuteItem.representedObject = WikiAutomaticPublishCadence.oneMinute.rawValue
     autoPublishThirtyMinutesItem.representedObject = WikiAutomaticPublishCadence.thirtyMinutes.rawValue
@@ -955,6 +988,16 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
       refreshWikiItem,
       settingsItem,
       versionItem,
+      autoUpdateCadenceItem,
+      autoUpdateDisabledItem,
+      autoUpdateTwelveHoursItem,
+      autoUpdateOneHourItem,
+      autoUpdateConstantItem,
+      agentConcurrencyLimitItem,
+      agentConcurrencyThreeItem,
+      agentConcurrencyFiveItem,
+      agentConcurrencyTwelveItem,
+      agentConcurrencyNoLimitItem,
       autoPublishCadenceItem,
       autoPublishNoLimitItem,
       autoPublishOneMinuteItem,
@@ -996,6 +1039,22 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
     let setupReady = cachedRequiredSetupReady
     setupItem.title = isLocalWebSetupInFlight ? "Granting Setup..." : setupReady ? "Setup..." : "Finish Setup..."
     setupItem.isEnabled = true
+    let automaticUpdateCadence = OneContextAppSettings.wikiAutomaticUpdateCadence(
+      preferencesPath: RuntimePaths.current().preferencesPath
+    )
+    autoUpdateCadenceItem.title = "Auto-Update: \(automaticUpdateCadence.title)"
+    autoUpdateDisabledItem.state = automaticUpdateCadence == .disabled ? .on : .off
+    autoUpdateTwelveHoursItem.state = automaticUpdateCadence == .twelveHours ? .on : .off
+    autoUpdateOneHourItem.state = automaticUpdateCadence == .oneHour ? .on : .off
+    autoUpdateConstantItem.state = automaticUpdateCadence == .constant ? .on : .off
+    let agentLimit = OneContextAppSettings.wikiAgentConcurrencyLimit(
+      preferencesPath: RuntimePaths.current().preferencesPath
+    )
+    agentConcurrencyLimitItem.title = "Agent Limit: \(agentLimit.title)"
+    agentConcurrencyThreeItem.state = agentLimit == .three ? .on : .off
+    agentConcurrencyFiveItem.state = agentLimit == .five ? .on : .off
+    agentConcurrencyTwelveItem.state = agentLimit == .twelve ? .on : .off
+    agentConcurrencyNoLimitItem.state = agentLimit == .noLimit ? .on : .off
     let cadence = OneContextAppSettings.wikiAutomaticPublishCadence(
       preferencesPath: RuntimePaths.current().preferencesPath
     )
@@ -1266,6 +1325,40 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
     }
   }
 
+  @objc private func setWikiAutoUpdateCadence(_ sender: NSMenuItem) {
+    guard let rawValue = sender.representedObject as? String,
+      let cadence = WikiAutomaticUpdateCadence.parse(rawValue)
+    else {
+      return
+    }
+    do {
+      try OneContextAppSettings.setWikiAutomaticUpdateCadence(
+        cadence,
+        preferencesPath: RuntimePaths.current().preferencesPath
+      )
+      refreshMenuItems()
+    } catch {
+      presentMenuAlert("Could not save wiki auto-update setting.")
+    }
+  }
+
+  @objc private func setWikiAgentConcurrencyLimit(_ sender: NSMenuItem) {
+    guard let rawValue = sender.representedObject as? String,
+      let limit = WikiAgentConcurrencyLimit.parse(rawValue)
+    else {
+      return
+    }
+    do {
+      try OneContextAppSettings.setWikiAgentConcurrencyLimit(
+        limit,
+        preferencesPath: RuntimePaths.current().preferencesPath
+      )
+      refreshMenuItems()
+    } catch {
+      presentMenuAlert("Could not save wiki agent limit setting.")
+    }
+  }
+
   private func showSetupWindow(message: String?) {
     updateSetupWindow(message: message)
     setupWindowController.showWindow(nil)
@@ -1368,22 +1461,20 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate
     Task {
       do {
         _ = try await RuntimeController().start(startMenu: false)
+        let agentLimit = OneContextAppSettings.wikiAgentConcurrencyLimit(
+          preferencesPath: RuntimePaths.current().preferencesPath
+        )
         _ = try await runtimeRPC(
-          "memory.update_wiki",
+          "context_engine.update_wiki",
           params: [
-            "provider": "codex",
-            "import_sources": true,
-            "import_ticks": 4,
-            "source_window_days": 30,
-            "source_max_events": 5_000,
-            "source_max_lines": 250_000,
-            "source_query_limit": 2_400,
-            "source_cursor_name": "wiki_agent_sessions_v1",
+            "execute_agents": true,
+            "max_concurrent": agentLimit.contextEngineArgumentValue,
+            "source_window_days": 3,
             "trigger": "menu.update_wiki"
           ],
-          timeout: 240
+          timeout: Constants.wikiUpdateRPCTimeout
         )
-        _ = try await waitForWikiRunning(timeout: 240)
+        _ = try await waitForWikiRunning(timeout: Constants.wikiUpdateRPCTimeout)
         await MainActor.run {
           self.isWikiRefreshInFlight = false
           self.refreshMenuItems()

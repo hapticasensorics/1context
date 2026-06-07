@@ -150,6 +150,12 @@ private struct RuntimeDefaultsManifestDocument: Decodable {
 }
 
 public final class WikiRuntimeDefaultsInstaller: @unchecked Sendable {
+  private static let managedContextEngineDefaultDirectories = [
+    "context-engine/indexes",
+    "context-engine/orchestrators",
+    "context-engine/packs",
+  ]
+
   private let runtimePaths: RuntimePaths
   private let defaultsRoot: URL?
   private let fileManager: FileManager
@@ -222,6 +228,8 @@ public final class WikiRuntimeDefaultsInstaller: @unchecked Sendable {
       try RuntimePermissions.ensurePrivateDirectory(runtimePaths.userContentDirectory)
     }
 
+    copied.append(contentsOf: try syncManagedContextEngineDefaults(sourceRoot: sourceRoot))
+
     guard let enumerator = fileManager.enumerator(
       at: sourceRoot,
       includingPropertiesForKeys: [.isDirectoryKey, .isSymbolicLinkKey],
@@ -244,6 +252,12 @@ public final class WikiRuntimeDefaultsInstaller: @unchecked Sendable {
       if relative.isEmpty { continue }
       let destination = runtimePaths.userContentDirectory.appendingPathComponent(relative)
       let values = try sourceURL.resourceValues(forKeys: [.isDirectoryKey, .isSymbolicLinkKey])
+      if isManagedContextEngineDefault(relative) {
+        if values.isDirectory == true {
+          enumerator.skipDescendants()
+        }
+        continue
+      }
       if relative == ".1context" || relative.hasPrefix(".1context/") {
         if values.isDirectory == true {
           enumerator.skipDescendants()
@@ -288,6 +302,62 @@ public final class WikiRuntimeDefaultsInstaller: @unchecked Sendable {
     )
     try writeLedger(result)
     return result
+  }
+
+  private func syncManagedContextEngineDefaults(sourceRoot: URL) throws -> [String] {
+    var copied: [String] = []
+    for relative in Self.managedContextEngineDefaultDirectories {
+      let source = sourceRoot.appendingPathComponent(relative, isDirectory: true)
+      var isDirectory: ObjCBool = false
+      guard fileManager.fileExists(atPath: source.path, isDirectory: &isDirectory), isDirectory.boolValue else {
+        continue
+      }
+
+      let destination = runtimePaths.userContentDirectory.appendingPathComponent(relative, isDirectory: true)
+      if fileManager.fileExists(atPath: destination.path) {
+        try fileManager.removeItem(at: destination)
+      }
+      try RuntimePermissions.ensurePrivateDirectory(destination.deletingLastPathComponent())
+      try fileManager.copyItem(at: source, to: destination)
+      copied.append(contentsOf: try repairPermissionsAndCollectPaths(at: destination, relative: relative))
+    }
+    return copied
+  }
+
+  private func repairPermissionsAndCollectPaths(at root: URL, relative: String) throws -> [String] {
+    var copied = [relative + "/"]
+    try RuntimePermissions.ensurePrivateDirectory(root)
+
+    guard let enumerator = fileManager.enumerator(
+      at: root,
+      includingPropertiesForKeys: [.isDirectoryKey],
+      options: [],
+      errorHandler: nil
+    ) else {
+      return copied
+    }
+
+    for case let url as URL in enumerator {
+      let itemRelative = self.relativePath(url, under: root)
+      if itemRelative.isEmpty { continue }
+      let path = relative + "/" + itemRelative
+      let values = try url.resourceValues(forKeys: [.isDirectoryKey])
+      if values.isDirectory == true {
+        try RuntimePermissions.ensurePrivateDirectory(url)
+        copied.append(path + "/")
+      } else {
+        RuntimePermissions.ensurePrivateFile(url.path)
+        copied.append(path)
+      }
+    }
+
+    return copied
+  }
+
+  private func isManagedContextEngineDefault(_ relative: String) -> Bool {
+    Self.managedContextEngineDefaultDirectories.contains { managed in
+      relative == managed || relative.hasPrefix(managed + "/")
+    }
   }
 
   private func result(

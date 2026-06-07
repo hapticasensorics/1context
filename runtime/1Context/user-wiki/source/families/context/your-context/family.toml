@@ -1,0 +1,8 @@
+schema_version = 1
+id = "your-context"
+title = "Your Context"
+page_id = "your-context"
+slug = "your-context"
+route = "/your-context"
+type = "context-page"
+template = "pages/e08/your-context.md"

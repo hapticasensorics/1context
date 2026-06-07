@@ -1,0 +1,33 @@
+id = "wiki-company-receipts-v1"
+version = "0.1.0"
+
+[required]
+harness_birth_certificate = true
+harness_turn_start = true
+context_injection_receipt = true
+final_message = true
+talk_append = true
+mail_delivery = true
+harness_turn_complete = true
+
+[final_message]
+path = "final-message.md"
+non_empty = true
+fields = [
+  "status",
+  "evidence",
+  "proposed_wiki_talk",
+  "next_agent_requests",
+  "next_state_machine_event",
+]
+
+[talk_append]
+delivery_mode = "mail"
+thread_id = "job.run_id"
+from = "agent://<unit_id>"
+cc_page_mailbox = true
+
+[completion]
+do_not_count_codex_exit_as_done = true
+require_final_message_and_harness_receipt = true
+require_talk_or_mail_receipt = true

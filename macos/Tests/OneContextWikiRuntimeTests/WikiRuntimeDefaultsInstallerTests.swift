@@ -30,6 +30,18 @@ struct WikiRuntimeDefaultsInstallerTests {
       withIntermediateDirectories: true
     )
     try FileManager.default.createDirectory(
+      at: defaultOneContext.appendingPathComponent("context-engine/indexes", isDirectory: true),
+      withIntermediateDirectories: true
+    )
+    try FileManager.default.createDirectory(
+      at: defaultOneContext.appendingPathComponent("context-engine/orchestrators/wiki-company-orchestrator-v1", isDirectory: true),
+      withIntermediateDirectories: true
+    )
+    try FileManager.default.createDirectory(
+      at: defaultOneContext.appendingPathComponent("context-engine/packs/wiki-company-v1/jobs", isDirectory: true),
+      withIntermediateDirectories: true
+    )
+    try FileManager.default.createDirectory(
       at: defaultOneContext.appendingPathComponent(".1context", isDirectory: true),
       withIntermediateDirectories: true
     )
@@ -50,6 +62,21 @@ struct WikiRuntimeDefaultsInstallerTests {
     )
     try "# Prompt\n".write(
       to: defaultOneContext.appendingPathComponent("context-engine/prompts/agent.md"),
+      atomically: true,
+      encoding: .utf8
+    )
+    try "current index\n".write(
+      to: defaultOneContext.appendingPathComponent("context-engine/indexes/index-manifest.toml"),
+      atomically: true,
+      encoding: .utf8
+    )
+    try "current orchestrator\n".write(
+      to: defaultOneContext.appendingPathComponent("context-engine/orchestrators/wiki-company-orchestrator-v1/orchestrator.toml"),
+      atomically: true,
+      encoding: .utf8
+    )
+    try "id = \"memory.wiki.current\"\nagent = \"curator\"\n".write(
+      to: defaultOneContext.appendingPathComponent("context-engine/packs/wiki-company-v1/jobs/memory.wiki.current.toml"),
       atomically: true,
       encoding: .utf8
     )
@@ -93,6 +120,15 @@ struct WikiRuntimeDefaultsInstallerTests {
       atomically: true,
       encoding: .utf8
     )
+    try FileManager.default.createDirectory(
+      at: paths.userContentDirectory.appendingPathComponent("context-engine/packs/wiki-company-v1/jobs", isDirectory: true),
+      withIntermediateDirectories: true
+    )
+    try "id = \"memory.wiki.build_inputs\"\n".write(
+      to: paths.userContentDirectory.appendingPathComponent("context-engine/packs/wiki-company-v1/jobs/memory.wiki.build_inputs.toml"),
+      atomically: true,
+      encoding: .utf8
+    )
 
     let installer = WikiRuntimeDefaultsInstaller(
       runtimePaths: paths,
@@ -107,6 +143,9 @@ struct WikiRuntimeDefaultsInstallerTests {
     #expect(result.copied.contains("user-wiki/site/index.html"))
     #expect(result.copied.contains("user-wiki/site/.1context/route-manifest.json"))
     #expect(result.copied.contains("context-engine/prompts/agent.md"))
+    #expect(result.copied.contains("context-engine/indexes/index-manifest.toml"))
+    #expect(result.copied.contains("context-engine/orchestrators/wiki-company-orchestrator-v1/orchestrator.toml"))
+    #expect(result.copied.contains("context-engine/packs/wiki-company-v1/jobs/memory.wiki.current.toml"))
     #expect(result.packagedManifest?.releaseVersion == "0.1.test")
     #expect(result.packagedManifest?.runtimeDefaultsSourceHash == "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
     #expect(result.packagedManifest?.wikiCoreHash == "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee")
@@ -123,6 +162,8 @@ struct WikiRuntimeDefaultsInstallerTests {
     #expect(FileManager.default.fileExists(atPath: paths.userWikiSiteDirectory.appendingPathComponent("index.html").path))
     #expect(FileManager.default.fileExists(atPath: paths.userWikiSiteDirectory.appendingPathComponent(".1context/route-manifest.json").path))
     #expect(!FileManager.default.fileExists(atPath: paths.userContentDirectory.appendingPathComponent(".1context/runtime-defaults-manifest.json").path))
+    #expect(FileManager.default.fileExists(atPath: paths.userContentDirectory.appendingPathComponent("context-engine/packs/wiki-company-v1/jobs/memory.wiki.current.toml").path))
+    #expect(!FileManager.default.fileExists(atPath: paths.userContentDirectory.appendingPathComponent("context-engine/packs/wiki-company-v1/jobs/memory.wiki.build_inputs.toml").path))
 
     let ledger = paths.appSupportSetupDirectory.appendingPathComponent("runtime-defaults-install.json")
     #expect(FileManager.default.fileExists(atPath: ledger.path))

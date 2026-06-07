@@ -1,0 +1,18 @@
+id = "for-you-editor"
+version = "0.1.0"
+harness = "codex-app-server"
+provider = "codex"
+model = "gpt-5.5"
+tools = []
+prompt_paths = ["prompts/for-you-editor.md"]
+reference_paths = ["prompts/for-you-editor-task.md", "prompts/wiki-talk-style-guide.md"]
+experience = []
+
+[model_policy]
+reasoning_effort = "high"
+
+[runtime]
+
+[memory]
+mode = "persistent"
+attach = "last_for_job"

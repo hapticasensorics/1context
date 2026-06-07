@@ -155,7 +155,10 @@ fn parse_density_request(request: &QueryDensityRequest) -> ReadResult<ParsedDens
                 .to_string(),
         ));
     }
-    if !request.filters.source_ids.is_empty() || !request.filters.source_types.is_empty() {
+    if !request.filters.source_ids.is_empty()
+        || !request.filters.source_types.is_empty()
+        || !request.filters.source_keys.is_empty()
+    {
         return Err(ReadQueryError::InvalidRequest(
             "queryDensity uses coarse density buckets and does not support source filters"
                 .to_string(),

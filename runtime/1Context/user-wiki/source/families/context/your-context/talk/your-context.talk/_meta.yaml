@@ -1,0 +1,7 @@
+title: "Talk - Your Context"
+talk_for: "mailbox://page/your-context"
+page: "user-wiki://source/families/context/your-context/source/your-context.md"
+route: "/your-context"
+talk_route: "/your-context/talk"
+status: open
+schema_version: 1

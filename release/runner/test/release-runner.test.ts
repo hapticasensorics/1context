@@ -46,6 +46,15 @@ test("manifest validates and exports dev channel policy", async () => {
   assert.equal(env.ONECONTEXT_APP_IDENTITY, "dev");
   assert.equal(env.ONECONTEXT_APP_BUNDLE_NAME, "1Context Dev");
   assert.equal(env.ONECONTEXT_BUNDLE_IDENTIFIER, "com.haptica.1context.dev");
+  assert.equal(env.ONECONTEXT_INCLUDE_MANAGED_POSTGRES, "true");
+});
+
+test("manifest forces Perception DB Ultra Max for every release-factory channel", () => {
+  const manifest = loadManifestFile();
+  for (const channel of ["dev", "prototype", "private", "official"]) {
+    const env = envForManifest(manifest, fromRoot("release", "release.toml"), channel);
+    assert.equal(env.ONECONTEXT_INCLUDE_MANAGED_POSTGRES, "true");
+  }
 });
 
 test("release train dev build dry-run writes timing evidence", async () => {

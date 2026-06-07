@@ -1,0 +1,8 @@
+schema_version = 1
+id = "for-you"
+title = "For You"
+page_id = "for-you"
+slug = "for-you"
+route = "/for-you"
+type = "for-you"
+template = "pages/e08/for-you.md"

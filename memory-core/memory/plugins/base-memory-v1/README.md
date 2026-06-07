@@ -40,7 +40,6 @@ uv run --project memory-core 1context-memory-core memory cycles list --json
 uv run --project memory-core 1context-memory-core memory cycles show <cycle-id> --json
 uv run --project memory-core 1context-memory-core memory cycles validate <cycle-id> --json
 uv run --project memory-core 1context-memory-core memory replay-dry-run --start <ts> --end <ts> --json
-uv run --project memory-core 1context-memory-core memory update-wiki --provider codex --json
 ```
 
 Do not add a broad developer CLI back for convenience. Add explicit contract
@@ -48,7 +47,8 @@ verbs only when the Swift app or a production memory loop actually needs them.
 
 ## Boundaries
 
-- Memory-core owns prompt/job definitions and thin wiki-update orchestration.
+- Memory-core owns legacy prompt/job definitions for inspection and Python memory helpers.
+- `onecontext-context-engine` owns wiki-company orchestration and update execution.
 - `onecontext-memoryd` owns durable Perception DB ingestion and query.
 - `onecontext-wiki-core` owns wiki page lifecycle, talk folders, and publish
   receipts.

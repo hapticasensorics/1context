@@ -52,6 +52,7 @@ pub struct ObjectFiltersRequest {
     pub lane_ids: Vec<String>,
     pub source_ids: Vec<String>,
     pub source_types: Vec<String>,
+    pub source_keys: Vec<String>,
     pub kinds: Vec<String>,
     pub roles: Vec<String>,
     pub privacy_classes: Vec<String>,
@@ -212,6 +213,7 @@ pub struct ParsedReadFilters {
     pub lane_ids: Vec<Uuid>,
     pub source_ids: Vec<Uuid>,
     pub source_types: Vec<String>,
+    pub source_keys: Vec<String>,
     pub kinds: Vec<String>,
     pub roles: Vec<String>,
     pub privacy_classes: Vec<String>,
@@ -281,6 +283,7 @@ pub fn query_viewport(
             &parsed.lane_ids,
             &parsed.source_ids,
             &parsed.source_types,
+            &parsed.source_keys,
             &parsed.kinds,
             &parsed.roles,
             &parsed.privacy_classes,
@@ -345,6 +348,7 @@ pub fn explain_viewport(
             &parsed.lane_ids,
             &parsed.source_ids,
             &parsed.source_types,
+            &parsed.source_keys,
             &parsed.kinds,
             &parsed.roles,
             &parsed.privacy_classes,
@@ -422,6 +426,7 @@ pub fn parse_viewport_request(request: &QueryViewportRequest) -> ReadResult<Pars
         lane_ids: parse_uuid_vec("filters.lane_ids", &request.filters.lane_ids)?,
         source_ids: parse_uuid_vec("filters.source_ids", &request.filters.source_ids)?,
         source_types: clean_text_vec(&request.filters.source_types),
+        source_keys: clean_text_vec(&request.filters.source_keys),
         kinds: clean_text_vec(&request.filters.kinds),
         roles: clean_text_vec(&request.filters.roles),
         privacy_classes: clean_text_vec(&request.filters.privacy_classes),
@@ -663,7 +668,7 @@ WITH viewport_objects AS MATERIALIZED (
     o.display_title,
     left(o.display_text, 512) AS display_text_preview,
     o.blob_id,
-    CASE WHEN $15::bool THEN o.payload ELSE NULL::jsonb END AS payload
+    CASE WHEN $16::bool THEN o.payload ELSE NULL::jsonb END AS payload
   FROM perception.objects o
   WHERE o.user_id = $1
     AND o.event_start >= $2::timestamptz
@@ -671,25 +676,26 @@ WITH viewport_objects AS MATERIALIZED (
     AND ($4::uuid[] = '{}'::uuid[] OR o.lane_id = ANY($4::uuid[]))
     AND ($5::uuid[] = '{}'::uuid[] OR o.source_id = ANY($5::uuid[]))
     AND (
-      $6::text[] = '{}'::text[]
+      ($6::text[] = '{}'::text[] AND $7::text[] = '{}'::text[])
       OR EXISTS (
         SELECT 1
         FROM perception.sources source_filter
         WHERE source_filter.source_id = o.source_id
           AND source_filter.user_id = o.user_id
-          AND source_filter.source_type = ANY($6::text[])
+          AND ($6::text[] = '{}'::text[] OR source_filter.source_type = ANY($6::text[]))
+          AND ($7::text[] = '{}'::text[] OR source_filter.source_key = ANY($7::text[]))
       )
     )
-    AND ($7::text[] = '{}'::text[] OR o.kind = ANY($7::text[]))
-    AND ($8::text[] = '{}'::text[] OR o.role = ANY($8::text[]))
-    AND ($9::text[] = '{}'::text[] OR o.privacy_class = ANY($9::text[]))
-    AND ($10::bool OR o.valid_to IS NULL)
+    AND ($8::text[] = '{}'::text[] OR o.kind = ANY($8::text[]))
+    AND ($9::text[] = '{}'::text[] OR o.role = ANY($9::text[]))
+    AND ($10::text[] = '{}'::text[] OR o.privacy_class = ANY($10::text[]))
+    AND ($11::bool OR o.valid_to IS NULL)
     AND (
-      $11::timestamptz IS NULL
-      OR (o.event_start, o.lane_id, o.object_id) > ($11::timestamptz, $12::uuid, $13::uuid)
+      $12::timestamptz IS NULL
+      OR (o.event_start, o.lane_id, o.object_id) > ($12::timestamptz, $13::uuid, $14::uuid)
     )
   ORDER BY o.event_start ASC, o.lane_id ASC, o.object_id ASC
-  LIMIT $14
+  LIMIT $15
 )
 SELECT
   o.object_id,
@@ -719,7 +725,7 @@ SELECT
   o.display_title,
   o.display_text_preview,
   o.blob_id,
-  CASE WHEN $15::bool THEN o.payload ELSE NULL::jsonb END AS payload,
+  CASE WHEN $16::bool THEN o.payload ELSE NULL::jsonb END AS payload,
   b.content_type AS blob_content_type,
   b.byte_count AS blob_byte_count,
   b.blob_state AS blob_state,
@@ -730,7 +736,7 @@ JOIN perception.series ser
   ON ser.series_id = o.series_id
  AND ser.user_id = o.user_id
 LEFT JOIN perception.blobs b
-  ON $16::bool
+  ON $17::bool
  AND b.blob_id = o.blob_id
  AND b.user_id = o.user_id
 LEFT JOIN LATERAL (
@@ -750,7 +756,7 @@ LEFT JOIN LATERAL (
 	    ) edge_hits
 	    GROUP BY edge_kind
 	  ) edge_counts
-		) ec ON $17::bool
+		) ec ON $18::bool
 	ORDER BY o.event_start ASC, o.lane_id ASC, o.object_id ASC
 		"#;
 
@@ -811,13 +817,34 @@ mod tests {
     #[test]
     fn viewport_payload_projection_is_include_gated() {
         assert!(VIEWPORT_SELECT_SQL
-            .contains("CASE WHEN $15::bool THEN o.payload ELSE NULL::jsonb END AS payload"));
-        assert!(VIEWPORT_SELECT_SQL.contains("ON $16::bool"));
-        assert!(VIEWPORT_SELECT_SQL.contains(") ec ON $17::bool"));
-        assert!(VIEWPORT_SELECT_SQL.contains("LIMIT $14"));
+            .contains("CASE WHEN $16::bool THEN o.payload ELSE NULL::jsonb END AS payload"));
+        assert!(VIEWPORT_SELECT_SQL.contains("ON $17::bool"));
+        assert!(VIEWPORT_SELECT_SQL.contains(") ec ON $18::bool"));
+        assert!(VIEWPORT_SELECT_SQL.contains("LIMIT $15"));
         assert!(VIEWPORT_SELECT_SQL.contains("WITH viewport_objects AS MATERIALIZED"));
         assert!(VIEWPORT_SELECT_SQL.contains("o.event_start >= $2::timestamptz"));
         assert!(VIEWPORT_SELECT_SQL.contains("o.event_start < $3::timestamptz"));
+    }
+
+    #[test]
+    fn viewport_supports_source_key_filters() {
+        let request = QueryViewportRequest {
+            user_id: "10000000-0000-0000-0000-000000000001".to_string(),
+            time: Some(TimeRangeRequest {
+                start: "2026-05-25T09:10:00Z".to_string(),
+                end: "2026-05-25T09:11:00Z".to_string(),
+            }),
+            filters: ObjectFiltersRequest {
+                source_keys: vec!["codex.local_sessions".to_string()],
+                ..ObjectFiltersRequest::default()
+            },
+            ..Default::default()
+        };
+
+        let parsed = parse_viewport_request(&request).unwrap();
+
+        assert_eq!(parsed.source_keys, vec!["codex.local_sessions".to_string()]);
+        assert!(VIEWPORT_SELECT_SQL.contains("source_filter.source_key = ANY($7::text[])"));
     }
 
     #[test]

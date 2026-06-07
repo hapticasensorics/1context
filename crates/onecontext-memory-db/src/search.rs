@@ -100,6 +100,7 @@ struct ParsedSearchTextRequest {
     lane_ids: Vec<Uuid>,
     source_ids: Vec<Uuid>,
     source_types: Vec<String>,
+    source_keys: Vec<String>,
     kinds: Vec<String>,
     roles: Vec<String>,
     privacy_classes: Vec<String>,
@@ -123,6 +124,7 @@ pub fn search_text(
             &parsed.lane_ids,
             &parsed.source_ids,
             &parsed.source_types,
+            &parsed.source_keys,
             &parsed.kinds,
             &parsed.roles,
             &parsed.privacy_classes,
@@ -186,6 +188,7 @@ pub fn explain_search_text(
             &parsed.lane_ids,
             &parsed.source_ids,
             &parsed.source_types,
+            &parsed.source_keys,
             &parsed.kinds,
             &parsed.roles,
             &parsed.privacy_classes,
@@ -227,6 +230,7 @@ fn parse_search_text_request(request: &SearchTextRequest) -> ReadResult<ParsedSe
         lane_ids: parse_uuid_vec("filters.lane_ids", &request.filters.lane_ids)?,
         source_ids: parse_uuid_vec("filters.source_ids", &request.filters.source_ids)?,
         source_types: clean_text_vec(&request.filters.source_types),
+        source_keys: clean_text_vec(&request.filters.source_keys),
         kinds: clean_text_vec(&request.filters.kinds),
         roles: clean_text_vec(&request.filters.roles),
         privacy_classes: clean_text_vec(&request.filters.privacy_classes),
@@ -293,18 +297,19 @@ LEFT JOIN perception.blobs b
   ON b.blob_id = o.blob_id
  AND b.user_id = o.user_id
 WHERE o.user_id = $1
-  AND ($11::bool OR o.valid_to IS NULL)
+  AND ($12::bool OR o.valid_to IS NULL)
   AND o.search_vector @@ plainto_tsquery('simple', $2)
   AND ($3::timestamptz IS NULL OR o.event_end > $3::timestamptz)
   AND ($4::timestamptz IS NULL OR o.event_start < $4::timestamptz)
   AND ($5::uuid[] = '{}'::uuid[] OR o.lane_id = ANY($5::uuid[]))
   AND ($6::uuid[] = '{}'::uuid[] OR o.source_id = ANY($6::uuid[]))
   AND ($7::text[] = '{}'::text[] OR s.source_type = ANY($7::text[]))
-  AND ($8::text[] = '{}'::text[] OR o.kind = ANY($8::text[]))
-  AND ($9::text[] = '{}'::text[] OR o.role = ANY($9::text[]))
-  AND ($10::text[] = '{}'::text[] OR o.privacy_class = ANY($10::text[]))
+  AND ($8::text[] = '{}'::text[] OR s.source_key = ANY($8::text[]))
+  AND ($9::text[] = '{}'::text[] OR o.kind = ANY($9::text[]))
+  AND ($10::text[] = '{}'::text[] OR o.role = ANY($10::text[]))
+  AND ($11::text[] = '{}'::text[] OR o.privacy_class = ANY($11::text[]))
 ORDER BY rank DESC, o.event_start DESC, o.object_id ASC
-LIMIT $12
+LIMIT $13
 "#;
 
 const SEARCH_TEXT_SQL: &str = SEARCH_TEXT_SELECT_SQL;
@@ -328,6 +333,7 @@ mod tests {
             query: "timescale".to_string(),
             filters: ObjectFiltersRequest {
                 source_types: vec!["codex".to_string()],
+                source_keys: vec!["codex.local_sessions".to_string()],
                 include_invalid: true,
                 ..ObjectFiltersRequest::default()
             },
@@ -337,9 +343,11 @@ mod tests {
         let parsed = parse_search_text_request(&request).unwrap();
 
         assert_eq!(parsed.source_types, vec!["codex".to_string()]);
+        assert_eq!(parsed.source_keys, vec!["codex.local_sessions".to_string()]);
         assert!(parsed.include_invalid);
         assert!(SEARCH_TEXT_SELECT_SQL.contains("s.source_type = ANY($7::text[])"));
-        assert!(SEARCH_TEXT_SELECT_SQL.contains("($11::bool OR o.valid_to IS NULL)"));
+        assert!(SEARCH_TEXT_SELECT_SQL.contains("s.source_key = ANY($8::text[])"));
+        assert!(SEARCH_TEXT_SELECT_SQL.contains("($12::bool OR o.valid_to IS NULL)"));
         assert!(SEARCH_TEXT_SELECT_SQL.contains("JOIN perception.series ser"));
         assert!(SEARCH_TEXT_SELECT_SQL.contains("ser.default_lane_id AS series_default_lane_id"));
         assert!(SEARCH_TEXT_SELECT_SQL.contains("o.text_value"));

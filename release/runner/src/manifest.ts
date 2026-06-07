@@ -78,6 +78,7 @@ const ChannelSchema = z.object({
   appcast: z.enum(["none", "private", "public"]),
   public_asset_mutation: z.boolean(),
   proof: z.string().min(1),
+  managed_postgres: z.enum(["off", "auto", "required"]).default("required"),
   budget_is_advisory: z.boolean(),
   budget_validate_seconds: z.number().int().nonnegative(),
   budget_build_seconds: z.number().int().nonnegative(),
@@ -307,6 +308,7 @@ function validateReleaseFactory(manifest: ReleaseManifest): void {
         "dev channel must stay local, Apple Development signed, unnotarized, appcast-free, and non-mutating.",
       );
     }
+    assertRelease(policy.managed_postgres === "required", `release_factory.channels.${name}.managed_postgres must be "required" for release-factory builds.`);
     if (name === "prototype") {
       assertRelease(!policy.requires_tag && policy.appcast === "none" && !policy.public_asset_mutation, "prototype channel must not require a tag, appcast, or public asset mutation.");
       assertRelease(policy.signing_mode === "developer-id" && policy.notarize, "prototype channel must produce a Developer ID notarized DMG.");
@@ -561,6 +563,11 @@ export function envForManifest(manifest: ReleaseManifest, manifestPath: string, 
       : "com.haptica.1context.local-web-proxy",
     ONECONTEXT_DMG_VOLUME_NAME: channel === "dev" ? "1Context Dev" : "1Context",
     ONECONTEXT_EXPECTED_APP_BASENAME: channel === "dev" ? "1Context Dev.app" : "1Context.app",
+    ONECONTEXT_INCLUDE_MANAGED_POSTGRES: channelData.managed_postgres === "off"
+      ? "false"
+      : channelData.managed_postgres === "auto"
+        ? "auto"
+        : "true",
     ONECONTEXT_RELEASE_CHANNEL_REQUIRES_CLEAN_TREE: channelData.requires_clean_tree ? "1" : "0",
     ONECONTEXT_RELEASE_CHANNEL_REQUIRES_TAG: channelData.requires_tag ? "1" : "0",
     ONECONTEXT_RELEASE_CHANNEL_SIGNING_MODE: channelData.signing_mode,

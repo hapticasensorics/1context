@@ -1,0 +1,27 @@
+id = "memory.wiki.librarian_sweep"
+version = "0.1.0"
+label = "Concept Librarian Sweep"
+agent = "librarian"
+tools = []
+prompt_paths = ["prompts/librarian.md", "prompts/operator-touched-convention.md"]
+inputs = ["concept_dir", "recent_for_you_articles", "your_context_article", "talk_folders"]
+outputs = ["removal_proposals", "merge_proposals", "fading_entries", "archival_proposals", "retention_tally"]
+
+[params]
+window_start = "YYYY-MM-DD"
+window_end = "YYYY-MM-DD"
+audience = "private"
+concept_dir = "path"
+workspace = "path"
+cleanup_priority = "aggressive_generated_junk_removal"
+
+[permissions]
+read = ["concept_dir", "recent_articles", "talk_folders"]
+write = ["talk_folders", "proposal_artifacts"]
+deny = ["direct_page_promotion", "operator_touched_sections"]
+
+[completion]
+done = ["concept_sweep.decision_recorded", "junk_sweep.tally_recorded"]
+skip = ["no_stale_concepts"]
+needs_approval = ["archive_candidate_requires_operator"]
+failure = ["missing_concept_dir", "invalid_sweep_entry", "model_error"]

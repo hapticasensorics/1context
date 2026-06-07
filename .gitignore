@@ -2,6 +2,9 @@
 *.log
 tmp/
 runtime-test/
+runtime/managed-postgres/
+.tmp-managed-postgres-build/
+runtime/1Context/user-wiki/.1context/page-lifecycle.lock
 recycle-bin/
 dist/
 target/
@@ -34,3 +37,4 @@ wiki-engine/**/__pycache__/
 *.pyc
 release/runner/node_modules/
 release/runner/dist/
+release/managed-postgres/runtime/

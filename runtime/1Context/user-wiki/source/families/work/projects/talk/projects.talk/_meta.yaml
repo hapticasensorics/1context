@@ -1,0 +1,7 @@
+title: "Talk - Projects"
+talk_for: "mailbox://page/projects"
+page: "user-wiki://source/families/work/projects/source/projects.md"
+route: "/projects"
+talk_route: "/projects/talk"
+status: open
+schema_version: 1
