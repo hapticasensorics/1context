@@ -18,6 +18,7 @@ required_proofs = [
   "release_policy",
   "full_tests",
   "package_smoke",
+  "perception_db_ultra_max",
   "asset_audit",
   "self_hosted_gui_update",
   "real_uninstall_reinstall",

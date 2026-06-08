@@ -749,6 +749,7 @@ fn base_object(
             },
             "source": {
                 "agent_source": session.source.as_str(),
+                "connector_key": connector_key_for_agent_source(session.source),
                 "agent_connector_key": connector_key_for_agent_source(session.source),
                 "source_uri": session.source_uri,
                 "session_id": session.session_id

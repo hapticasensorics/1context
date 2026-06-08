@@ -136,6 +136,12 @@ pub struct PerceptionObjectSummary {
     pub lane_id: String,
     pub source_id: String,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub source_type: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub source_key: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub source_display_name: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub series_id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub series_kind: Option<String>,
@@ -542,6 +548,9 @@ pub fn object_summary_from_row(
         event_end: event_end.to_rfc3339_opts(SecondsFormat::Micros, true),
         lane_id: lane_id.to_string(),
         source_id: source_id.to_string(),
+        source_type: row.try_get("source_type").ok().flatten(),
+        source_key: row.try_get("source_key").ok().flatten(),
+        source_display_name: row.try_get("source_display_name").ok().flatten(),
         series_id: series_id.map(|value| value.to_string()),
         series_kind: row.try_get("series_kind").ok().flatten(),
         series_key: row.try_get("series_key").ok().flatten(),
@@ -649,8 +658,11 @@ WITH viewport_objects AS MATERIALIZED (
     o.event_start,
     o.event_end,
     o.lane_id,
-    o.source_id,
-    o.series_id,
+	  o.source_id,
+	  source.source_type,
+	  source.source_key,
+	  source.display_name AS source_display_name,
+	  o.series_id,
     o.source_record_id,
     o.kind,
     o.role,
@@ -669,21 +681,20 @@ WITH viewport_objects AS MATERIALIZED (
     left(o.display_text, 512) AS display_text_preview,
     o.blob_id,
     CASE WHEN $16::bool THEN o.payload ELSE NULL::jsonb END AS payload
-  FROM perception.objects o
-  WHERE o.user_id = $1
+	  FROM perception.objects o
+	  LEFT JOIN perception.sources source
+	    ON source.source_id = o.source_id
+	   AND source.user_id = o.user_id
+	  WHERE o.user_id = $1
     AND o.event_start >= $2::timestamptz
     AND o.event_start < $3::timestamptz
     AND ($4::uuid[] = '{}'::uuid[] OR o.lane_id = ANY($4::uuid[]))
     AND ($5::uuid[] = '{}'::uuid[] OR o.source_id = ANY($5::uuid[]))
     AND (
       ($6::text[] = '{}'::text[] AND $7::text[] = '{}'::text[])
-      OR EXISTS (
-        SELECT 1
-        FROM perception.sources source_filter
-        WHERE source_filter.source_id = o.source_id
-          AND source_filter.user_id = o.user_id
-          AND ($6::text[] = '{}'::text[] OR source_filter.source_type = ANY($6::text[]))
-          AND ($7::text[] = '{}'::text[] OR source_filter.source_key = ANY($7::text[]))
+      OR (
+        ($6::text[] = '{}'::text[] OR source.source_type = ANY($6::text[]))
+        AND ($7::text[] = '{}'::text[] OR source.source_key = ANY($7::text[]))
       )
     )
     AND ($8::text[] = '{}'::text[] OR o.kind = ANY($8::text[]))
@@ -702,8 +713,11 @@ SELECT
   o.event_start,
   o.event_end,
   o.lane_id,
-  o.source_id,
-  o.series_id,
+	  o.source_id,
+	  o.source_type,
+	  o.source_key,
+	  o.source_display_name,
+	  o.series_id,
   ser.series_kind,
   ser.series_key,
   ser.display_name AS series_display_name,
@@ -844,7 +858,10 @@ mod tests {
         let parsed = parse_viewport_request(&request).unwrap();
 
         assert_eq!(parsed.source_keys, vec!["codex.local_sessions".to_string()]);
-        assert!(VIEWPORT_SELECT_SQL.contains("source_filter.source_key = ANY($7::text[])"));
+        assert!(VIEWPORT_SELECT_SQL.contains("source.source_key = ANY($7::text[])"));
+        assert!(VIEWPORT_SELECT_SQL.contains("source.source_type"));
+        assert!(VIEWPORT_SELECT_SQL.contains("source_key"));
+        assert!(!VIEWPORT_SELECT_SQL.contains("SELECT 1\n\t        SELECT 1"));
     }
 
     #[test]

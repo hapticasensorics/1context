@@ -101,7 +101,7 @@ V0 deployment targets:
 
 ```text
 Developer mode:
-  repo-managed DB container or local Postgres
+  app-managed Postgres runtime
   explicit current-schema bootstrap command
   visible health page
 
@@ -807,15 +807,14 @@ filtering to one lane stays responsive
 Developers should get a one-command local loop:
 
 ```bash
-./scripts/memory-db-dev.sh provision
-export ONECONTEXT_MEMORY_DB_URL="$(./scripts/memory-db-dev.sh url)"
+./scripts/release-train.sh build --channel dev
 cargo test -p onecontext-memory-db
 ```
 
-The dev helper should create:
+The dev build should include:
 
 ```text
-local TimescaleDB
+app-managed Postgres/Timescale runtime
 current app, perception, and search schemas
 ```
 

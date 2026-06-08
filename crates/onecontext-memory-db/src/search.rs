@@ -256,8 +256,11 @@ SELECT
   o.event_start,
   o.event_end,
   o.lane_id,
-  o.source_id,
-  o.series_id,
+	  o.source_id,
+	  s.source_type,
+	  s.source_key,
+	  s.display_name AS source_display_name,
+	  o.series_id,
   ser.series_kind,
   ser.series_key,
   ser.display_name AS series_display_name,
@@ -347,6 +350,7 @@ mod tests {
         assert!(parsed.include_invalid);
         assert!(SEARCH_TEXT_SELECT_SQL.contains("s.source_type = ANY($7::text[])"));
         assert!(SEARCH_TEXT_SELECT_SQL.contains("s.source_key = ANY($8::text[])"));
+        assert!(SEARCH_TEXT_SELECT_SQL.contains("s.source_key"));
         assert!(SEARCH_TEXT_SELECT_SQL.contains("($12::bool OR o.valid_to IS NULL)"));
         assert!(SEARCH_TEXT_SELECT_SQL.contains("JOIN perception.series ser"));
         assert!(SEARCH_TEXT_SELECT_SQL.contains("ser.default_lane_id AS series_default_lane_id"));

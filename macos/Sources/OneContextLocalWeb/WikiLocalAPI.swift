@@ -761,7 +761,7 @@ public final class WikiLocalAPIHandler: @unchecked Sendable {
           const record = item.record || item;
           const envelope = record.envelope || {};
           const sourceRecord = item.source_record || record.source_record || {};
-          const sourceValue = item.source || item.source_type || item.source_id || sourceRecord.source_key || record.connector_key || "unknown";
+          const sourceValue = item.source || item.source_key || sourceRecord.source_key || record.connector_key || item.source_type || item.source_id || "unknown";
           return {
             objectID: item.object_id || record.object_id || envelope.object_id || "",
             source: sourceValue,

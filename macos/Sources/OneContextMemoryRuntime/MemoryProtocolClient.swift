@@ -405,12 +405,11 @@ public final class MemoryProtocolProcessClient: MemoryProtocolClient, @unchecked
     if let endTime = query.endTime?.trimmingCharacters(in: .whitespacesAndNewlines), !endTime.isEmpty {
       time["end"] = endTime
     }
-    let filters = sourceFilters(query.sources)
     return [
       "user_id": Self.localUserID,
       "time": time,
       "bucket": query.bucket,
-      "filters": filters,
+      "filters": [:],
       "explain": false
     ]
   }

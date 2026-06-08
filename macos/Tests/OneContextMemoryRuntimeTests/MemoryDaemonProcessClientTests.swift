@@ -96,11 +96,13 @@ final class MemoryDaemonProcessClientTests: XCTestCase {
     defer { try? FileManager.default.removeItem(at: root) }
     try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
     let argsFile = root.appendingPathComponent("memoryd-args.txt")
+    let requestsFile = root.appendingPathComponent("memoryd-requests.jsonl")
     let executable = root.appendingPathComponent("onecontext-memoryd")
     let script = """
     #!/bin/sh
     printf '%s\\n' "$*" >> \(shellQuoted(argsFile.path))
-    cat >/dev/null
+    cat >> \(shellQuoted(requestsFile.path))
+    printf '\\n' >> \(shellQuoted(requestsFile.path))
     case "$2" in
       memory.hydrateObjects)
         printf '%s\\n' '{"schema_version":1,"surface":"memory_object_hydration","protocol":"memory.hydrateObjects.v1","status":"ok","provider":"onecontext-memoryd","object":{"object_id":"object-123"}}'
@@ -142,10 +144,14 @@ final class MemoryDaemonProcessClientTests: XCTestCase {
     )
 
     let args = try String(contentsOf: argsFile, encoding: .utf8)
+    let requests = try String(contentsOf: requestsFile, encoding: .utf8)
     XCTAssertTrue(args.contains("protocol memory.hydrateObjects --request-json -"))
     XCTAssertTrue(args.contains("protocol memory.queryDensity --request-json -"))
     XCTAssertTrue(args.contains("protocol memory.queryEdges --request-json -"))
     XCTAssertTrue(args.contains("protocol memory.searchText --request-json -"))
+    XCTAssertTrue(requests.contains(#""method":"memory.queryDensity""#))
+    XCTAssertFalse(requests.contains("source_keys"))
+    XCTAssertFalse(requests.contains("source_types"))
   }
 
   func testStorageReadinessMethodsUseRustProtocolProcess() throws {
@@ -231,7 +237,7 @@ final class MemoryDaemonProcessClientTests: XCTestCase {
     XCTAssertEqual(lines.dropFirst().first, "")
   }
 
-  func testAppSpecificExplicitDatabaseURLSelectsExternalStorageBackend() throws {
+  func testAppSpecificExplicitDatabaseURLDoesNotOverrideManagedStorageByDefault() throws {
     let root = temporaryRoot()
     defer { try? FileManager.default.removeItem(at: root) }
     try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
@@ -251,6 +257,40 @@ final class MemoryDaemonProcessClientTests: XCTestCase {
       runtimePaths: runtimePaths(root: root, identity: .dev),
       environment: [
         "ONECONTEXT_MEMORYD_BIN": executable.path,
+        "ONECONTEXT_MEMORY_DB_URL": explicit
+      ]
+    )
+
+    _ = try client.storageHealth()
+    let lines = try String(contentsOf: envFile, encoding: .utf8)
+      .split(separator: "\n", omittingEmptySubsequences: false)
+      .map(String.init)
+
+    XCTAssertEqual(lines.first, "managed_postgres")
+    XCTAssertEqual(lines.dropFirst().first, "")
+  }
+
+  func testExplicitAllowFlagSelectsExternalStorageBackend() throws {
+    let root = temporaryRoot()
+    defer { try? FileManager.default.removeItem(at: root) }
+    try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+    let envFile = root.appendingPathComponent("memoryd-env.txt")
+    let executable = root.appendingPathComponent("onecontext-memoryd")
+    let script = """
+    #!/bin/sh
+    printf '%s\\n%s\\n' "$ONECONTEXT_STORAGE_BACKEND" "$ONECONTEXT_MEMORY_DB_URL" > \(shellQuoted(envFile.path))
+    cat >/dev/null
+    printf '%s\\n' '{"schema_version":1,"surface":"perception_db","protocol":"memory.storageHealth.v1","status":"ok","provider":"onecontext-memoryd"}'
+    """
+    try script.write(to: executable, atomically: true, encoding: .utf8)
+    try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: executable.path)
+
+    let explicit = "postgres://example.test/dev-memory"
+    let client = MemoryDaemonProcessClient(
+      runtimePaths: runtimePaths(root: root, identity: .dev),
+      environment: [
+        "ONECONTEXT_MEMORYD_BIN": executable.path,
+        "ONECONTEXT_ALLOW_EXTERNAL_POSTGRES": "1",
         "ONECONTEXT_MEMORY_DB_URL": explicit
       ]
     )

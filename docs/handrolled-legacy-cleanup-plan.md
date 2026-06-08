@@ -73,7 +73,7 @@ Acceptable replacements:
 
 | Paths | Action | Replacement |
 | --- | --- | --- |
-| `scripts/memory-db-dev.sh` | Shrink/keep | Fresh-schema dev helper over the Rust bootstrap command. |
+| Retired Docker memory DB dev helper | Done | App-managed Postgres runtime and Rust memory DB tests own current schema. |
 | Retired memory DB benchmark shell harnesses | Done | Rust memory DB tests own current schema and writer contracts. |
 | Retired capture/attention benchmark and proof shell harnesses | Done | Rust capture/attention tests own current bundle and dashboard contracts. |
 | Non-live installed-app permission package checkers | Delete | Permission proof should be covered by release package smoke plus Swift tests. |

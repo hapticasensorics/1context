@@ -2578,8 +2578,9 @@ keeps legacy tables active.
 
 ```text
 reset:
-  ./scripts/memory-db-dev.sh reset
-  ./scripts/memory-db-dev.sh provision
+  onecontext-memoryd protocol memory.stopStorage --request-json -
+  remove the app-owned Postgres data directory for the active app identity
+  onecontext-memoryd protocol memory.ensureStorageReady --request-json -
 
 current schema:
   create app, perception, and search schemas
@@ -2891,7 +2892,7 @@ Benchmark command target:
 
 ```bash
 cargo test -p onecontext-memory-db
-cargo run -p onecontext-memory-db --bin onecontext-memoryd -- bench --database-url "$ONECONTEXT_MEMORY_DB_URL" --sources codex,claude,imessage
+cargo run -p onecontext-memory-db --bin onecontext-memoryd -- bench --sources codex,claude,imessage
 ```
 
 ---

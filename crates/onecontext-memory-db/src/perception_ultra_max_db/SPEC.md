@@ -79,7 +79,7 @@ Add three explicit storage backend modes:
 
 ```text
 managed_postgres       release default
-external_postgres      dev/CI/debug only
+external_postgres      gated debug only, requires ONECONTEXT_ALLOW_EXTERNAL_POSTGRES=1
 disabled               tests only, only where memory is not required
 ```
 
@@ -100,14 +100,16 @@ ONECONTEXT_STORAGE_BACKEND=managed_postgres
 ONECONTEXT_ALLOW_EMPTY_MEMORY_FALLBACK=0
 ```
 
-Dev defaults can temporarily remain:
+Debug-only external mode:
 
 ```text
+ONECONTEXT_ALLOW_EXTERNAL_POSTGRES=1
 ONECONTEXT_STORAGE_BACKEND=external_postgres
-ONECONTEXT_ALLOW_EMPTY_MEMORY_FALLBACK=1
+ONECONTEXT_MEMORY_DB_URL=<explicit external database URL>
 ```
 
-But the team should dogfood `managed_postgres` as soon as PR 5 lands. Otherwise the product path becomes a decorative bridge to nowhere.
+Developers should dogfood `managed_postgres`. Otherwise the product path becomes
+a decorative bridge to nowhere.
 
 ---
 
@@ -1601,7 +1603,7 @@ Architecture is fixed:
 - Rust memoryd owns storage truth.
 - Postgres/Timescale is bundled and private.
 - Release uses Unix socket only.
-- Docker/Colima/Homebrew are dev-only.
+- Docker/Colima/Homebrew are not product or release dependencies.
 - ensure_storage_ready and ensure_recent_backfill are separate.
 
 Do not redesign storage.
@@ -1613,7 +1615,7 @@ For every PR:
 1. Identify existing files/symbols first.
 2. Patch the smallest surface.
 3. Add tests or smoke command.
-4. Preserve dev external_postgres mode.
+4. Preserve only gated debug external_postgres mode.
 5. Return typed errors, not strings.
 6. Never delete pgdata. Quarantine first.
 ```

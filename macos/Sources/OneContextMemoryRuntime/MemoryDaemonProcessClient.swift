@@ -293,16 +293,21 @@ public final class MemoryDaemonProcessClient: @unchecked Sendable {
     identity: OneContextAppIdentity
   ) -> [String: String] {
     var env = environment
-    let explicitDatabaseURL = normalizedExplicitDatabaseURL(from: env)
+    let allowExternalPostgres = env["ONECONTEXT_ALLOW_EXTERNAL_POSTGRES"] == "1"
+    let explicitDatabaseURL = allowExternalPostgres ? normalizedExplicitDatabaseURL(from: env) : nil
     if let explicitDatabaseURL {
       env["ONECONTEXT_MEMORY_DB_URL"] = explicitDatabaseURL
-    }
-    if env["ONECONTEXT_STORAGE_BACKEND"]?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty != false {
-      env["ONECONTEXT_STORAGE_BACKEND"] = explicitDatabaseURL == nil ? "managed_postgres" : "external_postgres"
-    }
-    if identity.kind == .dev, explicitDatabaseURL == nil {
+    } else {
       env.removeValue(forKey: "ONECONTEXT_MEMORY_DB_URL")
     }
+    let storageBackend = env["ONECONTEXT_STORAGE_BACKEND"]?
+      .trimmingCharacters(in: .whitespacesAndNewlines)
+      .lowercased()
+      .replacingOccurrences(of: "-", with: "_")
+    if storageBackend?.isEmpty != false || (!allowExternalPostgres && storageBackend == "external_postgres") {
+      env["ONECONTEXT_STORAGE_BACKEND"] = explicitDatabaseURL == nil ? "managed_postgres" : "external_postgres"
+    }
+    _ = identity
     return env
   }
 
@@ -343,7 +348,8 @@ public final class MemoryDaemonProcessClient: @unchecked Sendable {
     discoverExecutable().map {
       MemoryProtocolProcessConfiguration(
         executable: $0,
-        environment: processEnvironment()
+        environment: processEnvironment(),
+        timeoutSeconds: 30
       )
     }
   }

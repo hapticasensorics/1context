@@ -19,6 +19,7 @@ export const REQUIRED_PROOFS = new Set([
   "release_policy",
   "full_tests",
   "package_smoke",
+  "perception_db_ultra_max",
   "asset_audit",
   "self_hosted_gui_update",
   "real_uninstall_reinstall",
@@ -78,7 +79,7 @@ const ChannelSchema = z.object({
   appcast: z.enum(["none", "private", "public"]),
   public_asset_mutation: z.boolean(),
   proof: z.string().min(1),
-  managed_postgres: z.enum(["off", "auto", "required"]).default("required"),
+  managed_postgres: z.literal("required").default("required"),
   budget_is_advisory: z.boolean(),
   budget_validate_seconds: z.number().int().nonnegative(),
   budget_build_seconds: z.number().int().nonnegative(),
@@ -563,11 +564,7 @@ export function envForManifest(manifest: ReleaseManifest, manifestPath: string, 
       : "com.haptica.1context.local-web-proxy",
     ONECONTEXT_DMG_VOLUME_NAME: channel === "dev" ? "1Context Dev" : "1Context",
     ONECONTEXT_EXPECTED_APP_BASENAME: channel === "dev" ? "1Context Dev.app" : "1Context.app",
-    ONECONTEXT_INCLUDE_MANAGED_POSTGRES: channelData.managed_postgres === "off"
-      ? "false"
-      : channelData.managed_postgres === "auto"
-        ? "auto"
-        : "true",
+    ONECONTEXT_INCLUDE_MANAGED_POSTGRES: "true",
     ONECONTEXT_RELEASE_CHANNEL_REQUIRES_CLEAN_TREE: channelData.requires_clean_tree ? "1" : "0",
     ONECONTEXT_RELEASE_CHANNEL_REQUIRES_TAG: channelData.requires_tag ? "1" : "0",
     ONECONTEXT_RELEASE_CHANNEL_SIGNING_MODE: channelData.signing_mode,

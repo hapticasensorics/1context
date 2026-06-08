@@ -9,9 +9,9 @@ use onecontext_memory_db::{
     default_context_for_source, default_home_dir, describe_memory_query_protocol, edges, hydrate,
     ingest_claude_incremental, ingest_codex_incremental, ingest_imessage_incremental,
     query_density, read_viewport, search, FileIngestCursor, IncrementalIngestBatch,
-    IncrementalIngestOptions, LocalIngestCursors, ManagedPostgresCommandRunner, MethodName,
-    ProtocolError, ProtocolRequest, ProtocolResponse, ProtocolStats, SessionIngestProfile,
-    SqliteIngestCursor, StatusResponse, StorageBackend, StorageHealth, StorageStatus,
+    IncrementalIngestOptions, LocalIngestCursors, MethodName, ProtocolError, ProtocolRequest,
+    ProtocolResponse, ProtocolStats, SessionIngestProfile, SqliteIngestCursor, StatusResponse,
+    StorageBackend, StorageHealth, StorageStatus,
 };
 use postgres::{Client, NoTls};
 use rusqlite::{Connection, OpenFlags};
@@ -23,6 +23,7 @@ const DEFAULT_MAX_LINES: usize = 50_000;
 const DEFAULT_SOURCES: &str = "codex,claude,imessage";
 const DATABASE_URL_ENV: &str = "ONECONTEXT_MEMORY_DB_URL";
 const STORAGE_BACKEND_ENV: &str = "ONECONTEXT_STORAGE_BACKEND";
+const ALLOW_EXTERNAL_POSTGRES_ENV: &str = "ONECONTEXT_ALLOW_EXTERNAL_POSTGRES";
 const APP_SUPPORT_DIR_ENV: &str = "ONECONTEXT_APP_SUPPORT_DIR";
 const LOCAL_USER_ID: &str = "00000000-0000-0000-0000-000000000001";
 const RECENT_BACKFILL_CURSOR_NAME: &str = "memoryd_recent_backfill";
@@ -433,11 +434,15 @@ fn dispatch_protocol_request(
             match serde_json::from_value::<onecontext_memory_db::EnsureStorageReadyRequest>(
                 request.params.clone(),
             ) {
-                Ok(_) => ProtocolResponse::ok(
+                Ok(typed) => ProtocolResponse::ok(
                     method,
                     request_id,
-                    serde_json::to_value(storage_health_response(database.as_ref(), true))
-                        .expect("storage health serializes"),
+                    serde_json::to_value(if typed.repair {
+                        repair_storage_response(database.as_ref())
+                    } else {
+                        storage_health_response(database.as_ref(), true)
+                    })
+                    .expect("storage health serializes"),
                     stats,
                 ),
                 Err(error) => invalid_params_response(method, request_id, error, stats),
@@ -580,7 +585,7 @@ fn dispatch_protocol_request(
                 Ok(_) => ProtocolResponse::ok(
                     method,
                     request_id,
-                    serde_json::to_value(storage_health_response(database.as_ref(), true))
+                    serde_json::to_value(repair_storage_response(database.as_ref()))
                         .expect("storage health serializes"),
                     stats,
                 ),
@@ -796,6 +801,7 @@ where
     }
 }
 
+#[derive(Debug, PartialEq, Eq)]
 enum StorageBackendResolution {
     Backend(StorageBackend),
     Invalid(String),
@@ -827,10 +833,23 @@ fn stop_storage_response(database: Option<&DatabaseTarget>) -> StorageHealth {
     }
 }
 
+fn repair_storage_response(database: Option<&DatabaseTarget>) -> StorageHealth {
+    match resolve_storage_backend(database) {
+        StorageBackendResolution::Backend(StorageBackend::ManagedPostgres) => {
+            repair_managed_postgres_health()
+        }
+        StorageBackendResolution::Backend(StorageBackend::ExternalPostgres) => {
+            storage_health_response(database, true)
+        }
+        StorageBackendResolution::Backend(StorageBackend::Disabled) => disabled_storage_health(),
+        StorageBackendResolution::Invalid(value) => invalid_storage_backend_health(value),
+    }
+}
+
 fn restart_storage_response(database: Option<&DatabaseTarget>) -> StorageHealth {
     match resolve_storage_backend(database) {
         StorageBackendResolution::Backend(StorageBackend::ManagedPostgres) => {
-            managed_postgres_health(true)
+            restart_managed_postgres_health()
         }
         StorageBackendResolution::Backend(StorageBackend::ExternalPostgres)
         | StorageBackendResolution::Backend(StorageBackend::Disabled) => {
@@ -847,19 +866,28 @@ fn resolve_storage_backend(database: Option<&DatabaseTarget>) -> StorageBackendR
             "managed" | "managed_postgres" => {
                 StorageBackendResolution::Backend(StorageBackend::ManagedPostgres)
             }
-            "external" | "external_postgres" => {
+            "external" | "external_postgres" if external_postgres_allowed() => {
                 StorageBackendResolution::Backend(StorageBackend::ExternalPostgres)
             }
+            "external" | "external_postgres" => StorageBackendResolution::Invalid(format!(
+                "{value} requires {ALLOW_EXTERNAL_POSTGRES_ENV}=1"
+            )),
             "disabled" => StorageBackendResolution::Backend(StorageBackend::Disabled),
             _ => StorageBackendResolution::Invalid(value),
         };
     }
 
-    if database.is_some() {
+    if database.is_some() && external_postgres_allowed() {
         StorageBackendResolution::Backend(StorageBackend::ExternalPostgres)
     } else {
         StorageBackendResolution::Backend(StorageBackend::ManagedPostgres)
     }
+}
+
+fn external_postgres_allowed() -> bool {
+    std::env::var(ALLOW_EXTERNAL_POSTGRES_ENV)
+        .ok()
+        .is_some_and(|value| value.trim() == "1")
 }
 
 fn operation_database_target(
@@ -878,7 +906,7 @@ fn operation_database_target(
         StorageBackendResolution::Invalid(value) => Err(ProtocolError::new(
             "INVALID_STORAGE_BACKEND",
             format!(
-                "Invalid {STORAGE_BACKEND_ENV} value {value:?}; expected managed_postgres, external_postgres, or disabled."
+                "Invalid {STORAGE_BACKEND_ENV} value {value:?}; expected managed_postgres, disabled, or external_postgres with {ALLOW_EXTERNAL_POSTGRES_ENV}=1."
             ),
             false,
         )),
@@ -936,7 +964,7 @@ fn managed_postgres_health(ensure: bool) -> StorageHealth {
 fn stop_managed_postgres_health() -> StorageHealth {
     let config = onecontext_memory_db::ManagedPgPathConfig::from_env();
     let paths = config.resolve_paths();
-    match stop_managed_postgres_with_config(&config) {
+    match onecontext_memory_db::stop_managed_postgres_with_config(&config) {
         Ok(_) => {
             let mut health = managed_postgres_health(false);
             health.message = "Local managed Postgres was stopped.".to_string();
@@ -952,26 +980,60 @@ fn stop_managed_postgres_health() -> StorageHealth {
     }
 }
 
-fn stop_managed_postgres_with_config(
-    config: &onecontext_memory_db::ManagedPgPathConfig,
-) -> Result<(), onecontext_memory_db::ManagedPostgresError> {
+fn repair_managed_postgres_health() -> StorageHealth {
+    let config = onecontext_memory_db::ManagedPgPathConfig::from_env();
     let paths = config.resolve_paths();
-    let manifest =
-        onecontext_memory_db::ManagedPgManifest::load_and_validate(config.resolve_bundle_prefix())?;
-    let plan = onecontext_memory_db::ManagedPostgresCommandPlan::stop(&manifest, &paths);
-    let mut runner = onecontext_memory_db::StdManagedPostgresCommandRunner;
-    let output = runner.run(&plan)?;
-    if output.success() {
-        Ok(())
-    } else {
-        Err(onecontext_memory_db::ManagedPostgresError::command_failed(
-            plan.program,
-            plan.args,
-            output.status,
-            output.stdout,
-            output.stderr,
-        ))
+    if let Err(error) = onecontext_memory_db::stop_managed_postgres_with_config(&config) {
+        if matches!(
+            error,
+            onecontext_memory_db::ManagedPostgresError::BundleMissing { .. }
+                | onecontext_memory_db::ManagedPostgresError::BundleInvalid { .. }
+                | onecontext_memory_db::ManagedPostgresError::InvalidManifest { .. }
+                | onecontext_memory_db::ManagedPostgresError::UnsupportedArch { .. }
+        ) {
+            return managed_probe_health();
+        }
+        return managed_runtime_error_health(
+            &paths,
+            "managed_postgres_repair_failed",
+            "Managed Postgres could not be stopped for repair.".to_string(),
+            Some(error.to_string()),
+            true,
+        );
     }
+    let mut health = managed_postgres_health(true);
+    if health.ready {
+        health.message = "Local managed Postgres was repaired and is ready.".to_string();
+    }
+    health
+}
+
+fn restart_managed_postgres_health() -> StorageHealth {
+    let config = onecontext_memory_db::ManagedPgPathConfig::from_env();
+    let paths = config.resolve_paths();
+    if let Err(error) = onecontext_memory_db::stop_managed_postgres_with_config(&config) {
+        if matches!(
+            error,
+            onecontext_memory_db::ManagedPostgresError::BundleMissing { .. }
+                | onecontext_memory_db::ManagedPostgresError::BundleInvalid { .. }
+                | onecontext_memory_db::ManagedPostgresError::InvalidManifest { .. }
+                | onecontext_memory_db::ManagedPostgresError::UnsupportedArch { .. }
+        ) {
+            return managed_probe_health();
+        }
+        return managed_runtime_error_health(
+            &paths,
+            "managed_postgres_restart_failed",
+            "Managed Postgres could not be stopped for restart.".to_string(),
+            Some(error.to_string()),
+            true,
+        );
+    }
+    let mut health = managed_postgres_health(true);
+    if health.ready {
+        health.message = "Local managed Postgres was restarted and is ready.".to_string();
+    }
+    health
 }
 
 fn external_postgres_health(database: Option<&DatabaseTarget>, ensure: bool) -> StorageHealth {
@@ -998,7 +1060,7 @@ fn external_postgres_health(database: Option<&DatabaseTarget>, ensure: bool) -> 
             recent_backfill: recent_backfill_not_checked(),
             message: "External Postgres is selected but no database URL is configured.".to_string(),
             detail: Some(format!(
-                "Set {DATABASE_URL_ENV} or pass --database-url for external_postgres mode."
+                "Set {DATABASE_URL_ENV} or pass --database-url, and set {ALLOW_EXTERNAL_POSTGRES_ENV}=1, for external_postgres mode."
             )),
         };
     };
@@ -1127,7 +1189,7 @@ fn invalid_storage_backend_health(value: String) -> StorageHealth {
         recent_backfill: recent_backfill_not_checked(),
         message: format!("Invalid {STORAGE_BACKEND_ENV} value."),
         detail: Some(format!(
-            "got {value:?}; expected managed_postgres, external_postgres, or disabled"
+            "got {value:?}; expected managed_postgres, disabled, or external_postgres with {ALLOW_EXTERNAL_POSTGRES_ENV}=1"
         )),
     }
 }
@@ -1376,7 +1438,9 @@ fn ensure_recent_backfill(
             let Some(database) = database else {
                 return Err(ProtocolError::new(
                     "DATABASE_UNCONFIGURED",
-                    "External Postgres backfill requires ONECONTEXT_MEMORY_DB_URL or --database-url.",
+                    format!(
+                        "External Postgres backfill requires ONECONTEXT_MEMORY_DB_URL or --database-url, plus {ALLOW_EXTERNAL_POSTGRES_ENV}=1."
+                    ),
                     false,
                 ));
             };
@@ -1403,7 +1467,7 @@ fn ensure_recent_backfill(
         StorageBackendResolution::Invalid(value) => Err(ProtocolError::new(
             "INVALID_STORAGE_BACKEND",
             format!(
-                "Invalid {STORAGE_BACKEND_ENV} value {value:?}; expected managed_postgres, external_postgres, or disabled."
+                "Invalid {STORAGE_BACKEND_ENV} value {value:?}; expected managed_postgres, disabled, or external_postgres with {ALLOW_EXTERNAL_POSTGRES_ENV}=1."
             ),
             false,
         )),
@@ -1466,9 +1530,9 @@ fn managed_readable_sources(home: PathBuf) -> Vec<String> {
         .into_iter()
         .filter(|report| report.readable)
         .filter_map(|report| match report.connector_key.as_str() {
-            "codex.local_sessions" => Some("codex".to_string()),
-            "claude.local_sessions" => Some("claude".to_string()),
-            "imessage.chat_db" => Some("imessage".to_string()),
+            "codex.local_sessions" => Some("codex.local_sessions".to_string()),
+            "claude.local_sessions" => Some("claude.local_sessions".to_string()),
+            "imessage.chat_db" => Some("imessage.chat_db".to_string()),
             _ => None,
         })
         .collect()
@@ -2696,7 +2760,7 @@ fn parse_query_density_request(
     let end_time =
         take_option_value(args, "--end-time").or_else(|| take_option_value(args, "--end"));
     let bucket = take_option_value(args, "--bucket").unwrap_or_else(|| "1m".to_string());
-    let sources = take_option_value(args, "--sources")
+    let _sources = take_option_value(args, "--sources")
         .or_else(|| take_option_value(args, "--source"))
         .map(|value| split_csv(&value))
         .unwrap_or_default();
@@ -2711,7 +2775,6 @@ fn parse_query_density_request(
         time,
         bucket,
         filters: read_viewport::ObjectFiltersRequest {
-            source_types: sources,
             ..read_viewport::ObjectFiltersRequest::default()
         },
         explain: false,
@@ -2874,7 +2937,7 @@ fn take_flag(args: &mut Vec<String>, name: &str) -> bool {
 
 fn print_usage() {
     eprintln!(
-        "usage:\n  onecontext-memoryd daemon [--home PATH] [--context-engine-root PATH] [--run-dir PATH] [--database-url URL] [--sources codex,claude,imessage] [--interval-ms N] [--max-events N] [--max-lines N] [--profile hot_memory|compact_audit|forensic] [--once]\n  onecontext-memoryd bench [--home PATH] [--database-url URL] [--sources codex,claude,imessage] [--max-events N] [--max-lines N] [--profile hot_memory|compact_audit|forensic]\n  onecontext-memoryd status [--run-dir PATH] [--context-engine-root PATH]\n  onecontext-memoryd describe\n  onecontext-memoryd protocol|rpc memory.storageHealth --request-json -\n  onecontext-memoryd queryViewport [--database-url URL] [--user-id UUID] [--start RFC3339] [--end RFC3339] [--source KEY] [--limit N]\n  onecontext-memoryd queryDensity [--start-time RFC3339] [--end-time RFC3339] [--sources codex,claude,imessage] [--bucket 1m]\n  onecontext-memoryd hydrateObjects [--object-id ID ... | --object-ids ID,ID]\n\ndatabase URL env: ONECONTEXT_MEMORY_DB_URL\nstorage backend env: ONECONTEXT_STORAGE_BACKEND=managed_postgres|external_postgres|disabled"
+        "usage:\n  onecontext-memoryd daemon [--home PATH] [--context-engine-root PATH] [--run-dir PATH] [--database-url URL] [--sources codex,claude,imessage] [--interval-ms N] [--max-events N] [--max-lines N] [--profile hot_memory|compact_audit|forensic] [--once]\n  onecontext-memoryd bench [--home PATH] [--database-url URL] [--sources codex,claude,imessage] [--max-events N] [--max-lines N] [--profile hot_memory|compact_audit|forensic]\n  onecontext-memoryd status [--run-dir PATH] [--context-engine-root PATH]\n  onecontext-memoryd describe\n  onecontext-memoryd protocol|rpc memory.storageHealth --request-json -\n  onecontext-memoryd queryViewport [--database-url URL] [--user-id UUID] [--start RFC3339] [--end RFC3339] [--source KEY] [--limit N]\n  onecontext-memoryd queryDensity [--start-time RFC3339] [--end-time RFC3339] [--sources codex,claude,imessage] [--bucket 1m]\n  onecontext-memoryd hydrateObjects [--object-id ID ... | --object-ids ID,ID]\n\ndatabase URL env: ONECONTEXT_MEMORY_DB_URL (external Postgres only when ONECONTEXT_ALLOW_EXTERNAL_POSTGRES=1)\nstorage backend env: ONECONTEXT_STORAGE_BACKEND=managed_postgres|disabled|external_postgres"
     );
 }
 
@@ -2885,6 +2948,12 @@ mod protocol_tests {
 
     fn env_lock() -> std::sync::MutexGuard<'static, ()> {
         super::test_env_lock()
+    }
+
+    fn clear_storage_env() {
+        std::env::remove_var(STORAGE_BACKEND_ENV);
+        std::env::remove_var(ALLOW_EXTERNAL_POSTGRES_ENV);
+        std::env::remove_var(onecontext_memory_db::MANAGED_PG_PREFIX_ENV);
     }
 
     #[test]
@@ -2955,8 +3024,7 @@ mod protocol_tests {
     #[test]
     fn protocol_storage_health_defaults_to_managed_scaffold() {
         let _lock = env_lock();
-        std::env::remove_var(STORAGE_BACKEND_ENV);
-        std::env::remove_var(onecontext_memory_db::MANAGED_PG_PREFIX_ENV);
+        clear_storage_env();
         let response = dispatch_protocol_request(
             ProtocolRequest {
                 schema_version: 1,
@@ -2977,10 +3045,45 @@ mod protocol_tests {
     }
 
     #[test]
+    fn database_url_without_external_gate_still_uses_managed_storage() {
+        let _lock = env_lock();
+        clear_storage_env();
+        let database = DatabaseTarget {
+            url: "postgres://onecontext:onecontext_dev@127.0.0.1:15432/onecontext_memory"
+                .to_string(),
+            source: "test".to_string(),
+        };
+
+        assert_eq!(
+            resolve_storage_backend(Some(&database)),
+            StorageBackendResolution::Backend(StorageBackend::ManagedPostgres)
+        );
+    }
+
+    #[test]
+    fn external_postgres_backend_requires_allow_flag() {
+        let _lock = env_lock();
+        clear_storage_env();
+        std::env::set_var(STORAGE_BACKEND_ENV, "external_postgres");
+
+        assert!(matches!(
+            resolve_storage_backend(None),
+            StorageBackendResolution::Invalid(value)
+                if value.contains(ALLOW_EXTERNAL_POSTGRES_ENV)
+        ));
+
+        std::env::set_var(ALLOW_EXTERNAL_POSTGRES_ENV, "1");
+        assert_eq!(
+            resolve_storage_backend(None),
+            StorageBackendResolution::Backend(StorageBackend::ExternalPostgres)
+        );
+        clear_storage_env();
+    }
+
+    #[test]
     fn protocol_ensure_storage_ready_accepts_reason() {
         let _lock = env_lock();
-        std::env::remove_var(STORAGE_BACKEND_ENV);
-        std::env::remove_var(onecontext_memory_db::MANAGED_PG_PREFIX_ENV);
+        clear_storage_env();
         let response = dispatch_protocol_request(
             ProtocolRequest {
                 schema_version: 1,
@@ -3106,8 +3209,34 @@ mod protocol_tests {
 
         let sources = managed_readable_sources(root.clone());
 
-        assert_eq!(sources, vec!["codex".to_string(), "claude".to_string()]);
+        assert_eq!(
+            sources,
+            vec![
+                "codex.local_sessions".to_string(),
+                "claude.local_sessions".to_string()
+            ]
+        );
         let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn query_density_cli_keeps_source_arguments_out_of_coarse_filters() {
+        let mut args = vec![
+            "--user-id".to_string(),
+            "00000000-0000-0000-0000-000000000001".to_string(),
+            "--start".to_string(),
+            "2026-05-24T00:00:00Z".to_string(),
+            "--end".to_string(),
+            "2026-05-24T01:00:00Z".to_string(),
+            "--sources".to_string(),
+            "codex.local_sessions,claude.local_sessions".to_string(),
+        ];
+
+        let request = parse_query_density_request(&mut args).unwrap();
+
+        assert!(request.filters.source_ids.is_empty());
+        assert!(request.filters.source_types.is_empty());
+        assert!(request.filters.source_keys.is_empty());
     }
 
     #[test]
@@ -3150,6 +3279,50 @@ mod protocol_tests {
 
         assert_eq!(response.status, ProtocolResponseStatus::Ok);
         let result = response.result.expect("repair result");
+        assert_eq!(result["backend"], "managed_postgres");
+        assert_eq!(result["status"], "bundle_missing");
+    }
+
+    #[test]
+    fn protocol_ensure_storage_ready_with_repair_uses_repair_health_path() {
+        let _lock = env_lock();
+        std::env::remove_var(STORAGE_BACKEND_ENV);
+        std::env::remove_var(onecontext_memory_db::MANAGED_PG_PREFIX_ENV);
+        let response = dispatch_protocol_request(
+            ProtocolRequest {
+                schema_version: 1,
+                request_id: Some("req-ensure-repair".to_string()),
+                method: MethodName::EnsureStorageReady,
+                params: json!({"reason": "test", "repair": true}),
+            },
+            None,
+            2,
+        );
+
+        assert_eq!(response.status, ProtocolResponseStatus::Ok);
+        let result = response.result.expect("repair ensure result");
+        assert_eq!(result["backend"], "managed_postgres");
+        assert_eq!(result["status"], "bundle_missing");
+    }
+
+    #[test]
+    fn protocol_restart_storage_returns_health_scaffold() {
+        let _lock = env_lock();
+        std::env::remove_var(STORAGE_BACKEND_ENV);
+        std::env::remove_var(onecontext_memory_db::MANAGED_PG_PREFIX_ENV);
+        let response = dispatch_protocol_request(
+            ProtocolRequest {
+                schema_version: 1,
+                request_id: Some("req-restart".to_string()),
+                method: MethodName::RestartStorage,
+                params: json!({"reason": "test"}),
+            },
+            None,
+            2,
+        );
+
+        assert_eq!(response.status, ProtocolResponseStatus::Ok);
+        let result = response.result.expect("restart result");
         assert_eq!(result["backend"], "managed_postgres");
         assert_eq!(result["status"], "bundle_missing");
     }

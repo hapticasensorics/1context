@@ -98,8 +98,8 @@ RUNTIME_DEFAULTS_RESOURCE_DIR="$RESOURCES_DIR/RuntimeDefaults"
 WIKI_ENGINE_RESOURCE_DIR="$RESOURCES_DIR/WikiEngine"
 MANAGED_POSTGRES_SOURCE_DIR="${ONECONTEXT_MANAGED_POSTGRES_SOURCE_DIR:-$ROOT/release/managed-postgres/runtime/macos-arm64}"
 MANAGED_POSTGRES_RESOURCE_DIR="$RESOURCES_DIR/managed-postgres/macos-arm64"
-INCLUDE_MANAGED_POSTGRES="${ONECONTEXT_INCLUDE_MANAGED_POSTGRES:-auto}"
-if [[ "$INCLUDE_MANAGED_POSTGRES" == "auto" && "$ONECONTEXT_RELEASE_CHANNEL" != "dev" ]]; then
+INCLUDE_MANAGED_POSTGRES="${ONECONTEXT_INCLUDE_MANAGED_POSTGRES:-true}"
+if [[ "$INCLUDE_MANAGED_POSTGRES" == "auto" ]]; then
   INCLUDE_MANAGED_POSTGRES="true"
 fi
 SPARKLE_FEED_URL="$ONECONTEXT_SPARKLE_FEED_URL"
@@ -326,11 +326,12 @@ package_managed_postgres() {
   case "$mode" in
     1|true|yes|auto) ;;
     0|false|no)
-      if [[ "$ONECONTEXT_RELEASE_CHANNEL" != "dev" ]]; then
-        echo "Non-dev app builds must include managed Postgres; ONECONTEXT_INCLUDE_MANAGED_POSTGRES=$mode is not allowed." >&2
-        exit 1
+      if [[ "$ONECONTEXT_RELEASE_CHANNEL" == "dev" && "${ONECONTEXT_ALLOW_UNBUNDLED_STORAGE_TESTS:-}" == "1" ]]; then
+        echo "Skipping managed Postgres only because ONECONTEXT_ALLOW_UNBUNDLED_STORAGE_TESTS=1 is set for a dev build." >&2
+        return
       fi
-      return
+      echo "App builds must include Perception DB Ultra Max managed Postgres; ONECONTEXT_INCLUDE_MANAGED_POSTGRES=$mode is not allowed." >&2
+      exit 1
       ;;
     *)
       echo "Unsupported ONECONTEXT_INCLUDE_MANAGED_POSTGRES value: $mode" >&2

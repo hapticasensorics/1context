@@ -8,9 +8,10 @@ use sha2::Digest;
 use uuid::Uuid;
 
 use crate::local_adapters::{
-    default_context_for_source, default_home_dir, ingest_claude_incremental,
-    ingest_codex_incremental, ingest_imessage_incremental, AdapterContext, AdapterError,
-    IncrementalIngestBatch, IncrementalIngestOptions, LocalIngestCursors, SessionIngestProfile,
+    canonical_local_source, default_context_for_source, default_home_dir,
+    ingest_claude_incremental, ingest_codex_incremental, ingest_imessage_incremental,
+    AdapterContext, AdapterError, IncrementalIngestBatch, IncrementalIngestOptions,
+    LocalIngestCursors, SessionIngestProfile,
 };
 use crate::source_cursors::{
     advance_source_cursor_after_db_success, load_source_cursor, CursorAdvanceMode,
@@ -153,33 +154,35 @@ pub fn ingest_sources_with_client(
     let mut source_results = Vec::with_capacity(sources.len());
     let mut ok = true;
     for source in sources {
-        let context = context_for_request_source(request, &source)?;
+        let canonical_source = canonical_request_source(&source)?;
+        let context = context_for_request_source(request, canonical_source)?;
         let source_id = context.stream_id.clone();
         let cursor = load_source_cursor(client, &source_id, &cursor_name)?;
         let mut cursors = cursor
             .and_then(|cursor| serde_json::from_value(cursor.cursor_value).ok())
             .unwrap_or_default();
-        let batch = match ingest_source_batch(&home, &context, &options, &source, &mut cursors) {
-            Ok(batch) => batch,
-            Err(error) => {
-                ok = false;
-                source_results.push(IngestSourceResult {
-                    source,
-                    source_id,
-                    status: "adapter_error".to_string(),
-                    read_count: 0,
-                    written_count: 0,
-                    inserted_count: 0,
-                    duplicate_count: 0,
-                    cursor_advanced: false,
-                    advancement_mode: None,
-                    error_code: Some("ADAPTER_ERROR".to_string()),
-                    error: Some(error.to_string()),
-                    adapter_report: None,
-                });
-                continue;
-            }
-        };
+        let batch =
+            match ingest_source_batch(&home, &context, &options, canonical_source, &mut cursors) {
+                Ok(batch) => batch,
+                Err(error) => {
+                    ok = false;
+                    source_results.push(IngestSourceResult {
+                        source,
+                        source_id,
+                        status: "adapter_error".to_string(),
+                        read_count: 0,
+                        written_count: 0,
+                        inserted_count: 0,
+                        duplicate_count: 0,
+                        cursor_advanced: false,
+                        advancement_mode: None,
+                        error_code: Some("ADAPTER_ERROR".to_string()),
+                        error: Some(error.to_string()),
+                        adapter_report: None,
+                    });
+                    continue;
+                }
+            };
         let prepared_write = prepare_batch_write_request(&request.user_id, &write_id, &batch)?;
         let read_count = prepared_write.read_count;
         let write_path = prepared_write.path;
@@ -247,6 +250,11 @@ fn context_for_request_source(
     let mut context = default_context_for_source(source)?;
     context.user_id = request.user_id.clone();
     Ok(context)
+}
+
+fn canonical_request_source(source: &str) -> Result<&'static str, IngestSourcesError> {
+    canonical_local_source(source)
+        .ok_or_else(|| AdapterError::UnknownSource(source.to_string()).into())
 }
 
 fn ingest_source_batch(
@@ -377,6 +385,22 @@ mod tests {
         let write_id = generated_write_id("00000000-0000-0000-0000-000000000001");
 
         Uuid::parse_str(&write_id).unwrap();
+    }
+
+    #[test]
+    fn connector_key_sources_are_normalized_for_ingest_adapters() {
+        assert_eq!(
+            canonical_request_source("codex.local_sessions").unwrap(),
+            "codex"
+        );
+        assert_eq!(
+            canonical_request_source("claude.local_sessions").unwrap(),
+            "claude"
+        );
+        assert_eq!(
+            canonical_request_source("imessage.chat_db").unwrap(),
+            "imessage"
+        );
     }
 
     #[test]

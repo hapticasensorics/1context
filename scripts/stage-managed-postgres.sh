@@ -5,10 +5,11 @@ usage() {
   cat <<'USAGE'
 Usage: scripts/stage-managed-postgres.sh [options]
 
-Stages a repo-local managed Postgres bundle for the macOS app. By default it
-tries to assemble the bundle from locally installed PostgreSQL 17, pgvector,
-and TimescaleDB prefixes. If --source is passed, it copies an already assembled
-bundle directory instead.
+Stages a repo-local managed Postgres bundle for the macOS app from explicit
+prefixes. The release-owned source-build path is
+scripts/build-managed-postgres-runtime.sh; this helper is only the final bundle
+assembly step. If --source is passed, it copies an already assembled bundle
+directory instead.
 
 Options:
   --source DIR             Copy an already assembled bundle directory.
@@ -21,7 +22,6 @@ USAGE
 }
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
 
 SOURCE=""
 DEST="release/managed-postgres/runtime/macos-arm64"
@@ -71,20 +71,6 @@ fail() {
 
 trim() {
   printf '%s' "$1" | awk '{$1=$1};1'
-}
-
-discover_brew_prefix() {
-  local formula="$1"
-  if ! command -v brew >/dev/null 2>&1; then
-    return 1
-  fi
-  if ! brew list --formula "$formula" >/dev/null 2>&1; then
-    return 1
-  fi
-  local prefix
-  prefix="$(brew --prefix "$formula" 2>/dev/null || true)"
-  [[ -n "$prefix" && -d "$prefix" ]] || return 1
-  printf '%s\n' "$prefix"
 }
 
 require_prefix() {
@@ -184,22 +170,6 @@ detect_timescaledb_prefix() {
   if [[ -n "$(find_first_matching_file "$postgres_prefix" 'timescaledb.control')" ]]; then
     printf '%s\n' "$postgres_prefix"
     return 0
-  fi
-  local candidate
-  for candidate in \
-    "$(discover_brew_prefix timescaledb 2>/dev/null || true)" \
-    "$(discover_brew_prefix timescaledb-ha 2>/dev/null || true)"; do
-    if [[ -n "$candidate" && -n "$(find_first_matching_file "$candidate" 'timescaledb.control')" ]]; then
-      printf '%s\n' "$candidate"
-      return 0
-    fi
-  done
-  if [[ -d /opt/homebrew/opt || -d /usr/local/opt ]]; then
-    candidate="$(find /opt/homebrew/opt /usr/local/opt -maxdepth 2 -type f -name 'timescaledb.control' -print 2>/dev/null | sed -n '1p' || true)"
-    if [[ -n "$candidate" ]]; then
-      dirname "$(dirname "$(dirname "$(dirname "$candidate")")")"
-      return 0
-    fi
   fi
   return 1
 }
@@ -363,12 +333,6 @@ if [[ -n "$SOURCE" ]]; then
   exit 0
 fi
 
-if [[ -z "$POSTGRES_PREFIX" ]]; then
-  POSTGRES_PREFIX="$(discover_brew_prefix postgresql@17 2>/dev/null || true)"
-fi
-if [[ -z "$PGVECTOR_PREFIX" ]]; then
-  PGVECTOR_PREFIX="$(discover_brew_prefix pgvector 2>/dev/null || true)"
-fi
 if ! TIMESCALEDB_PREFIX="$(detect_timescaledb_prefix "$POSTGRES_PREFIX" "$TIMESCALEDB_PREFIX" 2>/dev/null)"; then
   TIMESCALEDB_PREFIX=""
 fi
@@ -387,10 +351,7 @@ if [[ ${#missing[@]} -gt 0 ]]; then
     echo "Expected either:"
     echo "  - a real assembled bundle via --source DIR"
     echo "  - or local prefixes via --postgres-prefix, --pgvector-prefix, and --timescaledb-prefix"
-    echo
-    echo "Helpful commands:"
-    echo "  brew install postgresql@17 pgvector timescale/tap/timescaledb"
-    echo "  scripts/stage-managed-postgres.sh --postgres-prefix <pg17-prefix> --pgvector-prefix <pgvector-prefix> --timescaledb-prefix <timescaledb-prefix>"
+    echo "For release-owned source builds, run scripts/build-managed-postgres-runtime.sh."
   } >&2
   exit 1
 fi

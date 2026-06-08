@@ -105,7 +105,57 @@ fi
 if [[ -z "$INSTALL_TO" ]]; then
   INSTALL_TO="/Applications/$(basename "$APP")"
 fi
+[[ "$INSTALL_TO" == *.app ]] || { echo "--install-to must point at an .app bundle: $INSTALL_TO" >&2; exit 2; }
 
+APP_CANONICAL="$(/usr/bin/python3 - "$APP" <<'PY'
+import pathlib
+import sys
+print(pathlib.Path(sys.argv[1]).resolve())
+PY
+)"
+INSTALL_CANONICAL="$(/usr/bin/python3 - "$INSTALL_TO" <<'PY'
+import pathlib
+import sys
+print(pathlib.Path(sys.argv[1]).resolve())
+PY
+)"
+[[ "$APP_CANONICAL" != "$INSTALL_CANONICAL" ]] || { echo "--install-to must differ from --app: $INSTALL_TO" >&2; exit 2; }
+
+PREINSTALL_REPLACED_EXISTING=0
+PREINSTALL_PROTOCOL_STOP_RC=""
+PREINSTALL_PGCTL_STOP_RC=""
+
+stop_existing_installed_storage() {
+  [[ -d "$INSTALL_TO" ]] || return 0
+
+  PREINSTALL_REPLACED_EXISTING=1
+  local old_memoryd="$INSTALL_TO/Contents/MacOS/onecontext-memoryd"
+  local old_pgctl="$INSTALL_TO/Contents/Resources/managed-postgres/macos-arm64/bin/pg_ctl"
+  local default_pgdata="$HOME/Library/Application Support/1Context/Postgres/pgdata"
+
+  if [[ -x "$old_memoryd" ]]; then
+    set +e
+    printf '%s\n' '{"reason":"installed-app-managed-postgres-smoke-preinstall"}' | \
+      env -i \
+        "HOME=$HOME" \
+        "TMPDIR=${TMPDIR:-/tmp}" \
+        "PATH=/usr/bin:/bin:/usr/sbin:/sbin" \
+        "ONECONTEXT_STORAGE_BACKEND=managed_postgres" \
+        "$old_memoryd" protocol memory.stopStorage --request-json - >/dev/null 2>&1
+    PREINSTALL_PROTOCOL_STOP_RC=$?
+    set -e
+  fi
+
+  if [[ -x "$old_pgctl" && -d "$default_pgdata" ]]; then
+    set +e
+    "$old_pgctl" -D "$default_pgdata" stop -m fast >/dev/null 2>&1
+    PREINSTALL_PGCTL_STOP_RC=$?
+    set -e
+  fi
+}
+
+stop_existing_installed_storage
+rm -rf "$INSTALL_TO"
 ditto --norsrc --noqtn "$APP" "$INSTALL_TO"
 "$ROOT/scripts/verify-managed-postgres-bundle.sh" --require-sbom "$INSTALL_TO"
 
@@ -117,8 +167,13 @@ ENSURE_JSON="$WORKDIR/ensure-storage-ready.json"
 HEALTH_JSON="$WORKDIR/storage-health.json"
 INGEST_STATUS_JSON=""
 INGEST_TIME_TXT=""
-PGDATA_DIR=""
+PGDATA_DIR="$WORKDIR/app-support/Postgres/pgdata"
+PROTOCOL_ATTEMPTS_DIR="$WORKDIR/protocol-attempts"
+PROTOCOL_ATTEMPTS_TOTAL=0
+PROTOCOL_RETRY_COUNT=0
+PROTOCOL_SIGNAL_KILL_COUNT=0
 SMOKE_PASSED=0
+mkdir -p "$PROTOCOL_ATTEMPTS_DIR"
 
 cleanup() {
   local rc=$?
@@ -126,7 +181,7 @@ cleanup() {
     "$INSTALL_TO/Contents/Resources/managed-postgres/macos-arm64/bin/pg_ctl" \
       -D "$PGDATA_DIR" stop -m fast >/dev/null 2>&1 || true
   fi
-  if [[ "$SMOKE_PASSED" == "1" ]]; then
+  if [[ "$SMOKE_PASSED" == "1" && "$PROTOCOL_RETRY_COUNT" == "0" && "$PROTOCOL_SIGNAL_KILL_COUNT" == "0" ]]; then
     rm -rf "$WORKDIR"
   else
     echo "installed Perception DB Ultra Max smoke evidence preserved: $WORKDIR" >&2
@@ -148,14 +203,26 @@ run_memoryd_protocol() {
   local method="$1"
   local request_json="$2"
   local output_json="$3"
-  local attempt rc
+  local attempt rc attempt_id request_file stdout_file stderr_file
   for attempt in 1 2 3; do
+    PROTOCOL_ATTEMPTS_TOTAL=$((PROTOCOL_ATTEMPTS_TOTAL + 1))
+    attempt_id="$(printf '%03d-%s-%d' "$PROTOCOL_ATTEMPTS_TOTAL" "${method//[^A-Za-z0-9_.-]/_}" "$attempt")"
+    request_file="$PROTOCOL_ATTEMPTS_DIR/$attempt_id.request.json"
+    stdout_file="$PROTOCOL_ATTEMPTS_DIR/$attempt_id.stdout.json"
+    stderr_file="$PROTOCOL_ATTEMPTS_DIR/$attempt_id.stderr.txt"
+    printf '%s\n' "$request_json" >"$request_file"
     set +e
-    printf '%s\n' "$request_json" | "${RUN_ENV[@]}" "$MEMORYD" protocol "$method" --request-json - >"$output_json"
+    "${RUN_ENV[@]}" "$MEMORYD" protocol "$method" --request-json - <"$request_file" >"$stdout_file" 2>"$stderr_file"
     rc=$?
     set -e
+    printf '%s\n' "$rc" >"$PROTOCOL_ATTEMPTS_DIR/$attempt_id.exit"
     if [[ "$rc" == "0" ]]; then
+      cp "$stdout_file" "$output_json"
       return 0
+    fi
+    PROTOCOL_RETRY_COUNT=$((PROTOCOL_RETRY_COUNT + 1))
+    if [[ "$rc" -ge 128 ]]; then
+      PROTOCOL_SIGNAL_KILL_COUNT=$((PROTOCOL_SIGNAL_KILL_COUNT + 1))
     fi
     echo "installed Perception DB Ultra Max smoke: $method attempt $attempt failed with exit $rc" >&2
     sleep "$attempt"
@@ -308,12 +375,43 @@ fi
 
 if [[ -n "$EVIDENCE_JSON" ]]; then
   mkdir -p "$(dirname "$EVIDENCE_JSON")"
-  /usr/bin/python3 - "$ENSURE_JSON" "$HEALTH_JSON" "${INGEST_STATUS_JSON:-}" "${INGEST_TIME_TXT:-}" "$EVIDENCE_JSON" "$INSTALL_TO" "$INGEST_SOURCES" "$MAX_EVENTS" "$MAX_LINES" <<'PY'
+  /usr/bin/python3 - \
+    "$ENSURE_JSON" \
+    "$HEALTH_JSON" \
+    "${INGEST_STATUS_JSON:-}" \
+    "${INGEST_TIME_TXT:-}" \
+    "$EVIDENCE_JSON" \
+    "$INSTALL_TO" \
+    "$INGEST_SOURCES" \
+    "$MAX_EVENTS" \
+    "$MAX_LINES" \
+    "$PROTOCOL_ATTEMPTS_TOTAL" \
+    "$PROTOCOL_RETRY_COUNT" \
+    "$PROTOCOL_SIGNAL_KILL_COUNT" \
+    "$PREINSTALL_REPLACED_EXISTING" \
+    "${PREINSTALL_PROTOCOL_STOP_RC:-}" \
+    "${PREINSTALL_PGCTL_STOP_RC:-}" <<'PY'
 import json
 import pathlib
 import sys
 
-ensure_path, health_path, ingest_path, ingest_time_path, output_path, app_path, ingest_sources, max_events, max_lines = sys.argv[1:]
+(
+    ensure_path,
+    health_path,
+    ingest_path,
+    ingest_time_path,
+    output_path,
+    app_path,
+    ingest_sources,
+    max_events,
+    max_lines,
+    protocol_attempts_total,
+    protocol_retries,
+    protocol_signal_kill_count,
+    preinstall_replaced_existing,
+    preinstall_protocol_stop_rc,
+    preinstall_pgctl_stop_rc,
+) = sys.argv[1:]
 
 def unwrap(path):
     with open(path, "r", encoding="utf-8") as handle:
@@ -338,6 +436,14 @@ def parse_time(path):
             except ValueError:
                 pass
     return values
+
+def optional_int(value):
+    if value == "":
+        return None
+    try:
+        return int(value)
+    except ValueError:
+        return None
 
 health = unwrap(health_path)
 ensure = unwrap(ensure_path)
@@ -382,6 +488,17 @@ payload = {
         "runtime": "bundled_managed_postgres",
         "sbom_verified": True,
         "host_runtime_dependency": False,
+    },
+    "diagnostics": {
+        "protocol_attempts_total": int(protocol_attempts_total),
+        "protocol_retries": int(protocol_retries),
+        "protocol_signal_kill_retries": int(protocol_signal_kill_count),
+        "attempt_diagnostics_preserved": int(protocol_retries) > 0 or int(protocol_signal_kill_count) > 0,
+        "preinstall": {
+            "replaced_existing_app": preinstall_replaced_existing == "1",
+            "stop_storage_exit": optional_int(preinstall_protocol_stop_rc),
+            "pg_ctl_stop_exit": optional_int(preinstall_pgctl_stop_rc),
+        },
     },
 }
 if ingest is not None:

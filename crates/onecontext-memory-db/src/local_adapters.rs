@@ -188,30 +188,39 @@ pub fn default_home_dir() -> PathBuf {
         .unwrap_or_else(|| PathBuf::from("/"))
 }
 
-pub fn default_context_for_source(source: &str) -> Result<AdapterContext, AdapterError> {
+pub fn canonical_local_source(source: &str) -> Option<&'static str> {
     match source {
-        "codex" => Ok(AdapterContext {
+        "codex" | "codex.local_sessions" => Some("codex"),
+        "claude" | "claude.local_sessions" => Some("claude"),
+        "imessage" | "imessage.chat_db" => Some("imessage"),
+        _ => None,
+    }
+}
+
+pub fn default_context_for_source(source: &str) -> Result<AdapterContext, AdapterError> {
+    match canonical_local_source(source) {
+        Some("codex") => Ok(AdapterContext {
             user_id: DEFAULT_USER_ID.to_string(),
             stream_id: CODEX_STREAM_ID.to_string(),
             lane_id: CODEX_LANE_ID.to_string(),
             connector_key: "codex.local_sessions".to_string(),
             privacy_class: "normal".to_string(),
         }),
-        "claude" => Ok(AdapterContext {
+        Some("claude") => Ok(AdapterContext {
             user_id: DEFAULT_USER_ID.to_string(),
             stream_id: CLAUDE_STREAM_ID.to_string(),
             lane_id: CLAUDE_LANE_ID.to_string(),
             connector_key: "claude.local_sessions".to_string(),
             privacy_class: "normal".to_string(),
         }),
-        "imessage" => Ok(AdapterContext {
+        Some("imessage") => Ok(AdapterContext {
             user_id: DEFAULT_USER_ID.to_string(),
             stream_id: IMESSAGE_STREAM_ID.to_string(),
             lane_id: IMESSAGE_LANE_ID.to_string(),
             connector_key: "imessage.chat_db".to_string(),
             privacy_class: "sensitive".to_string(),
         }),
-        other => Err(AdapterError::UnknownSource(other.to_string())),
+        _ => Err(AdapterError::UnknownSource(source.to_string())),
     }
 }
 
@@ -239,6 +248,30 @@ pub fn probe_local_sources(home: &Path) -> Vec<SourceProbeReport> {
             "canonical",
         ),
     ]
+}
+
+#[cfg(test)]
+mod source_context_tests {
+    use super::*;
+
+    #[test]
+    fn connector_keys_resolve_to_local_source_contexts() {
+        let codex = default_context_for_source("codex.local_sessions").unwrap();
+        let claude = default_context_for_source("claude.local_sessions").unwrap();
+
+        assert_eq!(codex.connector_key, "codex.local_sessions");
+        assert_eq!(codex.stream_id, CODEX_STREAM_ID);
+        assert_eq!(
+            canonical_local_source("codex.local_sessions"),
+            Some("codex")
+        );
+        assert_eq!(claude.connector_key, "claude.local_sessions");
+        assert_eq!(claude.stream_id, CLAUDE_STREAM_ID);
+        assert_eq!(
+            canonical_local_source("claude.local_sessions"),
+            Some("claude")
+        );
+    }
 }
 
 pub fn sample_codex_objects(

@@ -1360,6 +1360,19 @@ final class OneContextDaemon: @unchecked Sendable {
     memoryDaemon.startIfAvailable { [logger] message in
       logger.write(message)
     }
+    DispatchQueue.global(qos: .utility).async { [memoryDaemon, logger] in
+      do {
+        let payload = try memoryDaemon.ensureStorageReady(
+          MemoryEnsureStorageReadyQuery(reason: "app-launch", repair: true)
+        )
+        let result = (payload["result"] as? [String: Any]) ?? payload
+        let status = result["status"] as? String ?? "unknown"
+        let ready = ((result["ready"] as? Bool) == true) || ((result["storage_ready"] as? Bool) == true)
+        logger.write("memory storage launch readiness status=\(status) ready=\(ready)")
+      } catch {
+        logger.write("memory storage launch readiness failed: \(error.localizedDescription)")
+      }
+    }
   }
 
   private func startPersistentUXEventTap() {

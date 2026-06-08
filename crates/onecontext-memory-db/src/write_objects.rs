@@ -996,9 +996,34 @@ fn write_prepared_chunk(
         SELECT DISTINCT ON (source_id)
           source_id,
           user_id,
-          split_part(COALESCE(metadata->'source'->>'connector_key', schema_name, kind), '.', 1),
-          COALESCE(metadata->'source'->>'connector_key', source_id::text),
-          COALESCE(metadata->'source'->>'connector_key', source_id::text),
+          COALESCE(
+            metadata->'source'->>'source_type',
+            metadata->'source'->>'agent_source',
+            split_part(
+              COALESCE(
+                metadata->'source'->>'source_key',
+                metadata->'source'->>'connector_key',
+                metadata->'source'->>'agent_connector_key',
+                schema_name,
+                kind
+              ),
+              '.',
+              1
+            )
+          ),
+          COALESCE(
+            metadata->'source'->>'source_key',
+            metadata->'source'->>'connector_key',
+            metadata->'source'->>'agent_connector_key',
+            source_id::text
+          ),
+          COALESCE(
+            metadata->'source'->>'display_name',
+            metadata->'source'->>'source_key',
+            metadata->'source'->>'connector_key',
+            metadata->'source'->>'agent_connector_key',
+            source_id::text
+          ),
           lane_id,
           jsonb_build_object(
             'created_by', 'onecontext-memory-db.write_objects',
@@ -1008,6 +1033,10 @@ fn write_prepared_chunk(
         ORDER BY source_id, ordinal
         ON CONFLICT (source_id) DO UPDATE
         SET updated_at = now(),
+            source_type = EXCLUDED.source_type,
+            source_key = EXCLUDED.source_key,
+            display_name = EXCLUDED.display_name,
+            metadata = EXCLUDED.metadata,
             default_lane_id = COALESCE(perception.sources.default_lane_id, EXCLUDED.default_lane_id);
 
         INSERT INTO perception.blobs (
@@ -2256,6 +2285,18 @@ mod tests {
         );
         assert_eq!(prepared.leaders[0].modality, "mixed");
         assert_eq!(prepared.leaders[0].body_type, "json");
+    }
+
+    #[test]
+    fn source_insert_prefers_connector_key_over_agent_lane_schema() {
+        let source = include_str!("write_objects.rs");
+
+        assert!(source.contains("metadata->'source'->>'agent_source'"));
+        assert!(source.contains("metadata->'source'->>'connector_key'"));
+        assert!(source.contains("metadata->'source'->>'agent_connector_key'"));
+        assert!(source.contains("metadata->'source'->>'source_key'"));
+        assert!(source.contains("source_type = EXCLUDED.source_type"));
+        assert!(source.contains("source_key = EXCLUDED.source_key"));
     }
 
     #[test]
