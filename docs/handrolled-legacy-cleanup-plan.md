@@ -151,8 +151,8 @@ Required wording in implementation briefs:
 
 | Paths | Action | Notes |
 | --- | --- | --- |
-| `crates/onecontext-wiki-daemon/src/main.rs` | Replace parser | Use `clap`; delete command alias compatibility and string-matched error mapping. |
-| `crates/onecontext-wiki-core/src/lib.rs` TOML helpers | Replace/delete | Use typed config or `toml_edit`; delete `toml_quote`, string array edits, enabled toggles. |
+| `crates/onecontext-wiki/cli/src/main.rs` | Replace parser | Use `clap`; delete command alias compatibility and string-matched error mapping. |
+| `crates/onecontext-wiki/core/src/lib.rs` TOML helpers | Replace/delete | Use typed config or `toml_edit`; delete `toml_quote`, string array edits, enabled toggles. |
 | frontmatter/template helpers | Replace/delete | Use YAML/frontmatter and template libraries; require templates instead of fallback templates. |
 | Markdown/link extraction | Replace | Use Markdown parser events, not substring scanning. |
 | HTML link diagnostics | Replace | Use DOM parser or renderer instrumentation. |

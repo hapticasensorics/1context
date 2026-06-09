@@ -6,8 +6,8 @@ I’m assuming the screenshot’s repo shape means roughly:
 macos/                         Swift menu bar app + daemon/service layer
 crates/onecontext-memory-db     Rust memoryd / Perception DB layer
 crates/onecontext-context-engine
-crates/onecontext-wiki-core
-crates/onecontext-wiki-daemon
+crates/onecontext-wiki/core
+crates/onecontext-wiki/cli
 release/
 runtime/
 scripts/

@@ -91,7 +91,7 @@ The first production shape should be:
 
 ```text
 crates/
-  onecontext-codex-adapter/
+  onecontext-agent-harness/adapters/codex/
     src/
       app_server_client.rs
       schema_registry.rs
@@ -105,10 +105,10 @@ crates/
       harness_bridge.rs
       main.rs
 
-  onecontext-agent-harness-core/
+  onecontext-agent-harness/core/
     existing durable unit and adapter evidence store
 
-  onecontext-wiki-core/
+  onecontext-wiki/core/
     existing wiki and mail truth layer
 ```
 

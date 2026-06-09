@@ -1,17 +1,18 @@
 [workspace]
 members = [
-  "crates/onecontext-agent-harness-core",
-  "crates/onecontext-agent-harness-daemon",
+  "crates/onecontext-agent-harness/core",
+  "crates/onecontext-agent-harness/daemon",
   "crates/onecontext-attention-dashboard",
   "crates/onecontext-attention-runner",
-  "crates/onecontext-codex-adapter",
+  "crates/onecontext-agent-harness/adapters/codex",
+  "crates/onecontext-agent-mail",
   "crates/onecontext-context-engine",
   "crates/onecontext-capture-bundler",
   "crates/onecontext-capture-core",
   "crates/onecontext-capture-dashboard",
   "crates/onecontext-memory-db",
-  "crates/onecontext-wiki-core",
-  "crates/onecontext-wiki-daemon",
+  "crates/onecontext-wiki/core",
+  "crates/onecontext-wiki/cli",
 ]
 resolver = "2"
 

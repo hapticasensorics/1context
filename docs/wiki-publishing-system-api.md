@@ -44,8 +44,8 @@ Repo source:
 ```text
 runtime/1Context/              public-safe shipped defaults source
 runtime-test/                  ignored local/private scenario fixtures
-crates/onecontext-wiki-core/   portable Rust wiki semantics
-crates/onecontext-wiki-daemon/ CLI/JSON adapter for the Rust core
+crates/onecontext-wiki/core/   portable Rust wiki semantics
+crates/onecontext-wiki/cli/    CLI/JSON adapter for the Rust core
 wiki-engine/                   deterministic static renderer
 macos/Sources/                 app host, daemon bridge, Local Web, setup
 memory-core/src/onectx/wiki_interface/

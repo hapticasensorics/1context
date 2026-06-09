@@ -2592,6 +2592,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "onecontext-agent-mail"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "fs2",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "tempfile",
+ "url",
+]
+
+[[package]]
 name = "onecontext-attention-dashboard"
 version = "0.1.0"
 dependencies = [
@@ -2668,6 +2682,8 @@ version = "0.1.0"
 dependencies = [
  "chrono",
  "onecontext-agent-harness-core",
+ "onecontext-agent-mail",
+ "onecontext-wiki-core",
  "serde",
  "serde_json",
  "sha2 0.10.9",
@@ -2696,12 +2712,12 @@ dependencies = [
  "anyhow",
  "chrono",
  "fs2",
+ "onecontext-agent-mail",
  "serde",
  "serde_json",
  "sha2 0.10.9",
  "tempfile",
  "toml 0.8.23",
- "url",
 ]
 
 [[package]]
@@ -2710,6 +2726,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "chrono",
+ "onecontext-agent-mail",
  "onecontext-wiki-core",
  "serde",
  "serde_json",

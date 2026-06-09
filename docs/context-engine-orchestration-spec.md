@@ -746,4 +746,4 @@ manual Refresh Wiki over a 3-day window can show:
   `runtime/1Context/context-engine/packs/wiki-company-v1/` and
   `runtime/1Context/context-engine/orchestrators/wiki-company-orchestrator-v1/`.
 - Current real Agent Mail implementation:
-  `crates/onecontext-wiki-core/src/agent_mail.rs`.
+  `crates/onecontext-agent-mail/src/lib.rs`.

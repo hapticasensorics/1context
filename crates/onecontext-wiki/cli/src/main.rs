@@ -6,13 +6,13 @@ use codex_notify::{
     decide_codex_notification_dispatch, CodexDispatchRequest, CodexRuntimeStatus,
     CodexSupervisorPolicy,
 };
+use onecontext_agent_mail::{
+    AgentGrantPolicy, AgentIdentifyRequest, AgentMailStore, AgentRecord, CodexSteeringPayload,
+    DeliveryAttemptStatus, DeliveryState, MailAddress, MailInjectionResult, MessageAcceptance,
+    MessageAttachmentRef, MessageBodyRef, MessageEnvelope, MessagePageRef,
+    NotificationAttemptStatus, SendMailOptions,
+};
 use onecontext_wiki_core::{
-    agent_mail::{
-        AgentGrantPolicy, AgentIdentifyRequest, AgentMailStore, AgentRecord, CodexSteeringPayload,
-        DeliveryAttemptStatus, DeliveryState, MailAddress, MailInjectionResult, MessageAcceptance,
-        MessageAttachmentRef, MessageBodyRef, MessageEnvelope, MessagePageRef,
-        NotificationAttemptStatus, SendMailOptions,
-    },
     PageCreateOptions, TalkAppendRequest, TalkAttachmentInput, TalkDeliveryMode, WikiCore,
     WikiInventory,
 };

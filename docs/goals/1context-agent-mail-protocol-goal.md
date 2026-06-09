@@ -19,7 +19,7 @@ The implementation starts inside the portable Rust wiki runtime boundary as a
 real module, not as more code poured into one large file.
 
 ```text
-onecontext-wiki-core/
+onecontext-wiki/core/
   pages/assets/talk/publish
   agent_mail/
     addresses
@@ -34,9 +34,9 @@ onecontext-wiki-core/
 Adapters stay thin:
 
 ```text
-onecontext-wiki-daemon = CLI/JSON adapter
-Swift bridge           = app host and Local Web integration
-Python wiki adapter    = memory-side client over Rust receipts
+onecontext-wiki/cli = CLI/JSON adapter
+Swift bridge        = app host and Local Web integration
+Python wiki adapter = memory-side client over Rust receipts
 ```
 
 No Swift or Python layer should own routing, claim, mark, lease, mailbox, or
@@ -353,7 +353,7 @@ Post-V0 hardening checks:
 
 - [x] Create a real `agent_mail` module boundary in `onecontext-wiki-core`
   before adding behavior. Evidence:
-  `crates/onecontext-wiki-core/src/agent_mail.rs`.
+  `crates/onecontext-agent-mail/src/lib.rs`.
 - [x] Keep the initial module private to Rust tests; do not expose CLI, Swift,
   or Python calls yet.
 - [x] Add schema/error types for addresses, agents, messages, deliveries,

@@ -108,8 +108,9 @@ runtime/1Context/
 runtime-test/                private ignored fixture lab
 
 crates/
-  onecontext-wiki-core/      portable wiki semantics
-  onecontext-wiki-daemon/    CLI/JSON adapter
+  onecontext-wiki/
+    core/                    portable wiki semantics
+    cli/                     CLI/JSON adapter
 
 wiki-engine/                 renderer package
 

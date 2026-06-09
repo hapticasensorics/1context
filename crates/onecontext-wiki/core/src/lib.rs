@@ -5375,9 +5375,7 @@ fn infer_media_type(filename: &str) -> &'static str {
         Some("txt") | Some("log") | Some("rs") | Some("swift") | Some("py") | Some("go")
         | Some("java") | Some("kt") | Some("sh") | Some("sql") | Some("c") | Some("h")
         | Some("cc") | Some("cpp") | Some("hpp") | Some("m") | Some("mm") | Some("rb")
-        | Some("xml") => {
-            "text/plain"
-        }
+        | Some("xml") => "text/plain",
         Some("csv") => "text/csv",
         Some("pdf") => "application/pdf",
         _ => "application/octet-stream",
