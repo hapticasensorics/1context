@@ -1,11 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { spawn, spawnSync } from 'node:child_process';
-import { once } from 'node:events';
+import { spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, resolve } from 'node:path';
-import { setTimeout as sleep } from 'node:timers/promises';
 import { fileURLToPath } from 'node:url';
 
 import { renderPage } from './index.mjs';
@@ -15,23 +13,6 @@ const ENGINE_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 function writeFixtureFile(path, contents) {
   mkdirSync(dirname(path), { recursive: true });
   writeFileSync(path, contents);
-}
-
-async function waitForPortFile(portFile, details) {
-  for (let attempt = 0; attempt < 100; attempt += 1) {
-    if (existsSync(portFile)) {
-      const port = Number(readFileSync(portFile, 'utf8'));
-      if (port > 0) return port;
-    }
-    await sleep(25);
-  }
-  throw new Error(`serve-site did not write a port file\n${details()}`);
-}
-
-async function stopChild(child) {
-  if (child.exitCode !== null || child.signalCode !== null) return;
-  child.kill();
-  await Promise.race([once(child, 'close'), sleep(1000)]);
 }
 
 test('parent pages emit a single H1 even when markdown starts with a title heading', () => {
@@ -117,187 +98,6 @@ Second claim has another source[^second].
   assert.match(html, /<li id="cite-note-citation-probe-1" class="opctx-reference"/);
   assert.match(html, /First source with <a href="https:\/\/openai.com\/">OpenAI<\/a>\./);
   assert.doesNotMatch(html, /\[\^first\]:/);
-});
-
-test('serve-site answers static wiki state without writable host storage', async () => {
-  const tmp = mkdtempSync(resolve(tmpdir(), '1ctx-static-state-'));
-  const site = resolve(tmp, 'site');
-  const portFile = resolve(tmp, 'port.txt');
-  mkdirSync(site, { recursive: true });
-  writeFixtureFile(resolve(site, 'index.html'), '<!doctype html><title>Static State</title>');
-  writeFixtureFile(resolve(site, 'deep/note.html'), '<!doctype html><title>Deep Note</title><h1>Deep Note</h1>');
-  writeFixtureFile(resolve(site, 'deep/talk/attachments/proof.eml'), [
-    'From: agent@example.com',
-    'Subject: Attachment proof',
-    '',
-    'This should open as readable text in the browser.',
-    '',
-  ].join('\n'));
-  writeFixtureFile(resolve(site, 'deep/talk/attachments/proof.txt'), 'plain text attachment proof\n');
-  writeFixtureFile(resolve(site, 'deep/talk/attachments/context.md'), '# Context Attachment\n\nMarkdown attachment proof.\n');
-  writeFixtureFile(resolve(site, 'deep/talk/attachments/panel.PNG'), Buffer.from([
-    0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a,
-  ]));
-  writeFixtureFile(resolve(site, 'deep/note.md'), `---
-title: Deep Note
-slug: deep-note
-route: /deep/note
-section: reference
-access: private
----
-# Deep Note
-
-Searchable nested note body.
-`);
-  writeFixtureFile(
-    resolve(site, 'deep/note.talk.html'),
-    '<!doctype html><title>Talk · Deep Note</title><h1>Talk · Deep Note</h1>'
-  );
-  writeFixtureFile(
-    resolve(site, 'deep/note/talk/index.html'),
-    '<!doctype html><title>Talk · Deep Note</title><base href="/deep/note/talk/"><h1>Talk · Deep Note</h1>'
-  );
-  writeFixtureFile(resolve(site, '.1context/content-index.json'), JSON.stringify({
-    pages: [
-      {
-        route: '/deep/note',
-        kind: 'page',
-        slug: 'deep-note',
-        title: 'Deep Note',
-        markdown_path: 'deep/note.md',
-      },
-      {
-        route: '/deleted-route',
-        kind: 'page',
-        slug: 'deleted-route',
-        title: 'Deleted Route',
-        markdown_path: 'deleted-route.md',
-      },
-    ],
-  }));
-
-  const server = spawn(process.execPath, [
-    resolve(ENGINE_ROOT, 'tools/serve-site.mjs'),
-    site,
-  ], {
-    cwd: ENGINE_ROOT,
-    env: {
-      ...process.env,
-      HOST: '127.0.0.1',
-      PORT: '0',
-      PORT_FILE: portFile,
-    },
-    stdio: ['ignore', 'pipe', 'pipe'],
-  });
-  let stdout = '';
-  let stderr = '';
-  server.stdout.on('data', (chunk) => { stdout += chunk; });
-  server.stderr.on('data', (chunk) => { stderr += chunk; });
-
-  try {
-    const port = await waitForPortFile(portFile, () => `stdout:\n${stdout}\nstderr:\n${stderr}`);
-    const stateUrl = `http://127.0.0.1:${port}/api/wiki/state`;
-
-    const stateResponse = await fetch(stateUrl);
-    assert.equal(stateResponse.status, 200);
-    const state = await stateResponse.json();
-    assert.deepEqual(state.settings, {});
-    assert.deepEqual(state.bookmarks, []);
-    assert.equal(state._storage.exists, false);
-    assert.equal(state._storage.writable, false);
-    assert.equal(state._storage.mode, 'static');
-
-    const writeResponse = await fetch(stateUrl, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ settings: { theme: 'dark' } }),
-    });
-    assert.equal(writeResponse.status, 405);
-    assert.equal(writeResponse.headers.get('allow'), 'GET, HEAD, OPTIONS');
-    assert.equal((await writeResponse.json()).error, 'static_state_read_only');
-
-    const stateOptionsResponse = await fetch(stateUrl, { method: 'OPTIONS' });
-    assert.equal(stateOptionsResponse.status, 204);
-    assert.equal(stateOptionsResponse.headers.get('allow'), 'GET, HEAD, OPTIONS');
-
-    const searchUrl = `http://127.0.0.1:${port}/api/wiki/search?q=deep%20note`;
-    const searchOptionsResponse = await fetch(searchUrl, { method: 'OPTIONS' });
-    assert.equal(searchOptionsResponse.status, 204);
-    assert.equal(searchOptionsResponse.headers.get('allow'), 'GET, HEAD, OPTIONS');
-
-    const searchHeadResponse = await fetch(searchUrl, { method: 'HEAD' });
-    assert.equal(searchHeadResponse.status, 200);
-    assert.match(searchHeadResponse.headers.get('content-type'), /^application\/json\b/);
-
-    const searchWriteResponse = await fetch(searchUrl, { method: 'POST' });
-    assert.equal(searchWriteResponse.status, 405);
-    assert.equal(searchWriteResponse.headers.get('allow'), 'GET, HEAD, OPTIONS');
-    assert.equal((await searchWriteResponse.json()).error, 'method_not_allowed');
-
-    const searchResponse = await fetch(searchUrl);
-    assert.equal(searchResponse.status, 200);
-    const search = await searchResponse.json();
-    assert.equal(search.matches.length, 1);
-    assert.equal(search.matches[0].title, 'Deep Note');
-    assert.equal(search.matches[0].route, '/deep/note');
-
-    const deletedSearchResponse = await fetch(`http://127.0.0.1:${port}/api/wiki/search?q=deleted%20route`);
-    assert.equal(deletedSearchResponse.status, 200);
-    assert.equal((await deletedSearchResponse.json()).matches.length, 0);
-
-    writeFixtureFile(resolve(site, 'deleted-route.html'), '<!doctype html><title>Deleted Route</title><h1>Deleted Route</h1>');
-    writeFixtureFile(resolve(site, 'deleted-route.md'), `---
-title: Deleted Route
-slug: deleted-route
-route: /deleted-route
-section: reference
-access: private
----
-# Deleted Route
-
-Restored route body.
-`);
-    const restoredRouteResponse = await fetch(`http://127.0.0.1:${port}/deleted-route`);
-    assert.equal(restoredRouteResponse.status, 200);
-    const restoredSearchResponse = await fetch(`http://127.0.0.1:${port}/api/wiki/search?q=deleted%20route`);
-    assert.equal(restoredSearchResponse.status, 200);
-    const restoredSearch = await restoredSearchResponse.json();
-    assert.equal(restoredSearch.matches.length, 1);
-    assert.equal(restoredSearch.matches[0].route, '/deleted-route');
-
-    const canonicalTalkResponse = await fetch(`http://127.0.0.1:${port}/deep/note/talk`);
-    assert.equal(canonicalTalkResponse.status, 200);
-    assert.match(canonicalTalkResponse.headers.get('content-type'), /^text\/html\b/);
-    assert.match(await canonicalTalkResponse.text(), /Talk · Deep Note/);
-
-    const dotTalkResponse = await fetch(`http://127.0.0.1:${port}/deep/note.talk`);
-    assert.equal(dotTalkResponse.status, 404);
-
-    const dotTalkSlashResponse = await fetch(`http://127.0.0.1:${port}/deep/note.talk/`);
-    assert.equal(dotTalkSlashResponse.status, 404);
-
-    const emlResponse = await fetch(`http://127.0.0.1:${port}/deep/talk/attachments/proof.eml`);
-    assert.equal(emlResponse.status, 200);
-    assert.match(emlResponse.headers.get('content-type'), /^text\/plain\b/);
-    assert.match(await emlResponse.text(), /Subject: Attachment proof/);
-
-    const txtResponse = await fetch(`http://127.0.0.1:${port}/deep/talk/attachments/proof.txt`);
-    assert.equal(txtResponse.status, 200);
-    assert.match(txtResponse.headers.get('content-type'), /^text\/plain\b/);
-    assert.match(await txtResponse.text(), /plain text attachment proof/);
-
-    const mdResponse = await fetch(`http://127.0.0.1:${port}/deep/talk/attachments/context.md`);
-    assert.equal(mdResponse.status, 200);
-    assert.match(mdResponse.headers.get('content-type'), /^text\/markdown\b/);
-    assert.match(await mdResponse.text(), /Markdown attachment proof/);
-
-    const pngResponse = await fetch(`http://127.0.0.1:${port}/deep/talk/attachments/panel.PNG`);
-    assert.equal(pngResponse.status, 200);
-    assert.match(pngResponse.headers.get('content-type'), /^image\/png\b/);
-  } finally {
-    await stopChild(server);
-    rmSync(tmp, { recursive: true, force: true });
-  }
 });
 
 test('section sub-pages derive their own canonical route from parent route', () => {

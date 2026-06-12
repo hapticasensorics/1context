@@ -442,7 +442,6 @@ rsync -a \
   --exclude 'node_modules/.bin' \
   --exclude 'node_modules/.package-lock.json' \
   --exclude 'node_modules/*/bin' \
-  --exclude 'tools/serve-site.mjs' \
   --exclude 'tools/write-runtime-defaults-manifest.py' \
   --exclude 'README.md' \
   "$ROOT/wiki-engine/" \
