@@ -1,16 +1,9 @@
-mod codex_notify;
-
 use anyhow::{anyhow, Context, Result};
 use chrono::{Duration, SecondsFormat, Utc};
-use codex_notify::{
-    decide_codex_notification_dispatch, CodexDispatchRequest, CodexRuntimeStatus,
-    CodexSupervisorPolicy,
-};
 use onecontext_agent_mail::{
-    AgentGrantPolicy, AgentIdentifyRequest, AgentMailStore, AgentRecord, CodexSteeringPayload,
-    DeliveryAttemptStatus, DeliveryState, MailAddress, MailInjectionResult, MessageAcceptance,
-    MessageAttachmentRef, MessageBodyRef, MessageEnvelope, MessagePageRef,
-    NotificationAttemptStatus, SendMailOptions,
+    AgentGrantPolicy, AgentIdentifyRequest, AgentMailStore, AgentRecord, DeliveryAttemptStatus,
+    DeliveryState, MailAddress, MailInjectionResult, MessageAcceptance, MessageAttachmentRef,
+    MessageBodyRef, MessageEnvelope, MessagePageRef, SendMailOptions,
 };
 use onecontext_wiki_core::{
     PageCreateOptions, TalkAppendRequest, TalkAttachmentInput, TalkDeliveryMode, WikiCore,
@@ -21,10 +14,9 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::env;
 use std::fs::{self, File};
 use std::io::ErrorKind;
-use std::io::Write;
 use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
+use std::process::Command;
 
 fn main() {
     let args = env::args().skip(1).collect::<Vec<_>>();
@@ -569,7 +561,7 @@ fn run(mut args: Vec<String>) -> Result<()> {
                 "acceptance": acceptance,
                 "delivery_attempt_count": attempts.len(),
                 "delivery_attempts": attempts,
-                "next_action": "wiki.notify.dispatch",
+                "next_action": "wiki.notify.poll",
                 "repair_hints": [],
             }))
         }
@@ -853,83 +845,6 @@ fn run(mut args: Vec<String>) -> Result<()> {
                 "notification": notification,
             }))
         }
-        "notify-dispatch" => {
-            let agent_id = args
-                .first()
-                .cloned()
-                .ok_or_else(|| anyhow!("notify-dispatch requires <agent-id>"))?;
-            args.remove(0);
-            let dry_run = take_bool_flag(&mut args, "--dry-run");
-            let steering_command =
-                take_flag_value(&mut args, "notify-dispatch", "--steering-command")?;
-            let steering_args =
-                take_repeated_flag_values(&mut args, "notify-dispatch", "--steering-arg")?;
-            let payload_format = take_flag_value(&mut args, "notify-dispatch", "--payload-format")?
-                .unwrap_or_else(|| "text".to_string());
-            let limit = take_i64_flag(&mut args, "notify-dispatch", "--limit")?
-                .unwrap_or(25)
-                .max(0) as usize;
-            reject_extra_args("notify-dispatch", &args)?;
-            let store = agent_mail_store(&root);
-            let notifications =
-                store.notification_dispatch_queue(&agent_id, None, &now_rfc3339())?;
-            let mut attempts = Vec::new();
-            let mut dispatch_decisions = Vec::new();
-            for notification in notifications.into_iter().take(limit) {
-                let payload = store.codex_steering_payload(&notification)?;
-                let steering_text = store.codex_steering_text(&payload);
-                let occurred_at = now_rfc3339();
-                let decision = decide_codex_notification_dispatch(CodexDispatchRequest {
-                    payload: &payload,
-                    runtime_status: CodexRuntimeStatus::ActiveTurn {
-                        thread_id: payload.thread_id.clone(),
-                        turn_id: None,
-                    },
-                    policy: CodexSupervisorPolicy::default(),
-                })?;
-                let (status, error) = if !decision.is_dispatchable() {
-                    (
-                        NotificationAttemptStatus::Failed,
-                        Some(serde_json::to_string(&decision.evidence.terminal_error)?),
-                    )
-                } else if dry_run {
-                    (NotificationAttemptStatus::DryRun, None)
-                } else {
-                    let command = steering_command.as_ref().ok_or_else(|| {
-                        anyhow!("notify-dispatch requires --dry-run or --steering-command")
-                    })?;
-                    match send_steering_command(
-                        command,
-                        &steering_args,
-                        &payload_format,
-                        &payload,
-                        &steering_text,
-                    ) {
-                        Ok(()) => (NotificationAttemptStatus::Sent, None),
-                        Err(error) => (
-                            NotificationAttemptStatus::Failed,
-                            Some(format!("{error:#}")),
-                        ),
-                    }
-                };
-                dispatch_decisions.push(decision);
-                attempts.push(store.record_notification_attempt(
-                    &notification,
-                    status,
-                    &occurred_at,
-                    error,
-                )?);
-            }
-            print_json(&json!({
-                "schema_version": 1,
-                "status": "ok",
-                "operation": "wiki.notify.dispatch",
-                "agent_id": agent_id,
-                "attempt_count": attempts.len(),
-                "attempts": attempts,
-                "dispatch_decisions": dispatch_decisions,
-            }))
-        }
         "talk-append" => {
             let page = take_flag_value(&mut args, "talk-append", "--page")?
                 .ok_or_else(|| anyhow!("talk-append requires --page"))?;
@@ -1202,54 +1117,6 @@ fn now_rfc3339() -> String {
     Utc::now().to_rfc3339_opts(SecondsFormat::Secs, true)
 }
 
-fn send_steering_command(
-    command: &str,
-    args: &[String],
-    payload_format: &str,
-    payload: &CodexSteeringPayload,
-    steering_text: &str,
-) -> Result<()> {
-    let input = match payload_format {
-        "text" => steering_text.to_string(),
-        "json" => serde_json::to_string(&json!({
-            "payload": payload,
-            "steering_text": steering_text,
-        }))?,
-        other => {
-            return Err(anyhow!(
-                "invalid notify-dispatch --payload-format {other:?}; expected text or json"
-            ))
-        }
-    };
-    let mut child = Command::new(command)
-        .args(args)
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .with_context(|| format!("spawn steering command {command}"))?;
-    child
-        .stdin
-        .as_mut()
-        .ok_or_else(|| anyhow!("steering command stdin unavailable"))?
-        .write_all(input.as_bytes())
-        .with_context(|| format!("write steering payload to {command}"))?;
-    let output = child
-        .wait_with_output()
-        .with_context(|| format!("wait for steering command {command}"))?;
-    if output.status.success() {
-        return Ok(());
-    }
-    let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
-    let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
-    Err(anyhow!(
-        "steering command {command} failed with status {}; stderr={:?}; stdout={:?}",
-        output.status,
-        stderr,
-        stdout
-    ))
-}
-
 fn take_flag_value(args: &mut Vec<String>, command: &str, flag: &str) -> Result<Option<String>> {
     let Some(index) = args.iter().position(|arg| arg == flag) else {
         return Ok(None);
@@ -1413,7 +1280,6 @@ fn operation_for_command(command: &str) -> &'static str {
         "mail-snooze" => "wiki.mail.snooze",
         "notify-poll" => "wiki.notify.poll",
         "notify-ack" => "wiki.notify.ack",
-        "notify-dispatch" => "wiki.notify.dispatch",
         "talk-append" => "wiki.talk.append",
         _ => "wiki.unknown",
     }
@@ -2723,7 +2589,6 @@ Usage:
   onecontext-wiki --root <1Context-root> mail-snooze <delivery-id> --agent-id <agent-id> --until <rfc3339>
   onecontext-wiki --root <1Context-root> notify-poll <agent-id> [--cursor <cursor>]
   onecontext-wiki --root <1Context-root> notify-ack <notification-id> --agent-id <agent-id>
-  onecontext-wiki --root <1Context-root> notify-dispatch <agent-id> (--dry-run | --steering-command <command> [--steering-arg <arg>]...) [--payload-format text|json] [--limit <n>]
   onecontext-wiki --root <1Context-root> talk-append --page <id> --kind <kind> --subject <subject> --from <actor> (--body <markdown> | --body-file <path>) [--to <label>] [--cc <label>] [--thread-id <thread>] [--reply-to <message>] [--operation-id <id>] [--delivery-mode labels-only|mail] [--attachment <file>] [--attachment-filename <name>] [--attachment-caption <caption>] [--attachment-alt <text>] [--allow-tombstoned]
 
 Aliases: command names may also use the dotted tool form or be prefixed with

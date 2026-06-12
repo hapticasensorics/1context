@@ -27,7 +27,6 @@ final class WikiCoreRPCBridgeTests: XCTestCase {
       "wiki.mail.snooze",
       "wiki.notify.poll",
       "wiki.notify.ack",
-      "wiki.notify.dispatch",
       "wiki.publish.status",
       "wiki.publish"
     ]
@@ -340,17 +339,6 @@ final class WikiCoreRPCBridgeTests: XCTestCase {
       method: "wiki.notify.ack",
       params: ["notificationId": "notif_001", "agentId": "agent_codex_abc"]
     )
-    _ = try bridge.call(
-      method: "wiki.notify.dispatch",
-      params: [
-        "agentId": "agent_codex_abc",
-        "dryRun": true,
-        "steeringCommand": "/usr/bin/true",
-        "steeringArgs": ["--unused"],
-        "payloadFormat": "json",
-        "limit": 3
-      ]
-    )
 
     XCTAssertEqual(recorder.calls, [
       [
@@ -408,20 +396,7 @@ final class WikiCoreRPCBridgeTests: XCTestCase {
         "2026-05-21T08:00:00Z"
       ],
       ["notify-poll", "agent_codex_abc"],
-      ["notify-ack", "notif_001", "--agent-id", "agent_codex_abc"],
-      [
-        "notify-dispatch",
-        "agent_codex_abc",
-        "--dry-run",
-        "--steering-command",
-        "/usr/bin/true",
-        "--steering-arg",
-        "--unused",
-        "--payload-format",
-        "json",
-        "--limit",
-        "3"
-      ]
+      ["notify-ack", "notif_001", "--agent-id", "agent_codex_abc"]
     ])
   }
 
@@ -459,12 +434,6 @@ final class WikiCoreRPCBridgeTests: XCTestCase {
     _ = try bridge.markMail(deliveryID: "delivery_clean", agentID: "agent_codex_clean", state: "done")
     _ = try bridge.pollNotifications(agentID: "agent_codex_clean", cursor: "notifcur_1")
     _ = try bridge.acknowledgeNotification(notificationID: "notif_clean", agentID: "agent_codex_clean")
-    _ = try bridge.dispatchNotifications(
-      agentID: "agent_codex_clean",
-      dryRun: true,
-      payloadFormat: "json",
-      limit: 1
-    )
 
     XCTAssertEqual(recorder.calls, [
       [
@@ -513,8 +482,7 @@ final class WikiCoreRPCBridgeTests: XCTestCase {
       ["mail-claim", "delivery_clean", "--agent-id", "agent_codex_clean"],
       ["mail-mark", "delivery_clean", "--agent-id", "agent_codex_clean", "--state", "done"],
       ["notify-poll", "agent_codex_clean", "--cursor", "notifcur_1"],
-      ["notify-ack", "notif_clean", "--agent-id", "agent_codex_clean"],
-      ["notify-dispatch", "agent_codex_clean", "--dry-run", "--payload-format", "json", "--limit", "1"]
+      ["notify-ack", "notif_clean", "--agent-id", "agent_codex_clean"]
     ])
   }
 

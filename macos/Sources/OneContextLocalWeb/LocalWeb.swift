@@ -454,12 +454,6 @@ public struct CaddyConfig: Equatable, Sendable {
       }
 
       route {
-        @wikiStaticApi path /api/wiki/site /api/wiki/pages /api/wiki/stats
-        handle @wikiStaticApi {
-          rewrite * {path}.json
-          file_server
-        }
-
         @wikiDynamicApi path /api/wiki/*
         handle @wikiDynamicApi {
           reverse_proxy \(apiBindHost):\(apiPort)
@@ -504,12 +498,6 @@ public struct CaddyConfig: Equatable, Sendable {
       }
 
       route {
-        @wikiStaticApi path /api/wiki/site /api/wiki/pages /api/wiki/stats
-        handle @wikiStaticApi {
-          rewrite * {path}.json
-          file_server
-        }
-
         @wikiDynamicApi path /api/wiki/*
         handle @wikiDynamicApi {
           reverse_proxy \(apiBindHost):\(apiPort)

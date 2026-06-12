@@ -293,7 +293,6 @@ public final class WikiLocalAPIHandler: @unchecked Sendable {
     for url in [
       paths.wikiCurrent.appendingPathComponent(".1context/content-index.json"),
       paths.wikiCurrent.appendingPathComponent("content-index.json"),
-      paths.wikiCurrent.appendingPathComponent("api/wiki/pages.json"),
       paths.wikiCurrent.appendingPathComponent("site-manifest.json")
     ] {
       guard let object = readJSON(url) else { continue }

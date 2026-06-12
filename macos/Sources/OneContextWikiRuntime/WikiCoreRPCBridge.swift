@@ -101,8 +101,6 @@ public final class WikiCoreRPCBridge: @unchecked Sendable {
       return try callCore(notifyPollArguments(params))
     case .notifyAck:
       return try callCore(notifyAckArguments(params))
-    case .notifyDispatch:
-      return try callCore(notifyDispatchArguments(params))
     case .talkAppend:
       return try callCore(talkAppendArguments(params))
     }
@@ -210,31 +208,6 @@ public final class WikiCoreRPCBridge: @unchecked Sendable {
 
   public func acknowledgeNotification(notificationID: String, agentID: String) throws -> [String: Any] {
     try call(method: "wiki.notify.ack", params: ["notification_id": notificationID, "agent_id": agentID])
-  }
-
-  public func dispatchNotifications(
-    agentID: String,
-    dryRun: Bool = false,
-    steeringCommand: String? = nil,
-    steeringArgs: [String] = [],
-    payloadFormat: String? = nil,
-    limit: Int? = nil
-  ) throws -> [String: Any] {
-    var params: [String: Any] = [
-      "agent_id": agentID,
-      "dry_run": dryRun,
-      "steering_args": steeringArgs
-    ]
-    if let steeringCommand {
-      params["steering_command"] = steeringCommand
-    }
-    if let payloadFormat {
-      params["payload_format"] = payloadFormat
-    }
-    if let limit {
-      params["limit"] = limit
-    }
-    return try call(method: "wiki.notify.dispatch", params: params)
   }
 
   private func pageCreateArguments(_ params: [String: Any]) throws -> [String] {
@@ -473,16 +446,6 @@ public final class WikiCoreRPCBridge: @unchecked Sendable {
       "--agent-id",
       try requiredString(params, keys: ["agent_id", "agentId", "agent"])
     ]
-  }
-
-  private func notifyDispatchArguments(_ params: [String: Any]) throws -> [String] {
-    var arguments = ["notify-dispatch", try requiredString(params, keys: ["agent_id", "agentId", "agent"])]
-    appendBoolFlag(&arguments, "--dry-run", bool(params, keys: ["dry_run", "dryRun"]))
-    appendOption(&arguments, "--steering-command", string(params, keys: ["steering_command", "steeringCommand"]))
-    appendRepeatedOption(&arguments, "--steering-arg", strings(params, keys: ["steering_args", "steeringArgs"]))
-    appendOption(&arguments, "--payload-format", string(params, keys: ["payload_format", "payloadFormat"]))
-    appendOption(&arguments, "--limit", string(params, keys: ["limit"]))
-    return arguments
   }
 
   private func pageReference(_ params: [String: Any]) throws -> String {
@@ -762,7 +725,6 @@ private enum WikiCoreRPCMethod {
   case mailSnooze
   case notifyPoll
   case notifyAck
-  case notifyDispatch
   case talkAppend
 
   init?(_ method: String) {
@@ -823,8 +785,6 @@ private enum WikiCoreRPCMethod {
       self = .notifyPoll
     case "wiki.notify.ack", "wiki.notify-ack", "wiki.notify_ack":
       self = .notifyAck
-    case "wiki.notify.dispatch", "wiki.notify-dispatch", "wiki.notify_dispatch":
-      self = .notifyDispatch
     case "wiki.talk.append", "wiki.talk-append", "wiki.talk_append":
       self = .talkAppend
     default:

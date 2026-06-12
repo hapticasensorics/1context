@@ -95,7 +95,6 @@ struct OneContextCLI {
       1context wiki mail-snooze <delivery-id> --agent-id <agent-id> --until <rfc3339>
       1context wiki notify-poll <agent-id> [--cursor <cursor>]
       1context wiki notify-ack <notification-id> --agent-id <agent-id>
-      1context wiki notify-dispatch <agent-id> (--dry-run | --steering-command <command> [--steering-arg <arg>]...) [--payload-format text|json] [--limit <n>]
       1context wiki talk-append <page-id-or-route> --subject <subject> --from <address> (--body <markdown> | --body-file <path>) [--operation-id <id>] [--delivery-mode labels-only|mail] [--to <address>]... [--cc <address>]... [--attachment <path>]... [--attachment-filename <name>]... [--attachment-caption <caption>]... [--attachment-alt <text>]...
       1context wiki publish-status
       1context wiki publish [--trigger <label>] [--force] [--wiki-engine <dir>] [--node <path>]
@@ -130,7 +129,6 @@ struct OneContextCLI {
       1context wiki mail-snooze <delivery-id> --agent-id <agent-id> --until <rfc3339>
       1context wiki notify-poll <agent-id> [--cursor <cursor>]
       1context wiki notify-ack <notification-id> --agent-id <agent-id>
-      1context wiki notify-dispatch <agent-id> (--dry-run | --steering-command <command> [--steering-arg <arg>]...) [--payload-format text|json] [--limit <n>]
       1context wiki talk-append <page-id-or-route> --subject <subject> --from <address> (--body <markdown> | --body-file <path>) [--operation-id <id>] [--delivery-mode labels-only|mail] [--to <address>]... [--cc <address>]... [--attachment <path>]... [--attachment-filename <name>]... [--attachment-caption <caption>]... [--attachment-alt <text>]...
       1context wiki publish-status
       1context wiki publish [--trigger <label>] [--force] [--wiki-engine <dir>] [--node <path>]
@@ -508,8 +506,6 @@ struct OneContextCLI {
       try printJSON(UnixJSONRPCClient().call(method: "wiki.notify.poll", params: try wikiNotifyPollParams()))
     case "notify-ack":
       try printJSON(UnixJSONRPCClient().call(method: "wiki.notify.ack", params: try wikiNotifyAckParams()))
-    case "notify-dispatch":
-      try printJSON(UnixJSONRPCClient().call(method: "wiki.notify.dispatch", params: try wikiNotifyDispatchParams()))
     case "talk-append":
       try printJSON(UnixJSONRPCClient().call(method: "wiki.talk.append", params: try wikiTalkAppendParams()))
     case "publish-status":
@@ -856,24 +852,6 @@ struct OneContextCLI {
     return params
   }
 
-  static func wikiNotifyDispatchParams() throws -> [String: Any] {
-    guard args.count >= 3 else {
-      throw CLIError.commandFailed("wiki notify-dispatch requires an agent id")
-    }
-    var params = try wikiParams(
-      startIndex: 3,
-      valueFlags: [
-        "--steering-command": "steering_command",
-        "--payload-format": "payload_format",
-        "--limit": "limit"
-      ],
-      repeatedFlags: ["--steering-arg": "steering_args"],
-      boolFlags: ["--dry-run": "dry_run"]
-    )
-    params["agent_id"] = args[2]
-    return params
-  }
-
   static func wikiTalkAppendParams() throws -> [String: Any] {
     guard args.count >= 3 else {
       throw CLIError.commandFailed("wiki talk-append requires a page id or route")
@@ -1132,7 +1110,6 @@ struct OneContextCLI {
     "mail-snooze": "wiki.mail.snooze",
     "notify-poll": "wiki.notify.poll",
     "notify-ack": "wiki.notify.ack",
-    "notify-dispatch": "wiki.notify.dispatch",
     "talk-append": "wiki.talk.append",
     "publish-status": "wiki.publish.status",
     "publish": "wiki.publish"
