@@ -30,19 +30,34 @@ Failure returns:
 | Command | Request | Return |
 | --- | --- | --- |
 | `help` | `{}` | `commands[]` |
-| `describe` | `{}` | `owned_by_harness[]`, `external_product_layers[]`, `adapter_event_families[]` |
-| `ensure` | `{}` | `paths` |
-| `status` | `{}` | path fields, `store_exists`, `harness_root_exists` |
-| `call` | `AgentCallRequest` | `unit_id`, `unit`, latest `receipt` |
-| `birth` | `AgentCallRequest` | same as `call` |
+| `birth-live` | `AgentCallRequest` | `status: "scaffold"` until live runtime binding lands |
 | `start-turn` | `StartTurnRequest` | updated `unit`, latest `receipt` |
 | `complete-turn` | `CompleteTurnRequest` | updated `unit`, latest `receipt` |
-| `record-adapter-event` | `RecordAdapterEventRequest` | updated `unit`, latest `receipt` |
-| `observe-proof` | `ObserveProofRequest` | `status: "scaffold"`, compatibility `receipt` |
-| `transport-plan` | `TransportPlanRequest` | `request`, `transport_plan`, compatibility `receipt` |
-| `agents` | `{}` | grouped inventory plus `counts` |
-| `agent-status` | `{ "unit_id": "..." }` | `certificate`, `lifecycle`, `lineage`, `turns`, `usage`, `capabilities`, `adapter_evidence`, `proof_status`, `receipts` |
+| `record-proof` | `RecordAdapterEventRequest` | updated `unit`, latest `receipt` |
+| `heartbeat` | `{ "unit_id": "..." }` | updated `unit`, heartbeat proof receipt |
 | `retire` | `{ "unit_id": "...", "reason": "..." }` | updated `unit`, latest `receipt` |
+| `status` | `{}` or `{ "unit_id": "..." }` | path status, or unit status with `certificate`, `lifecycle`, `lineage`, `turns`, `usage`, `capabilities`, `adapter_evidence`, `proof_status`, `receipts` |
+| `inventory` | `{}` | grouped inventory plus `counts` |
+| `replay` | `{}` | replayed `snapshot`, `inventory`, and `counts` |
+
+Support commands:
+
+| Command | Request | Return |
+| --- | --- | --- |
+| `describe` | `{}` | `owned_by_harness[]`, `external_product_layers[]`, `adapter_event_families[]` |
+| `ensure` | `{}` | `paths` |
+
+Compatibility aliases:
+
+| Alias | Use Instead |
+| --- | --- |
+| `call` | `birth-live` once live birth lands; currently legacy ledger birth |
+| `birth` | `birth-live` once live birth lands; currently legacy ledger birth |
+| `record-adapter-event` | `record-proof` |
+| `agents` | `inventory` |
+| `agent-status` | `status` with `unit_id` |
+| `observe-proof` | `record-proof`; currently scaffold only |
+| `transport-plan` | future `birth-live` tool resolution |
 
 ## Requests
 
@@ -69,19 +84,19 @@ Optional: `outcome`, `status`, `input_tokens`, `output_tokens`,
 
 `outcome`/`status`: `completed`, `waiting`, `done`.
 
-`RecordAdapterEventRequest`
+`RecordAdapterEventRequest` / `record-proof`
 
 Required: `unit_id`, `adapter`, `kind`, `status`.
 
 Optional: `event_id`, `id`, `at`, `correlation`, `evidence`, `redaction`.
 
-`ObserveProofRequest`
+`ObserveProofRequest` compatibility alias
 
 Required: `unit_id` and one of `proof_key`, `proof`, or `kind`.
 
 Optional: `status`, `evidence`, `metadata`.
 
-`TransportPlanRequest`
+`TransportPlanRequest` compatibility alias
 
 Optional: `unit_id`, `capability_id`, `requested_transports`, `intent`,
 `metadata`.
@@ -115,5 +130,6 @@ Optional: `unit_id`, `capability_id`, `requested_transports`, `intent`,
 
 ## Current Caveat
 
-`record-adapter-event` is the durable proof write path. `observe-proof` only
-returns a scaffold compatibility receipt today.
+`record-proof` is the durable proof write path. `observe-proof` only returns a
+scaffold compatibility receipt today. `birth-live` is fail-closed scaffold until
+the harness owns real Codex runtime binding.

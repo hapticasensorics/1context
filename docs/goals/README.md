@@ -22,6 +22,10 @@ Current goals:
 - [1Context Codex Adapter Implementation Goal](1context-codex-adapter-implementation-goal.md)
   - Status: active. Tracks the Rust adapter spine for Codex app-server binding,
     hooks, wake dispatch, body injection, event mirroring, and redacted proof.
+- [1Context Agent Harness Live Birth Proof Goal](1context-agent-harness-live-birth-proof-goal.md)
+  - Status: planning. Defines the live Codex proof gate for harness-owned agent
+    birth, context/tool injection, runtime binding, ledger replay, and repeated
+    proof from clean roots.
 
 Archived goals:
 

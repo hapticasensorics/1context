@@ -850,6 +850,12 @@ impl AgentHarnessStore {
         snapshot.agent_status(unit_id)
     }
 
+    pub fn replay(&self) -> Result<AgentHarnessSnapshot, HarnessError> {
+        self.paths.ensure_dirs()?;
+        let receipts = read_receipt_artifacts(&self.paths)?;
+        replay_snapshot_from_receipts(&self.paths, &receipts)
+    }
+
     fn load_snapshot_unlocked(&self) -> Result<AgentHarnessSnapshot, HarnessError> {
         if !self.paths.store_path.exists() {
             return Ok(AgentHarnessSnapshot::default());

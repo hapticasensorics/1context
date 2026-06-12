@@ -1,8 +1,9 @@
 use onecontext_agent_harness_core::{
-    describe_agent_harness_contract, summarize_proof_status, utc_now_rfc3339, AdapterEvent,
-    AgentAvailability, AgentCallRequest, AgentHarnessInventoryEntry, AgentHarnessPaths,
-    AgentHarnessStore, AgentHarnessUnit, AgentUnitId, HarnessError, HarnessLifecycleState,
-    ReceiptKind, AGENT_HARNESS_SCHEMA_VERSION,
+    describe_agent_harness_contract, summarize_proof_status, utc_now_rfc3339, AdapterCorrelation,
+    AdapterEvent, AdapterEventKind, AdapterEventRequest, AdapterEventStatus, AdapterKind,
+    AdapterRedaction, AgentAvailability, AgentCallRequest, AgentHarnessInventoryEntry,
+    AgentHarnessPaths, AgentHarnessStore, AgentHarnessUnit, AgentUnitId, HarnessError,
+    HarnessLifecycleState, ReceiptKind, AGENT_HARNESS_SCHEMA_VERSION,
 };
 mod protocol;
 
@@ -79,16 +80,23 @@ fn run(mut args: Vec<String>) -> Result<Value, CliError> {
                 "paths": paths.status_payload(),
             }))
         }
-        "status" => Ok(paths.status_payload()),
+        "status" => status_route(&paths, request),
         "call" => call_route(&paths, "call", request),
         "birth" => call_route(&paths, "birth", request),
+        "birth-live" => birth_live_route(&paths, request),
         "start-turn" => start_turn_route(&paths, request),
         "complete-turn" => complete_turn_route(&paths, request),
         "observe-proof" => observe_proof_route(&paths, request),
-        "record-adapter-event" => record_adapter_event_route(&paths, request),
+        "record-proof" => record_adapter_event_route(&paths, "record-proof", request),
+        "record-adapter-event" => {
+            record_adapter_event_route(&paths, "record-adapter-event", request)
+        }
+        "heartbeat" => heartbeat_route(&paths, request),
         "transport-plan" => transport_plan_route(&paths, request),
-        "agents" => agents_route(&paths, request),
-        "agent-status" => agent_status_route(&paths, request),
+        "inventory" => agents_route(&paths, "inventory", request),
+        "agents" => agents_route(&paths, "agents", request),
+        "agent-status" => agent_status_route(&paths, "agent-status", request),
+        "replay" => replay_route(&paths, request),
         "retire" => retire_route(&paths, request),
         other => Err(CliError {
             exit_code: 2,
@@ -106,19 +114,28 @@ fn help_payload() -> Value {
         "status": "ok",
         "surface": "agent_harness_help",
         "commands": [
-            "ensure",
-            "status",
-            "describe",
-            "call",
-            "birth",
+            "birth-live",
             "start-turn",
             "complete-turn",
+            "record-proof",
+            "heartbeat",
+            "retire",
+            "status",
+            "inventory",
+            "replay"
+        ],
+        "support_commands": [
+            "ensure",
+            "describe"
+        ],
+        "compatibility_aliases": [
+            "call",
+            "birth",
             "observe-proof",
             "record-adapter-event",
             "transport-plan",
             "agents",
-            "agent-status",
-            "retire"
+            "agent-status"
         ],
     })
 }
@@ -140,12 +157,58 @@ fn call_route(paths: &AgentHarnessPaths, command: &str, request: Value) -> Resul
     Ok(unit_payload(command, unit))
 }
 
-fn agents_route(paths: &AgentHarnessPaths, request: Value) -> Result<Value, CliError> {
-    validate_request("agents", request, RequestShape::AnyObject)?;
+fn birth_live_route(paths: &AgentHarnessPaths, request: Value) -> Result<Value, CliError> {
+    let request = validate_request("birth-live", request, RequestShape::Call)?;
+    paths.ensure_dirs().map_err(|error| CliError {
+        exit_code: 1,
+        code: "agent_harness_ensure_failed".to_string(),
+        message: error.to_string(),
+        details: json!({ "command": "birth-live" }),
+        repair_hints: vec![
+            "Check that --root points to a writable 1Context directory.".to_string(),
+        ],
+    })?;
+    let at = utc_now_rfc3339();
+    Ok(json!({
+        "schema_version": AGENT_HARNESS_SCHEMA_VERSION,
+        "status": "scaffold",
+        "surface": "agent_harness_protocol",
+        "operation": "agent.harness.birth-live",
+        "at": at,
+        "request": request,
+        "feature_gate": {
+            "status": "blocked",
+            "reason": "birth-live must start or resume a real Codex runtime before writing agent.born",
+            "owner_lane": "live-codex-runtime-binding",
+            "daemon_behavior": "validated intended birth request shape and failed closed without creating a harness unit"
+        }
+    }))
+}
+
+fn status_route(paths: &AgentHarnessPaths, request: Value) -> Result<Value, CliError> {
+    let request = validate_request("status", request, RequestShape::AnyObject)?;
+    if request
+        .get("unit_id")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|unit_id| !unit_id.is_empty())
+        .is_some()
+    {
+        return agent_status_route(paths, "status", request);
+    }
+    Ok(paths.status_payload())
+}
+
+fn agents_route(
+    paths: &AgentHarnessPaths,
+    command: &str,
+    request: Value,
+) -> Result<Value, CliError> {
+    validate_request(command, request, RequestShape::AnyObject)?;
     let store = AgentHarnessStore::from_paths(paths.clone());
     let inventory = store
         .inventory()
-        .map_err(|error| CliError::from_harness_error("agents", error))?;
+        .map_err(|error| CliError::from_harness_error(command, error))?;
 
     let mut active = Vec::new();
     let mut waiting = Vec::new();
@@ -175,7 +238,7 @@ fn agents_route(paths: &AgentHarnessPaths, request: Value) -> Result<Value, CliE
         "schema_version": AGENT_HARNESS_SCHEMA_VERSION,
         "status": "ok",
         "surface": "agent_harness_protocol",
-        "operation": "agent.harness.agents",
+        "operation": operation_name(command),
         "at": utc_now_rfc3339(),
         "agents": {
             "active": active,
@@ -194,14 +257,18 @@ fn agents_route(paths: &AgentHarnessPaths, request: Value) -> Result<Value, CliE
     }))
 }
 
-fn agent_status_route(paths: &AgentHarnessPaths, request: Value) -> Result<Value, CliError> {
-    let request = validate_request("agent-status", request, RequestShape::Unit)?;
-    let unit_id = unit_id_from_request("agent-status", &request)?;
+fn agent_status_route(
+    paths: &AgentHarnessPaths,
+    command: &str,
+    request: Value,
+) -> Result<Value, CliError> {
+    let request = validate_request(command, request, RequestShape::Unit)?;
+    let unit_id = unit_id_from_request(command, &request)?;
     let store = AgentHarnessStore::from_paths(paths.clone());
     let status = store
         .agent_status(&unit_id)
-        .map_err(|error| CliError::from_harness_error("agent-status", error))?;
-    Ok(agent_status_payload(status.unit))
+        .map_err(|error| CliError::from_harness_error(command, error))?;
+    Ok(agent_status_payload(command, status.unit))
 }
 
 fn retire_route(paths: &AgentHarnessPaths, request: Value) -> Result<Value, CliError> {
@@ -269,15 +336,51 @@ fn observe_proof_route(paths: &AgentHarnessPaths, request: Value) -> Result<Valu
 
 fn record_adapter_event_route(
     paths: &AgentHarnessPaths,
+    command: &str,
     request: Value,
 ) -> Result<Value, CliError> {
-    let request = parse_record_adapter_event(&request)
-        .map_err(|error| protocol_error("record-adapter-event", error))?;
+    let request =
+        parse_record_adapter_event(&request).map_err(|error| protocol_error(command, error))?;
     let store = AgentHarnessStore::from_paths(paths.clone());
     let unit = store
         .record_adapter_event(request.into_core())
-        .map_err(|error| CliError::from_harness_error("record-adapter-event", error))?;
-    Ok(unit_payload("record-adapter-event", unit))
+        .map_err(|error| CliError::from_harness_error(command, error))?;
+    Ok(unit_payload(command, unit))
+}
+
+fn heartbeat_route(paths: &AgentHarnessPaths, request: Value) -> Result<Value, CliError> {
+    let request = validate_request("heartbeat", request, RequestShape::Unit)?;
+    let unit_id = unit_id_from_request("heartbeat", &request)?;
+    let correlation = request
+        .get("correlation")
+        .cloned()
+        .map(serde_json::from_value::<AdapterCorrelation>)
+        .transpose()
+        .map_err(|error| {
+            CliError::invalid_request(
+                "heartbeat",
+                format!("Request field correlation has invalid shape: {error}"),
+                vec!["Check the object shape for correlation.".to_string()],
+            )
+        })?
+        .unwrap_or_default();
+    let evidence = request
+        .get("evidence")
+        .cloned()
+        .unwrap_or_else(|| json!({ "source": "agent.harness.heartbeat" }));
+    let store = AgentHarnessStore::from_paths(paths.clone());
+    let unit = store
+        .record_adapter_event(AdapterEventRequest {
+            unit_id,
+            adapter: AdapterKind::HostHook,
+            kind: AdapterEventKind::AgentHeartbeatObserved,
+            status: AdapterEventStatus::Observed,
+            correlation,
+            evidence,
+            redaction: AdapterRedaction::default(),
+        })
+        .map_err(|error| CliError::from_harness_error("heartbeat", error))?;
+    Ok(unit_payload("heartbeat", unit))
 }
 
 fn transport_plan_route(paths: &AgentHarnessPaths, request: Value) -> Result<Value, CliError> {
@@ -334,6 +437,30 @@ fn transport_plan_route(paths: &AgentHarnessPaths, request: Value) -> Result<Val
     }))
 }
 
+fn replay_route(paths: &AgentHarnessPaths, request: Value) -> Result<Value, CliError> {
+    validate_request("replay", request, RequestShape::AnyObject)?;
+    let store = AgentHarnessStore::from_paths(paths.clone());
+    let snapshot = store
+        .replay()
+        .map_err(|error| CliError::from_harness_error("replay", error))?;
+    let inventory = snapshot.inventory();
+    let active_count = inventory.active.len();
+    let retired_count = inventory.retired.len();
+    Ok(json!({
+        "schema_version": AGENT_HARNESS_SCHEMA_VERSION,
+        "status": "ok",
+        "surface": "agent_harness_protocol",
+        "operation": "agent.harness.replay",
+        "at": utc_now_rfc3339(),
+        "snapshot": snapshot,
+        "inventory": inventory,
+        "counts": {
+            "active": active_count,
+            "retired": retired_count
+        }
+    }))
+}
+
 fn unit_payload(command: &str, unit: AgentHarnessUnit) -> Value {
     let unit_id = unit.unit_id.0.clone();
     let receipt = unit.receipts.last().cloned();
@@ -376,7 +503,7 @@ fn frontier_scaffold_payload(
     })
 }
 
-fn agent_status_payload(unit: AgentHarnessUnit) -> Value {
+fn agent_status_payload(command: &str, unit: AgentHarnessUnit) -> Value {
     let unit_id = unit.unit_id.0.clone();
     let adapter_events = persisted_adapter_events(&unit);
     let proof_status = summarize_proof_status(&unit.certificate.capabilities, &adapter_events);
@@ -384,7 +511,7 @@ fn agent_status_payload(unit: AgentHarnessUnit) -> Value {
         "schema_version": AGENT_HARNESS_SCHEMA_VERSION,
         "status": "ok",
         "surface": "agent_harness_protocol",
-        "operation": "agent.harness.agent-status",
+        "operation": operation_name(command),
         "at": utc_now_rfc3339(),
         "unit_id": unit_id,
         "certificate": &unit.certificate,
@@ -1231,6 +1358,115 @@ mod tests {
 
         assert_eq!(error.code, "agent_harness_unit_retired");
         assert_eq!(error.details["unit_id"], "agent-retired-1");
+    }
+
+    #[test]
+    fn help_names_clean_api_and_compatibility_aliases() {
+        let payload = run(vec!["help".to_string()]).expect("help");
+
+        let commands = payload["commands"].as_array().unwrap();
+        assert!(commands.iter().any(|command| command == "birth-live"));
+        assert!(commands.iter().any(|command| command == "record-proof"));
+        assert!(commands.iter().any(|command| command == "inventory"));
+        assert!(commands.iter().any(|command| command == "replay"));
+        assert!(!commands.iter().any(|command| command == "call"));
+
+        let aliases = payload["compatibility_aliases"].as_array().unwrap();
+        assert!(aliases.iter().any(|command| command == "call"));
+        assert!(aliases
+            .iter()
+            .any(|command| command == "record-adapter-event"));
+    }
+
+    #[test]
+    fn birth_live_fails_closed_without_creating_ledger_unit() {
+        let root = temp_root("birth-live-scaffold");
+        let payload = run(vec![
+            "--root".to_string(),
+            root.display().to_string(),
+            "birth-live".to_string(),
+            "--request-json".to_string(),
+            r#"{"unit_id":"agent-live-1","role":"researcher","model":"gpt-5","visibility":"private"}"#
+                .to_string(),
+        ])
+        .expect("birth-live scaffold");
+
+        assert_eq!(payload["status"], "scaffold");
+        assert_eq!(payload["operation"], "agent.harness.birth-live");
+        assert_eq!(payload["feature_gate"]["status"], "blocked");
+
+        let inventory = run(vec![
+            "--root".to_string(),
+            root.display().to_string(),
+            "inventory".to_string(),
+        ])
+        .expect("inventory");
+        assert_eq!(inventory["agents"]["counts"]["active"], 0);
+    }
+
+    #[test]
+    fn clean_inventory_status_record_proof_heartbeat_and_replay_commands_work() {
+        let root = temp_root("clean-api");
+        create_unit_with_context_proof(&root, "agent-clean-1");
+
+        let inventory = run(vec![
+            "--root".to_string(),
+            root.display().to_string(),
+            "inventory".to_string(),
+        ])
+        .expect("inventory");
+        assert_eq!(inventory["operation"], "agent.harness.inventory");
+        assert_eq!(inventory["agents"]["counts"]["active"], 1);
+
+        let status = run(vec![
+            "--root".to_string(),
+            root.display().to_string(),
+            "status".to_string(),
+            "--request-json".to_string(),
+            r#"{"unit_id":"agent-clean-1"}"#.to_string(),
+        ])
+        .expect("status");
+        assert_eq!(status["operation"], "agent.harness.status");
+        assert_eq!(status["unit_id"], "agent-clean-1");
+
+        let recorded = run(vec![
+            "--root".to_string(),
+            root.display().to_string(),
+            "record-proof".to_string(),
+            "--request-json".to_string(),
+            r#"{"unit_id":"agent-clean-1","adapter":"local_test","kind":"context_injection_executed","status":"accepted"}"#
+                .to_string(),
+        ])
+        .expect("record proof");
+        assert_eq!(recorded["operation"], "agent.harness.record-proof");
+        assert_eq!(recorded["receipt"]["kind"], "proof_observed");
+
+        let heartbeat = run(vec![
+            "--root".to_string(),
+            root.display().to_string(),
+            "heartbeat".to_string(),
+            "--request-json".to_string(),
+            r#"{"unit_id":"agent-clean-1","evidence":{"lease":"alive"}}"#.to_string(),
+        ])
+        .expect("heartbeat");
+        assert_eq!(heartbeat["operation"], "agent.harness.heartbeat");
+        assert_eq!(heartbeat["receipt"]["kind"], "proof_observed");
+
+        let replay = run(vec![
+            "--root".to_string(),
+            root.display().to_string(),
+            "replay".to_string(),
+        ])
+        .expect("replay");
+        assert_eq!(replay["operation"], "agent.harness.replay");
+        assert_eq!(replay["counts"]["active"], 1);
+        assert_eq!(
+            replay["snapshot"]["units"]["agent-clean-1"]["adapter_events"]
+                .as_array()
+                .unwrap()
+                .len(),
+            2
+        );
     }
 
     fn temp_root(label: &str) -> PathBuf {

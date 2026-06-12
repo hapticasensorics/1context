@@ -11,10 +11,10 @@ returns structured JSON for both success and error paths.
 Request-bearing commands accept any one of:
 
 ```bash
-onecontext-agent-harness call --request-json '{"role":"researcher","model":"gpt-5","visibility":"private"}'
-onecontext-agent-harness call --json '{"role":"researcher","model":"gpt-5","visibility":"private"}'
-onecontext-agent-harness call --request-file request.json
-onecontext-agent-harness call '{"role":"researcher","model":"gpt-5","visibility":"private"}'
+onecontext-agent-harness birth-live --request-json '{"role":"researcher","model":"gpt-5","visibility":"private"}'
+onecontext-agent-harness record-proof --json '{"unit_id":"agent-1","adapter":"local_test","kind":"context_injection_executed","status":"observed"}'
+onecontext-agent-harness status --request-file request.json
+onecontext-agent-harness inventory '{}'
 ```
 
 `--root <path>` selects the 1Context runtime root and defaults to
@@ -22,23 +22,36 @@ onecontext-agent-harness call '{"role":"researcher","model":"gpt-5","visibility"
 
 ## Commands
 
-Implemented against the current core API:
+Primary harness API:
 
-- `ensure`
-- `status`
-- `describe`
-- `call`
-- `birth`
+- `birth-live`
 - `start-turn`
 - `complete-turn`
+- `record-proof`
+- `heartbeat`
+- `retire`
+- `status`
+- `inventory`
+- `replay`
+
+Support commands:
+
+- `ensure`
+- `describe`
+
+Compatibility aliases:
+
+- `call`
+- `birth`
 - `record-adapter-event`
 - `agents`
 - `agent-status`
-- `retire`
-
-Implemented in the daemon protocol layer:
-
 - `transport-plan`
+- `observe-proof`
+
+`call` and `birth` still perform the legacy ledger-only birth. `birth-live`
+currently fails closed with `status: "scaffold"` until the harness owns live
+Codex runtime binding.
 
 `transport-plan` is a deterministic projection over declared capability
 bindings. It returns `status: "ok"`, a stable daemon receipt, and a
@@ -48,10 +61,6 @@ core planner:
 ```rust
 AgentHarnessStore::plan_transport(TransportPlanRequest) -> Result<TransportPlan, HarnessError>
 ```
-
-Compatibility-gated until the core crate exposes a durable store API:
-
-- `observe-proof`
 
 `observe-proof` returns `status: "scaffold"` with a stable receipt and a
 `feature_gate.expected_core_method` field:
@@ -87,7 +96,7 @@ and is not retired before returning a scaffold receipt.
 }
 ```
 
-`record-adapter-event`:
+`record-proof`:
 
 ```json
 {
@@ -109,7 +118,7 @@ and is not retired before returning a scaffold receipt.
 }
 ```
 
-`agent-status` returns persisted turn, usage, adapter evidence, and proof status
+`status` with `unit_id` returns persisted turn, usage, adapter evidence, and proof status
 from the core store. Adapter proof status is derived from
 `unit.adapter_events` plus adapter events replayed from unit receipt evidence.
 Registry proof events include `skill_registry_observed`,
