@@ -6,8 +6,8 @@ use onecontext_agent_mail::{
     MessageBodyRef, MessageEnvelope, MessagePageRef, SendMailOptions,
 };
 use onecontext_wiki_core::{
-    PageCreateOptions, TalkAppendRequest, TalkAttachmentInput, TalkDeliveryMode, WikiCore,
-    WikiInventory,
+    Actor, OperatorTouchedConflict, PageCreateOptions, TalkAppendRequest, TalkAttachmentInput,
+    TalkDeliveryMode, WikiCore, WikiInventory,
 };
 use serde_json::json;
 use std::collections::{BTreeMap, BTreeSet};
@@ -23,11 +23,16 @@ fn main() {
     if let Err(error) = run(args.clone()) {
         let message = format!("{error:#}");
         let command = command_name(&args).unwrap_or("unknown");
+        let conflict_details = error
+            .downcast_ref::<OperatorTouchedConflict>()
+            .and_then(|conflict| serde_json::to_value(conflict).ok());
         let mut error = json!({
             "code": error_code(&message),
             "message": message,
         });
-        if let Some(details) = error_details(error["message"].as_str().unwrap_or_default()) {
+        if let Some(details) = conflict_details {
+            error["details"] = details;
+        } else if let Some(details) = error_details(error["message"].as_str().unwrap_or_default()) {
             error["details"] = details;
         }
         let repair_hints = repair_hints(error["message"].as_str().unwrap_or_default());
@@ -160,8 +165,9 @@ fn run(mut args: Vec<String>) -> Result<()> {
                 .ok_or_else(|| anyhow!("page-write-body requires --body or --body-file"))?;
             let expected =
                 take_flag_value(&mut args, "page-write-body", "--expected-source-sha256")?;
+            let actor = take_actor_flag(&mut args, "page-write-body")?;
             reject_extra_args("page-write-body", &args)?;
-            print_json(&core.write_page_body(&page, &body, expected.as_deref())?)
+            print_json(&core.write_page_body(&page, &body, expected.as_deref(), &actor)?)
         }
         "page-patch-body" => {
             let page = args
@@ -178,8 +184,42 @@ fn run(mut args: Vec<String>) -> Result<()> {
                     })?;
             let expected =
                 take_flag_value(&mut args, "page-patch-body", "--expected-source-sha256")?;
+            let actor = take_actor_flag(&mut args, "page-patch-body")?;
             reject_extra_args("page-patch-body", &args)?;
-            print_json(&core.patch_page_body(&page, &find, &replace, expected.as_deref())?)
+            print_json(&core.patch_page_body(
+                &page,
+                &find,
+                &replace,
+                expected.as_deref(),
+                &actor,
+            )?)
+        }
+        "page-append-section" => {
+            let page = args
+                .first()
+                .cloned()
+                .ok_or_else(|| anyhow!("page-append-section requires <page>"))?;
+            args.remove(0);
+            let section = take_flag_value(&mut args, "page-append-section", "--section")?
+                .ok_or_else(|| anyhow!("page-append-section requires --section"))?;
+            let content = read_text_arg(
+                &mut args,
+                "page-append-section",
+                "--content",
+                "--content-file",
+            )?
+            .ok_or_else(|| anyhow!("page-append-section requires --content or --content-file"))?;
+            let expected =
+                take_flag_value(&mut args, "page-append-section", "--expected-source-sha256")?;
+            let actor = take_actor_flag(&mut args, "page-append-section")?;
+            reject_extra_args("page-append-section", &args)?;
+            print_json(&core.append_to_section(
+                &page,
+                &section,
+                &content,
+                expected.as_deref(),
+                &actor,
+            )?)
         }
         "asset-add" => {
             let page = args
@@ -1169,6 +1209,16 @@ fn reject_extra_args(command: &str, args: &[String]) -> Result<()> {
     }
 }
 
+/// Body-write actor attribution: `--actor operator` (the default — a human at
+/// the terminal) or `--actor agent://<unit>`. Agent actors are subject to
+/// server-enforced operator-touched span rejection in wiki-core.
+fn take_actor_flag(args: &mut Vec<String>, command: &str) -> Result<Actor> {
+    match take_flag_value(args, command, "--actor")? {
+        Some(value) => Actor::parse(&value),
+        None => Ok(Actor::operator()),
+    }
+}
+
 fn read_text_arg(
     args: &mut Vec<String>,
     command: &str,
@@ -1254,6 +1304,7 @@ fn operation_for_command(command: &str) -> &'static str {
         "page-create-all" => "wiki.page.create_all",
         "page-write-body" => "wiki.page.write_body",
         "page-patch-body" => "wiki.page.patch_body",
+        "page-append-section" => "wiki.page.append_section",
         "asset-add" => "wiki.asset.add",
         "asset-list" => "wiki.asset.list",
         "reference-list" => "wiki.reference.list",
@@ -1305,7 +1356,16 @@ fn canonical_command(command: &str) -> String {
 }
 
 fn error_code(message: &str) -> &'static str {
-    if message.contains("snooze until") || message.contains("state snoozed requires --until") {
+    if message.contains("operator_touched_conflict:") {
+        "operator_touched_conflict"
+    } else if message.contains("invalid actor:") {
+        "invalid_actor"
+    } else if message.contains("section heading not found in body") {
+        "section_not_found"
+    } else if message.contains("section heading matched") {
+        "section_ambiguous"
+    } else if message.contains("snooze until") || message.contains("state snoozed requires --until")
+    {
         "invalid_snooze_until"
     } else if message.contains("timed out waiting for") && message.contains(" lock at ") {
         "mutation_lock_busy"
@@ -1397,7 +1457,16 @@ fn error_details(message: &str) -> Option<serde_json::Value> {
 }
 
 fn repair_hints(message: &str) -> Vec<&'static str> {
-    if message.contains("snooze until") || message.contains("state snoozed requires --until") {
+    if message.contains("operator_touched_conflict:") {
+        vec!["Operator-authored spans are server-protected. Append after the span with page-append-section, or leave the edit to the operator via a talk proposal."]
+    } else if message.contains("invalid actor:") {
+        vec!["Pass --actor operator for human edits or --actor agent://<unit> for agent edits."]
+    } else if message.contains("section heading not found in body") {
+        vec!["Run wiki.page.open to inspect the current source headings before appending."]
+    } else if message.contains("section heading matched") {
+        vec!["Make the section heading unique before appending, or use page-patch-body with a narrower edit."]
+    } else if message.contains("snooze until") || message.contains("state snoozed requires --until")
+    {
         vec!["Use --until with an RFC3339 timestamp in the future, for example 2099-01-01T00:00:00Z."]
     } else if message.contains("timed out waiting for") && message.contains(" lock at ") {
         vec!["Retry after the current wiki mutation finishes."]
@@ -2561,8 +2630,9 @@ Usage:
   onecontext-wiki --root <1Context-root> page-open <page-id-or-route>
   onecontext-wiki --root <1Context-root> page-create <page-id> [--title <title>] [--route <route>] [--slug <slug>] [--family-group <id>] [--family-id <id>] [--type <type>] [--template <path>] [--summary <text>] [--nav-section primary|utility|hidden] [--nav-order <n>]
   onecontext-wiki --root <1Context-root> page-create-all
-  onecontext-wiki --root <1Context-root> page-write-body <page-id-or-route> (--body <markdown> | --body-file <path>) [--expected-source-sha256 <hash>]
-  onecontext-wiki --root <1Context-root> page-patch-body <page-id-or-route> (--find <markdown> | --find-file <path>) (--replace <markdown> | --replace-file <path>) [--expected-source-sha256 <hash>]
+  onecontext-wiki --root <1Context-root> page-write-body <page-id-or-route> (--body <markdown> | --body-file <path>) [--expected-source-sha256 <hash>] [--actor <operator|agent://unit>]
+  onecontext-wiki --root <1Context-root> page-patch-body <page-id-or-route> (--find <markdown> | --find-file <path>) (--replace <markdown> | --replace-file <path>) [--expected-source-sha256 <hash>] [--actor <operator|agent://unit>]
+  onecontext-wiki --root <1Context-root> page-append-section <page-id-or-route> --section <heading> (--content <markdown> | --content-file <path>) [--expected-source-sha256 <hash>] [--actor <operator|agent://unit>]
   onecontext-wiki --root <1Context-root> asset-add <page-id-or-route> --file <path> [--filename <name>] [--purpose inline_image|download|decorative|source_file] [--caption <text>] [--alt-text <text>]
   onecontext-wiki --root <1Context-root> asset-list <page-id-or-route>
   onecontext-wiki --root <1Context-root> reference-list [page-id-or-route]
@@ -2718,6 +2788,72 @@ mod tests {
             vec![
                 "Run wiki.page.restore before editing, or choose an enabled replacement page for new content."
             ]
+        );
+    }
+
+    #[test]
+    fn operator_touched_conflict_passes_through_as_typed_error() {
+        let temp = TempDir::new().unwrap();
+        let root = temp.path().join("1Context");
+        seed_runtime(&root);
+        let root_flag = root.display().to_string();
+        let base = |args: &[&str]| {
+            let mut command = vec!["--root".to_string(), root_flag.clone()];
+            command.extend(args.iter().map(|arg| arg.to_string()));
+            command
+        };
+
+        run(base(&["page-create", "topics"])).unwrap();
+        run(base(&[
+            "page-write-body",
+            "topics",
+            "--body",
+            "\n# Topics\n\n<!-- operator-touched: 2026-06-01 founder pass -->\nFounder paragraph.\n<!-- /operator-touched -->\n",
+        ]))
+        .unwrap();
+
+        let error = run(base(&[
+            "page-patch-body",
+            "topics",
+            "--find",
+            "Founder paragraph.",
+            "--replace",
+            "Agent rewrite.",
+            "--actor",
+            "agent://wiki/curator",
+        ]))
+        .expect_err("agent patch into operator span must fail");
+        let conflict = error
+            .downcast_ref::<OperatorTouchedConflict>()
+            .expect("typed operator_touched_conflict crosses the CLI boundary");
+        assert_eq!(conflict.code, "operator_touched_conflict");
+        let message = format!("{error:#}");
+        assert_eq!(error_code(&message), "operator_touched_conflict");
+        assert!(!repair_hints(&message).is_empty());
+
+        run(base(&[
+            "page-append-section",
+            "topics",
+            "--section",
+            "Topics",
+            "--content",
+            "Additive agent note after the span.",
+            "--actor",
+            "agent://wiki/curator",
+        ]))
+        .expect("append after the span stays allowed for agents");
+
+        assert_eq!(
+            error_code("invalid actor: founder; expected operator or agent://<unit>"),
+            "invalid_actor"
+        );
+        assert_eq!(
+            error_code("section heading not found in body for topics: Missing; use page-open to inspect the current source"),
+            "section_not_found"
+        );
+        assert_eq!(
+            error_code("section heading matched 2 times in body for topics: Notes; make the heading unique before appending"),
+            "section_ambiguous"
         );
     }
 
@@ -3058,6 +3194,15 @@ mod tests {
                 "body",
                 "--replace",
                 "new body",
+                "unexpected",
+            ],
+            vec![
+                "page-append-section",
+                "topics",
+                "--section",
+                "Topics",
+                "--content",
+                "- entry",
                 "unexpected",
             ],
             vec!["reference-list", "topics", "unexpected"],
