@@ -90,6 +90,8 @@ pub struct WikiCompanyAgentTurnResult {
     pub codex_thread_id: Option<String>,
     pub codex_turn_id: Option<String>,
     pub codex_thread_resumed: bool,
+    #[serde(default)]
+    pub usage: Option<CodexTokenUsage>,
     pub mail_agent: Option<RegisteredMailAgent>,
     pub worker_config: Value,
     pub final_message_path: String,
@@ -176,7 +178,29 @@ pub struct CodexWorkerTurnResult {
     pub mail_agent: Option<RegisteredMailAgent>,
     pub assistant_text: String,
     pub error: Option<String>,
+    #[serde(default)]
+    pub usage: Option<CodexTokenUsage>,
+    #[serde(default)]
+    pub rejected_server_requests: Vec<String>,
     pub duration_ms: u64,
+}
+
+/// Token usage reported by stock codex app-server 0.139.0 via the
+/// `thread/tokenUsage/updated` notification (`tokenUsage.total`) and, when
+/// present, the `turn/completed` payload. Field names mirror the camelCase
+/// wire shape documented in the live-probe findings.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CodexTokenUsage {
+    #[serde(default)]
+    pub total_tokens: u64,
+    #[serde(default)]
+    pub input_tokens: u64,
+    #[serde(default)]
+    pub cached_input_tokens: u64,
+    #[serde(default)]
+    pub output_tokens: u64,
+    #[serde(default)]
+    pub reasoning_output_tokens: u64,
 }
 
 pub fn execute_wiki_company_agents(
@@ -264,6 +288,11 @@ pub fn codex_worker_thread_config() -> Value {
         "features.multi_agent": false,
         "features.multi_agent_v2": false,
         "features.multi_agent_v2.enabled": false,
+        // Probe-verified on stock codex-cli 0.139.0: disabling memories saves
+        // ~4k input tokens per worker turn and keeps bounded worker turns
+        // isolated from the desktop memory system.
+        "memories.generate_memories": false,
+        "memories.use_memories": false,
     })
 }
 
@@ -641,6 +670,8 @@ fn execute_harness_turn_request(
                 "assistant_preview": preview(&worker_result.assistant_text, 500),
                 "worker_config": worker_config,
                 "resumed_thread": worker_result.resumed_thread,
+                "codex_token_usage": &worker_result.usage,
+                "rejected_server_requests": &worker_result.rejected_server_requests,
             }),
             AdapterCorrelation {
                 thread_id: worker_result.thread_id.clone(),
@@ -682,9 +713,15 @@ fn execute_harness_turn_request(
                 unit_id: child.unit_id.clone(),
                 turn_id: turn_id.clone(),
                 usage: AgentTurnUsage {
-                    input_tokens: 0,
-                    output_tokens: 0,
-                    total_tokens: Some(0),
+                    input_tokens: worker_result
+                        .usage
+                        .map(|usage| usage.input_tokens)
+                        .unwrap_or(0),
+                    output_tokens: worker_result
+                        .usage
+                        .map(|usage| usage.output_tokens)
+                        .unwrap_or(0),
+                    total_tokens: worker_result.usage.map(|usage| usage.total_tokens),
                     duration_ms: worker_result.duration_ms,
                 },
                 next_state: AgentTurnCompletionState::Ready,
@@ -701,6 +738,8 @@ fn execute_harness_turn_request(
                     "codex_thread_id": worker_result.thread_id,
                     "codex_turn_id": worker_result.turn_id,
                     "codex_thread_resumed": worker_result.resumed_thread,
+                    "codex_token_usage": &worker_result.usage,
+                    "rejected_server_requests": &worker_result.rejected_server_requests,
                     "mail_agent": &worker_result.mail_agent,
                     "worker_config": worker_config,
                 }),
@@ -732,6 +771,7 @@ fn execute_harness_turn_request(
             codex_thread_id: worker_result.thread_id,
             codex_turn_id: worker_result.turn_id,
             codex_thread_resumed: worker_result.resumed_thread,
+            usage: worker_result.usage,
             mail_agent: worker_result.mail_agent,
             worker_config: worker_config.clone(),
             final_message_path: final_message.path.display().to_string(),
@@ -1164,78 +1204,247 @@ fn run_codex_worker_turn(
         }),
     )?;
 
-    let mut assistant_text = String::new();
-    let mut codex_turn_id = None;
-    let mut final_status = "timeout".to_string();
-    let mut error = None;
+    let mut stream = WorkerTurnStream::default();
     let deadline = Duration::from_secs(worker_timeout_secs());
     let start = Instant::now();
     while start.elapsed() < deadline {
         let Some(value) = app.read_next(Duration::from_secs(5))? else {
             continue;
         };
-        if value.get("id").and_then(Value::as_str) == Some("turn") {
-            codex_turn_id = extract_turn_id(&value).or(codex_turn_id);
-        }
-        if value.get("method").and_then(Value::as_str) == Some("rawResponseItem/completed") {
-            if let Some(text) = extract_assistant_text(&value) {
-                if !assistant_text.is_empty() {
-                    assistant_text.push('\n');
-                }
-                assistant_text.push_str(&text);
-            }
-        }
-        if value.get("method").and_then(Value::as_str) == Some("agentMessage/delta") {
-            if let Some(delta) = value
-                .get("params")
-                .and_then(|params| params.get("delta"))
-                .and_then(Value::as_str)
-            {
-                assistant_text.push_str(delta);
-            }
-        }
-        if value.get("method").and_then(Value::as_str) == Some("turn/completed") {
-            let turn = value
-                .get("params")
-                .and_then(|params| params.get("turn"))
-                .cloned()
-                .unwrap_or(Value::Null);
-            codex_turn_id = turn
-                .get("id")
-                .and_then(Value::as_str)
-                .map(ToOwned::to_owned)
-                .or(codex_turn_id);
-            final_status = turn
-                .get("status")
-                .and_then(Value::as_str)
-                .unwrap_or("completed")
-                .to_string();
-            error = turn
-                .get("error")
-                .filter(|error| !error.is_null())
-                .map(|error| {
-                    serde_json::to_string(error)
-                        .unwrap_or_else(|_| "unknown codex error".to_string())
-                });
+        let turn_completed =
+            handle_worker_turn_message(&mut stream, &value, &mut |response| app.respond(response))?;
+        if turn_completed {
             break;
         }
     }
     app.shutdown();
 
-    if assistant_text.trim().is_empty() && final_status == "completed" {
-        assistant_text = "status: completed\n\nevidence:\n- Codex app-server turn completed but did not emit assistant text before completion was observed.\n\nproposed_wiki_talk:\n- No proposed talk text was emitted.\n\nnext_agent_requests:\n- none\n\nnext_state_machine_event: worker_turn_completed".to_string();
+    finalize_worker_turn_stream(
+        stream,
+        &request.operation_id,
+        thread_id,
+        thread_open.resumed,
+        mail_context.agent,
+        u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX),
+    )
+}
+
+/// Accumulated state from the codex app-server notification stream for one
+/// bounded worker turn.
+#[derive(Clone, Debug, Default, PartialEq)]
+struct WorkerTurnStream {
+    /// Text accumulated from `item/agentMessage/delta` notifications.
+    delta_text: String,
+    /// Full assistant text extracted from `item/completed` notifications
+    /// (`params.item.role == "assistant"`). Preferred over deltas to avoid
+    /// doubling when both sources fire for the same message.
+    completed_text: String,
+    /// Fallback assistant text from `rawResponseItem/completed`.
+    raw_response_text: String,
+    codex_turn_id: Option<String>,
+    final_status: Option<String>,
+    error: Option<String>,
+    usage: Option<CodexTokenUsage>,
+    /// Methods of server-initiated requests we rejected during the turn.
+    rejected_server_requests: Vec<String>,
+}
+
+impl WorkerTurnStream {
+    /// Resolve the assistant text without doubling across sources:
+    /// `item/completed` full text wins over accumulated deltas, with
+    /// `rawResponseItem/completed` as the last-resort fallback.
+    fn assistant_text(&self) -> &str {
+        if !self.completed_text.trim().is_empty() {
+            &self.completed_text
+        } else if !self.delta_text.trim().is_empty() {
+            &self.delta_text
+        } else {
+            &self.raw_response_text
+        }
     }
 
+    fn final_status(&self) -> String {
+        self.final_status
+            .clone()
+            .unwrap_or_else(|| "timeout".to_string())
+    }
+}
+
+fn worker_turn_unsupported_request_response(id: &Value, method: &str) -> Value {
+    json!({
+        "jsonrpc": "2.0",
+        "id": id,
+        "error": {
+            "code": -32601,
+            "message": format!(
+                "1Context worker turns do not support server-initiated request method {method}"
+            ),
+        }
+    })
+}
+
+/// Process one JSON-RPC message from the codex app-server during a worker
+/// turn. Returns `Ok(true)` once `turn/completed` is observed. Server-initiated
+/// requests (messages carrying both `id` and `method`) are answered with a
+/// JSON-RPC "method not supported" error via `respond` so the server never
+/// hangs waiting, and the method name is recorded for the turn receipts.
+fn handle_worker_turn_message(
+    stream: &mut WorkerTurnStream,
+    value: &Value,
+    respond: &mut dyn FnMut(Value) -> Result<(), String>,
+) -> Result<bool, String> {
+    let method = value.get("method").and_then(Value::as_str);
+    if let Some(method) = method {
+        if let Some(id) = value.get("id").filter(|id| !id.is_null()) {
+            respond(worker_turn_unsupported_request_response(id, method))?;
+            stream.rejected_server_requests.push(method.to_string());
+            return Ok(false);
+        }
+    }
+    if value.get("id").and_then(Value::as_str) == Some("turn") {
+        if let Some(turn_id) = extract_turn_id(value) {
+            stream.codex_turn_id = Some(turn_id);
+        }
+        return Ok(false);
+    }
+    let Some(method) = method else {
+        return Ok(false);
+    };
+    match method {
+        "item/agentMessage/delta" => {
+            if let Some(delta) = value
+                .get("params")
+                .and_then(|params| params.get("delta"))
+                .and_then(Value::as_str)
+            {
+                stream.delta_text.push_str(delta);
+            }
+        }
+        "item/completed" => {
+            if let Some(text) = extract_assistant_text(value) {
+                if !stream.completed_text.is_empty() {
+                    stream.completed_text.push('\n');
+                }
+                stream.completed_text.push_str(&text);
+            }
+        }
+        "rawResponseItem/completed" => {
+            if let Some(text) = extract_assistant_text(value) {
+                if !stream.raw_response_text.is_empty() {
+                    stream.raw_response_text.push('\n');
+                }
+                stream.raw_response_text.push_str(&text);
+            }
+        }
+        "thread/tokenUsage/updated" => {
+            if let Some(usage) = value.get("params").and_then(extract_token_usage) {
+                stream.usage = Some(usage);
+            }
+        }
+        "turn/completed" => {
+            let params = value.get("params").cloned().unwrap_or(Value::Null);
+            let turn = params.get("turn").cloned().unwrap_or(Value::Null);
+            if let Some(turn_id) = turn.get("id").and_then(Value::as_str) {
+                stream.codex_turn_id = Some(turn_id.to_string());
+            }
+            stream.final_status = Some(
+                turn.get("status")
+                    .and_then(Value::as_str)
+                    .unwrap_or("completed")
+                    .to_string(),
+            );
+            stream.error = turn.get("error").filter(|error| !error.is_null()).map(
+                |error| {
+                    serde_json::to_string(error)
+                        .unwrap_or_else(|_| "unknown codex error".to_string())
+                },
+            );
+            if let Some(usage) = extract_token_usage(&params) {
+                stream.usage = Some(usage);
+            }
+            return Ok(true);
+        }
+        _ => {}
+    }
+    Ok(false)
+}
+
+/// Convert the accumulated notification stream into a worker turn result.
+/// An empty assistant stream is a hard turn failure: the harness never
+/// fabricates final-message content on the worker's behalf.
+fn finalize_worker_turn_stream(
+    stream: WorkerTurnStream,
+    operation_id: &str,
+    thread_id: String,
+    resumed_thread: bool,
+    mail_agent: RegisteredMailAgent,
+    duration_ms: u64,
+) -> Result<CodexWorkerTurnResult, String> {
+    let final_status = stream.final_status();
+    let assistant_text = stream.assistant_text().to_string();
+    if assistant_text.trim().is_empty() {
+        return Err(format!(
+            "codex worker turn for {operation_id} ended with status {final_status} and no assistant output; refusing to fabricate final-message content (codex error: {})",
+            stream.error.as_deref().unwrap_or("none")
+        ));
+    }
     Ok(CodexWorkerTurnResult {
         status: final_status,
         thread_id: Some(thread_id),
-        turn_id: codex_turn_id,
-        resumed_thread: thread_open.resumed,
-        mail_agent: Some(mail_context.agent),
+        turn_id: stream.codex_turn_id,
+        resumed_thread,
+        mail_agent: Some(mail_agent),
         assistant_text,
-        error,
-        duration_ms: u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX),
+        error: stream.error,
+        usage: stream.usage,
+        rejected_server_requests: stream.rejected_server_requests,
+        duration_ms,
     })
+}
+
+fn token_usage_from_object(value: &Value) -> Option<CodexTokenUsage> {
+    let object = value.as_object()?;
+    if !object.contains_key("totalTokens")
+        && !object.contains_key("inputTokens")
+        && !object.contains_key("outputTokens")
+    {
+        return None;
+    }
+    let read = |key: &str| object.get(key).and_then(Value::as_u64).unwrap_or(0);
+    Some(CodexTokenUsage {
+        total_tokens: read("totalTokens"),
+        input_tokens: read("inputTokens"),
+        cached_input_tokens: read("cachedInputTokens"),
+        output_tokens: read("outputTokens"),
+        reasoning_output_tokens: read("reasoningOutputTokens"),
+    })
+}
+
+/// Extract a token-usage payload from notification params. Stock 0.139.0
+/// streams `thread/tokenUsage/updated` with
+/// `{tokenUsage:{total:{totalTokens,...},last:{...}}}`; `turn/completed` is
+/// also checked for the same payload under `tokenUsage`/`usage`, either at the
+/// params root or nested under `turn`.
+fn extract_token_usage(params: &Value) -> Option<CodexTokenUsage> {
+    let turn = params.get("turn");
+    let candidates = [
+        params
+            .get("tokenUsage")
+            .and_then(|usage| usage.get("total")),
+        params.get("tokenUsage"),
+        params.get("usage").and_then(|usage| usage.get("total")),
+        params.get("usage"),
+        turn.and_then(|turn| turn.get("tokenUsage"))
+            .and_then(|usage| usage.get("total")),
+        turn.and_then(|turn| turn.get("tokenUsage")),
+        turn.and_then(|turn| turn.get("usage"))
+            .and_then(|usage| usage.get("total")),
+        turn.and_then(|turn| turn.get("usage")),
+    ];
+    candidates
+        .into_iter()
+        .flatten()
+        .find_map(token_usage_from_object)
 }
 
 fn identify_mail_agent_for_turn(
@@ -1669,14 +1878,20 @@ impl CodexAppServerProcess {
             "method": method,
             "params": params,
         });
+        self.respond(message)
+    }
+
+    /// Write one raw JSON-RPC message (used both for client requests and for
+    /// responses to server-initiated requests).
+    fn respond(&mut self, message: Value) -> Result<(), String> {
         serde_json::to_writer(&mut self.stdin, &message)
-            .map_err(|error| format!("failed to encode app-server request: {error}"))?;
+            .map_err(|error| format!("failed to encode app-server message: {error}"))?;
         self.stdin
             .write_all(b"\n")
-            .map_err(|error| format!("failed to write app-server request: {error}"))?;
+            .map_err(|error| format!("failed to write app-server message: {error}"))?;
         self.stdin
             .flush()
-            .map_err(|error| format!("failed to flush app-server request: {error}"))
+            .map_err(|error| format!("failed to flush app-server message: {error}"))
     }
 
     fn read_until_id(&mut self, id: &str, timeout: Duration) -> Result<Value, String> {
@@ -1744,6 +1959,12 @@ fn write_final_message(
     request: &HarnessTurnRequest,
     worker_result: &CodexWorkerTurnResult,
 ) -> Result<FinalMessageWrite, String> {
+    if worker_result.assistant_text.trim().is_empty() {
+        return Err(format!(
+            "refusing to write final message for {}: codex worker turn ended with status {} and no assistant output; the harness never synthesizes final-message content",
+            request.operation_id, worker_result.status
+        ));
+    }
     let requested_path = paths
         .root
         .join(&request.required_receipts.final_message_path);
@@ -1752,20 +1973,8 @@ fn write_final_message(
         fs::create_dir_all(parent)
             .map_err(|error| format!("failed to create final-message dir: {error}"))?;
     }
-    let (body, origin) = if worker_result.assistant_text.trim().is_empty() {
-        (
-            format!(
-                "status: {}\n\norigin: harness_synthesized_empty_worker_output\n\nevidence:\n- No assistant text captured.\n\nproposed_wiki_talk:\n- No proposed talk text captured.\n\nnext_agent_requests:\n- none\n\nnext_state_machine_event: worker_turn_{}\n",
-                worker_result.status, worker_result.status
-            ),
-            "harness_synthesized_empty_worker_output".to_string(),
-        )
-    } else {
-        (
-            worker_result.assistant_text.clone(),
-            "model_output".to_string(),
-        )
-    };
+    let body = worker_result.assistant_text.clone();
+    let origin = "model_output".to_string();
     let content_sha256 = sha256_text(&body);
     fs::write(&path, body)
         .map_err(|error| format!("failed to write final message {}: {error}", path.display()))?;
@@ -2334,6 +2543,8 @@ fn append_agent_report(
         "unit_id": request.unit_id,
         "codex_thread_id": worker_result.thread_id,
         "codex_turn_id": worker_result.turn_id,
+        "codex_token_usage": &worker_result.usage,
+        "rejected_server_requests": &worker_result.rejected_server_requests,
         "mail_agent": &worker_result.mail_agent,
         "status": worker_result.status,
         "final_message_path": final_message.path,
@@ -2440,6 +2651,14 @@ mod tests {
             serde_json::Value::Bool(false)
         );
         assert!(multi_agent_v2_disabled(&config));
+        assert_eq!(
+            config["memories.generate_memories"],
+            serde_json::Value::Bool(false)
+        );
+        assert_eq!(
+            config["memories.use_memories"],
+            serde_json::Value::Bool(false)
+        );
         assert_eq!(config.get("tools"), None);
         assert_eq!(config.get("enabled_tools"), None);
         assert_eq!(config.get("disabled_tools"), None);
@@ -2459,6 +2678,349 @@ mod tests {
             .contains("final-report and follow-up delivery belongs to the 1Context harness"));
         assert!(CODEX_WORKER_DEVELOPER_INSTRUCTIONS
             .contains("do not call wiki.talk.append or send Agent Mail"));
+    }
+
+    fn notification(method: &str, params: Value) -> Value {
+        json!({ "jsonrpc": "2.0", "method": method, "params": params })
+    }
+
+    /// Feed a synthetic app-server message stream through the worker-turn
+    /// parsing path, collecting any responses written back to the server.
+    fn drive_worker_turn_stream(messages: Vec<Value>) -> (WorkerTurnStream, Vec<Value>, bool) {
+        let mut stream = WorkerTurnStream::default();
+        let mut responses = Vec::new();
+        let mut completed = false;
+        for message in messages {
+            let done = handle_worker_turn_message(&mut stream, &message, &mut |response| {
+                responses.push(response);
+                Ok(())
+            })
+            .expect("handle worker turn message");
+            if done {
+                completed = true;
+                break;
+            }
+        }
+        (stream, responses, completed)
+    }
+
+    fn test_mail_agent() -> RegisteredMailAgent {
+        RegisteredMailAgent {
+            agent_id: "agent-mail-a".to_string(),
+            primary_address: "role://memory.hourly.scribe".to_string(),
+            transport_kind: "codex-app-server".to_string(),
+            transport_thread_id: "thr_1".to_string(),
+            requested_roles: vec!["role://memory.hourly.scribe".to_string()],
+            granted_roles: vec!["role://memory.hourly.scribe".to_string()],
+            requested_capabilities: vec!["wiki.mail".to_string()],
+            granted_capabilities: vec!["wiki.mail".to_string()],
+            lease_expires_at: "2026-06-12T00:00:00Z".to_string(),
+            inbox_delivery_count: 0,
+            thread_message_count: 0,
+        }
+    }
+
+    #[test]
+    fn worker_turn_stream_captures_token_usage_from_thread_notification() {
+        let (stream, responses, completed) = drive_worker_turn_stream(vec![
+            notification(
+                "thread/tokenUsage/updated",
+                json!({
+                    "threadId": "thr_1",
+                    "turnId": "turn_1",
+                    "tokenUsage": {
+                        "total": {
+                            "totalTokens": 14225,
+                            "inputTokens": 13980,
+                            "cachedInputTokens": 9216,
+                            "outputTokens": 245,
+                            "reasoningOutputTokens": 64
+                        },
+                        "last": {
+                            "totalTokens": 120,
+                            "inputTokens": 100,
+                            "cachedInputTokens": 0,
+                            "outputTokens": 20,
+                            "reasoningOutputTokens": 0
+                        }
+                    }
+                }),
+            ),
+            notification(
+                "item/completed",
+                json!({ "item": { "id": "item_1", "role": "assistant", "content": [{ "type": "text", "text": "ok" }] } }),
+            ),
+            notification("turn/completed", json!({ "turn": { "id": "turn_1", "status": "completed" } })),
+        ]);
+
+        assert!(completed);
+        assert!(responses.is_empty());
+        assert_eq!(
+            stream.usage,
+            Some(CodexTokenUsage {
+                total_tokens: 14225,
+                input_tokens: 13980,
+                cached_input_tokens: 9216,
+                output_tokens: 245,
+                reasoning_output_tokens: 64,
+            })
+        );
+
+        let result = finalize_worker_turn_stream(
+            stream,
+            "op-a",
+            "thr_1".to_string(),
+            false,
+            test_mail_agent(),
+            42,
+        )
+        .expect("completed worker turn");
+        assert_eq!(result.status, "completed");
+        assert_eq!(result.turn_id.as_deref(), Some("turn_1"));
+        let usage = result.usage.expect("usage threaded into worker result");
+        assert_eq!(usage.total_tokens, 14225);
+        assert_eq!(usage.output_tokens, 245);
+    }
+
+    #[test]
+    fn turn_completed_usage_payload_overrides_running_usage() {
+        let (stream, _, completed) = drive_worker_turn_stream(vec![
+            notification(
+                "thread/tokenUsage/updated",
+                json!({
+                    "tokenUsage": {
+                        "total": { "totalTokens": 100, "inputTokens": 90, "outputTokens": 10 }
+                    }
+                }),
+            ),
+            notification(
+                "item/agentMessage/delta",
+                json!({ "delta": "final answer" }),
+            ),
+            notification(
+                "turn/completed",
+                json!({
+                    "turn": {
+                        "id": "turn_2",
+                        "status": "completed",
+                        "usage": {
+                            "totalTokens": 180,
+                            "inputTokens": 150,
+                            "cachedInputTokens": 64,
+                            "outputTokens": 30,
+                            "reasoningOutputTokens": 8
+                        }
+                    }
+                }),
+            ),
+        ]);
+
+        assert!(completed);
+        assert_eq!(
+            stream.usage,
+            Some(CodexTokenUsage {
+                total_tokens: 180,
+                input_tokens: 150,
+                cached_input_tokens: 64,
+                output_tokens: 30,
+                reasoning_output_tokens: 8,
+            })
+        );
+    }
+
+    #[test]
+    fn empty_assistant_stream_fails_worker_turn_instead_of_synthesizing() {
+        let (stream, _, completed) = drive_worker_turn_stream(vec![notification(
+            "turn/completed",
+            json!({ "turn": { "id": "turn_1", "status": "completed" } }),
+        )]);
+
+        assert!(completed);
+        let error = finalize_worker_turn_stream(
+            stream,
+            "op-empty",
+            "thr_1".to_string(),
+            false,
+            test_mail_agent(),
+            7,
+        )
+        .expect_err("empty assistant stream must fail the worker turn");
+        assert!(error.contains("no assistant output"), "error: {error}");
+        assert!(error.contains("op-empty"), "error: {error}");
+    }
+
+    #[test]
+    fn timed_out_stream_without_output_fails_worker_turn() {
+        // No turn/completed at all: the loop deadline expires with an empty stream.
+        let (stream, _, completed) = drive_worker_turn_stream(vec![notification(
+            "thread/started",
+            json!({ "threadId": "thr_1" }),
+        )]);
+
+        assert!(!completed);
+        let error = finalize_worker_turn_stream(
+            stream,
+            "op-timeout",
+            "thr_1".to_string(),
+            false,
+            test_mail_agent(),
+            7,
+        )
+        .expect_err("timeout without output must fail the worker turn");
+        assert!(error.contains("status timeout"), "error: {error}");
+    }
+
+    #[test]
+    fn write_final_message_refuses_empty_assistant_output() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let paths = ContextEnginePaths::new(temp.path().join("runtime/1Context"));
+        let request = harness_request_for_mail_roles(
+            "memory.wiki.historian",
+            vec!["role://memory.hourly.answerer"],
+            vec![],
+        );
+        let worker_result = CodexWorkerTurnResult {
+            status: "completed".to_string(),
+            thread_id: Some("thr_1".to_string()),
+            turn_id: Some("turn_1".to_string()),
+            resumed_thread: false,
+            mail_agent: Some(test_mail_agent()),
+            assistant_text: "   \n".to_string(),
+            error: None,
+            usage: None,
+            rejected_server_requests: Vec::new(),
+            duration_ms: 5,
+        };
+
+        let error = write_final_message(&paths, &request, &worker_result)
+            .expect_err("empty assistant output must not produce a final message file");
+        assert!(error.contains("no assistant output"), "error: {error}");
+        assert!(!paths
+            .root
+            .join(&request.required_receipts.final_message_path)
+            .exists());
+    }
+
+    #[test]
+    fn listener_prefers_item_completed_text_and_never_doubles_sources() {
+        let (stream, _, completed) = drive_worker_turn_stream(vec![
+            notification(
+                "item/agentMessage/delta",
+                json!({ "threadId": "thr_1", "itemId": "item_1", "delta": "Hello " }),
+            ),
+            notification(
+                "item/agentMessage/delta",
+                json!({ "threadId": "thr_1", "itemId": "item_1", "delta": "world" }),
+            ),
+            notification(
+                "rawResponseItem/completed",
+                json!({ "item": { "type": "message", "role": "assistant", "content": [{ "type": "output_text", "text": "Hello world" }] } }),
+            ),
+            notification(
+                "item/completed",
+                json!({ "item": { "id": "item_1", "role": "assistant", "content": [{ "type": "text", "text": "Hello world" }] } }),
+            ),
+            notification("turn/completed", json!({ "turn": { "id": "turn_1", "status": "completed" } })),
+        ]);
+
+        assert!(completed);
+        assert_eq!(stream.assistant_text(), "Hello world");
+        assert_eq!(stream.delta_text, "Hello world");
+        assert_eq!(stream.raw_response_text, "Hello world");
+    }
+
+    #[test]
+    fn listener_falls_back_to_deltas_then_raw_response_items() {
+        let (delta_only, _, _) = drive_worker_turn_stream(vec![
+            notification("item/agentMessage/delta", json!({ "delta": "partial " })),
+            notification("item/agentMessage/delta", json!({ "delta": "answer" })),
+            notification("turn/completed", json!({ "turn": { "status": "completed" } })),
+        ]);
+        assert_eq!(delta_only.assistant_text(), "partial answer");
+
+        let (raw_only, _, _) = drive_worker_turn_stream(vec![
+            notification(
+                "rawResponseItem/completed",
+                json!({ "item": { "role": "assistant", "content": [{ "text": "raw fallback" }] } }),
+            ),
+            notification("turn/completed", json!({ "turn": { "status": "completed" } })),
+        ]);
+        assert_eq!(raw_only.assistant_text(), "raw fallback");
+    }
+
+    #[test]
+    fn non_assistant_items_do_not_contribute_assistant_text() {
+        let (stream, _, _) = drive_worker_turn_stream(vec![
+            notification(
+                "item/completed",
+                json!({ "item": { "id": "item_0", "role": "user", "content": [{ "type": "text", "text": "prompt echo" }] } }),
+            ),
+            notification(
+                "item/completed",
+                json!({ "item": { "id": "item_1", "type": "reasoning", "content": [{ "type": "text", "text": "thinking" }] } }),
+            ),
+            notification("turn/completed", json!({ "turn": { "status": "completed" } })),
+        ]);
+        assert_eq!(stream.assistant_text(), "");
+    }
+
+    #[test]
+    fn server_initiated_request_is_rejected_and_recorded() {
+        let (stream, responses, completed) = drive_worker_turn_stream(vec![
+            json!({
+                "jsonrpc": "2.0",
+                "id": "srv-req-1",
+                "method": "execCommandApproval",
+                "params": { "threadId": "thr_1", "command": "rm -rf /" }
+            }),
+            json!({
+                "jsonrpc": "2.0",
+                "id": 42,
+                "method": "applyPatchApproval",
+                "params": { "threadId": "thr_1" }
+            }),
+            notification(
+                "item/completed",
+                json!({ "item": { "role": "assistant", "content": [{ "text": "done" }] } }),
+            ),
+            notification("turn/completed", json!({ "turn": { "id": "turn_1", "status": "completed" } })),
+        ]);
+
+        assert!(completed);
+        assert_eq!(
+            stream.rejected_server_requests,
+            vec![
+                "execCommandApproval".to_string(),
+                "applyPatchApproval".to_string()
+            ]
+        );
+        assert_eq!(responses.len(), 2);
+        assert_eq!(responses[0]["id"], json!("srv-req-1"));
+        assert_eq!(responses[0]["error"]["code"], json!(-32601));
+        assert!(responses[0]["error"]["message"]
+            .as_str()
+            .expect("error message")
+            .contains("execCommandApproval"));
+        assert_eq!(responses[1]["id"], json!(42));
+        assert_eq!(responses[1]["error"]["code"], json!(-32601));
+
+        let result = finalize_worker_turn_stream(
+            stream,
+            "op-a",
+            "thr_1".to_string(),
+            false,
+            test_mail_agent(),
+            9,
+        )
+        .expect("turn still completes after rejected server requests");
+        assert_eq!(result.assistant_text, "done");
+        assert_eq!(
+            result.rejected_server_requests,
+            vec![
+                "execCommandApproval".to_string(),
+                "applyPatchApproval".to_string()
+            ]
+        );
     }
 
     fn multi_agent_v2_disabled(config: &Value) -> bool {
@@ -2908,6 +3470,7 @@ wiki.editor.reported
             codex_thread_id: Some("thread-a".to_string()),
             codex_turn_id: Some("codex-turn-a".to_string()),
             codex_thread_resumed: false,
+            usage: None,
             mail_agent: None,
             worker_config: json!({}),
             final_message_path: "runtime/1Context/context-engine/live/runs/run-a/turns/historian/attempt-0001/final-message.md".to_string(),
@@ -2938,5 +3501,609 @@ wiki.editor.reported
             mail_receipt: Some("agent-mail://mailmsg-a/delivery-a".to_string()),
             error: None,
         }
+    }
+
+    /// Live seam proof: one bounded worker turn through the real
+    /// `execute_harness_turn_request` path against stock `codex app-server`.
+    /// Requires a logged-in stock Codex CLI on PATH and spends real tokens.
+    /// Run explicitly:
+    /// `cargo test -p onecontext-context-engine --lib live_stock_codex_worker_turn_smoke -- --ignored --nocapture`
+    #[test]
+    #[ignore = "live: spawns stock codex app-server and spends tokens"]
+    fn live_stock_codex_worker_turn_smoke() {
+        use crate::harness_executor::{
+            agent_mail_address_for_unit, build_harness_turn_request_for_runtime_turn,
+            HarnessWorkerProfile,
+        };
+        use crate::runtime_executor::{RuntimeTurnDescriptor, RuntimeTurnRoute};
+        use crate::scheduler::ScheduledReceiptExpectations;
+        use std::collections::BTreeMap;
+
+        std::env::set_var("ONECONTEXT_CONTEXT_ENGINE_WORKER_TIMEOUT_SECS", "240");
+        let temp = tempfile::tempdir().expect("tempdir");
+        let paths = ContextEnginePaths::new(temp.path().join("runtime/1Context"));
+        paths.ensure_release_dirs().expect("release dirs");
+        let seed_wiki =
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../runtime/1Context/user-wiki");
+        let copy_status = std::process::Command::new("cp")
+            .arg("-R")
+            .arg(&seed_wiki)
+            .arg(paths.user_wiki.parent().expect("user-wiki parent"))
+            .status()
+            .expect("seed user-wiki copy");
+        assert!(copy_status.success(), "seed user-wiki copy failed");
+        ensure_orchestrator_unit(&paths).expect("orchestrator root unit");
+
+        let turn = RuntimeTurnDescriptor {
+            schema_version: CONTEXT_ENGINE_SCHEMA_VERSION,
+            kind: "onecontext.context_engine.runtime_turn_descriptor.v1".to_string(),
+            run_id: "live-smoke".to_string(),
+            status: "runnable".to_string(),
+            operation_id: "live-smoke:scribe-unit".to_string(),
+            harness_unit_id: "live-smoke-scribe-unit".to_string(),
+            harness_turn_id: "turn-live-smoke-scribe-unit".to_string(),
+            phase_id: "wake_scribes".to_string(),
+            job_id: "memory.hourly.scribe".to_string(),
+            agent_id: "hourly-scribe".to_string(),
+            unit_id: "scribe-unit".to_string(),
+            fanout: "once".to_string(),
+            max_concurrent: None,
+            packet_id: None,
+            date: None,
+            hour: None,
+            bindings: BTreeMap::new(),
+            unit_scope: BTreeMap::new(),
+            inputs: vec!["source_packet".to_string()],
+            outputs: vec!["scribe_artifacts".to_string()],
+            required_artifacts: Vec::new(),
+            required_mail: Vec::new(),
+            route: RuntimeTurnRoute {
+                thread_id: "mail://wiki-company".to_string(),
+                from_role: "memory.hourly.scribe".to_string(),
+                from_mailbox: agent_mail_address_for_unit("live-smoke-scribe-unit"),
+                to: vec!["role://memory.wiki.historian".to_string()],
+                cc: vec!["list://wiki-company".to_string()],
+            },
+            receipt_expectations: ScheduledReceiptExpectations {
+                durable_receipt: "mail://wiki-company".to_string(),
+                require_birth_certificate: true,
+                require_turn_start: true,
+                require_context_injection: true,
+                require_adapter_events: true,
+                require_final_message: true,
+                require_talk_append: true,
+                require_mail_delivery: true,
+                require_turn_complete: true,
+                final_message_path: "final-message.md".to_string(),
+                final_message_fields: Vec::new(),
+                talk_delivery_mode: "mail".to_string(),
+                require_non_empty_final_message: true,
+                do_not_count_codex_exit_as_done: true,
+            },
+            final_message_path:
+                "context-engine/live/runs/live-smoke/turns/live-smoke-scribe-unit/attempt-0001/final-message.md"
+                    .to_string(),
+            source_packet_path: None,
+            source_packet_hash: None,
+            condition: None,
+        };
+        let profile = HarnessWorkerProfile {
+            model: "gpt-5.5".to_string(),
+            reasoning_effort: "low".to_string(),
+            prompt_text: "You are a 1Context scribe on a live smoke test. Reply with one short sentence describing what a personal wiki is for. Do not run any commands.".to_string(),
+            tools: Vec::new(),
+        };
+        let request = build_harness_turn_request_for_runtime_turn(&paths, &profile, &turn)
+            .expect("build runtime turn request");
+        let result = execute_harness_turn_request(&paths, request).expect("live worker turn");
+
+        eprintln!("=== LIVE SMOKE RESULT ===\n{result:#?}");
+        if let Ok(final_message) = std::fs::read_to_string(&result.final_message_path) {
+            eprintln!("=== FINAL MESSAGE ===\n{final_message}");
+        }
+
+        assert_eq!(
+            result.final_message_origin, "model_output",
+            "expected model-authored output, got origin {} (preview: {})",
+            result.final_message_origin, result.assistant_preview
+        );
+        assert!(
+            !result.assistant_preview.trim().is_empty(),
+            "assistant text empty"
+        );
+        assert!(
+            result.completion.complete,
+            "completion incomplete: {:?}",
+            result.completion.issues
+        );
+        assert!(result.codex_thread_id.is_some(), "no codex thread id");
+
+        let usage = result
+            .usage
+            .expect("live turn must capture codex token usage");
+        eprintln!("=== LIVE SMOKE TOKEN USAGE ===\n{usage:#?}");
+        assert!(
+            usage.output_tokens > 0,
+            "expected non-zero outputTokens in captured usage: {usage:?}"
+        );
+        assert!(
+            usage.total_tokens >= usage.output_tokens,
+            "totalTokens should cover outputTokens: {usage:?}"
+        );
+    }
+
+    /// Replace exactly one occurrence, failing loudly if the trim target has
+    /// drifted out of the committed prompt text.
+    fn trim_prompt(text: &str, label: &str, from: &str, to: &str) -> String {
+        assert!(
+            text.contains(from),
+            "prompt trim {label} no longer matches the committed prompt text; \
+             update the trim target. missing:\n{from}"
+        );
+        eprintln!("--- prompt trim {label} applied");
+        text.replacen(from, to, 1)
+    }
+
+    /// Live two-role chain: scribe -> historian through the real
+    /// `execute_harness_turn_request` path on stock codex-cli, using the REAL
+    /// pack role prompts and a synthetic source packet materialized by the
+    /// real planner + materializer. The historian receives the scribe's
+    /// product push-mail style: embedded verbatim in its turn input.
+    ///
+    /// `cargo test -p onecontext-context-engine --lib live_two_role_chain_smoke -- --ignored --nocapture`
+    #[test]
+    #[ignore = "live: spawns stock codex app-server twice and spends tokens"]
+    fn live_two_role_chain_smoke() {
+        use crate::harness_executor::{
+            agent_mail_address_for_unit, build_harness_turn_request_for_runtime_turn,
+            HarnessWorkerProfile,
+        };
+        use crate::packet_planner::SourceEvent;
+        use crate::runtime_executor::{RuntimeTurnDescriptor, RuntimeTurnRoute};
+        use crate::scheduler::ScheduledReceiptExpectations;
+        use std::collections::BTreeMap;
+
+        std::env::set_var("ONECONTEXT_CONTEXT_ENGINE_WORKER_TIMEOUT_SECS", "240");
+        let temp = tempfile::tempdir().expect("tempdir");
+        let paths = ContextEnginePaths::new(temp.path().join("runtime/1Context"));
+        paths.ensure_release_dirs().expect("release dirs");
+        let seed_wiki = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../runtime/1Context/user-wiki");
+        let copy_status = std::process::Command::new("cp")
+            .arg("-R")
+            .arg(&seed_wiki)
+            .arg(paths.user_wiki.parent().expect("user-wiki parent"))
+            .status()
+            .expect("seed user-wiki copy");
+        assert!(copy_status.success(), "seed user-wiki copy failed");
+        ensure_orchestrator_unit(&paths).expect("orchestrator root unit");
+
+        // --- Synthetic source packet: 5 realistic coding-session events in
+        // one hour window, defined as JSON and pushed through the REAL
+        // packet planner + materializer so the packet format, packet_id,
+        // date/hour, path, and source_packet_hash all match production.
+        let packet_date = "2026-06-11";
+        let packet_hour = "14";
+        let events_json = r#"[
+          {
+            "ts": "2026-06-11T14:03:12Z",
+            "session_id": "codex-0611-memdb",
+            "kind": "user_message",
+            "role": "user",
+            "source": "codex",
+            "privacy_class": "private",
+            "body_type": "text",
+            "cwd": "/Users/paulhan/dev/1context",
+            "project_key": "1context",
+            "text": "Refactor the memory DB schema: drop the legacy_events table and add source_record_hash to perception_events. The migration has to be reversible."
+          },
+          {
+            "ts": "2026-06-11T14:09:47Z",
+            "session_id": "codex-0611-memdb",
+            "kind": "file_change",
+            "role": "assistant",
+            "source": "codex",
+            "privacy_class": "private",
+            "body_type": "text",
+            "cwd": "/Users/paulhan/dev/1context",
+            "project_key": "1context",
+            "text": "Edited crates/onecontext-memory-db/schema/current.sql: added source_record_hash TEXT NOT NULL DEFAULT '' to perception_events, dropped the legacy_events table, and wrote companion migration migrations/0042_add_source_record_hash.sql."
+          },
+          {
+            "ts": "2026-06-11T14:17:05Z",
+            "session_id": "codex-0611-memdb",
+            "kind": "exec_command",
+            "role": "assistant",
+            "source": "codex",
+            "privacy_class": "private",
+            "body_type": "text",
+            "cwd": "/Users/paulhan/dev/1context",
+            "project_key": "1context",
+            "text": "Ran `cargo test -p onecontext-memory-db`: 2 failures — schema_roundtrip_includes_all_columns and migration_0042_is_reversible (down migration is missing the DROP COLUMN)."
+          },
+          {
+            "ts": "2026-06-11T14:24:30Z",
+            "session_id": "codex-0611-memdb",
+            "kind": "file_change",
+            "role": "assistant",
+            "source": "codex",
+            "privacy_class": "private",
+            "body_type": "text",
+            "cwd": "/Users/paulhan/dev/1context",
+            "project_key": "1context",
+            "text": "Edited crates/onecontext-memory-db/migrations/0042_add_source_record_hash.down.sql: added ALTER TABLE perception_events DROP COLUMN source_record_hash. Re-ran `cargo test -p onecontext-memory-db`: all 31 tests green."
+          },
+          {
+            "ts": "2026-06-11T14:41:58Z",
+            "session_id": "codex-0611-memdb",
+            "kind": "user_message",
+            "role": "user",
+            "source": "codex",
+            "privacy_class": "private",
+            "body_type": "text",
+            "cwd": "/Users/paulhan/dev/1context",
+            "project_key": "1context",
+            "text": "good. leaving the legacy_events backfill for tomorrow — need to check the perception cursor logic first. commit as 'Drop legacy_events, add source_record_hash (0042)'"
+          }
+        ]"#;
+        let events: Vec<SourceEvent> =
+            serde_json::from_str(events_json).expect("synthetic source events parse");
+        assert_eq!(events.len(), 5, "expected 5 synthetic events");
+        let plan = build_packet_plan(&events, PacketPlannerPolicy::default(), &BTreeSet::new());
+        assert_eq!(
+            plan.selected_packets.len(),
+            1,
+            "synthetic hour should plan as exactly one packet: {plan:#?}"
+        );
+        let materialized = materialize_source_packets(
+            &paths,
+            &plan,
+            &events,
+            SourcePacketMaterializationRequest {
+                run_id: "live-chain".to_string(),
+                source_window_days: 1,
+                current_pages: Vec::new(),
+            },
+        )
+        .expect("materialize synthetic source packet");
+        assert!(
+            materialized.issues.is_empty(),
+            "packet materialization issues: {:?}",
+            materialized.issues
+        );
+        let packet = &materialized.packets[0];
+        assert_eq!(packet.date, packet_date);
+        assert_eq!(packet.hour, packet_hour);
+        assert_eq!(packet.event_count, 5);
+        eprintln!(
+            "=== SYNTHETIC PACKET ===\npacket_id: {}\npath: {}\nhash: {}",
+            packet.packet_id, packet.path, packet.source_packet_hash
+        );
+
+        // --- REAL role prompts from the wiki-company-v1 pack, with dead pack
+        // scaffolding trimmed (every trim asserted + logged via trim_prompt).
+        let prompts_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../runtime/1Context/context-engine/packs/wiki-company-v1/prompts");
+
+        // Scribe role prompt. TRIM S1: the pack's task prompt named a target
+        // file path; in this harness the turn product is the final message.
+        let scribe_role = std::fs::read_to_string(prompts_dir.join("hourly-scribe.md"))
+            .expect("read hourly-scribe.md");
+        let scribe_role = trim_prompt(
+            &scribe_role,
+            "S1 (scribe output = final message, not a file)",
+            "Write exactly one markdown file at the path named in the task prompt.",
+            "Deliver exactly one talk entry as your final assistant message; the 1Context harness owns file delivery.",
+        );
+
+        // Scribe task prompt. TRIM S2: {output_path} target-file block is dead
+        // (no file write). TRIM S3/S5/S7: file-write phrasing follows S2.
+        // HYDRATE S6: {date}/{hour} template variables filled like the old
+        // pack runner did.
+        let scribe_task = std::fs::read_to_string(prompts_dir.join("hourly-scribe-task.md"))
+            .expect("read hourly-scribe-task.md");
+        let scribe_task = trim_prompt(
+            &scribe_task,
+            "S2 (drop {output_path} target-file block)",
+            "Target file:\n\n```text\n{output_path}\n```",
+            "Deliver the entry as your final assistant message; do not create files.",
+        );
+        let scribe_task = trim_prompt(
+            &scribe_task,
+            "S3 (create-the-file -> write-the-entry)",
+            "- Create the target file if and only if the inherited hour contains meaningful\n  activity worth remembering.",
+            "- Write the entry if and only if the inherited hour contains meaningful\n  activity worth remembering.",
+        );
+        let scribe_task = trim_prompt(
+            &scribe_task,
+            "S5 (no target file to except)",
+            "- Do not edit any file except the target file.",
+            "- Do not edit, create, or read any files, and do not run commands.",
+        );
+        let scribe_task = trim_prompt(
+            &scribe_task,
+            "S7 (important artifact is the final message)",
+            "The target workspace is temporary. The important artifact is the markdown file.",
+            "The target workspace is temporary. The important artifact is your final message.",
+        );
+        let scribe_task = scribe_task
+            .replace("{date}", packet_date)
+            .replace("{hour}", packet_hour);
+        eprintln!("--- prompt hydration S6 applied ({{date}} -> {packet_date}, {{hour}} -> {packet_hour})");
+        let scribe_prompt = format!("{scribe_role}\n\n---\n\n{scribe_task}");
+
+        // --- TURN 1: SCRIBE (live).
+        let scribe_turn = RuntimeTurnDescriptor {
+            schema_version: CONTEXT_ENGINE_SCHEMA_VERSION,
+            kind: "onecontext.context_engine.runtime_turn_descriptor.v1".to_string(),
+            run_id: "live-chain".to_string(),
+            status: "runnable".to_string(),
+            operation_id: "live-chain:scribe-unit".to_string(),
+            harness_unit_id: "live-chain-scribe-unit".to_string(),
+            harness_turn_id: "turn-live-chain-scribe-unit".to_string(),
+            phase_id: "wake_scribes".to_string(),
+            job_id: "memory.hourly.scribe".to_string(),
+            agent_id: "hourly-scribe".to_string(),
+            unit_id: "scribe-unit".to_string(),
+            fanout: "once".to_string(),
+            max_concurrent: None,
+            packet_id: Some(packet.packet_id.clone()),
+            date: Some(packet_date.to_string()),
+            hour: Some(packet_hour.to_string()),
+            bindings: BTreeMap::new(),
+            unit_scope: BTreeMap::new(),
+            inputs: vec!["source_packet".to_string()],
+            outputs: vec!["scribe_artifacts".to_string()],
+            required_artifacts: Vec::new(),
+            required_mail: Vec::new(),
+            route: RuntimeTurnRoute {
+                thread_id: "mail://wiki-company".to_string(),
+                from_role: "memory.hourly.scribe".to_string(),
+                from_mailbox: agent_mail_address_for_unit("live-chain-scribe-unit"),
+                to: vec!["role://memory.wiki.historian".to_string()],
+                cc: vec!["list://wiki-company".to_string()],
+            },
+            receipt_expectations: ScheduledReceiptExpectations {
+                durable_receipt: "mail://wiki-company".to_string(),
+                require_birth_certificate: true,
+                require_turn_start: true,
+                require_context_injection: true,
+                require_adapter_events: true,
+                require_final_message: true,
+                require_talk_append: true,
+                require_mail_delivery: true,
+                require_turn_complete: true,
+                final_message_path: "final-message.md".to_string(),
+                final_message_fields: Vec::new(),
+                talk_delivery_mode: "mail".to_string(),
+                require_non_empty_final_message: true,
+                do_not_count_codex_exit_as_done: true,
+            },
+            final_message_path:
+                "context-engine/live/runs/live-chain/turns/live-chain-scribe-unit/attempt-0001/final-message.md"
+                    .to_string(),
+            source_packet_path: Some(packet.path.clone()),
+            source_packet_hash: Some(packet.source_packet_hash.clone()),
+            condition: None,
+        };
+        let scribe_profile = HarnessWorkerProfile {
+            model: "gpt-5.5".to_string(),
+            reasoning_effort: "low".to_string(),
+            prompt_text: scribe_prompt,
+            tools: Vec::new(),
+        };
+        let scribe_request =
+            build_harness_turn_request_for_runtime_turn(&paths, &scribe_profile, &scribe_turn)
+                .expect("build scribe turn request");
+        let scribe_result =
+            execute_harness_turn_request(&paths, scribe_request).expect("live scribe turn");
+
+        let scribe_entry = std::fs::read_to_string(&scribe_result.final_message_path)
+            .expect("read scribe final message");
+        eprintln!("=== TURN 1: SCRIBE OUTPUT (full) ===\n{scribe_entry}\n=== END SCRIBE OUTPUT ===");
+        assert_eq!(
+            scribe_result.final_message_origin, "model_output",
+            "scribe: expected model-authored output, got origin {} (preview: {})",
+            scribe_result.final_message_origin, scribe_result.assistant_preview
+        );
+        assert!(
+            scribe_result.completion.complete,
+            "scribe completion incomplete: {:?}",
+            scribe_result.completion.issues
+        );
+        assert!(
+            !scribe_entry.trim().is_empty(),
+            "scribe final message empty"
+        );
+        let scribe_usage = scribe_result
+            .usage
+            .as_ref()
+            .expect("scribe turn must capture codex token usage");
+        eprintln!("=== TURN 1: SCRIBE TOKEN USAGE ===\n{scribe_usage:#?}");
+        assert!(scribe_usage.output_tokens > 0, "scribe outputTokens zero");
+
+        // --- Historian role prompt. Trims H1-H5 remove dead pack scaffolding
+        // (talk folders on disk, concept index, q.py escalation, file
+        // writes); the scribe entries arrive push-mail style in this turn
+        // input instead.
+        let historian_role = std::fs::read_to_string(prompts_dir.join("historian.md"))
+            .expect("read historian.md");
+        let historian_role = trim_prompt(
+            &historian_role,
+            "H1 (day's entries arrive in-band, not from a talk folder)",
+            "- **All hourly entries on the talk folder for the day you're\n  processing** — markdown files named\n  `YYYY-MM-DDTHH-MMZ.conversation.md` for that date. Read in\n  chronological order (filename order does this for free).",
+            "- **All hourly entries for the day you're processing**, embedded\n  verbatim in this turn input under \"Today's Scribe Entries\". They\n  are your complete evidence; read them in the order given.",
+        );
+        let historian_role = trim_prompt(
+            &historian_role,
+            "H2 (no prior historian entries exist)",
+            "- **Your own prior entries on the same talk folder**, if any. You\n  don't repeat questions you've already asked; you may build on\n  them or revise them.",
+            "- You have no prior entries for this day; this is your first pass.",
+        );
+        let historian_role = trim_prompt(
+            &historian_role,
+            "H3 (concept index unavailable)",
+            "- **Concept page index** at `/paul-demo2/concept/` (or\n  `content/paul-demo/concept/<slug>.md` for the lab tree). Use this\n  to know which named subjects already have pages — you propose\n  new candidates only for things that don't.",
+            "- The concept page index is unavailable in this harness; treat\n  every named subject as having no existing page, and skip the\n  skip-if-already-decided lookups (no prior eras exist).",
+        );
+        let historian_role = trim_prompt(
+            &historian_role,
+            "H4 (q.py escalation tool is gone)",
+            "- **Raw events** via `agent/tools/q.py` if a scribe entry references\n  something you can't parse from the entry alone. Treat this as\n  escalation, not default behavior; the scribes already did the\n  primary read.",
+            "- Raw-event escalation tooling is unavailable in this harness; the\n  scribe entries in this turn input are your complete evidence. Do\n  not read files or run commands.",
+        );
+        let historian_role = trim_prompt(
+            &historian_role,
+            "H5 (entries delivered as final message, not files)",
+            "Markdown files in the same talk folder the scribes posted to (and\nin the destination talk folders for proposals targeting other\npages, per the routing above). Same filename convention, same\nper-entry frontmatter shape (see\n`prompts/for-you-talk-conventions.md`).",
+            "Entries delivered in your final assistant message; the 1Context\nharness owns file delivery. For each entry, state the intended\nfilename (same filename convention), then the frontmatter block,\nthen the body. Name the destination talk folder for proposals\ntargeting other pages, per the routing above.",
+        );
+        let historian_role = trim_prompt(
+            &historian_role,
+            "H6 (run report lists intended filenames, not written paths)",
+            "- The absolute paths of every file you wrote.",
+            "- The intended filename of every entry you produced.",
+        );
+
+        // Push-mail embedding: the scribe's product IS the historian's input.
+        let historian_prompt = format!(
+            "{historian_role}\n\n---\n\n## Today's Scribe Entries ({packet_date})\n\n\
+             The following are all of the day's scribe entries, delivered\n\
+             in-band. This is your complete input; read nothing from disk and\n\
+             run no commands.\n\n\
+             ### Entry `{packet_date}T{packet_hour}-00Z.conversation.md`\n\n{scribe_entry}\n"
+        );
+
+        // --- TURN 2: HISTORIAN (live), fresh unit/operation ids.
+        let historian_turn = RuntimeTurnDescriptor {
+            schema_version: CONTEXT_ENGINE_SCHEMA_VERSION,
+            kind: "onecontext.context_engine.runtime_turn_descriptor.v1".to_string(),
+            run_id: "live-chain".to_string(),
+            status: "runnable".to_string(),
+            operation_id: "live-chain:historian-unit".to_string(),
+            harness_unit_id: "live-chain-historian-unit".to_string(),
+            harness_turn_id: "turn-live-chain-historian-unit".to_string(),
+            phase_id: "wake_historian".to_string(),
+            job_id: "memory.wiki.historian".to_string(),
+            agent_id: "historian".to_string(),
+            unit_id: "historian-unit".to_string(),
+            fanout: "once".to_string(),
+            max_concurrent: None,
+            packet_id: None,
+            date: Some(packet_date.to_string()),
+            hour: None,
+            bindings: BTreeMap::new(),
+            unit_scope: BTreeMap::new(),
+            inputs: vec!["scribe_artifacts".to_string()],
+            outputs: vec!["historian_entries".to_string()],
+            required_artifacts: Vec::new(),
+            required_mail: Vec::new(),
+            route: RuntimeTurnRoute {
+                thread_id: "mail://wiki-company".to_string(),
+                from_role: "memory.wiki.historian".to_string(),
+                from_mailbox: agent_mail_address_for_unit("live-chain-historian-unit"),
+                to: vec!["role://memory.wiki.editor".to_string()],
+                cc: vec!["list://wiki-company".to_string()],
+            },
+            receipt_expectations: ScheduledReceiptExpectations {
+                durable_receipt: "mail://wiki-company".to_string(),
+                require_birth_certificate: true,
+                require_turn_start: true,
+                require_context_injection: true,
+                require_adapter_events: true,
+                require_final_message: true,
+                require_talk_append: true,
+                require_mail_delivery: true,
+                require_turn_complete: true,
+                final_message_path: "final-message.md".to_string(),
+                final_message_fields: Vec::new(),
+                talk_delivery_mode: "mail".to_string(),
+                require_non_empty_final_message: true,
+                do_not_count_codex_exit_as_done: true,
+            },
+            final_message_path:
+                "context-engine/live/runs/live-chain/turns/live-chain-historian-unit/attempt-0001/final-message.md"
+                    .to_string(),
+            source_packet_path: None,
+            source_packet_hash: None,
+            condition: None,
+        };
+        let historian_profile = HarnessWorkerProfile {
+            model: "gpt-5.5".to_string(),
+            reasoning_effort: "low".to_string(),
+            prompt_text: historian_prompt,
+            tools: Vec::new(),
+        };
+        let historian_request = build_harness_turn_request_for_runtime_turn(
+            &paths,
+            &historian_profile,
+            &historian_turn,
+        )
+        .expect("build historian turn request");
+        let historian_result = execute_harness_turn_request(&paths, historian_request)
+            .expect("live historian turn");
+
+        let historian_entry = std::fs::read_to_string(&historian_result.final_message_path)
+            .expect("read historian final message");
+        eprintln!(
+            "=== TURN 2: HISTORIAN OUTPUT (full) ===\n{historian_entry}\n=== END HISTORIAN OUTPUT ==="
+        );
+        assert_eq!(
+            historian_result.final_message_origin, "model_output",
+            "historian: expected model-authored output, got origin {} (preview: {})",
+            historian_result.final_message_origin, historian_result.assistant_preview
+        );
+        assert!(
+            historian_result.completion.complete,
+            "historian completion incomplete: {:?}",
+            historian_result.completion.issues
+        );
+        assert!(
+            !historian_entry.trim().is_empty(),
+            "historian final message empty"
+        );
+        let historian_usage = historian_result
+            .usage
+            .as_ref()
+            .expect("historian turn must capture codex token usage");
+        eprintln!("=== TURN 2: HISTORIAN TOKEN USAGE ===\n{historian_usage:#?}");
+        assert!(
+            historian_usage.output_tokens > 0,
+            "historian outputTokens zero"
+        );
+
+        // Loose engagement check: the historian must visibly engage with the
+        // scribe's material — mention something from the synthetic hour, or
+        // pose a question.
+        let historian_lower = historian_entry.to_lowercase();
+        let engagement_terms = [
+            "source_record_hash",
+            "legacy_events",
+            "0042",
+            "onecontext-memory-db",
+            "migration",
+            "backfill",
+            "perception",
+        ];
+        let mentions_event = engagement_terms
+            .iter()
+            .any(|term| historian_lower.contains(term));
+        let poses_question = historian_entry.contains('?');
+        assert!(
+            mentions_event || poses_question,
+            "historian output engages with neither the synthetic events nor poses a question:\n{historian_entry}"
+        );
+
+        eprintln!(
+            "=== CHAIN SUMMARY ===\nscribe: thread={:?} usage(total/in/out)={}/{}/{}\nhistorian: thread={:?} usage(total/in/out)={}/{}/{}\nengagement: mentions_event={mentions_event} poses_question={poses_question}",
+            scribe_result.codex_thread_id,
+            scribe_usage.total_tokens,
+            scribe_usage.input_tokens,
+            scribe_usage.output_tokens,
+            historian_result.codex_thread_id,
+            historian_usage.total_tokens,
+            historian_usage.input_tokens,
+            historian_usage.output_tokens,
+        );
     }
 }
