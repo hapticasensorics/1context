@@ -2939,4 +2939,120 @@ wiki.editor.reported
             error: None,
         }
     }
+
+    /// Live seam proof: one bounded worker turn through the real
+    /// `execute_harness_turn_request` path against stock `codex app-server`.
+    /// Requires a logged-in stock Codex CLI on PATH and spends real tokens.
+    /// Run explicitly:
+    /// `cargo test -p onecontext-context-engine --lib live_stock_codex_worker_turn_smoke -- --ignored --nocapture`
+    #[test]
+    #[ignore = "live: spawns stock codex app-server and spends tokens"]
+    fn live_stock_codex_worker_turn_smoke() {
+        use crate::harness_executor::{
+            agent_mail_address_for_unit, build_harness_turn_request_for_runtime_turn,
+            HarnessWorkerProfile,
+        };
+        use crate::runtime_executor::{RuntimeTurnDescriptor, RuntimeTurnRoute};
+        use crate::scheduler::ScheduledReceiptExpectations;
+        use std::collections::BTreeMap;
+
+        std::env::set_var("ONECONTEXT_CONTEXT_ENGINE_WORKER_TIMEOUT_SECS", "240");
+        let temp = tempfile::tempdir().expect("tempdir");
+        let paths = ContextEnginePaths::new(temp.path().join("runtime/1Context"));
+        paths.ensure_release_dirs().expect("release dirs");
+        let seed_wiki =
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../runtime/1Context/user-wiki");
+        let copy_status = std::process::Command::new("cp")
+            .arg("-R")
+            .arg(&seed_wiki)
+            .arg(paths.user_wiki.parent().expect("user-wiki parent"))
+            .status()
+            .expect("seed user-wiki copy");
+        assert!(copy_status.success(), "seed user-wiki copy failed");
+        ensure_orchestrator_unit(&paths).expect("orchestrator root unit");
+
+        let turn = RuntimeTurnDescriptor {
+            schema_version: CONTEXT_ENGINE_SCHEMA_VERSION,
+            kind: "onecontext.context_engine.runtime_turn_descriptor.v1".to_string(),
+            run_id: "live-smoke".to_string(),
+            status: "runnable".to_string(),
+            operation_id: "live-smoke:scribe-unit".to_string(),
+            harness_unit_id: "live-smoke-scribe-unit".to_string(),
+            harness_turn_id: "turn-live-smoke-scribe-unit".to_string(),
+            phase_id: "wake_scribes".to_string(),
+            job_id: "memory.hourly.scribe".to_string(),
+            agent_id: "hourly-scribe".to_string(),
+            unit_id: "scribe-unit".to_string(),
+            fanout: "once".to_string(),
+            max_concurrent: None,
+            packet_id: None,
+            date: None,
+            hour: None,
+            bindings: BTreeMap::new(),
+            unit_scope: BTreeMap::new(),
+            inputs: vec!["source_packet".to_string()],
+            outputs: vec!["scribe_artifacts".to_string()],
+            required_artifacts: Vec::new(),
+            required_mail: Vec::new(),
+            route: RuntimeTurnRoute {
+                thread_id: "mail://wiki-company".to_string(),
+                from_role: "memory.hourly.scribe".to_string(),
+                from_mailbox: agent_mail_address_for_unit("live-smoke-scribe-unit"),
+                to: vec!["role://memory.wiki.historian".to_string()],
+                cc: vec!["list://wiki-company".to_string()],
+            },
+            receipt_expectations: ScheduledReceiptExpectations {
+                durable_receipt: "mail://wiki-company".to_string(),
+                require_birth_certificate: true,
+                require_turn_start: true,
+                require_context_injection: true,
+                require_adapter_events: true,
+                require_final_message: true,
+                require_talk_append: true,
+                require_mail_delivery: true,
+                require_turn_complete: true,
+                final_message_path: "final-message.md".to_string(),
+                final_message_fields: Vec::new(),
+                talk_delivery_mode: "mail".to_string(),
+                require_non_empty_final_message: true,
+                do_not_count_codex_exit_as_done: true,
+            },
+            final_message_path:
+                "context-engine/live/runs/live-smoke/turns/live-smoke-scribe-unit/attempt-0001/final-message.md"
+                    .to_string(),
+            source_packet_path: None,
+            source_packet_hash: None,
+            condition: None,
+        };
+        let profile = HarnessWorkerProfile {
+            model: "gpt-5.5".to_string(),
+            reasoning_effort: "low".to_string(),
+            prompt_text: "You are a 1Context scribe on a live smoke test. Reply with one short sentence describing what a personal wiki is for. Do not run any commands.".to_string(),
+            tools: Vec::new(),
+        };
+        let request = build_harness_turn_request_for_runtime_turn(&paths, &profile, &turn)
+            .expect("build runtime turn request");
+        let result = execute_harness_turn_request(&paths, request).expect("live worker turn");
+
+        eprintln!("=== LIVE SMOKE RESULT ===\n{result:#?}");
+        if let Ok(final_message) = std::fs::read_to_string(&result.final_message_path) {
+            eprintln!("=== FINAL MESSAGE ===\n{final_message}");
+        }
+
+        assert_eq!(
+            result.final_message_origin, "model_output",
+            "expected model-authored output, got origin {} (preview: {})",
+            result.final_message_origin, result.assistant_preview
+        );
+        assert!(
+            !result.assistant_preview.trim().is_empty(),
+            "assistant text empty"
+        );
+        assert!(
+            result.completion.complete,
+            "completion incomplete: {:?}",
+            result.completion.issues
+        );
+        assert!(result.codex_thread_id.is_some(), "no codex thread id");
+    }
 }
