@@ -413,6 +413,7 @@ final class OneContextDaemon: @unchecked Sendable {
     repairMenuLaunchAgentInBackground()
     startMemoryDaemon()
     startWikiAPI()
+    logWikiRendererNodeResolution()
     publishWikiInBackground(refresh: false)
     startAutomaticMemoryWikiUpdateTimer()
     acceptQueue.async { [self] in
@@ -1512,6 +1513,18 @@ final class OneContextDaemon: @unchecked Sendable {
       trigger: refresh ? "wiki.refresh" : "wiki.prepare",
       priority: refresh ? .manual : .automatic
     )
+  }
+
+  private func logWikiRendererNodeResolution() {
+    let node = wikiRendererConfig?.node ?? WikiEngineRendererConfig.resolveNode()
+    if let executable = node.executable {
+      logger.write("wiki renderer node source=\(node.source.rawValue) path=\(executable.path)")
+    } else {
+      logger.write(
+        "wiki renderer node missing: wiki re-publish will fail until Node.js is available "
+          + "(set ONECONTEXT_NODE, install node, or reinstall a build with the bundled node runtime)"
+      )
+    }
   }
 
   private func startAutomaticMemoryWikiUpdateTimer() {

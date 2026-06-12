@@ -1,13 +1,30 @@
 import Foundation
 import OneContextPlatform
 
+public enum WikiEngineNodeSource: String, Equatable, Sendable {
+  case envOverride = "env-override"
+  case bundled
+  case system
+  case missing
+}
+
+public struct WikiEngineNodeResolution: Equatable, Sendable {
+  public var executable: URL?
+  public var source: WikiEngineNodeSource
+
+  public init(executable: URL?, source: WikiEngineNodeSource) {
+    self.executable = executable
+    self.source = source
+  }
+}
+
 public struct WikiEngineRendererConfig: Equatable, Sendable {
-  public var nodeExecutable: URL
+  public var node: WikiEngineNodeResolution
   public var engineDirectory: URL
   public var renderTool: URL
 
-  public init(nodeExecutable: URL, engineDirectory: URL, renderTool: URL) {
-    self.nodeExecutable = nodeExecutable
+  public init(node: WikiEngineNodeResolution, engineDirectory: URL, renderTool: URL) {
+    self.node = node
     self.engineDirectory = engineDirectory
     self.renderTool = renderTool
   }
@@ -24,13 +41,107 @@ public struct WikiEngineRendererConfig: Equatable, Sendable {
     ) else {
       return nil
     }
-    let nodePath = environment["ONECONTEXT_NODE"] ?? "/usr/bin/env"
-    let nodeExecutable = URL(fileURLWithPath: nodePath)
     return WikiEngineRendererConfig(
-      nodeExecutable: nodeExecutable,
+      node: resolveNode(
+        environment: environment,
+        resourceURL: resourceURL,
+        executableURL: executableURL
+      ),
       engineDirectory: engine,
       renderTool: engine.appendingPathComponent("tools/render-site.mjs")
     )
+  }
+
+  public static func resolveNode(
+    environment: [String: String] = ProcessInfo.processInfo.environment,
+    resourceURL: URL? = Bundle.main.resourceURL,
+    executableURL: URL? = Bundle.main.executableURL,
+    fileManager: FileManager = .default,
+    systemSearchPaths: [String]? = nil
+  ) -> WikiEngineNodeResolution {
+    if let override = environment["ONECONTEXT_NODE"], !override.isEmpty {
+      return WikiEngineNodeResolution(executable: URL(fileURLWithPath: override), source: .envOverride)
+    }
+    if let bundled = bundledNodeExecutable(
+      resourceURL: resourceURL,
+      executableURL: executableURL,
+      fileManager: fileManager
+    ) {
+      return WikiEngineNodeResolution(executable: bundled, source: .bundled)
+    }
+    for directory in systemSearchPaths ?? nodeSearchPaths(environment: environment) {
+      let candidate = URL(fileURLWithPath: directory, isDirectory: true).appendingPathComponent("node")
+      if fileManager.isExecutableFile(atPath: candidate.path) {
+        return WikiEngineNodeResolution(executable: candidate, source: .system)
+      }
+    }
+    return WikiEngineNodeResolution(executable: nil, source: .missing)
+  }
+
+  private static func bundledNodeExecutable(
+    resourceURL: URL?,
+    executableURL: URL?,
+    fileManager: FileManager
+  ) -> URL? {
+    var candidates: [URL] = []
+    if let resourceURL {
+      candidates.append(resourceURL.appendingPathComponent("node-runtime/bin/node"))
+    }
+    if let executableURL {
+      candidates.append(
+        executableURL
+          .deletingLastPathComponent()
+          .deletingLastPathComponent()
+          .appendingPathComponent("Resources", isDirectory: true)
+          .appendingPathComponent("node-runtime/bin/node")
+      )
+    }
+    return candidates.first { fileManager.isExecutableFile(atPath: $0.path) }
+  }
+
+  static func nodeSearchPaths(environment: [String: String]) -> [String] {
+    var parts: [String] = []
+    for item in [environment["PATH"] ?? ""] + nvmNodeBinPaths() + [
+      "\(FileManager.default.homeDirectoryForCurrentUser.path)/.local/bin",
+      "\(FileManager.default.homeDirectoryForCurrentUser.path)/.cargo/bin",
+      "/opt/homebrew/bin",
+      "/opt/homebrew/sbin",
+      "/usr/local/bin",
+      "/usr/bin",
+      "/bin",
+      "/usr/sbin",
+      "/sbin"
+    ] where !item.isEmpty {
+      for segment in item.split(separator: ":").map(String.init) where !segment.isEmpty && !parts.contains(segment) {
+        parts.append(segment)
+      }
+    }
+    return parts
+  }
+
+  private static func nvmNodeBinPaths() -> [String] {
+    let versionsRoot = FileManager.default.homeDirectoryForCurrentUser
+      .appendingPathComponent(".nvm", isDirectory: true)
+      .appendingPathComponent("versions", isDirectory: true)
+      .appendingPathComponent("node", isDirectory: true)
+    guard let versionDirectories = try? FileManager.default.contentsOfDirectory(
+      at: versionsRoot,
+      includingPropertiesForKeys: [.isDirectoryKey],
+      options: [.skipsHiddenFiles]
+    ) else {
+      return []
+    }
+    return versionDirectories
+      .filter { url in
+        guard let values = try? url.resourceValues(forKeys: [.isDirectoryKey]) else {
+          return false
+        }
+        return values.isDirectory == true
+      }
+      .sorted {
+        $0.lastPathComponent.localizedStandardCompare($1.lastPathComponent) == .orderedDescending
+      }
+      .map { $0.appendingPathComponent("bin", isDirectory: true).path }
   }
 
   private static func discoverEngineDirectory(
@@ -89,6 +200,7 @@ public struct WikiEngineRenderSummary: Equatable, Sendable {
 public enum WikiEngineRendererError: LocalizedError, Equatable {
   case missingRenderTool(String)
   case missingSourceRoot(String)
+  case missingNodeRuntime
   case renderFailed(input: String, detail: String)
   case invalidResult(String)
 
@@ -98,6 +210,10 @@ public enum WikiEngineRendererError: LocalizedError, Equatable {
       return "Missing wiki renderer tool: \(path)"
     case .missingSourceRoot(let path):
       return "Missing wiki source root: \(path)"
+    case .missingNodeRuntime:
+      return "Wiki renderer Node.js runtime is missing: checked ONECONTEXT_NODE, the bundled "
+        + "Resources/node-runtime/bin/node, and PATH. Wiki re-publish cannot run until Node.js "
+        + "is available. Set ONECONTEXT_NODE, install node, or reinstall a build with the bundled node runtime."
     case .renderFailed(let input, let detail):
       return "Wiki render failed for \(input): \(detail)"
     case .invalidResult(let detail):
@@ -177,31 +293,21 @@ public final class WikiEngineRenderer: @unchecked Sendable {
   }
 
   private func runRenderSite(sourceRoot: URL, outputDirectory: URL, resultURL: URL) throws {
-    let process = Process()
-    if config.nodeExecutable.lastPathComponent == "env" {
-      process.executableURL = config.nodeExecutable
-      process.arguments = [
-        "node",
-        config.renderTool.path,
-        "--source-root",
-        sourceRoot.path,
-        "--output",
-        outputDirectory.path,
-        "--result-json",
-        resultURL.path
-      ]
-    } else {
-      process.executableURL = config.nodeExecutable
-      process.arguments = [
-        config.renderTool.path,
-        "--source-root",
-        sourceRoot.path,
-        "--output",
-        outputDirectory.path,
-        "--result-json",
-        resultURL.path
-      ]
+    guard let nodeExecutable = config.node.executable else {
+      throw WikiEngineRendererError.missingNodeRuntime
     }
+    let process = Process()
+    process.executableURL = nodeExecutable
+    // ONECONTEXT_NODE may point at /usr/bin/env; keep `env node` invocation working for that override.
+    process.arguments = (nodeExecutable.lastPathComponent == "env" ? ["node"] : []) + [
+      config.renderTool.path,
+      "--source-root",
+      sourceRoot.path,
+      "--output",
+      outputDirectory.path,
+      "--result-json",
+      resultURL.path
+    ]
     process.currentDirectoryURL = config.engineDirectory
     process.environment = rendererEnvironment()
     process.standardInput = FileHandle.nullDevice
@@ -241,53 +347,10 @@ public final class WikiEngineRenderer: @unchecked Sendable {
 
   private func rendererEnvironment() -> [String: String] {
     var environment = ProcessInfo.processInfo.environment
-    environment["PATH"] = developerToolPath(existing: environment["PATH"])
+    environment["PATH"] = WikiEngineRendererConfig
+      .nodeSearchPaths(environment: environment)
+      .joined(separator: ":")
     return environment
-  }
-
-  private func developerToolPath(existing: String?) -> String {
-    var parts: [String] = []
-    for item in [existing ?? ""] + nvmNodeBinPaths() + [
-      "\(FileManager.default.homeDirectoryForCurrentUser.path)/.local/bin",
-      "\(FileManager.default.homeDirectoryForCurrentUser.path)/.cargo/bin",
-      "/opt/homebrew/bin",
-      "/opt/homebrew/sbin",
-      "/usr/local/bin",
-      "/usr/bin",
-      "/bin",
-      "/usr/sbin",
-      "/sbin"
-    ] where !item.isEmpty {
-      for segment in item.split(separator: ":").map(String.init) where !segment.isEmpty && !parts.contains(segment) {
-        parts.append(segment)
-      }
-    }
-    return parts.joined(separator: ":")
-  }
-
-  private func nvmNodeBinPaths() -> [String] {
-    let versionsRoot = FileManager.default.homeDirectoryForCurrentUser
-      .appendingPathComponent(".nvm", isDirectory: true)
-      .appendingPathComponent("versions", isDirectory: true)
-      .appendingPathComponent("node", isDirectory: true)
-    guard let versionDirectories = try? FileManager.default.contentsOfDirectory(
-      at: versionsRoot,
-      includingPropertiesForKeys: [.isDirectoryKey],
-      options: [.skipsHiddenFiles]
-    ) else {
-      return []
-    }
-    return versionDirectories
-      .filter { url in
-        guard let values = try? url.resourceValues(forKeys: [.isDirectoryKey]) else {
-          return false
-        }
-        return values.isDirectory == true
-      }
-      .sorted {
-        $0.lastPathComponent.localizedStandardCompare($1.lastPathComponent) == .orderedDescending
-      }
-      .map { $0.appendingPathComponent("bin", isDirectory: true).path }
   }
 }
 

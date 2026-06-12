@@ -66,7 +66,7 @@ final class WikiRenderCoordinatorTests: XCTestCase {
     let coordinator = WikiRenderCoordinator(
       runtimePaths: paths,
       rendererConfig: WikiEngineRendererConfig(
-        nodeExecutable: URL(fileURLWithPath: "/usr/bin/env"),
+        node: WikiEngineNodeResolution(executable: URL(fileURLWithPath: "/usr/bin/env"), source: .system),
         engineDirectory: engine,
         renderTool: engine.appendingPathComponent("tools/render-site.mjs")
       ),
@@ -99,7 +99,7 @@ final class WikiRenderCoordinatorTests: XCTestCase {
     let coordinator = WikiRenderCoordinator(
       runtimePaths: paths,
       rendererConfig: WikiEngineRendererConfig(
-        nodeExecutable: URL(fileURLWithPath: "/usr/bin/env"),
+        node: WikiEngineNodeResolution(executable: URL(fileURLWithPath: "/usr/bin/env"), source: .system),
         engineDirectory: engine,
         renderTool: engine.appendingPathComponent("tools/render-site.mjs")
       ),
@@ -126,7 +126,7 @@ final class WikiRenderCoordinatorTests: XCTestCase {
     let coordinator = WikiRenderCoordinator(
       runtimePaths: paths,
       rendererConfig: WikiEngineRendererConfig(
-        nodeExecutable: URL(fileURLWithPath: "/usr/bin/env"),
+        node: WikiEngineNodeResolution(executable: URL(fileURLWithPath: "/usr/bin/env"), source: .system),
         engineDirectory: engine,
         renderTool: engine.appendingPathComponent("tools/render-site.mjs")
       ),
@@ -180,7 +180,7 @@ final class WikiRenderCoordinatorTests: XCTestCase {
     let coordinator = WikiRenderCoordinator(
       runtimePaths: paths,
       rendererConfig: WikiEngineRendererConfig(
-        nodeExecutable: URL(fileURLWithPath: "/usr/bin/env"),
+        node: WikiEngineNodeResolution(executable: URL(fileURLWithPath: "/usr/bin/env"), source: .system),
         engineDirectory: engine,
         renderTool: engine.appendingPathComponent("tools/render-site.mjs")
       ),
