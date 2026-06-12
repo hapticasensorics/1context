@@ -214,6 +214,7 @@ pub struct PageOpenResult {
     pub handles: PageHandles,
     pub files: PageOpenFiles,
     pub hashes: PageOpenHashes,
+    pub operator_touched: Vec<OperatorTouchedSpan>,
     pub resources: Vec<PageOpenResource>,
     pub edit: EditPreconditions,
     pub allowed_actions: Vec<String>,
@@ -410,6 +411,129 @@ pub struct Actor {
     pub name: Option<String>,
 }
 
+impl Actor {
+    pub fn operator() -> Self {
+        Self {
+            kind: "operator".to_string(),
+            name: None,
+        }
+    }
+
+    pub fn agent(address: &str) -> Self {
+        Self {
+            kind: "agent".to_string(),
+            name: Some(address.to_string()),
+        }
+    }
+
+    pub fn parse(value: &str) -> Result<Self> {
+        let value = value.trim();
+        if value == "operator" {
+            return Ok(Self::operator());
+        }
+        if let Some(unit) = value.strip_prefix("agent://") {
+            if !unit.trim().is_empty() {
+                return Ok(Self::agent(value));
+            }
+        }
+        Err(anyhow!(
+            "invalid actor: {value}; expected operator or agent://<unit>"
+        ))
+    }
+
+    pub fn is_operator(&self) -> bool {
+        self.kind == "operator"
+    }
+
+    pub fn label(&self) -> &str {
+        self.name.as_deref().unwrap_or(&self.kind)
+    }
+}
+
+/// One operator-touched span in a page body, delimited by
+/// `<!-- operator-touched: <note> -->` ... `<!-- /operator-touched -->`
+/// marker lines. An unclosed open marker protects through the end of the
+/// body (`closed: false`).
+#[derive(Clone, Debug, Serialize)]
+pub struct OperatorTouchedSpan {
+    pub date: Option<String>,
+    pub note: Option<String>,
+    pub section_slug: Option<String>,
+    /// 1-based inclusive line range in the full source file (frontmatter included).
+    pub line_range: [usize; 2],
+    pub closed: bool,
+}
+
+/// Internal parse result: the public span plus the byte range it occupies in
+/// the page body (markers included), used for overlap enforcement.
+#[derive(Clone, Debug)]
+struct ParsedOperatorSpan {
+    span: OperatorTouchedSpan,
+    start: usize,
+    end: usize,
+    closed: bool,
+}
+
+/// Typed rejection for agent edits that overlap operator-touched spans.
+/// Returned through `anyhow::Error`; callers downcast with
+/// `error.downcast_ref::<OperatorTouchedConflict>()` for the structured receipt.
+#[derive(Clone, Debug, Serialize)]
+pub struct OperatorTouchedConflict {
+    pub schema_version: u32,
+    pub code: String,
+    pub operation: String,
+    pub page: String,
+    pub actor: Actor,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub edit_line_range: Option<[usize; 2]>,
+    pub conflicting_spans: Vec<OperatorTouchedSpan>,
+    pub next_action: String,
+    pub repair_hints: Vec<String>,
+}
+
+impl std::fmt::Display for OperatorTouchedConflict {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let ranges = self
+            .conflicting_spans
+            .iter()
+            .map(|span| format!("{}-{}", span.line_range[0], span.line_range[1]))
+            .collect::<Vec<_>>()
+            .join(", ");
+        write!(
+            f,
+            "operator_touched_conflict: {} by {} on {} overlaps operator-touched span(s) at line(s) {}; append after the span or leave the edit to the operator",
+            self.operation,
+            self.actor.label(),
+            self.page,
+            ranges
+        )
+    }
+}
+
+impl std::error::Error for OperatorTouchedConflict {}
+
+fn operator_touched_conflict_error(
+    operation: &str,
+    page: &str,
+    actor: &Actor,
+    edit_line_range: Option<[usize; 2]>,
+    conflicting_spans: Vec<OperatorTouchedSpan>,
+) -> anyhow::Error {
+    anyhow::Error::new(OperatorTouchedConflict {
+        schema_version: 1,
+        code: "operator_touched_conflict".to_string(),
+        operation: operation.to_string(),
+        page: page.to_string(),
+        actor: actor.clone(),
+        edit_line_range,
+        conflicting_spans,
+        next_action: "append_after_span_or_defer_to_operator".to_string(),
+        repair_hints: vec![
+            "Operator-authored content is server-protected. Append new content after the span (page-append-section) or post a talk proposal for the operator.".to_string(),
+        ],
+    })
+}
+
 #[derive(Clone, Debug, Serialize)]
 pub struct OperationReceipt {
     pub schema_version: u32,
@@ -422,6 +546,8 @@ pub struct OperationReceipt {
     pub page_type: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub collection: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub actor: Option<Actor>,
     pub evidence: Vec<Evidence>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub page_status: Option<WikiPageStatus>,
@@ -429,6 +555,10 @@ pub struct OperationReceipt {
     pub edit: Option<EditPreconditions>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub hashes: Option<PageOpenHashes>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub before_source_sha256: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub after_source_sha256: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub link_impact: Option<LinkImpactSummary>,
     pub render_required: bool,
@@ -871,6 +1001,10 @@ impl WikiCore {
         let conventions = talk.join("_conventions.md");
         let tombstone = source.with_extension("tombstone.toml");
         let source_hash = sha256_file(&source).ok();
+        let operator_touched = fs::read_to_string(&source)
+            .ok()
+            .map(|text| operator_touched_spans_for_source(&text))
+            .unwrap_or_default();
         let talk_hash = if talk.is_dir() {
             tree_fingerprint(&talk).ok()
         } else {
@@ -943,6 +1077,7 @@ impl WikiCore {
                 curator_sha256: curator_hash.clone(),
                 conventions_sha256: conventions_hash.clone(),
             },
+            operator_touched,
             resources: vec![
                 PageOpenResource {
                     surface: "source".to_string(),
@@ -1914,7 +2049,7 @@ impl WikiCore {
                 event: "template.baseline".to_string(),
                 page: record.id.clone(),
                 at: now_rfc3339(),
-                actor,
+                actor: actor.clone(),
                 origin: None,
                 source_sha256: source_hash,
                 template_sha256: template_hash,
@@ -1933,10 +2068,13 @@ impl WikiCore {
             route,
             page_type,
             collection,
+            actor,
             evidence,
             page_status,
             edit,
             hashes,
+            before_source_sha256: None,
+            after_source_sha256: None,
             link_impact: None,
             render_required: true,
             next_action: "publish".to_string(),
@@ -1975,6 +2113,7 @@ impl WikiCore {
         reference: &str,
         body_markdown: &str,
         expected_source_sha256: Option<&str>,
+        actor: &Actor,
     ) -> Result<OperationReceipt> {
         self.ensure_runtime_dirs()?;
         let _lifecycle_lock = self.lock_lifecycle_writes()?;
@@ -1994,7 +2133,18 @@ impl WikiCore {
         }
         let original =
             fs::read_to_string(&source).with_context(|| format!("read {}", source.display()))?;
-        let (frontmatter, _body) = split_markdown_frontmatter(&original)?;
+        let (frontmatter, body) = split_markdown_frontmatter(&original)?;
+        // A whole-body rewrite touches every byte, so any operator-touched
+        // span on the page rejects an agent write.
+        enforce_operator_touched_spans(
+            "wiki.page.write_body",
+            &record.id,
+            actor,
+            frontmatter,
+            body,
+            0,
+            body.len(),
+        )?;
         let next = format!("{frontmatter}{body_markdown}");
         self.write_page_source_update(
             record,
@@ -2003,6 +2153,7 @@ impl WikiCore {
             next,
             "wiki.page.write_body",
             "page.body_written",
+            actor,
         )
     }
 
@@ -2012,6 +2163,7 @@ impl WikiCore {
         find: &str,
         replace: &str,
         expected_source_sha256: Option<&str>,
+        actor: &Actor,
     ) -> Result<OperationReceipt> {
         if find.is_empty() {
             return Err(anyhow!("page-patch-body requires a non-empty --find value"));
@@ -2051,6 +2203,16 @@ impl WikiCore {
                 ))
             }
         }
+        let find_start = body.find(find).expect("single occurrence verified above");
+        enforce_operator_touched_spans(
+            "wiki.page.patch_body",
+            &record.id,
+            actor,
+            frontmatter,
+            body,
+            find_start,
+            find_start + find.len(),
+        )?;
         let patched_body = body.replacen(find, replace, 1);
         let next = format!("{frontmatter}{patched_body}");
         self.write_page_source_update(
@@ -2060,6 +2222,68 @@ impl WikiCore {
             next,
             "wiki.page.patch_body",
             "page.body_patched",
+            actor,
+        )
+    }
+
+    /// First-class additive edit: append a markdown block at the end of one
+    /// section (located by its ATX heading text) without rewriting any
+    /// existing line. This is the e08 "additive discipline" made mechanical:
+    /// the insertion point lands after a section's operator-touched spans, so
+    /// agent appends succeed where rewrites are rejected. An unclosed span in
+    /// the section still protects through the end of the body.
+    pub fn append_to_section(
+        &self,
+        reference: &str,
+        section: &str,
+        content: &str,
+        expected_source_sha256: Option<&str>,
+        actor: &Actor,
+    ) -> Result<OperationReceipt> {
+        if content.trim().is_empty() {
+            return Err(anyhow!(
+                "page-append-section requires non-empty --content markdown"
+            ));
+        }
+        self.ensure_runtime_dirs()?;
+        let _lifecycle_lock = self.lock_lifecycle_writes()?;
+        let record = self.find_page(reference)?;
+        self.ensure_page_body_editable(&record)?;
+        let source = self.source_path(&record);
+        let before_hash = sha256_file(&source)?;
+        if let Some(expected) = expected_source_sha256 {
+            if expected != before_hash {
+                return Err(anyhow!(
+                    "source hash mismatch for {}; expected {}, found {}",
+                    record.id,
+                    expected,
+                    before_hash
+                ));
+            }
+        }
+        let original =
+            fs::read_to_string(&source).with_context(|| format!("read {}", source.display()))?;
+        let (frontmatter, body) = split_markdown_frontmatter(&original)?;
+        let (_, section_end) = locate_section(body, &record.id, section)?;
+        enforce_operator_touched_spans(
+            "wiki.page.append_section",
+            &record.id,
+            actor,
+            frontmatter,
+            body,
+            section_end,
+            section_end,
+        )?;
+        let next_body = append_block_at(body, section_end, content);
+        let next = format!("{frontmatter}{next_body}");
+        self.write_page_source_update(
+            record,
+            source,
+            before_hash,
+            next,
+            "wiki.page.append_section",
+            "page.section_appended",
+            actor,
         )
     }
 
@@ -2134,10 +2358,13 @@ impl WikiCore {
             route,
             page_type,
             collection,
+            actor: None,
             evidence,
             page_status,
             edit,
             hashes,
+            before_source_sha256: None,
+            after_source_sha256: None,
             link_impact: Some(link_impact),
             render_required: route_still_published,
             next_action: next_action.to_string(),
@@ -2205,10 +2432,13 @@ impl WikiCore {
             route,
             page_type,
             collection,
+            actor: None,
             evidence,
             page_status,
             edit,
             hashes,
+            before_source_sha256: None,
+            after_source_sha256: None,
             link_impact: None,
             render_required: changed,
             next_action: if changed {
@@ -3352,10 +3582,11 @@ impl WikiCore {
         &self,
         record: PageRecord,
         source: PathBuf,
-        _before_hash: String,
+        before_hash: String,
         next_content: String,
         operation: &str,
         ledger_event: &str,
+        actor: &Actor,
     ) -> Result<OperationReceipt> {
         let original =
             fs::read_to_string(&source).with_context(|| format!("read {}", source.display()))?;
@@ -3376,10 +3607,13 @@ impl WikiCore {
                 route,
                 page_type,
                 collection,
+                actor: Some(actor.clone()),
                 evidence,
                 page_status,
                 edit,
                 hashes,
+                before_source_sha256: Some(before_hash.clone()),
+                after_source_sha256: Some(before_hash),
                 link_impact: None,
                 render_required: false,
                 next_action: "none".to_string(),
@@ -3398,9 +3632,9 @@ impl WikiCore {
             event: ledger_event.to_string(),
             page: record.id.clone(),
             at: now_rfc3339(),
-            actor: None,
+            actor: Some(actor.clone()),
             origin: Some("body_edit".to_string()),
-            source_sha256: after_hash,
+            source_sha256: after_hash.clone(),
             template_sha256: None,
             publish_fingerprint: None,
         })?;
@@ -3415,10 +3649,13 @@ impl WikiCore {
             route,
             page_type,
             collection,
+            actor: Some(actor.clone()),
             evidence,
             page_status,
             edit,
             hashes,
+            before_source_sha256: Some(before_hash),
+            after_source_sha256: after_hash,
             link_impact: None,
             render_required: true,
             next_action: "publish".to_string(),
@@ -3821,13 +4058,14 @@ impl WikiCore {
         let source = self.source_path(record);
         let tombstone = source.with_extension("tombstone.toml");
         let mut hasher = Sha256::new();
-        hasher.update(b"1context-page-publish-fingerprint-v1");
+        hasher.update(b"1context-page-publish-fingerprint-v2");
         hasher.update([0]);
         hasher.update(serde_json::to_vec(record)?);
         hasher.update([0]);
         hash_optional_file(&mut hasher, "source", &source)?;
         hash_optional_file(&mut hasher, "tombstone", &tombstone)?;
         hash_optional_tree(&mut hasher, "assets", &self.asset_dir(record))?;
+        hash_optional_tree(&mut hasher, "talk", &self.talk_dir(record))?;
         Ok(format!("{:x}", hasher.finalize()))
     }
 
@@ -4182,6 +4420,276 @@ fn split_markdown_frontmatter(text: &str) -> Result<(&str, &str)> {
     Err(anyhow!(
         "source markdown frontmatter is missing closing delimiter; refusing body-only edit"
     ))
+}
+
+const OPERATOR_TOUCHED_OPEN: &str = "<!-- operator-touched";
+const OPERATOR_TOUCHED_CLOSE: &str = "<!-- /operator-touched";
+
+fn operator_touched_open_note(line: &str) -> Option<String> {
+    let trimmed = line.trim();
+    let rest = trimmed.strip_prefix(OPERATOR_TOUCHED_OPEN)?;
+    let rest = rest.strip_suffix("-->")?;
+    if trimmed.starts_with(OPERATOR_TOUCHED_CLOSE) {
+        return None;
+    }
+    let note = rest.trim().trim_start_matches(':').trim();
+    Some(note.to_string())
+}
+
+fn is_operator_touched_close(line: &str) -> bool {
+    let trimmed = line.trim();
+    trimmed.starts_with(OPERATOR_TOUCHED_CLOSE) && trimmed.ends_with("-->")
+}
+
+fn looks_like_date(token: &str) -> bool {
+    let bytes = token.as_bytes();
+    bytes.len() == 10
+        && bytes[4] == b'-'
+        && bytes[7] == b'-'
+        && bytes
+            .iter()
+            .enumerate()
+            .all(|(index, byte)| matches!(index, 4 | 7) || byte.is_ascii_digit())
+}
+
+fn atx_heading_text(line: &str) -> Option<(usize, &str)> {
+    let trimmed = line.trim_end_matches(['\r', '\n']);
+    let level = trimmed.chars().take_while(|ch| *ch == '#').count();
+    if level == 0 || level > 6 {
+        return None;
+    }
+    let rest = &trimmed[level..];
+    if !rest.is_empty() && !rest.starts_with(' ') {
+        return None;
+    }
+    Some((level, rest.trim().trim_end_matches('#').trim_end()))
+}
+
+/// Parse operator-touched span markers from a page body. Marker grammar
+/// (design §6.2; the close marker is this implementation's choice):
+/// open  = a line `<!-- operator-touched[: <note>] -->`; if the note starts
+///         with a YYYY-MM-DD token it is split out as the span date,
+/// close = a line `<!-- /operator-touched -->`.
+/// An open marker without a close protects through the end of the body.
+fn parse_operator_touched_spans(frontmatter: &str, body: &str) -> Vec<ParsedOperatorSpan> {
+    let frontmatter_lines = frontmatter.matches('\n').count();
+    let body_lines = body.lines().count().max(1);
+    let mut spans = Vec::new();
+    let mut section_slug: Option<String> = None;
+    let mut open: Option<(usize, usize, Option<String>, Option<String>, Option<String>)> = None;
+    let mut offset = 0usize;
+    let mut line_number = 0usize;
+
+    for line in body.split_inclusive('\n') {
+        line_number += 1;
+        let line_start = offset;
+        offset += line.len();
+        if let Some((_, heading)) = atx_heading_text(line) {
+            if open.is_none() {
+                section_slug = Some(slugify(heading)).filter(|slug| !slug.is_empty());
+            }
+            continue;
+        }
+        if open.is_none() {
+            if let Some(note) = operator_touched_open_note(line) {
+                let (date, note) = match note.split_once(char::is_whitespace) {
+                    Some((first, rest)) if looks_like_date(first) => (
+                        Some(first.to_string()),
+                        Some(rest.trim().to_string()).filter(|rest| !rest.is_empty()),
+                    ),
+                    None if looks_like_date(&note) => (Some(note.clone()), None),
+                    _ => (None, Some(note.clone()).filter(|note| !note.is_empty())),
+                };
+                open = Some((line_start, line_number, date, note, section_slug.clone()));
+            }
+        } else if is_operator_touched_close(line) {
+            let (start, start_line, date, note, slug) = open.take().expect("open span");
+            spans.push(ParsedOperatorSpan {
+                span: OperatorTouchedSpan {
+                    date,
+                    note,
+                    section_slug: slug,
+                    line_range: [
+                        frontmatter_lines + start_line,
+                        frontmatter_lines + line_number,
+                    ],
+                    closed: true,
+                },
+                start,
+                end: offset,
+                closed: true,
+            });
+        }
+    }
+
+    if let Some((start, start_line, date, note, slug)) = open {
+        spans.push(ParsedOperatorSpan {
+            span: OperatorTouchedSpan {
+                date,
+                note,
+                section_slug: slug,
+                line_range: [
+                    frontmatter_lines + start_line,
+                    frontmatter_lines + body_lines,
+                ],
+                closed: false,
+            },
+            start,
+            end: body.len(),
+            closed: false,
+        });
+    }
+
+    spans
+}
+
+fn operator_touched_spans_for_source(source_text: &str) -> Vec<OperatorTouchedSpan> {
+    split_markdown_frontmatter(source_text)
+        .map(|(frontmatter, body)| {
+            parse_operator_touched_spans(frontmatter, body)
+                .into_iter()
+                .map(|parsed| parsed.span)
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+fn body_byte_range_to_file_lines(
+    frontmatter: &str,
+    body: &str,
+    start: usize,
+    end: usize,
+) -> [usize; 2] {
+    let frontmatter_lines = frontmatter.matches('\n').count();
+    let start_line = frontmatter_lines + body[..start].matches('\n').count() + 1;
+    let end_line = frontmatter_lines
+        + body[..end.min(body.len())]
+            .trim_end_matches('\n')
+            .matches('\n')
+            .count()
+        + 1;
+    [start_line, end_line.max(start_line)]
+}
+
+/// Locate one section by ATX heading text. Returns the byte range
+/// `[heading_line_start, section_end)` in the body, where the section ends at
+/// the next heading of the same or higher level (or the end of the body).
+fn locate_section(body: &str, page_id: &str, heading: &str) -> Result<(usize, usize)> {
+    let wanted = heading.trim().trim_start_matches('#').trim();
+    if wanted.is_empty() {
+        return Err(anyhow!(
+            "page-append-section requires a non-empty --section heading"
+        ));
+    }
+    let mut matches = Vec::new();
+    let mut offset = 0usize;
+    let mut lines = Vec::new();
+    for line in body.split_inclusive('\n') {
+        lines.push((offset, line));
+        offset += line.len();
+    }
+    for (index, (line_start, line)) in lines.iter().enumerate() {
+        if let Some((level, text)) = atx_heading_text(line) {
+            if text == wanted {
+                matches.push((index, *line_start, level));
+            }
+        }
+    }
+    match matches.len() {
+        0 => {
+            return Err(anyhow!(
+                "section heading not found in body for {page_id}: {wanted}; use page-open to inspect the current source"
+            ))
+        }
+        1 => {}
+        count => {
+            return Err(anyhow!(
+                "section heading matched {count} times in body for {page_id}: {wanted}; make the heading unique before appending"
+            ))
+        }
+    }
+    let (heading_index, heading_start, heading_level) = matches[0];
+    let section_end = lines
+        .iter()
+        .skip(heading_index + 1)
+        .find_map(|(line_start, line)| {
+            atx_heading_text(line)
+                .filter(|(level, _)| *level <= heading_level)
+                .map(|_| *line_start)
+        })
+        .unwrap_or(body.len());
+    Ok((heading_start, section_end))
+}
+
+/// Server-enforced operator-touched guard (design §6.2). Agent actors may not
+/// edit a byte range that overlaps an operator-touched span; operator actors
+/// bypass because the spans are their own content. Insertions are zero-width
+/// ranges (`edit_start == edit_end`), so an append placed at or after a closed
+/// span's end passes while one inside the span is rejected. Unclosed spans
+/// protect through the end of the body.
+fn enforce_operator_touched_spans(
+    operation: &str,
+    page_id: &str,
+    actor: &Actor,
+    frontmatter: &str,
+    body: &str,
+    edit_start: usize,
+    edit_end: usize,
+) -> Result<()> {
+    if actor.is_operator() {
+        return Ok(());
+    }
+    let conflicting_spans = parse_operator_touched_spans(frontmatter, body)
+        .into_iter()
+        .filter(|parsed| {
+            let effective_end = if parsed.closed {
+                parsed.end
+            } else {
+                usize::MAX
+            };
+            edit_start < effective_end && parsed.start < edit_end
+        })
+        .map(|parsed| parsed.span)
+        .collect::<Vec<_>>();
+    if conflicting_spans.is_empty() {
+        return Ok(());
+    }
+    Err(operator_touched_conflict_error(
+        operation,
+        page_id,
+        actor,
+        Some(body_byte_range_to_file_lines(
+            frontmatter,
+            body,
+            edit_start,
+            edit_end,
+        )),
+        conflicting_spans,
+    ))
+}
+
+/// Insert `content` as a standalone markdown block at `insertion` (a byte
+/// offset on a line boundary in `body`) without rewriting any existing line:
+/// the text before and after the insertion point is preserved verbatim, with
+/// blank-line separation added around the new block as needed.
+fn append_block_at(body: &str, insertion: usize, content: &str) -> String {
+    let before = &body[..insertion];
+    let after = &body[insertion..];
+    let mut next = String::with_capacity(body.len() + content.len() + 4);
+    next.push_str(before);
+    if !next.is_empty() && !next.ends_with('\n') {
+        next.push('\n');
+    }
+    if !next.is_empty() && !next.ends_with("\n\n") {
+        next.push('\n');
+    }
+    next.push_str(content.trim_end());
+    next.push('\n');
+    if !after.is_empty() {
+        next.push('\n');
+        next.push_str(after);
+    }
+    next
 }
 
 fn parse_simple_frontmatter_fields(text: &str) -> Result<BTreeMap<String, String>> {
@@ -4865,6 +5373,10 @@ fn collect_publish_input_files(root: &Path, files: &mut Vec<PathBuf>) -> Result<
                 .map(|name| name.ends_with(".talk"))
                 .unwrap_or(false)
             {
+                // Talk trees are publish inputs (design §6.1/R11): a
+                // talk-only change must mark the site stale so publish
+                // proceeds without --force.
+                collect_files(&path, files)?;
                 continue;
             }
             collect_publish_input_files(&path, files)?;
@@ -6301,6 +6813,7 @@ mod tests {
                 "topics",
                 "# Topics\n\nFirst receipt body.\n",
                 Some(&create_hash),
+                &Actor::operator(),
             )
             .unwrap();
         assert_eq!(write.next_action, "publish");
@@ -6323,6 +6836,7 @@ mod tests {
                 "First receipt body",
                 "Second receipt body",
                 Some(&write_hash),
+                &Actor::operator(),
             )
             .unwrap();
         assert_eq!(patch.next_action, "publish");
@@ -6418,6 +6932,7 @@ mod tests {
             "topics",
             &format!("# Topics\n\n{}\n", added.asset.markdown),
             None,
+            &Actor::operator(),
         )
         .unwrap();
 
@@ -6605,6 +7120,7 @@ mod tests {
             "topics",
             "# Topics\n\nOperator-edited body before tombstone.\n",
             Some(&create_hash),
+            &Actor::operator(),
         )
         .unwrap();
 
@@ -6667,6 +7183,7 @@ talk_curator_template = "talk/curators/topics.md"
             "topics",
             "# Topics\n\nArticle link to [Target](/target).\n",
             None,
+            &Actor::operator(),
         )
         .unwrap();
         fs::write(
@@ -6822,7 +7339,12 @@ template = "site/e08/open-questions.md"
             std::thread::spawn(move || {
                 barrier.wait();
                 WikiCore::new(root)
-                    .write_page_body("topics", "\n# First writer\n", Some(&expected))
+                    .write_page_body(
+                        "topics",
+                        "\n# First writer\n",
+                        Some(&expected),
+                        &Actor::operator(),
+                    )
                     .map(|receipt| receipt.status)
                     .map_err(|error| error.to_string())
             })
@@ -6834,7 +7356,12 @@ template = "site/e08/open-questions.md"
             std::thread::spawn(move || {
                 barrier.wait();
                 WikiCore::new(root)
-                    .write_page_body("topics", "\n# Second writer\n", Some(&expected))
+                    .write_page_body(
+                        "topics",
+                        "\n# Second writer\n",
+                        Some(&expected),
+                        &Actor::operator(),
+                    )
                     .map(|receipt| receipt.status)
                     .map_err(|error| error.to_string())
             })
@@ -7368,6 +7895,359 @@ template = "site/e08/index.md"
             caption: None,
             alt_text: None,
         }
+    }
+
+    const SPAN_BODY: &str = "\n# Topics\n\n## Notes\n\n<!-- operator-touched: 2026-06-01 founder pass -->\nFounder paragraph stays exactly as written.\n<!-- /operator-touched -->\n\n## Log\n\n- first entry\n";
+
+    fn seed_topics_with_operator_span(root: &Path) -> WikiCore {
+        let core = WikiCore::new(root);
+        core.create_page("topics", None).unwrap();
+        let expected = core
+            .open_page("topics")
+            .unwrap()
+            .hashes
+            .source_sha256
+            .unwrap();
+        core.write_page_body("topics", SPAN_BODY, Some(&expected), &Actor::operator())
+            .unwrap();
+        core
+    }
+
+    fn topics_source_path(root: &Path) -> PathBuf {
+        root.join("user-wiki/source/families/reference/topics/source/topics.md")
+    }
+
+    #[test]
+    fn page_open_surfaces_operator_touched_spans() {
+        let temp = TempDir::new().unwrap();
+        let root = temp.path().join("1Context");
+        seed_fixture(&root);
+        let core = seed_topics_with_operator_span(&root);
+
+        let opened = core.open_page("topics").unwrap();
+        assert_eq!(opened.operator_touched.len(), 1);
+        let span = &opened.operator_touched[0];
+        assert_eq!(span.date.as_deref(), Some("2026-06-01"));
+        assert_eq!(span.note.as_deref(), Some("founder pass"));
+        assert_eq!(span.section_slug.as_deref(), Some("notes"));
+        assert!(span.closed);
+        let source_text = fs::read_to_string(topics_source_path(&root)).unwrap();
+        let lines = source_text.lines().collect::<Vec<_>>();
+        assert_eq!(
+            lines[span.line_range[0] - 1].trim(),
+            "<!-- operator-touched: 2026-06-01 founder pass -->"
+        );
+        assert_eq!(
+            lines[span.line_range[1] - 1].trim(),
+            "<!-- /operator-touched -->"
+        );
+    }
+
+    #[test]
+    fn agent_patch_overlapping_operator_touched_span_is_rejected_and_page_unchanged() {
+        let temp = TempDir::new().unwrap();
+        let root = temp.path().join("1Context");
+        seed_fixture(&root);
+        let core = seed_topics_with_operator_span(&root);
+        let before = fs::read_to_string(topics_source_path(&root)).unwrap();
+
+        let error = core
+            .patch_page_body(
+                "topics",
+                "Founder paragraph stays exactly as written.",
+                "Agent rewrite of founder content.",
+                None,
+                &Actor::agent("agent://wiki/curator"),
+            )
+            .unwrap_err();
+        let conflict = error
+            .downcast_ref::<OperatorTouchedConflict>()
+            .expect("typed operator_touched_conflict");
+        assert_eq!(conflict.code, "operator_touched_conflict");
+        assert_eq!(conflict.operation, "wiki.page.patch_body");
+        assert_eq!(conflict.page, "topics");
+        assert_eq!(conflict.actor.kind, "agent");
+        assert_eq!(conflict.actor.name.as_deref(), Some("agent://wiki/curator"));
+        assert_eq!(conflict.conflicting_spans.len(), 1);
+        assert!(conflict.edit_line_range.is_some());
+        assert_eq!(
+            fs::read_to_string(topics_source_path(&root)).unwrap(),
+            before
+        );
+
+        let write_error = core
+            .write_page_body(
+                "topics",
+                "\n# Topics\n\nWholesale agent rewrite.\n",
+                None,
+                &Actor::agent("agent://wiki/librarian"),
+            )
+            .unwrap_err();
+        assert!(write_error
+            .downcast_ref::<OperatorTouchedConflict>()
+            .is_some());
+        assert_eq!(
+            fs::read_to_string(topics_source_path(&root)).unwrap(),
+            before
+        );
+    }
+
+    #[test]
+    fn agent_patch_outside_operator_touched_span_is_allowed() {
+        let temp = TempDir::new().unwrap();
+        let root = temp.path().join("1Context");
+        seed_fixture(&root);
+        let core = seed_topics_with_operator_span(&root);
+
+        let receipt = core
+            .patch_page_body(
+                "topics",
+                "- first entry",
+                "- first entry (clarified)",
+                None,
+                &Actor::agent("agent://wiki/curator"),
+            )
+            .unwrap();
+        assert_eq!(receipt.status, "ok");
+        let text = fs::read_to_string(topics_source_path(&root)).unwrap();
+        assert!(text.contains("- first entry (clarified)"));
+        assert!(text.contains("Founder paragraph stays exactly as written."));
+    }
+
+    #[test]
+    fn operator_actor_bypasses_span_enforcement() {
+        let temp = TempDir::new().unwrap();
+        let root = temp.path().join("1Context");
+        seed_fixture(&root);
+        let core = seed_topics_with_operator_span(&root);
+
+        let receipt = core
+            .patch_page_body(
+                "topics",
+                "Founder paragraph stays exactly as written.",
+                "Founder paragraph, revised by the founder.",
+                None,
+                &Actor::operator(),
+            )
+            .unwrap();
+        assert_eq!(receipt.status, "ok");
+        assert_eq!(
+            receipt.actor.as_ref().map(|actor| actor.kind.as_str()),
+            Some("operator")
+        );
+        assert!(fs::read_to_string(topics_source_path(&root))
+            .unwrap()
+            .contains("Founder paragraph, revised by the founder."));
+    }
+
+    #[test]
+    fn agent_append_after_spans_is_allowed_on_page_with_spans() {
+        let temp = TempDir::new().unwrap();
+        let root = temp.path().join("1Context");
+        seed_fixture(&root);
+        let core = seed_topics_with_operator_span(&root);
+
+        let into_spanned_section = core
+            .append_to_section(
+                "topics",
+                "Notes",
+                "Addendum appended after the founder span.",
+                None,
+                &Actor::agent("agent://wiki/curator"),
+            )
+            .unwrap();
+        assert_eq!(into_spanned_section.status, "ok");
+        let at_page_end = core
+            .append_to_section(
+                "topics",
+                "Log",
+                "- second entry from agent",
+                None,
+                &Actor::agent("agent://wiki/curator"),
+            )
+            .unwrap();
+        assert_eq!(at_page_end.status, "ok");
+
+        let text = fs::read_to_string(topics_source_path(&root)).unwrap();
+        assert!(text.contains("<!-- operator-touched: 2026-06-01 founder pass -->\nFounder paragraph stays exactly as written.\n<!-- /operator-touched -->"));
+        let addendum = text
+            .find("Addendum appended after the founder span.")
+            .unwrap();
+        let close_marker = text.find("<!-- /operator-touched -->").unwrap();
+        let log_heading = text.find("## Log").unwrap();
+        assert!(close_marker < addendum && addendum < log_heading);
+        assert!(text.ends_with("- second entry from agent\n"));
+    }
+
+    #[test]
+    fn unclosed_operator_span_blocks_agent_appends_through_end_of_body() {
+        let temp = TempDir::new().unwrap();
+        let root = temp.path().join("1Context");
+        seed_fixture(&root);
+        let core = WikiCore::new(&root);
+        core.create_page("topics", None).unwrap();
+        core.write_page_body(
+            "topics",
+            "\n# Topics\n\n## Notes\n\n<!-- operator-touched -->\nFounder draft in progress; no close marker yet.\n",
+            None,
+            &Actor::operator(),
+        )
+        .unwrap();
+
+        let opened = core.open_page("topics").unwrap();
+        assert_eq!(opened.operator_touched.len(), 1);
+        assert!(!opened.operator_touched[0].closed);
+
+        let error = core
+            .append_to_section(
+                "topics",
+                "Notes",
+                "Agent addendum.",
+                None,
+                &Actor::agent("agent://wiki/curator"),
+            )
+            .unwrap_err();
+        let conflict = error
+            .downcast_ref::<OperatorTouchedConflict>()
+            .expect("typed operator_touched_conflict");
+        assert_eq!(conflict.operation, "wiki.page.append_section");
+        assert!(!conflict.conflicting_spans[0].closed);
+    }
+
+    #[test]
+    fn append_to_section_round_trip_includes_hash_receipts() {
+        let temp = TempDir::new().unwrap();
+        let root = temp.path().join("1Context");
+        seed_fixture(&root);
+        let core = seed_topics_with_operator_span(&root);
+        let source = topics_source_path(&root);
+        let before_text = fs::read_to_string(&source).unwrap();
+        let before_hash = sha256_file(&source).unwrap();
+
+        let receipt = core
+            .append_to_section(
+                "topics",
+                "Log",
+                "- appended entry",
+                Some(&before_hash),
+                &Actor::agent("agent://wiki/scribe"),
+            )
+            .unwrap();
+        assert_eq!(receipt.operation, "wiki.page.append_section");
+        assert_eq!(
+            receipt.before_source_sha256.as_deref(),
+            Some(before_hash.as_str())
+        );
+        let after_hash = sha256_file(&source).unwrap();
+        assert_ne!(after_hash, before_hash);
+        assert_eq!(
+            receipt.after_source_sha256.as_deref(),
+            Some(after_hash.as_str())
+        );
+        assert_eq!(
+            receipt
+                .actor
+                .as_ref()
+                .and_then(|actor| actor.name.as_deref()),
+            Some("agent://wiki/scribe")
+        );
+        assert_eq!(receipt.next_action, "publish");
+
+        let after_text = fs::read_to_string(&source).unwrap();
+        assert!(after_text.starts_with(before_text.trim_end_matches('\n')));
+        assert!(after_text.ends_with("- appended entry\n"));
+
+        let events =
+            read_jsonl::<serde_json::Value>(&root.join("user-wiki/.1context/page-ledger.jsonl"))
+                .unwrap();
+        let appended = events
+            .iter()
+            .find(|event| {
+                event.get("event").and_then(serde_json::Value::as_str)
+                    == Some("page.section_appended")
+            })
+            .expect("page.section_appended ledger event");
+        assert_eq!(
+            appended
+                .pointer("/actor/name")
+                .and_then(serde_json::Value::as_str),
+            Some("agent://wiki/scribe")
+        );
+        assert_eq!(
+            appended
+                .get("source_sha256")
+                .and_then(serde_json::Value::as_str),
+            Some(after_hash.as_str())
+        );
+
+        let missing = core
+            .append_to_section(
+                "topics",
+                "No Such Section",
+                "- entry",
+                None,
+                &Actor::operator(),
+            )
+            .unwrap_err();
+        assert!(missing
+            .to_string()
+            .contains("section heading not found in body"));
+    }
+
+    #[test]
+    fn talk_only_change_marks_publish_required_without_force() {
+        let temp = TempDir::new().unwrap();
+        let root = temp.path().join("1Context");
+        seed_fixture(&root);
+        let core = WikiCore::new(&root);
+        core.create_page("topics", None).unwrap();
+
+        fs::create_dir_all(root.join("user-wiki/site/.1context")).unwrap();
+        fs::write(
+            root.join("user-wiki/site/topics.html"),
+            "<main>Topics</main>",
+        )
+        .unwrap();
+        fs::write(
+            root.join("user-wiki/site/.1context/source-fingerprint.txt"),
+            format!("{}\n", core.publish_fingerprint().unwrap()),
+        )
+        .unwrap();
+        fs::write(
+            root.join("user-wiki/site/.1context/page-fingerprints.json"),
+            serde_json::to_vec_pretty(&core.page_publish_fingerprints().unwrap()).unwrap(),
+        )
+        .unwrap();
+
+        let published = core.publish_status().unwrap();
+        assert!(!published.render_required);
+        assert!(!published.site_needs_publish);
+        assert_eq!(published.next_action, "none");
+
+        fs::write(
+            root.join(
+                "user-wiki/source/families/reference/topics/talk/topics.talk/2026-06-11T00-00-00-000000000Z.conversation.talk-only.md",
+            ),
+            "---\nsubject: \"Talk only\"\n---\n\nTalk-only change must publish without --force.\n",
+        )
+        .unwrap();
+
+        let stale = core.publish_status().unwrap();
+        assert!(stale.site_needs_publish);
+        assert!(stale.render_required);
+        assert_eq!(stale.next_action, "publish");
+        assert_eq!(stale.pages_needing_publish, vec!["topics".to_string()]);
+    }
+
+    #[test]
+    fn actor_parse_accepts_operator_and_agent_addresses_only() {
+        assert!(Actor::parse("operator").unwrap().is_operator());
+        let agent = Actor::parse("agent://wiki/curator").unwrap();
+        assert!(!agent.is_operator());
+        assert_eq!(agent.kind, "agent");
+        assert_eq!(agent.name.as_deref(), Some("agent://wiki/curator"));
+        assert!(Actor::parse("agent://").is_err());
+        assert!(Actor::parse("founder").is_err());
     }
 
     fn test_page_options() -> PageCreateOptions {
