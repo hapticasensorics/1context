@@ -217,18 +217,6 @@ crates/onecontext-capture-core:
   - raw JSONL spool time-window reads
   - READY bundle validation
   - retention inventory, sweep planning, apply, and sweeps.jsonl audit append
-
-crates/onecontext-capture-bundler:
-  owns operator/debug CLI commands around bundle folders:
-  - describe
-  - list
-  - validate
-  - sweep
-  - export command that refuses to act as the production READY writer
-
-crates/onecontext-capture-dashboard:
-  owns live GUI/debug visibility and bundle-contract tests. It should read the
-  daemon and bundle folders; it must not become a high-rate capture source.
 ```
 
 The Swift daemon remains the V0 production exporter owner because it owns live
@@ -663,41 +651,13 @@ bundle top-level files. Empty JSONL files are allowed for degraded lanes except
 `events/windows.jsonl`, which must contain at least one window snapshot before a
 bundle can be considered valid READY input.
 
-## 8.2 Dashboard And CLI Usage
-
-Dashboard:
-
-```bash
-1context capture dashboard
-```
-
-The Rust dashboard is for live debugging. It reads daemon status/snapshot output,
-tails recent capture spool files, shows lane health and recent events, and can
-request low-rate previews. It should not be used as the production exporter or
-as a high-rate capture source.
-
-Rust bundle CLI:
-
-```bash
-cargo run -p onecontext-capture-bundler -- describe
-
-CAPTURE_ROOT="$HOME/Library/Application Support/1Context Dev/capture"
-cargo run -p onecontext-capture-bundler -- list --capture-root "$CAPTURE_ROOT" --class all
-cargo run -p onecontext-capture-bundler -- validate --capture-root "$CAPTURE_ROOT" --capture-id <capture_id> --strict
-cargo run -p onecontext-capture-bundler -- sweep --capture-root "$CAPTURE_ROOT"
-```
-
-The `sweep` command is dry-run by default. Add `--apply` only after reviewing
-the candidate list.
+## 8.2 Export Surfaces
 
 Current export surfaces:
 
 ```text
 onecontext_capture_core::export_ready_bundle:
   test/fixture helper over existing JSONL spool files
-
-onecontext-capture-bundler export:
-  refuses to write production READY bundles
 
 future 1contextd capture.bundle.export:
   production V0 export owner

@@ -719,51 +719,21 @@ onecontext-capture-core:
   stable-ish V0 library surface for paths, required files, lane inventory,
   manifest/schema structs, bundle validation, atomic writer helpers, raw spool
   time-window reads, and retention sweep planning
-
-onecontext-capture-bundler:
-  standalone operator/debug binary. It can describe the contract, list bundle
-  directories, validate READY bundles, and dry-run/apply a simple folder sweep.
-  Its export command refuses production export and points callers back to the
-  daemon-owned capture.bundle.export method.
-
-onecontext-capture-dashboard:
-  GUI/debug binary. It reads daemon `capture status` and `capture snapshot`,
-  tails live spool events, and has tests that encode the partial -> READY ->
-  live lifecycle and V0 required file set.
 ```
 
 Important implementation note:
 
 ```text
 onecontext_capture_core::export_ready_bundle(...)
-  is a useful test/fixture exporter over existing JSONL spool files.
-
-onecontext-capture-bundler export
-  is not the production exporter; production export must run through the Swift
-  daemon's current status, permission, sampler, and source-health truth.
+  is a useful test/fixture exporter over existing JSONL spool files; production
+  export must run through the Swift daemon's current status, permission,
+  sampler, and source-health truth.
 ```
 
 Build and test:
 
 ```bash
 cargo test -p onecontext-capture-core
-cargo test -p onecontext-capture-dashboard --test capture_bundle_contract
-cargo run -p onecontext-capture-bundler -- describe
-```
-
-Operator inspection against a capture root:
-
-```bash
-CAPTURE_ROOT="$HOME/Library/Application Support/1Context Dev/capture"
-cargo run -p onecontext-capture-bundler -- list --capture-root "$CAPTURE_ROOT" --class all
-cargo run -p onecontext-capture-bundler -- validate --capture-root "$CAPTURE_ROOT" --capture-id <capture_id> --strict
-cargo run -p onecontext-capture-bundler -- sweep --capture-root "$CAPTURE_ROOT"
-```
-
-Only use `--apply` for sweep after inspecting the dry-run candidate list:
-
-```bash
-cargo run -p onecontext-capture-bundler -- sweep --capture-root "$CAPTURE_ROOT" --apply
 ```
 
 V0 fixture generation status:

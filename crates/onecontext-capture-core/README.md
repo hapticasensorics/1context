@@ -15,12 +15,6 @@ Swift daemon / OneContextCapture:
 onecontext-capture-core:
   paths, required V0 files, manifest/source schemas, atomic writer helpers,
   JSONL spool window reads, READY validation, and retention planning/audit
-
-onecontext-capture-bundler:
-  operator/debug CLI around bundle folders and READY export validation
-
-onecontext-capture-dashboard:
-  GUI/debug reader of daemon status, live spool, and bundle lifecycle tests
 ```
 
 ## Capture Root Layout
@@ -129,20 +123,7 @@ in-window records.
 
 ```bash
 cargo test -p onecontext-capture-core
-cargo test -p onecontext-capture-dashboard --test capture_bundle_contract
-cargo run -p onecontext-capture-bundler -- describe
 ```
-
-Operator inspection:
-
-```bash
-CAPTURE_ROOT="$HOME/Library/Application Support/1Context Dev/capture"
-cargo run -p onecontext-capture-bundler -- list --capture-root "$CAPTURE_ROOT" --class all
-cargo run -p onecontext-capture-bundler -- validate --capture-root "$CAPTURE_ROOT" --capture-id <capture_id> --strict
-cargo run -p onecontext-capture-bundler -- sweep --capture-root "$CAPTURE_ROOT"
-```
-
-Only use `sweep --apply` after reviewing the dry-run output.
 
 ## Fixture Status
 

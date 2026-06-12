@@ -214,9 +214,6 @@ wiki.notify.poll(agent_id, cursor?)
 wiki.notify.ack(agent_id, notification_id)
 ```
 
-The daemon also owns host-side `notify-dispatch`; agents use that only through
-the supervisor, not as an ordinary mail action.
-
 ## V0 Done When
 
 - Agents can identify with a Codex thread id and receive a durable agent id,
@@ -456,7 +453,7 @@ Post-V0 hardening checks:
   2026-05-21 note: the installed Swift CLI help and parser now accept
   `talk-append --operation-id` and `--delivery-mode`; it also exposes
   `agent-identify`, `agent-inbox`, `mail-claim`, `mail-mark`, `mail-snooze`,
-  `notify-poll`, `notify-ack`, and `notify-dispatch`.
+  `notify-poll`, and `notify-ack`.
 - [x] Add memory-core Python wrappers that return raw Rust receipts.
   Evidence: `uv run --with pytest pytest tests/test_wiki_core_client.py -q`
   from `memory-core` passed 7 tests.

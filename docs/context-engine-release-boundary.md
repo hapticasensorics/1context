@@ -50,7 +50,7 @@ Swift daemon / Refresh Wiki
   -> wiki-company-v1 pack
   -> Perception DB packet planning
   -> onecontext-agent-harness
-  -> onecontext-codex-adapter / Codex app-server
+  -> Codex app-server
   -> Agent Mail + wiki talk receipts
   -> onecontext-wiki-core page writes
   -> wiki publish + validate
@@ -118,5 +118,5 @@ bundled `onecontext-context-engine` binary without Python root discovery or
 ## Cutover Rule
 
 When a feature is needed for the installed wiki company, add it to Rust Context
-Engine, `onecontext-agent-harness`, `onecontext-codex-adapter`,
-`onecontext-wiki-core`, or the Swift daemon boundary.
+Engine, `onecontext-agent-harness`, `onecontext-wiki-core`, or the Swift
+daemon boundary.

@@ -28,8 +28,8 @@ The active harness is:
 harnesses/codex-app-server.toml
 ```
 
-That harness describes the `onecontext-agent-harness` +
-`onecontext-codex-adapter` path. It does not run raw `codex exec` scripts.
+That harness describes the `onecontext-agent-harness` path. It does not run
+raw `codex exec` scripts.
 `provider = "codex"` means the Codex app / ChatGPT Pro transport. Individual
 agents still choose their model, reasoning effort, context budget, prompt paths,
 and memory policy.
