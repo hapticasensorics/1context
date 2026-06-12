@@ -177,9 +177,7 @@ for binary in \
   "$APP/Contents/Resources/1context-local-web-proxy" \
   "$APP/Contents/MacOS/1contextd" \
   "$APP/Contents/MacOS/onecontext-memoryd" \
-  "$APP/Contents/MacOS/onecontext-capture-dashboard" \
   "$APP/Contents/MacOS/onecontext-agent-harness" \
-  "$APP/Contents/MacOS/onecontext-codex-adapter" \
   "$APP/Contents/Resources/local-web/caddy/caddy"; do
   if [[ ! -x "$binary" ]]; then
     echo "Missing executable in DMG app: $binary" >&2

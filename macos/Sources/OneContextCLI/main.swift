@@ -72,7 +72,6 @@ struct OneContextCLI {
       1context capture snapshot
       1context capture metadata-sample [--duration-seconds <seconds>] [--max-frames <n>]
       1context capture dashboard [--snapshot] [--watch] [--interval-seconds <seconds>]
-      1context capture dashboard-gui
       1context wiki local-url
       1context wiki list
       1context wiki validate
@@ -147,7 +146,6 @@ struct OneContextCLI {
       1context capture snapshot
       1context capture metadata-sample [--duration-seconds <seconds>] [--max-frames <n>]
       1context capture dashboard [--snapshot] [--watch] [--interval-seconds <seconds>]
-      1context capture dashboard-gui
     """)
   }
 
@@ -548,9 +546,6 @@ struct OneContextCLI {
       try captureMetadataSample()
     case "dashboard":
       try captureDashboard()
-    case "dashboard-gui":
-      try requireCaptureArgumentCount(2)
-      try launchCaptureDashboardGUI()
     default:
       throw CLIError.commandFailed("Unknown capture subcommand: \(args[1])")
     }
@@ -598,31 +593,6 @@ struct OneContextCLI {
       }
     }
     return CaptureMetadataSampleOptions(durationSeconds: durationSeconds, maxFrames: maxFrames)
-  }
-
-  static func launchCaptureDashboardGUI() throws {
-    let fileManager = FileManager.default
-    let sibling = currentExecutablePath().map {
-      URL(fileURLWithPath: $0).deletingLastPathComponent().appendingPathComponent("onecontext-capture-dashboard").path
-    }
-    let candidates = [
-      sibling,
-      Optional(installedAppBundleURL().appendingPathComponent("Contents/MacOS/onecontext-capture-dashboard").path),
-      Optional(URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
-        .appendingPathComponent("target/debug/onecontext-capture-dashboard").path),
-      Optional(URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
-        .appendingPathComponent("target/release/onecontext-capture-dashboard").path)
-    ].compactMap { $0 }
-
-    guard let executable = candidates.first(where: { fileManager.isExecutableFile(atPath: $0) }) else {
-      throw CLIError.commandFailed("Could not find onecontext-capture-dashboard. Build the Rust dashboard first.")
-    }
-
-    let process = Process()
-    process.executableURL = URL(fileURLWithPath: executable)
-    process.environment = ProcessInfo.processInfo.environment
-    try process.run()
-    print("Opened 1Context Capture Dashboard GUI: \(executable)")
   }
 
   static func captureDashboard() throws {

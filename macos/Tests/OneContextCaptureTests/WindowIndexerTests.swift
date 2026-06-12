@@ -114,34 +114,6 @@ final class WindowIndexerTests: XCTestCase {
     XCTAssertEqual(resolvedActive?.processID, 10)
   }
 
-  func testDashboardFocusIsNotRewrittenToTopCaptureCandidate() {
-    var windows = [
-      window(
-        windowID: 30,
-        appPID: 30,
-        appName: "onecontext-capture-dashboard",
-        bundleID: "com.haptica.1context.capture-dashboard",
-        title: "1Context Capture Dashboard",
-        zRank: 0,
-        isFocused: true
-      ),
-      window(windowID: 20, appPID: 20, appName: "Google Chrome", bundleID: "com.google.Chrome", zRank: 1)
-    ]
-    let dashboardActive = CaptureActiveApplication(
-      processID: 30,
-      bundleID: "com.haptica.1context.capture-dashboard",
-      appName: "onecontext-capture-dashboard"
-    )
-
-    let resolvedActive = OneContextWindowIndexer.reconcileActiveWindowMetadata(
-      activeApplication: dashboardActive,
-      windows: &windows
-    )
-
-    XCTAssertEqual(windows.filter(\.isFocused).map(\.windowID), [30])
-    XCTAssertEqual(resolvedActive?.processID, 30)
-  }
-
   func testAXFocusedContextAnnotatesMatchingWindowWithoutReplacingItByZRank() {
     var windows = [
       window(windowID: 10, appPID: 99, appName: "Google Chrome", bundleID: "com.google.Chrome", title: "Docs", zRank: 0),
@@ -268,9 +240,9 @@ final class WindowIndexerTests: XCTestCase {
       window(
         windowID: 20,
         appPID: 42,
-        appName: "onecontext-capture-dashboard",
-        bundleID: "com.haptica.1context.capture-dashboard",
-        title: "1Context Capture Dashboard",
+        appName: "Example Notes",
+        bundleID: "com.example.notes",
+        title: "Example Notes",
         zRank: 1
       ),
       window(windowID: 30, appPID: 42, appName: "Codex", bundleID: "com.openai.codex", title: "Codex", zRank: 2),

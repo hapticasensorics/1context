@@ -549,13 +549,7 @@ public struct OneContextWindowIndexer {
       && (window.alpha.map { $0 > 0 } ?? true)
       && window.framePoints.width >= 120
       && window.framePoints.height >= 80
-      && !isDashboardWindow(window)
       && !isSystemWindow(window)
-  }
-
-  private static func isDashboardWindow(_ window: CaptureWindowState) -> Bool {
-    window.appName.caseInsensitiveCompare("onecontext-capture-dashboard") == .orderedSame
-      || window.title.contains("1Context Capture Dashboard")
   }
 
   private static func isSystemWindow(_ window: CaptureWindowState) -> Bool {
