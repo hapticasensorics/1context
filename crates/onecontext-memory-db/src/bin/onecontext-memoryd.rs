@@ -27,6 +27,7 @@ const ALLOW_EXTERNAL_POSTGRES_ENV: &str = "ONECONTEXT_ALLOW_EXTERNAL_POSTGRES";
 const APP_SUPPORT_DIR_ENV: &str = "ONECONTEXT_APP_SUPPORT_DIR";
 const LOCAL_USER_ID: &str = "00000000-0000-0000-0000-000000000001";
 const RECENT_BACKFILL_CURSOR_NAME: &str = "memoryd_recent_backfill";
+const RECENT_BACKFILL_DB_RECONNECT_ATTEMPTS: usize = 3;
 const REQUIRED_EXTENSIONS: &[(&str, bool)] = &[
     ("timescaledb", true),
     ("btree_gist", false),
@@ -1430,6 +1431,7 @@ fn ensure_recent_backfill(
             })?;
             run_recent_backfill_with_client(
                 &mut client,
+                &runtime.database_url,
                 request,
                 managed_readable_sources(default_home_dir()),
             )
@@ -1453,6 +1455,7 @@ fn ensure_recent_backfill(
             })?;
             run_recent_backfill_with_client(
                 &mut client,
+                &database.url,
                 request,
                 managed_readable_sources(default_home_dir()),
             )
@@ -1476,9 +1479,23 @@ fn ensure_recent_backfill(
 
 fn run_recent_backfill_with_client(
     client: &mut Client,
+    database_url: &str,
     request: &onecontext_memory_db::EnsureRecentBackfillRequest,
     sources: Vec<String>,
 ) -> Result<onecontext_memory_db::RecentBackfillHealth, ProtocolError> {
+    let existing_snapshot = recent_backfill_db_operation(client, database_url, |client| {
+        recent_backfill_snapshot(client, request.window_hours)
+    })
+    .map_err(|error| ProtocolError::new("READ_FAILED", error.to_string(), true))?;
+    let existing_health = recent_backfill_health_from_snapshot(
+        request,
+        &empty_recent_backfill_ingest_response(),
+        existing_snapshot,
+    );
+    if existing_health.density_ready {
+        return Ok(existing_health);
+    }
+
     if sources.is_empty() {
         return Ok(onecontext_memory_db::RecentBackfillHealth {
             status: "no_sources".to_string(),
@@ -1494,28 +1511,47 @@ fn run_recent_backfill_with_client(
     let mut last_result = None;
     let attempts = if request.block_until_ready { 3 } else { 1 };
     for _ in 0..attempts {
-        let ingest = onecontext_memory_db::ingest_sources::ingest_sources_with_client(
-            client,
-            &onecontext_memory_db::ingest_sources::IngestSourcesRequest {
-                user_id: LOCAL_USER_ID.to_string(),
-                write_id: None,
-                sources: sources.clone(),
-                home: Some(default_home_dir()),
-                max_events: DEFAULT_MAX_EVENTS,
-                max_lines: DEFAULT_MAX_LINES,
-                include_sensitive_text: false,
-                session_profile: SessionIngestProfile::default(),
-                cursor_name: Some(RECENT_BACKFILL_CURSOR_NAME.to_string()),
-            },
-        )
-        .map_err(|error| ProtocolError::new("INGEST_FAILED", error.to_string(), true))?;
-        let refresh_start = Utc::now() - ChronoDuration::hours(request.window_hours.max(1) as i64);
-        refresh_density_window(client, refresh_start, Utc::now()).map_err(|error| {
-            ProtocolError::new("DENSITY_REFRESH_FAILED", error.to_string(), true)
-        })?;
-        let snapshot = recent_backfill_snapshot(client, request.window_hours)
+        let ingest_request = onecontext_memory_db::ingest_sources::IngestSourcesRequest {
+            user_id: LOCAL_USER_ID.to_string(),
+            write_id: None,
+            sources: sources.clone(),
+            home: Some(default_home_dir()),
+            max_events: DEFAULT_MAX_EVENTS,
+            max_lines: DEFAULT_MAX_LINES,
+            include_sensitive_text: false,
+            session_profile: SessionIngestProfile::default(),
+            cursor_name: Some(RECENT_BACKFILL_CURSOR_NAME.to_string()),
+        };
+        let ingest = recent_backfill_ingest_with_reconnect(client, database_url, &ingest_request)?;
+        let snapshot_before_refresh =
+            recent_backfill_db_operation(client, database_url, |client| {
+                recent_backfill_snapshot(client, request.window_hours)
+            })
             .map_err(|error| ProtocolError::new("READ_FAILED", error.to_string(), true))?;
-        let health = recent_backfill_health_from_snapshot(request, &ingest, snapshot);
+        let mut health =
+            recent_backfill_health_from_snapshot(request, &ingest, snapshot_before_refresh);
+        if !health.density_ready {
+            let refresh_start =
+                Utc::now() - ChronoDuration::hours(request.window_hours.max(1) as i64);
+            if let Err(error) = recent_backfill_db_operation(client, database_url, |client| {
+                refresh_density_window(client, refresh_start, Utc::now())
+            }) {
+                let message = error.to_string();
+                if is_pollable_density_refresh_failure_message(&message) {
+                    health = recent_backfill_health_with_refresh_failure(health, &message);
+                } else {
+                    return Err(ProtocolError::new("DENSITY_REFRESH_FAILED", message, true));
+                }
+            } else {
+                let snapshot_after_refresh =
+                    recent_backfill_db_operation(client, database_url, |client| {
+                        recent_backfill_snapshot(client, request.window_hours)
+                    })
+                    .map_err(|error| ProtocolError::new("READ_FAILED", error.to_string(), true))?;
+                health =
+                    recent_backfill_health_from_snapshot(request, &ingest, snapshot_after_refresh);
+            }
+        }
         let density_ready = health.density_ready;
         last_result = Some(health);
         if density_ready {
@@ -1523,6 +1559,57 @@ fn run_recent_backfill_with_client(
         }
     }
     Ok(last_result.unwrap_or_else(|| recent_backfill_response(request.window_hours)))
+}
+
+fn recent_backfill_ingest_with_reconnect(
+    client: &mut Client,
+    database_url: &str,
+    request: &onecontext_memory_db::ingest_sources::IngestSourcesRequest,
+) -> Result<onecontext_memory_db::ingest_sources::IngestSourcesResponse, ProtocolError> {
+    match onecontext_memory_db::ingest_sources::ingest_sources_with_client(client, request) {
+        Ok(result) => Ok(result),
+        Err(error) if is_retryable_connection_loss_message(&error.to_string()) => {
+            let mut last_message = error.to_string();
+            for attempt in 0..RECENT_BACKFILL_DB_RECONNECT_ATTEMPTS {
+                if attempt > 0 {
+                    thread::sleep(Duration::from_millis(150));
+                }
+                let mut reconnected = match Client::connect(database_url, NoTls) {
+                    Ok(client) => client,
+                    Err(error) => {
+                        last_message = sanitize_database_error(&error.to_string(), database_url);
+                        continue;
+                    }
+                };
+                match onecontext_memory_db::ingest_sources::ingest_sources_with_client(
+                    &mut reconnected,
+                    request,
+                ) {
+                    Ok(result) => {
+                        *client = reconnected;
+                        return Ok(result);
+                    }
+                    Err(error) if is_retryable_connection_loss_message(&error.to_string()) => {
+                        last_message = error.to_string();
+                    }
+                    Err(error) => {
+                        return Err(ProtocolError::new("INGEST_FAILED", error.to_string(), true));
+                    }
+                }
+            }
+            Err(ProtocolError::new("INGEST_FAILED", last_message, true))
+        }
+        Err(error) => Err(ProtocolError::new("INGEST_FAILED", error.to_string(), true)),
+    }
+}
+
+fn empty_recent_backfill_ingest_response(
+) -> onecontext_memory_db::ingest_sources::IngestSourcesResponse {
+    onecontext_memory_db::ingest_sources::IngestSourcesResponse {
+        ok: true,
+        write_id: generated_protocol_write_id(),
+        source_results: vec![],
+    }
 }
 
 fn managed_readable_sources(home: PathBuf) -> Vec<String> {
@@ -1548,6 +1635,60 @@ fn refresh_density_window(
         start.to_rfc3339_opts(SecondsFormat::Micros, true),
         end.to_rfc3339_opts(SecondsFormat::Micros, true),
     ))
+}
+
+fn recent_backfill_db_operation<T>(
+    client: &mut Client,
+    database_url: &str,
+    mut operation: impl FnMut(&mut Client) -> Result<T, postgres::Error>,
+) -> Result<T, postgres::Error> {
+    match operation(client) {
+        Ok(result) => Ok(result),
+        Err(error) if is_retryable_connection_loss_message(&error.to_string()) => {
+            let mut last_error = error;
+            for attempt in 0..RECENT_BACKFILL_DB_RECONNECT_ATTEMPTS {
+                if attempt > 0 {
+                    thread::sleep(Duration::from_millis(150));
+                }
+                let mut reconnected = match Client::connect(database_url, NoTls) {
+                    Ok(client) => client,
+                    Err(error) => {
+                        last_error = error;
+                        continue;
+                    }
+                };
+                match operation(&mut reconnected) {
+                    Ok(result) => {
+                        *client = reconnected;
+                        return Ok(result);
+                    }
+                    Err(error) if is_retryable_connection_loss_message(&error.to_string()) => {
+                        last_error = error;
+                    }
+                    Err(error) => return Err(error),
+                }
+            }
+            Err(last_error)
+        }
+        Err(error) => Err(error),
+    }
+}
+
+fn is_retryable_connection_loss_message(message: &str) -> bool {
+    let normalized = message.to_ascii_lowercase();
+    normalized.contains("connection closed")
+        || normalized.contains("connection to server was lost")
+        || normalized.contains("terminating connection due to administrator command")
+        || normalized.contains("broken pipe")
+        || normalized.contains("error communicating with the server")
+        || normalized.contains("server closed the connection unexpectedly")
+}
+
+fn is_pollable_density_refresh_failure_message(message: &str) -> bool {
+    let normalized = message.to_ascii_lowercase();
+    is_retryable_connection_loss_message(&normalized)
+        || normalized.contains("out of shared memory")
+        || normalized.contains("max_locks_per_transaction")
 }
 
 fn recent_backfill_snapshot(
@@ -1659,6 +1800,24 @@ fn recent_backfill_health_from_snapshot(
         last_successful_ingest_ts: snapshot.last_successful_ingest_ts,
         message,
     }
+}
+
+fn recent_backfill_health_with_refresh_failure(
+    mut health: onecontext_memory_db::RecentBackfillHealth,
+    refresh_error: &str,
+) -> onecontext_memory_db::RecentBackfillHealth {
+    let base_message = health
+        .message
+        .take()
+        .unwrap_or_else(|| "Recent backfill is still building density.".to_string());
+    health.density_ready = false;
+    if health.status == "ready" {
+        health.status = "density_pending".to_string();
+    }
+    health.message = Some(format!(
+        "{base_message} Density refresh did not complete yet ({refresh_error}); retry is safe."
+    ));
+    health
 }
 
 fn storage_health_protocol_error(health: StorageHealth) -> ProtocolError {
@@ -3175,6 +3334,58 @@ mod protocol_tests {
         assert!(health.density_ready);
         assert_eq!(health.event_count, Some(12));
         assert_eq!(health.session_count, Some(3));
+    }
+
+    #[test]
+    fn recent_backfill_reconnect_classifier_only_accepts_connection_loss() {
+        assert!(is_retryable_connection_loss_message("connection closed"));
+        assert!(is_retryable_connection_loss_message(
+            "terminating connection due to administrator command"
+        ));
+        assert!(is_retryable_connection_loss_message(
+            "connection to server was lost"
+        ));
+        assert!(is_retryable_connection_loss_message(
+            "postgres cursor error: Broken pipe"
+        ));
+        assert!(!is_retryable_connection_loss_message(
+            "out of shared memory"
+        ));
+        assert!(!is_retryable_connection_loss_message(
+            "syntax error at or near \"CALL\""
+        ));
+    }
+
+    #[test]
+    fn density_refresh_resource_errors_return_pollable_health() {
+        let health = recent_backfill_health_with_refresh_failure(
+            onecontext_memory_db::RecentBackfillHealth {
+                status: "density_pending".to_string(),
+                window_hours: 72,
+                density_ready: false,
+                event_count: Some(42),
+                session_count: Some(2),
+                last_successful_ingest_ts: Some(1_780_620_000_000),
+                message: Some(
+                    "Recent backfill wrote events, but density is still below the 1 bucket threshold."
+                        .to_string(),
+                ),
+            },
+            "out of shared memory",
+        );
+
+        assert_eq!(health.status, "density_pending");
+        assert!(!health.density_ready);
+        assert!(health
+            .message
+            .as_deref()
+            .is_some_and(|message| message.contains("retry is safe")));
+        assert!(is_pollable_density_refresh_failure_message(
+            "out of shared memory"
+        ));
+        assert!(!is_pollable_density_refresh_failure_message(
+            "syntax error at or near \"CALL\""
+        ));
     }
 
     #[test]

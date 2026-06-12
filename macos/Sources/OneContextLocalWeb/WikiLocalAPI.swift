@@ -269,11 +269,15 @@ public final class WikiLocalAPIHandler: @unchecked Sendable {
     let terms = trimmed.lowercased().split(whereSeparator: \.isWhitespace).map(String.init)
     let matches = pages
       .compactMap { page -> [String: Any]? in
-        let haystack = searchText(for: page)
-        guard terms.allSatisfy({ haystack.contains($0) }) else { return nil }
+        let metadataText = searchText(for: page)
+        let bodyText = markdownBodyText(for: page)
+        let metadataMatches = terms.allSatisfy { metadataText.contains($0) }
+        let bodyMatches = terms.allSatisfy { bodyText.contains($0) }
+        guard metadataMatches || bodyMatches else { return nil }
         var result = page
-        result["excerpt"] = result["excerpt"] ?? result["description"] ?? result["summary"] ?? result["route"] ?? ""
-        result["score"] = score(page: page, terms: terms)
+        let bodySnippet = bodyMatches ? bodyExcerpt(bodyText, terms: terms) : nil
+        result["excerpt"] = result["excerpt"] ?? (metadataMatches ? (result["description"] ?? result["summary"]) : nil) ?? bodySnippet ?? result["route"] ?? ""
+        result["score"] = score(page: page, terms: terms, bodyText: bodyText)
         return result
       }
       .sorted { lhs, rhs in
@@ -292,8 +296,16 @@ public final class WikiLocalAPIHandler: @unchecked Sendable {
       paths.wikiCurrent.appendingPathComponent("api/wiki/pages.json"),
       paths.wikiCurrent.appendingPathComponent("site-manifest.json")
     ] {
-      guard let object = readJSON(url), let pages = object["pages"] as? [[String: Any]] else { continue }
-      return pages
+      guard let object = readJSON(url) else { continue }
+      if let pages = object["pages"] as? [[String: Any]] {
+        return pages
+      }
+      if let routes = object["routes"] as? [[String: Any]] {
+        return routes
+      }
+      if let twins = object["markdown_twins"] as? [[String: Any]] {
+        return twins
+      }
     }
     return []
   }
@@ -315,11 +327,70 @@ public final class WikiLocalAPIHandler: @unchecked Sendable {
     .lowercased()
   }
 
-  private func score(page: [String: Any], terms: [String]) -> Int {
+  private func markdownBodyText(for page: [String: Any]) -> String {
+    guard
+      let markdownPath = (page["markdown_path"] as? String) ?? (page["path"] as? String),
+      let url = publishedMarkdownURL(markdownPath)
+    else {
+      return ""
+    }
+    guard let raw = try? String(contentsOf: url, encoding: .utf8) else {
+      return ""
+    }
+    return plainMarkdownText(raw).lowercased()
+  }
+
+  private func publishedMarkdownURL(_ relativePath: String) -> URL? {
+    let trimmed = relativePath.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !trimmed.isEmpty, !trimmed.hasPrefix("/"), !trimmed.contains(":"), !trimmed.contains("\\") else {
+      return nil
+    }
+    let components = trimmed.split(separator: "/").map(String.init)
+    guard !components.isEmpty, components.allSatisfy({ !$0.isEmpty && $0 != "." && $0 != ".." }) else {
+      return nil
+    }
+    return components.reduce(paths.wikiCurrent) { partial, component in
+      partial.appendingPathComponent(component)
+    }
+  }
+
+  private func plainMarkdownText(_ raw: String) -> String {
+    var text = raw
+    if text.hasPrefix("---"),
+      let end = text.range(
+        of: "\n---",
+        options: [],
+        range: text.index(text.startIndex, offsetBy: 3)..<text.endIndex
+      )
+    {
+      text = String(text[end.upperBound...])
+    }
+    text = text.replacingOccurrences(of: #"```[\s\S]*?```"#, with: " ", options: .regularExpression)
+    text = text.replacingOccurrences(of: #"`([^`]+)`"#, with: "$1", options: .regularExpression)
+    text = text.replacingOccurrences(of: #"\[([^\]]+)\]\([^)]+\)"#, with: "$1", options: .regularExpression)
+    text = text.replacingOccurrences(of: #"[#>*_\-]+"#, with: " ", options: .regularExpression)
+    text = text.replacingOccurrences(of: #"\s+"#, with: " ", options: .regularExpression)
+    return text.trimmingCharacters(in: .whitespacesAndNewlines)
+  }
+
+  private func bodyExcerpt(_ bodyText: String, terms: [String]) -> String? {
+    guard !bodyText.isEmpty else { return nil }
+    let lower = bodyText.lowercased()
+    let index = terms.compactMap { lower.range(of: $0)?.lowerBound }.min() ?? lower.startIndex
+    let start = lower.index(index, offsetBy: -80, limitedBy: lower.startIndex) ?? lower.startIndex
+    let end = lower.index(index, offsetBy: 180, limitedBy: lower.endIndex) ?? lower.endIndex
+    return String(bodyText[start..<end])
+  }
+
+  private func score(page: [String: Any], terms: [String], bodyText: String) -> Int {
     let title = (page["title"] as? String ?? "").lowercased()
     let route = (page["route"] as? String ?? page["url"] as? String ?? "").lowercased()
     return terms.reduce(0) { partial, term in
-      partial + (title.contains(term) ? 10 : 0) + (route.contains(term) ? 4 : 0) + (searchText(for: page).contains(term) ? 1 : 0)
+      partial
+        + (title.contains(term) ? 10 : 0)
+        + (route.contains(term) ? 4 : 0)
+        + (searchText(for: page).contains(term) ? 1 : 0)
+        + (bodyText.contains(term) ? 1 : 0)
     }
   }
 

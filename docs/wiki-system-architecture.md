@@ -93,8 +93,9 @@ Swift owns:
 JavaScript owns static HTML rendering only. It should not decide user-data
 truth, page lifecycle, or publish eligibility.
 
-Python owns memory-side orchestration and should call the Rust core through the
-thin adapter in `memory-core/src/onectx/wiki_interface`.
+Rust Context Engine owns memory-side orchestration and calls the Rust wiki core
+through checked-in crates and installed binaries. No Python adapter is part of
+the current release path.
 
 ## Component Map
 
@@ -108,6 +109,7 @@ runtime/1Context/
 runtime-test/                private ignored fixture lab
 
 crates/
+  onecontext-context-engine/  native wiki-company orchestration
   onecontext-wiki-core/      portable wiki semantics
   onecontext-wiki-daemon/    CLI/JSON adapter
 
@@ -119,9 +121,6 @@ macos/Sources/
   OneContextLocalWeb/        local static/API serving
   OneContextDaemon/          app daemon host
   OneContextCLI/             installed `1context wiki` CLI
-
-memory-core/src/onectx/wiki_interface/
-  core_client.py             Python adapter over `onecontext-wiki`
 ```
 
 Installed:

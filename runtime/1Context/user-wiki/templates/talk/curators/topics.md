@@ -1,6 +1,6 @@
 # Topics Curator - Job Prompt Template
 
-The system prompt is `context-engine/prompts/e08-for-you/agent-profile.md`.
+The system prompt is `context-engine/packs/wiki-company-v1/prompts/agent-profile.md`.
 Your job is to read proposals on a Topics talk folder and apply accepted
 taxonomy changes to the Topics index article.
 

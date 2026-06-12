@@ -48,6 +48,7 @@ fn planner_skips_cached_packets_and_ignores_events_without_timestamps() {
             cwd: None,
             project_key: None,
             char_count: None,
+            ..SourceEvent::default()
         },
     ];
     let plan = build_packet_plan(
@@ -142,6 +143,7 @@ fn event(ts: &str, session_id: &str, text: &str) -> SourceEvent {
         cwd: None,
         project_key: None,
         char_count: None,
+        ..SourceEvent::default()
     }
 }
 
@@ -155,6 +157,7 @@ fn big_event(ts: &str, session_id: &str, char_count: u32) -> SourceEvent {
         cwd: None,
         project_key: None,
         char_count: Some(char_count),
+        ..SourceEvent::default()
     }
 }
 

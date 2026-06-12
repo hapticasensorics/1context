@@ -78,3 +78,84 @@ The rendered talk page should expose this inbox handoff.
     rmSync(tmp, { recursive: true, force: true });
   }
 });
+
+test('talk-folder renderer surfaces handle-only attachments', () => {
+  const tmp = mkdtempSync(resolve(tmpdir(), '1ctx-talk-handle-attachment-'));
+  try {
+    const folder = resolve(tmp, 'topics.talk');
+    writeFixtureFile(resolve(folder, '_meta.yaml'), `title: Talk - Topics
+slug: topics.talk
+section: reference
+access: private
+talk_route: /topics/talk
+`);
+    writeFixtureFile(
+      resolve(folder, '2026-05-20T15-00Z.proposal.handle-only.md'),
+      `---
+id: "talkmsg_handle_only"
+kind: "proposal"
+author: "agent://worker-ds/author"
+created: "2026-05-20T15:00:00Z"
+talk_for: "mailbox://page/topics"
+thread: "thread_handle_only"
+subject: "Handle only attachment"
+state: open
+attachments:
+  - handle: "user-wiki://page/topics/talk/attachments/talkmsg_handle_only/evidence.txt"
+    media_type: "text/plain"
+    caption: "Evidence"
+---
+
+The attachment has only the durable handle from mail.
+`
+    );
+
+    const { bodyHtml, mdAssembled, entries } = renderTalkFolder(folder);
+
+    assert.equal(entries[0].attachments[0].filename, 'evidence.txt');
+    assert.equal(entries[0].attachments[0].path, 'attachments/talkmsg_handle_only/evidence.txt');
+    assert.match(bodyHtml, /href="\/topics\/talk\/attachments\/talkmsg_handle_only\/evidence\.txt"/);
+    assert.match(mdAssembled, /\[evidence\.txt]\(\/topics\/talk\/attachments\/talkmsg_handle_only\/evidence\.txt\)/);
+  } finally {
+    rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
+test('talk-folder renderer preserves orphaned replies', () => {
+  const tmp = mkdtempSync(resolve(tmpdir(), '1ctx-talk-orphan-reply-'));
+  try {
+    const folder = resolve(tmp, 'topics.talk');
+    writeFixtureFile(resolve(folder, '_meta.yaml'), `title: Talk - Topics
+slug: topics.talk
+section: reference
+access: private
+talk_route: /topics/talk
+`);
+    writeFixtureFile(
+      resolve(folder, '2026-05-20T15-30Z.reply.missing-parent.md'),
+      `---
+id: "talkmsg_orphan_reply"
+kind: "reply"
+author: "agent://worker-ds/author"
+created: "2026-05-20T15:30:00Z"
+talk_for: "mailbox://page/topics"
+thread: "thread_missing_parent"
+parent: "talkmsg_parent_that_is_not_here"
+subject: "Missing parent reply"
+state: open
+---
+
+This reply must remain visible even when the parent id cannot hydrate.
+`
+    );
+
+    const { bodyHtml } = renderTalkFolder(folder);
+
+    assert.match(bodyHtml, /Orphaned replies/);
+    assert.match(bodyHtml, /talkmsg_parent_that_is_not_here/);
+    assert.match(bodyHtml, /This reply must remain visible/);
+    assert.doesNotMatch(bodyHtml, /No discussion yet/);
+  } finally {
+    rmSync(tmp, { recursive: true, force: true });
+  }
+});

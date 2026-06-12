@@ -47,7 +47,7 @@ fn run() -> Result<serde_json::Value, String> {
             "surface": "context_engine",
             "commands": ["describe", "update-wiki"],
             "release_boundary": {
-                "memory_core": "not_on_release_path",
+                "context_engine": "native_release_owner",
                 "orchestrator": "onecontext-context-engine",
                 "company_pack": "wiki-company-v1",
                 "company_orchestrator": "wiki-company-orchestrator-v1",
@@ -111,6 +111,13 @@ fn update_wiki(args: Vec<String>) -> Result<serde_json::Value, String> {
     paths
         .ensure_release_dirs()
         .map_err(|error| format!("failed to create context-engine directories: {error}"))?;
+    let storage_layout = paths.validate_storage_layout();
+    if !storage_layout.is_valid() {
+        return Err(format!(
+            "context-engine storage layout has retired runtime roots: {}. Archive or move them before running update-wiki.",
+            storage_layout.forbidden_paths.join("; ")
+        ));
+    }
     let pack = load_wiki_company_pack(&paths)?;
     let pack_report = validate_wiki_company_pack(&paths, &pack);
     if !pack_report.is_valid() {
@@ -141,6 +148,7 @@ fn update_wiki(args: Vec<String>) -> Result<serde_json::Value, String> {
             &pack,
             &plan.run_id,
             plan.request.max_concurrent_agents,
+            plan.request.source_window_days,
         )?)
     } else {
         None

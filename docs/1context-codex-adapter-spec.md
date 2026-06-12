@@ -143,12 +143,12 @@ Adapter-owned operational state lives under:
 Durable cross-system truth remains elsewhere:
 
 ```text
-~/1Context/context-engine/mail/
+~/1Context/context-engine/live/mail/
   messages, deliveries, notifications, claims
   injection-receipts.jsonl
   control-events.jsonl
 
-~/1Context/context-engine/agents/harness/
+~/1Context/context-engine/live/state/harness/
   agent-harness.json
   units/<unit-id>/adapter-events/<adapter-event-id>.json
 ```

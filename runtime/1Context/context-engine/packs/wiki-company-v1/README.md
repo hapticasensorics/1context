@@ -41,10 +41,9 @@ active release harnesses.
 
 ## Prompt Policy
 
-The prompts were ported from the old `memory-core` `base-memory-v1` donor pack
-and intentionally preserved as much as possible. Some examples inside prompt
-text may still mention older model names because they are examples of talk-page
-authorship or historical prompt language, not active release harness selection.
+The prompts in this pack are the canonical defaults for the wiki-company
+orchestrator. Keep examples role-stable: use company role ids in sample
+frontmatter and keep provider/model details in harness config, not prompt text.
 
 Do not scatter prompt copies into top-level runtime folders. Edit or fork this
 pack when changing the default company.

@@ -5,6 +5,7 @@ version = "0.1.0"
 harness_birth_certificate = true
 harness_turn_start = true
 context_injection_receipt = true
+adapter_events = true
 final_message = true
 talk_append = true
 mail_delivery = true

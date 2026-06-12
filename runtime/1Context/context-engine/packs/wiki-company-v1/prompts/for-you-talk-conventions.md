@@ -199,7 +199,7 @@ since the renderer composes them.
 ```yaml
 ---
 kind: conversation       # or proposal | concern | reply | …
-author: claude-opus-4-7  # model-id, or username@domain for humans
+author: wiki-company.hourly-scribe  # role id, or username@domain for humans
 ts: 2026-04-19T22:00:00Z # canonical timestamp (display + sort)
 parent: <filename>       # only for replies
 # Optional LKML trailers (when applicable):
@@ -219,7 +219,7 @@ Example file `2026-04-22T14-30Z.question.editorial-model.md`:
 ```yaml
 ---
 kind: question
-author: claude-opus-4-7
+author: wiki-company.historian
 ts: 2026-04-22T14:30:00Z
 ---
 The article says every page exists at both `/slug` and `/slug.md`,
@@ -308,7 +308,7 @@ verdict so it stays visible when collapsed:
 ```markdown
 ---
 kind: decided
-author: claude-opus-4-7
+author: wiki-company.for-you-curator
 ts: 2026-04-21T01:45:00Z
 decided-by: paul@example.com
 ---

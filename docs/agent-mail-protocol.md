@@ -672,8 +672,8 @@ wiki.mail.record_injection(delivery_id, agent_id, thread_id?, item_count?, resul
 ```
 
 This is host-facing, not a normal agent work tool. It appends a
-`MailInjectionReceipt` to `context-engine/mail/injection-receipts.jsonl` and a
-matching `MailControlEvent` to `context-engine/mail/control-events.jsonl`.
+`MailInjectionReceipt` to `context-engine/live/mail/injection-receipts.jsonl` and a
+matching `MailControlEvent` to `context-engine/live/mail/control-events.jsonl`.
 The recorder reopens the delivery through the same authorization path as
 `wiki.mail.open`, verifies the supplied thread id matches the authorized
 content delivery target, records body hashes rather than body text, and leaves
@@ -688,7 +688,7 @@ transcripts or guess which agent is speaking.
 Hook and app-server decisions are recorded outside message truth:
 
 ```text
-context-engine/mail/control-events.jsonl
+context-engine/live/mail/control-events.jsonl
 ```
 
 That ledger records `SessionStart`, `PreToolUse`, `PostToolUse`,

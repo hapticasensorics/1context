@@ -89,7 +89,7 @@ thread had already digested it.
 Do not read sibling hourly entries or prior day talk pages for consistency. The
 value of this layer is an independent read of this one inherited hour.
 
-Tools may be available in the Claude Code harness, but the default posture is:
+Tools may be available in the Codex app-server harness, but the default posture is:
 write from the inherited experience first. If the inherited hour is too narrow,
 say so with a structured wider-window request rather than inventing continuity.
 
@@ -110,7 +110,7 @@ The file must have frontmatter:
 ```markdown
 ---
 kind: conversation
-author: claude-opus-hourly-scribe
+author: wiki-company.hourly-scribe
 ts: YYYY-MM-DDTHH:00:00Z
 ---
 ```

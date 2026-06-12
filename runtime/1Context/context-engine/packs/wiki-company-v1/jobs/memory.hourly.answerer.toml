@@ -4,7 +4,7 @@ label = "Hourly Answerer"
 agent = "hourly-answerer"
 tools = []
 prompt_paths = ["prompts/hourly-answerer.md"]
-inputs = ["hourly_talk_entry", "historian_question", "hour_experience_packet"]
+inputs = ["hourly_talk_entry", "biographer_question", "hour_experience_packet"]
 outputs = ["hourly_answer_reply"]
 
 [params]
@@ -17,7 +17,7 @@ question_path = "path"
 output_path = "path"
 
 [permissions]
-read = ["parent_hourly_entry", "historian_question", "runtime_experience"]
+read = ["parent_hourly_entry", "biographer_question", "runtime_experience"]
 write = ["talk_folder"]
 deny = ["sibling_hours_by_default"]
 

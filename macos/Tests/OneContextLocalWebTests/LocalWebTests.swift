@@ -396,11 +396,28 @@ final class LocalWebTests: XCTestCase {
     try RuntimePermissions.ensurePrivateDirectory(web.wikiCurrent)
     let index: [String: Any] = [
       "pages": [
-        ["title": "Channel Tunnel Notes", "route": "/for-you", "description": "English and French engineering alignment"],
+        [
+          "title": "Channel Tunnel Notes",
+          "route": "/for-you",
+          "description": "English and French engineering alignment",
+          "markdown_path": "for-you.md"
+        ],
         ["title": "Release Bones", "route": "/projects", "description": "Packaging and daemon work"]
       ]
     ]
     try writeJSON(index, to: web.wikiCurrent.appendingPathComponent(".1context/content-index.json"))
+    try writeString(
+      """
+      ---
+      title: Channel Tunnel Notes
+      ---
+
+      # Channel Tunnel Notes
+
+      A quiet insight about alignment only appears in the markdown body.
+      """,
+      to: web.wikiCurrent.appendingPathComponent("for-you.md")
+    )
 
     let handler = WikiLocalAPIHandler(paths: web)
     let response = handler.handle(WikiLocalAPIRequest(method: "GET", path: "/api/wiki/search", query: ["q": "french"]))
@@ -410,6 +427,13 @@ final class LocalWebTests: XCTestCase {
     XCTAssertEqual(response.statusCode, 200)
     XCTAssertEqual(matches.count, 1)
     XCTAssertEqual(matches.first?["route"] as? String, "/for-you")
+
+    let bodyResponse = handler.handle(WikiLocalAPIRequest(method: "GET", path: "/api/wiki/search", query: ["q": "quiet insight"]))
+    let bodyPayload = try XCTUnwrap(json(bodyResponse))
+    let bodyMatches = try XCTUnwrap(bodyPayload["matches"] as? [[String: Any]])
+    XCTAssertEqual(bodyMatches.count, 1)
+    XCTAssertEqual(bodyMatches.first?["route"] as? String, "/for-you")
+    XCTAssertTrue((bodyMatches.first?["excerpt"] as? String ?? "").contains("quiet insight"))
   }
 
   func testWikiLocalAPIStatePersistsAndRejectsOversizedPayloads() throws {

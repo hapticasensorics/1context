@@ -35,9 +35,9 @@ Files are truth. JSONL is history. Derived indexes are rebuildable.
     readable wiki source, talk, templates, assets, and static export
 
   context-engine/
-    memory-system workspace: prompts, agents, jobs, proposals, decisions,
-    runs, artifacts, observations, talk-derived mail, notifications, ledgers,
-    and index manifests
+    memory-system workspace: packs, agents, jobs, decisions, runs, artifacts,
+    observations, talk-derived mail, notifications, ledgers, and index
+    manifests
 
 ~/Library/Application Support/1Context/
   app machinery: setup state, staging, local web mirrors, sockets, and
@@ -82,8 +82,8 @@ Copy ~/1Context/user-wiki/
   when you want an editable wiki backup.
 
 Copy ~/1Context/context-engine/
-  when you want agent history, proposals, decisions, runs, evidence, prompts,
-  and index manifests.
+  when you want agent history, decisions, runs, evidence, pack prompts, and
+  index manifests.
 
 Do not copy Application Support as the canonical record.
   It is app machinery and may contain disposable mirrors or indexes.
@@ -375,7 +375,7 @@ Talk entry `state` names should describe lifecycle: `open`, `accepted`,
 
 Current wiki V0 talk is page-local collaboration context. By default, `to` and
 `cc` are metadata labels only. Agent mail V0 may explicitly deliver addressed
-talk into `context-engine/mail`, but only when a caller requests mail delivery
+talk into `context-engine/live/mail`, but only when a caller requests mail delivery
 through the Agent Mail Protocol. Talk entry files and talk attachments remain
 the durable wiki discussion facts.
 
@@ -414,10 +414,10 @@ templates/
 Templates initialize pages and talk. They do not own those files after page
 creation. Once a template has created a user file, the user file wins.
 
-Global agent prompts belong in `context-engine/prompts`, not
-`user-wiki/templates`. Page-local talk conventions and curator instructions
-belong with the page's talk folder because they define how that page should be
-discussed.
+Agent prompts belong inside `context-engine/packs/<pack-id>/prompts`, not
+`user-wiki/templates` or a top-level `context-engine/prompts` folder.
+Page-local talk conventions and curator instructions belong with the page's
+talk folder because they define how that page should be discussed.
 
 ## Static Site Export
 
@@ -467,55 +467,99 @@ and backup-worthy, but it is not the clean static wiki export.
 
 ```text
 ~/1Context/context-engine/
+  packs/
+    wiki-company-v1/
+      agents/
+      jobs/
+      harnesses/
+      prompts/
+
+  orchestrators/
+    wiki-company-orchestrator-v1/
+
   agents/
     directory/
-
-  jobs/
-
-  prompts/
-    shared/
-    e08-for-you/
+      agents.jsonl
+      leases.jsonl
+    policies/
 
   mail/
-    messages/
-    bodies/
+    messages/YYYY/MM/
+    bodies/YYYY/MM/
     deliveries.jsonl
-    mailboxes/
     claims.jsonl
     idempotency.jsonl
     injection-receipts.jsonl
     control-events.jsonl
     dead-letter.jsonl
+    mailboxes/addr-*/inbox.jsonl
+    threads/
+    .mutation.lock
 
   notifications/
     outbox.jsonl
     attempts.jsonl
     cursors/
 
-  agents/deferred/
-    roles/
-    tools/
-    policies/
-    subscriptions/
-  mail/deferred/
-    subscriptions.jsonl
-    lists.jsonl
-  proposals/
-  decisions/
   runs/
-  artifacts/
-  observations/
-  ledgers/
-  indexes/
+    <run-id>/
+      run.json
+      source-packets/index.json
+      turns/<operation-id>/attempt-0001/
+        prompt-manifest.json
+        final-message.md
+        final-message.sha256
+        completion.json
+        adapter-events.jsonl
+        tool-transcript.jsonl
+        error.json
+        stdout.log
+        stderr.log
+      artifacts/
+        _content/sha256/<prefix>/<sha256>.json
+        <kind>/<artifact-id>.json
+      publish/
+        page-write-<page-id>.json
+        publish-proof.json
+      state/
+        raw-ingest-cursor.json
+        wiki-memory-cursor.json
+        packet-cache-index.json
+        dependency-graph.json
+      mail-index.jsonl
+      receipt-hydration.json
+
+  state/
+    harness/
+    codex-app-server/
+      threads/
+      events.jsonl
+    service/
+      current-run.json
+      run-events.jsonl
+    cleanup-receipts.jsonl
+    migration-receipts.jsonl
+
+  archive/
+    failed-runs/<archive-id>/
+      manifest.json
+      hashes.sha256
+      runs/<run-id>/
+      repair-notes.md
+
+  tmp/<run-id>/agents/<agent-id>/
 ```
 
 Directory meanings:
 
 | Directory | Stores |
 | --- | --- |
-| `agents/directory` | live and recently-live agent registrations, transport pointers, leases, and retirement events |
-| `jobs/` | reusable job definitions |
-| `prompts/` | global prompt files and prompt packs |
+| `packs/<pack-id>/agents` | static role identity, model, prompt, and permission configuration |
+| `packs/<pack-id>/jobs` | static reusable job definitions |
+| `packs/<pack-id>/harnesses` | static transport and receipt policy configuration |
+| `orchestrators/<id>` | static phase, routing, packet, and receipt orchestration policy |
+| `agents/directory` | live and recently-live Agent Mail registrations, transport pointers, leases, and retirement events; not role configuration |
+| `agents/policies` | local grant policy inputs; not worker runtime output |
 | `mail/messages` | immutable accepted mail envelopes, partitioned by date |
 | `mail/bodies` | immutable accepted markdown bodies, partitioned by date |
 | `mail/deliveries.jsonl` | append-only delivery truth for each recipient |
@@ -525,22 +569,55 @@ Directory meanings:
 | `mail/injection-receipts.jsonl` | host-facing records that an authorized `wiki.mail.open` body was injected or failed to inject into a Codex thread |
 | `mail/control-events.jsonl` | hook, app-server, injection, and supervisor decisions that shape agent runtime behavior without becoming message truth |
 | `mail/dead-letter.jsonl` | inspectable failed or exhausted delivery attempts |
+| `mail/.mutation.lock` | disposable local lock file; not durable proof unless lock failure is the bug |
 | `notifications/outbox.jsonl` | durable wakeup hints for eligible agents; contains envelope metadata, not full bodies |
 | `notifications/attempts.jsonl` | dispatch attempts, steering outcomes, retry evidence, and failures |
 | `notifications/cursors` | optional per-agent notification cursors |
-| `agents/deferred` | later role/tool/policy/subscription shapes after V0 delivery is stable |
-| `mail/deferred` | later list and subscription indexes after V0 delivery is stable |
-| `proposals/` | immutable proposed changes and patch series |
-| `decisions/` | accepted, rejected, deferred, withdrawn, or superseded outcomes |
-| `runs/` | replay/debug records for agent work |
-| `artifacts/` | previews, patches, validations, and proof bundles |
-| `observations/` | source material and captured inputs |
-| `ledgers/` | append-only operational JSONL |
-| `indexes/` | user-owned manifests and rebuild state for derived indexes |
+| `runs/<run-id>` | canonical envelope for one execution: source packets, turns, artifacts, publish proof, run-local state, mail index, and receipt hydration |
+| `runs/<run-id>/run.json` | compact run-local state and lifecycle |
+| `runs/<run-id>/mail-index.jsonl` | run-local index of Agent Mail message and delivery ids; not a duplicate mail body store |
+| `state/harness` | agent-harness store, birth certificates, units, receipts, adapter events, and active-turn bookkeeping |
+| `state/codex-app-server/threads` | persistent Codex thread bindings for harness-owned workers |
+| `state/codex-app-server/events.jsonl` | service event stream for Codex app-server traffic |
+| `state/service/current-run.json` | UI/agent discovery pointer to the latest or active run |
+| `state/cleanup-receipts.jsonl` | cleanup/archive attempts, failures, and repair hints |
+| `state/migration-receipts.jsonl` | records for moved retired runtime material |
+| `archive/failed-runs/<archive-id>/runs/<run-id>` | quarantined failed-run envelope before reset |
+| `tmp/<run-id>/agents/<agent-id>` | disposable isolated per-agent scratch |
 
 The context engine can reference wiki pages and artifacts with logical ids.
 Canonical wiki publication happens only after accepted changes land in
 `user-wiki`.
+
+Static wiki-company role configuration lives in `packs/<pack-id>/agents`.
+`context-engine/live/agents` is Agent Mail identity, lease, and local policy
+state; it is not a second authority for role definitions. New harness runtime
+output must not be written under retired top-level `context-engine/agents` or
+inside the live agent registry.
+
+Agent Mail `message_id` plus `delivery_id` is the coordination identity for
+agent messages. Page talk files under `user-wiki/source` are the readable wiki
+projection of those messages and remain user-facing source, but they do not
+replace Agent Mail identity or delivery proof.
+
+Generated talk projections must carry provenance that distinguishes them from
+human edits: agent id, run id, Agent Mail message id, delivery id when present,
+and `generated: true`. Human-edited talk files and accepted page source are user
+data and must not be cleaned as regenerated runtime output.
+
+Run-scoped artifacts are immutable after creation. A retry may repeat the same
+artifact key only when the payload is identical; changed content needs a new key
+or turn attempt inside `runs/<run-id>`. Before archive or cleanup, every Agent
+Mail receipt, talk projection, run-state pointer, and artifact handle that will
+be moved must hydrate or be mapped in the archive manifest with a content hash.
+Cleanup also requires a quiescence check: no active context-engine process for
+the run, no held mutation lock, no active harness turn, and no pending
+notification dispatch for the run.
+
+Prompt manifests and tool transcripts are private runtime evidence by default.
+They record hashes, source prompt paths, redaction status, allowed tools, and
+cited external sources. They must not publish raw prompts, raw transcript
+bodies, secrets, or local absolute paths into `user-wiki/site`.
 
 ## Context Engine File Classes
 
@@ -557,9 +634,9 @@ Agent directory records map durable agent ids to live transport pointers such
 as Codex `thread_id`, requested/granted roles, capabilities, leases, and
 retirement state. A thread id is a transport locator, not the durable identity.
 
-Proposals are immutable suggested changes. New versions create new files rather
-than overwriting old versions. Decisions record whether a proposal is accepted,
-rejected, deferred, withdrawn, or superseded.
+Page-local talk proposals are immutable suggested changes. New versions create
+new files rather than overwriting old versions. Decisions record whether a
+proposal is accepted, rejected, deferred, withdrawn, or superseded.
 
 Runs are replay/debug records. Artifacts are outputs, not conversation.
 Observations are source material for memory work. Ledgers are append-only JSONL.
@@ -808,9 +885,10 @@ The first wiki integration only needs to prove the data shape:
 - mirror the last-good export into Application Support for local web serving
 - prove `runtime/` is public-safe and `runtime-test/` is ignored
 
-The first slice should not require a bundled `memory-core` source checkout,
-long-running Python web server, vector indexes, embeddings, broad memory jobs, runtime
-`npm install`, runtime `uv run`, or host Python/Node to open the wiki.
+The first slice should not require a bundled Python orchestration source
+checkout, long-running Python web server, vector indexes, embeddings, broad
+memory jobs, runtime `npm install`, runtime `uv run`, or host Python/Node to
+open the wiki.
 
 Those are implementation constraints for V0, but they exist to protect the data
 contract: user-owned files must be enough to understand and rebuild the wiki.

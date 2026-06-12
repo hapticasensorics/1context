@@ -48,8 +48,7 @@ articles.
 
 ### Reference content (what to cross-check against)
 
-- All **other concept pages** in
-  `experiments/e04-concepts/concepts/` (skip `_archive/`).
+- All **other concept pages** from `wiki.concepts.dir`.
 - **Your Context** article.
 - **Prior For You articles** for the **last 4 weeks** (the
   rolling reading window).
@@ -169,13 +168,13 @@ Frontmatter + body:
 ```yaml
 ---
 kind: contradiction
-author: claude-opus-4-7-contradiction-flagger
+author: wiki-company.contradiction-flagger
 ts: <NOW>
 parent: <stem-of-newer-or-older-content-file>
 ---
 <details class="opctx-talk-closure" open>
 <summary><strong>Contradiction · <pattern> · <YYYY-MM-DD> by
-claude-opus-4-7-contradiction-flagger.</strong></summary>
+wiki-company.contradiction-flagger.</strong></summary>
 
 **Older claim** (from `<source-file-old>`):
 

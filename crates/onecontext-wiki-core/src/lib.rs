@@ -17,6 +17,7 @@ pub struct RuntimePaths {
     pub root: PathBuf,
     pub user_wiki: PathBuf,
     pub context_engine: PathBuf,
+    pub context_engine_live: PathBuf,
     pub source: PathBuf,
     pub templates: PathBuf,
     pub site: PathBuf,
@@ -27,12 +28,14 @@ impl RuntimePaths {
         let root = root.into();
         let user_wiki = root.join("user-wiki");
         let context_engine = root.join("context-engine");
+        let context_engine_live = context_engine.join("live");
         Self {
             source: user_wiki.join("source"),
             templates: user_wiki.join("templates"),
             site: user_wiki.join("site"),
             user_wiki,
             context_engine,
+            context_engine_live,
             root,
         }
     }
@@ -41,11 +44,6 @@ impl RuntimePaths {
         for path in [
             self.user_wiki.join(".1context"),
             self.source.join("families"),
-            self.context_engine.join("ledgers"),
-            self.context_engine.join("runs"),
-            self.context_engine.join("artifacts"),
-            self.context_engine.join("proposals"),
-            self.context_engine.join("decisions"),
         ] {
             fs::create_dir_all(path)?;
         }
@@ -2403,7 +2401,17 @@ impl WikiCore {
                 &talk_dir,
             );
             match mail_result {
-                Ok(delivery) => ("appended".to_string(), Some(delivery), Vec::new()),
+                Ok(delivery) if delivery.status == "delivered" => {
+                    ("appended".to_string(), Some(delivery), Vec::new())
+                }
+                Ok(delivery) => (
+                    "appended_delivery_deferred".to_string(),
+                    Some(delivery),
+                    vec![
+                        "Talk source was preserved; Agent Mail did not create any delivered recipient records yet."
+                            .to_string(),
+                    ],
+                ),
                 Err(error) => (
                     "appended_delivery_failed".to_string(),
                     Some(TalkMailDeliveryResult {
@@ -2494,13 +2502,41 @@ impl WikiCore {
             attachments: mail_attachments,
             created_at: created_at.to_string(),
         };
-        let receipt = agent_mail::AgentMailStore::new(&self.paths.context_engine).send_mail(
+        let receipt = agent_mail::AgentMailStore::new(&self.paths.context_engine_live).send_mail(
             &envelope,
             &request.body_markdown,
             &agent_mail::SendMailOptions::default(),
         )?;
+        let delivered_count = receipt
+            .attempts
+            .iter()
+            .filter(|attempt| {
+                matches!(
+                    attempt.status,
+                    agent_mail::DeliveryAttemptStatus::Delivered
+                        | agent_mail::DeliveryAttemptStatus::AlreadyDelivered
+                )
+            })
+            .count();
+        let deferred_count = receipt
+            .attempts
+            .iter()
+            .filter(|attempt| {
+                matches!(
+                    attempt.status,
+                    agent_mail::DeliveryAttemptStatus::DeferredCapacity
+                )
+            })
+            .count();
+        let delivery_status = if delivered_count > 0 {
+            "delivered"
+        } else if deferred_count > 0 {
+            "deferred_capacity"
+        } else {
+            "no_deliveries"
+        };
         Ok(TalkMailDeliveryResult {
-            status: "delivered".to_string(),
+            status: delivery_status.to_string(),
             acceptance: Some(match receipt.acceptance {
                 agent_mail::MessageAcceptance::Accepted => "accepted".to_string(),
                 agent_mail::MessageAcceptance::DuplicateSamePayload { .. } => {
@@ -5375,9 +5411,7 @@ fn infer_media_type(filename: &str) -> &'static str {
         Some("txt") | Some("log") | Some("rs") | Some("swift") | Some("py") | Some("go")
         | Some("java") | Some("kt") | Some("sh") | Some("sql") | Some("c") | Some("h")
         | Some("cc") | Some("cpp") | Some("hpp") | Some("m") | Some("mm") | Some("rb")
-        | Some("xml") => {
-            "text/plain"
-        }
+        | Some("xml") => "text/plain",
         Some("csv") => "text/csv",
         Some("pdf") => "application/pdf",
         _ => "application/octet-stream",
@@ -5788,6 +5822,9 @@ mod tests {
         assert_eq!(talk.delivery_mode, TalkDeliveryMode::LabelsOnly);
         assert!(talk.mail_delivery.is_none());
         assert!(!root.join("context-engine/mail/deliveries.jsonl").exists());
+        assert!(!root
+            .join("context-engine/live/mail/deliveries.jsonl")
+            .exists());
         assert_eq!(before_publish.status, after_publish.status);
         assert_eq!(
             before_publish.render_required,
@@ -5830,7 +5867,7 @@ mod tests {
         assert_eq!(delivery.acceptance.as_deref(), Some("accepted"));
         assert_eq!(delivery.attempt_count, 1);
         assert_eq!(delivery.attempts[0].recipient, "role://topics.curator");
-        let store = agent_mail::AgentMailStore::new(root.join("context-engine"));
+        let store = agent_mail::AgentMailStore::new(root.join("context-engine/live"));
         let recipient = agent_mail::MailAddress::parse("role://topics.curator").unwrap();
         assert_eq!(
             store
@@ -5849,6 +5886,42 @@ mod tests {
                 .id,
             "topics"
         );
+    }
+
+    #[test]
+    fn talk_append_mail_without_deliveries_is_not_reported_delivered() {
+        let temp = TempDir::new().unwrap();
+        let root = temp.path().join("1Context");
+        seed_fixture(&root);
+        let core = WikiCore::new(&root);
+        core.create_page("topics", None).unwrap();
+
+        let talk = core
+            .append_talk(TalkAppendRequest {
+                page: "topics".to_string(),
+                kind: "proposal".to_string(),
+                subject: "No recipients".to_string(),
+                operation_id: Some("talk-mail-no-recipients-001".to_string()),
+                delivery_mode: TalkDeliveryMode::Mail,
+                thread_id: None,
+                reply_to: None,
+                from: "agent://codex/talk-mail-empty".to_string(),
+                to: vec![],
+                cc: vec![],
+                body_markdown: "Mail mode without recipients must not look delivered.".to_string(),
+                attachments: vec![],
+                allow_tombstoned: false,
+            })
+            .unwrap();
+
+        let delivery = talk.mail_delivery.as_ref().unwrap();
+        assert_eq!(talk.status, "appended_delivery_deferred");
+        assert_eq!(delivery.status, "no_deliveries");
+        assert_eq!(delivery.attempt_count, 0);
+        assert!(talk
+            .repair_hints
+            .iter()
+            .any(|hint| hint.contains("did not create any delivered recipient records")));
     }
 
     #[test]
@@ -5953,7 +6026,7 @@ mod tests {
         let delivery_id = talk.mail_delivery.as_ref().unwrap().attempts[0]
             .delivery_id
             .clone();
-        let store = agent_mail::AgentMailStore::new(root.join("context-engine"));
+        let store = agent_mail::AgentMailStore::new(root.join("context-engine/live"));
         let agent = store
             .identify_agent(
                 &agent_mail::AgentIdentifyRequest {

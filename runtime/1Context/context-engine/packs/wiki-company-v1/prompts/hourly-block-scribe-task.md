@@ -15,7 +15,7 @@ For each listed hour, choose exactly one status:
 
 - `written`: write the hourly talk entry file.
 - `no-talk`: no talk entry is warranted.
-- `needs-retry`: the hour should be re-run as a single-hour Opus job.
+- `needs-retry`: the hour should be re-run as a single-hour scribe job.
 
 Hourly talk entry path format:
 
@@ -28,7 +28,7 @@ Required frontmatter for each written entry:
 ```markdown
 ---
 kind: conversation
-author: claude-opus-hourly-block-scribe
+author: wiki-company.hourly-block-scribe
 ts: {date}THH:00:00Z
 ---
 ```

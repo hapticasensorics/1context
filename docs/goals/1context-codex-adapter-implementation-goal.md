@@ -41,7 +41,7 @@ belong in Rust.
 ### 1. Scaffold
 
 - [x] Codex adapter target spec exists in `docs/1context-codex-adapter-spec.md`.
-- [x] Workspace crate seam exists at `crates/onecontext-codex-adapter`.
+- [x] Workspace crate seam exists at `crates/onecontext-agent-harness/adapters/codex`.
 - [x] Public module seams match the adapter spec: schema, app-server client,
   binding, wake, injection, hooks, event mirror, policy, proof.
 - [x] README explains the crate boundary and local proof ownership.

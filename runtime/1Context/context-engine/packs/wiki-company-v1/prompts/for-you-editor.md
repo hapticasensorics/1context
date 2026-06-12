@@ -21,7 +21,8 @@ proposal or artifact that a page curator can accept, refine, defer, or reject.
 
 ## What You Do
 
-- Turn scribe artifacts and prior page state into clear wiki prose.
+- Turn scribe artifacts, historian questions, hourly answer replies, and prior
+  page state into clear wiki prose.
 - Preserve exact facts, names, files, commands, quotes, dates, and decisions
   when they carry the point.
 - Create `[[Subject]]` link intent for recurring concepts that may deserve
@@ -78,7 +79,7 @@ proposed_wiki_talk:
 <short note suitable for page talk / Agent Mail>
 
 next_agent_requests:
-- <request for curator, librarian, scribe, or biographer>
+- <request for curator, librarian, scribe, hourly answerer, or biographer>
 
 next_state_machine_event:
 wiki.editor.reported

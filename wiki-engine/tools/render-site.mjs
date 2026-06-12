@@ -238,7 +238,8 @@ function markdownTwinKind(markdownPath) {
 
 function pageIdFromTalkFor(talkFor) {
   if (typeof talkFor !== 'string') return null;
-  const match = talkFor.match(/^page:\/\/(.+)$/);
+  const value = talkFor.trim();
+  const match = value.match(/^(?:page:\/\/|mailbox:\/\/page\/)([^/?#]+)$/);
   return match ? match[1] : null;
 }
 
@@ -541,8 +542,10 @@ function collectPageLedgerActivity(userWikiRoot, config) {
   }));
 }
 
-function collectRenderActivity(userWikiRoot) {
-  return readJsonLines(join(userWikiRoot, 'site', '.1context', 'render-events.jsonl')).map((event) => ({
+function collectRenderActivity(userWikiRoot, pendingRenderEvent = null) {
+  const events = readJsonLines(join(userWikiRoot, 'site', '.1context', 'render-events.jsonl'));
+  if (pendingRenderEvent) events.push(pendingRenderEvent);
+  return events.map((event) => ({
     at: event.published_at || event.rendered_at || event.at,
     label: 'render',
     href: '/',
@@ -569,7 +572,47 @@ function collectLinkDiagnosticActivity(userWikiRoot) {
   }];
 }
 
-function buildActivityFeed(sourceRoot, config) {
+function collectTalkDecisionActivity(sourceRoot, config) {
+  const routes = pageRouteMap(config);
+  const decisionKinds = new Set(['decision', 'decided', 'status', 'agent_report']);
+  return walkFiles(sourceRoot)
+    .filter((path) => path.endsWith('.md') && path.includes('.talk/') && !basename(path).startsWith('_'))
+    .map((path) => {
+      let parsed;
+      try {
+        parsed = matter(readFileSync(path, 'utf8'));
+      } catch {
+        return null;
+      }
+      const data = parsed.data || {};
+      const kind = String(data.kind || '').trim();
+      const state = String(data.state || data.status || '').trim();
+      if (!decisionKinds.has(kind) && !decisionKinds.has(state)) return null;
+      const pageId = data.page_id || pageIdFromTalkFor(data.talk_for);
+      const pageRoute = pageId ? routes.get(pageId) : null;
+      const talkRoute = data.talk_route
+        || (pageRoute ? (pageRoute === '/' ? '/talk' : `${pageRoute.replace(/\/+$/, '')}/talk`) : null)
+        || talkRouteFromSourcePath(sourceRoot, path);
+      const subject = data.subject || data.title || humanEvent(kind || state);
+      return {
+        at: data.created_at || data.created || data.ts,
+        label: subject,
+        href: talkRoute,
+        detail: [kind || state, data.author || data.from].filter(Boolean).join(' by '),
+      };
+    })
+    .filter(Boolean);
+}
+
+function talkRouteFromSourcePath(sourceRoot, path) {
+  const rel = posixRelative(sourceRoot, path);
+  const match = rel.match(/\/talk\/([^/]+)\.talk\//);
+  if (!match) return null;
+  const slug = match[1] === 'home' ? '' : match[1];
+  return slug ? `/${slug}/talk` : '/talk';
+}
+
+function buildActivityFeed(sourceRoot, config, pendingRenderEvent = null) {
   const homeFeed = config.site?.home_feed || {};
   if (homeFeed.enabled === false) {
     return '- Feed disabled by site configuration.';
@@ -577,14 +620,17 @@ function buildActivityFeed(sourceRoot, config) {
   const userWikiRoot = resolve(sourceRoot, '..');
   const sources = Array.isArray(homeFeed.sources)
     ? homeFeed.sources
-    : ['page_ledger', 'render_events', 'link_diagnostics'];
+    : ['page_ledger', 'render_events', 'decisions', 'link_diagnostics'];
   const maxItems = Number.isFinite(homeFeed.max_items) ? homeFeed.max_items : 12;
   let items = [];
   if (sources.includes('page_ledger')) {
     items.push(...collectPageLedgerActivity(userWikiRoot, config));
   }
   if (sources.includes('render_events')) {
-    items.push(...collectRenderActivity(userWikiRoot));
+    items.push(...collectRenderActivity(userWikiRoot, pendingRenderEvent));
+  }
+  if (sources.includes('decisions')) {
+    items.push(...collectTalkDecisionActivity(sourceRoot, config));
   }
   if (sources.includes('link_diagnostics')) {
     items.push(...collectLinkDiagnosticActivity(userWikiRoot));
@@ -599,11 +645,11 @@ function buildActivityFeed(sourceRoot, config) {
   return items.map(activityLine).join('\n');
 }
 
-function generateSitePageInputs(output, sourceRoot, config, generatedAt) {
+function generateSitePageInputs(output, sourceRoot, config, generatedAt, pendingRenderEvent = null) {
   const templatesRoot = resolve(sourceRoot, '..', 'templates');
   const generatedDir = join(output, '.1context', 'generated-site-inputs');
   const defaults = config.defaults || {};
-  const activityFeed = buildActivityFeed(sourceRoot, config);
+  const activityFeed = buildActivityFeed(sourceRoot, config, pendingRenderEvent);
   const inputs = [];
   for (const page of config.site_pages || []) {
     if (page.enabled === false || !page.template) continue;
@@ -1683,7 +1729,19 @@ function main() {
     rmSync(output, { recursive: true, force: true });
     mkdirSync(output, { recursive: true });
     const logs = [];
-    siteInputs = generateSitePageInputs(output, sourceRoot, wikiConfig, startedAt);
+    const pendingRenderEvent = {
+      schema_version: 1,
+      status: 'rendering',
+      trigger: 'render-site',
+      rendered_at: startedAt,
+    };
+    siteInputs = generateSitePageInputs(
+      output,
+      sourceRoot,
+      wikiConfig,
+      startedAt,
+      pendingRenderEvent
+    );
     for (const siteInput of siteInputs) {
       logs.push({
         input: siteInput.input,

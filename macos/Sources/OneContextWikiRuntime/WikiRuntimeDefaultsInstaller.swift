@@ -434,7 +434,7 @@ public final class WikiRuntimeDefaultsInstaller: @unchecked Sendable {
       packagedDefaultSHA256: try sha256(sourceURL),
       userFileSHA256: try sha256(destinationURL)
     )
-    let relativeProposalPath = "context-engine/proposals/wiki/runtime-defaults/\(proposalFileName(relative))"
+    let relativeProposalPath = "context-engine/live/state/proposals/wiki/runtime-defaults/\(proposalFileName(relative))"
     let proposalURL = runtimePaths.userContentDirectory.appendingPathComponent(relativeProposalPath)
     try RuntimePermissions.ensurePrivateDirectory(proposalURL.deletingLastPathComponent())
     let data = try encoder.encode(proposal)

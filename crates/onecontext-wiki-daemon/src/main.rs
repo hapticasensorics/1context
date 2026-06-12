@@ -6,13 +6,13 @@ use codex_notify::{
     decide_codex_notification_dispatch, CodexDispatchRequest, CodexRuntimeStatus,
     CodexSupervisorPolicy,
 };
+use onecontext_agent_mail::{
+    AgentGrantPolicy, AgentIdentifyRequest, AgentMailStore, AgentRecord, CodexSteeringPayload,
+    DeliveryAttemptStatus, DeliveryState, MailAddress, MailInjectionResult, MessageAcceptance,
+    MessageAttachmentRef, MessageBodyRef, MessageEnvelope, MessagePageRef,
+    NotificationAttemptStatus, SendMailOptions,
+};
 use onecontext_wiki_core::{
-    agent_mail::{
-        AgentGrantPolicy, AgentIdentifyRequest, AgentMailStore, AgentRecord, CodexSteeringPayload,
-        DeliveryAttemptStatus, DeliveryState, MailAddress, MailInjectionResult, MessageAcceptance,
-        MessageAttachmentRef, MessageBodyRef, MessageEnvelope, MessagePageRef,
-        NotificationAttemptStatus, SendMailOptions,
-    },
     PageCreateOptions, TalkAppendRequest, TalkAttachmentInput, TalkDeliveryMode, WikiCore,
     WikiInventory,
 };
@@ -278,7 +278,7 @@ fn run(mut args: Vec<String>) -> Result<()> {
         }
         "agent-list" => {
             reject_extra_args("agent-list", &args)?;
-            let store = AgentMailStore::new(root.join("context-engine"));
+            let store = agent_mail_store(&root);
             let agents = latest_agent_records_for_cli(&store)?;
             print_json(&json!({
                 "schema_version": 1,
@@ -295,7 +295,7 @@ fn run(mut args: Vec<String>) -> Result<()> {
                 .or_else(|| env::var("ONECONTEXT_THREAD_ID").ok())
                 .or_else(|| env::var("CODEX_THREAD_ID").ok());
             reject_extra_args("agent-whoami", &args)?;
-            let store = AgentMailStore::new(root.join("context-engine"));
+            let store = agent_mail_store(&root);
             let agent = if let Some(agent_id) = agent_id {
                 store.agent_status(&agent_id)?.record
             } else if let Some(thread_id) = thread_id {
@@ -342,7 +342,7 @@ fn run(mut args: Vec<String>) -> Result<()> {
                 allowed_roles,
                 allowed_capabilities: capabilities.iter().cloned().collect(),
             };
-            let record = AgentMailStore::new(root.join("context-engine")).identify_agent(
+            let record = agent_mail_store(&root).identify_agent(
                 &AgentIdentifyRequest {
                     transport_kind: "codex".to_string(),
                     thread_id,
@@ -377,11 +377,8 @@ fn run(mut args: Vec<String>) -> Result<()> {
             let now = now_rfc3339();
             let lease_expires_at = (Utc::now() + Duration::seconds(ttl_seconds))
                 .to_rfc3339_opts(SecondsFormat::Secs, true);
-            let lease = AgentMailStore::new(root.join("context-engine")).heartbeat_agent(
-                &agent_id,
-                &lease_expires_at,
-                &now,
-            )?;
+            let lease =
+                agent_mail_store(&root).heartbeat_agent(&agent_id, &lease_expires_at, &now)?;
             print_json(&json!({
                 "schema_version": 1,
                 "status": "ok",
@@ -398,8 +395,7 @@ fn run(mut args: Vec<String>) -> Result<()> {
             args.remove(0);
             reject_extra_args("agent-retire", &args)?;
             let now = now_rfc3339();
-            let agent = AgentMailStore::new(root.join("context-engine"))
-                .retire_agent(&agent_id, &now, &now)?;
+            let agent = agent_mail_store(&root).retire_agent(&agent_id, &now, &now)?;
             print_json(&json!({
                 "schema_version": 1,
                 "status": "ok",
@@ -414,8 +410,7 @@ fn run(mut args: Vec<String>) -> Result<()> {
                 .ok_or_else(|| anyhow!("agent-status requires <agent-id>"))?;
             args.remove(0);
             reject_extra_args("agent-status", &args)?;
-            let status =
-                AgentMailStore::new(root.join("context-engine")).agent_status(&agent_id)?;
+            let status = agent_mail_store(&root).agent_status(&agent_id)?;
             print_json(&json!({
                 "schema_version": 1,
                 "status": "ok",
@@ -437,8 +432,8 @@ fn run(mut args: Vec<String>) -> Result<()> {
                 thread_id
             };
             reject_extra_args("agent-status-by-thread", &args)?;
-            let snapshot = AgentMailStore::new(root.join("context-engine"))
-                .agent_status_by_thread(&thread_id, &now_rfc3339())?;
+            let snapshot =
+                agent_mail_store(&root).agent_status_by_thread(&thread_id, &now_rfc3339())?;
             print_json(&json!({
                 "schema_version": 1,
                 "status": "ok",
@@ -460,7 +455,7 @@ fn run(mut args: Vec<String>) -> Result<()> {
                 .ok_or_else(|| anyhow!("agent-inbox requires <agent-id>"))?;
             args.remove(0);
             reject_extra_args("agent-inbox", &args)?;
-            let rows = AgentMailStore::new(root.join("context-engine")).agent_inbox(&agent_id)?;
+            let rows = agent_mail_store(&root).agent_inbox(&agent_id)?;
             print_json(&json!({
                 "schema_version": 1,
                 "status": "ok",
@@ -553,11 +548,7 @@ fn run(mut args: Vec<String>) -> Result<()> {
                 max_open_deliveries_per_recipient: max_open_deliveries_per_recipient
                     .map(|limit| limit as usize),
             };
-            let receipt = AgentMailStore::new(root.join("context-engine")).send_mail(
-                &envelope,
-                &body_markdown,
-                &options,
-            )?;
+            let receipt = agent_mail_store(&root).send_mail(&envelope, &body_markdown, &options)?;
             let acceptance = message_acceptance_value(&receipt.acceptance);
             let attempts = receipt
                 .attempts
@@ -590,7 +581,7 @@ fn run(mut args: Vec<String>) -> Result<()> {
             args.remove(0);
             reject_extra_args("mail-inbox", &args)?;
             let address = MailAddress::parse(&address)?;
-            let rows = AgentMailStore::new(root.join("context-engine")).mail_inbox(&address)?;
+            let rows = agent_mail_store(&root).mail_inbox(&address)?;
             print_json(&json!({
                 "schema_version": 1,
                 "status": "ok",
@@ -604,7 +595,7 @@ fn run(mut args: Vec<String>) -> Result<()> {
             let message_id = take_flag_value(&mut args, "mail-read", "--message-id")?;
             let thread_id = take_flag_value(&mut args, "mail-read", "--thread-id")?;
             reject_extra_args("mail-read", &args)?;
-            let store = AgentMailStore::new(root.join("context-engine"));
+            let store = agent_mail_store(&root);
             match (message_id, thread_id) {
                 (Some(message_id), None) => {
                     let message = store.read_message(&message_id)?;
@@ -641,8 +632,7 @@ fn run(mut args: Vec<String>) -> Result<()> {
             let agent_id = take_flag_value(&mut args, "mail-open", "--agent-id")?
                 .ok_or_else(|| anyhow!("mail-open requires --agent-id"))?;
             reject_extra_args("mail-open", &args)?;
-            let opened = AgentMailStore::new(root.join("context-engine"))
-                .open_delivery(&delivery_id, &agent_id)?;
+            let opened = agent_mail_store(&root).open_delivery(&delivery_id, &agent_id)?;
             print_json(&json!({
                 "schema_version": 1,
                 "status": "ok",
@@ -682,16 +672,15 @@ fn run(mut args: Vec<String>) -> Result<()> {
             }
             let error = take_flag_value(&mut args, "mail-record-injection", "--error")?;
             reject_extra_args("mail-record-injection", &args)?;
-            let recorded = AgentMailStore::new(root.join("context-engine"))
-                .record_mail_injection_result(
-                    &delivery_id,
-                    &agent_id,
-                    thread_id.as_deref(),
-                    item_count as usize,
-                    result,
-                    &now_rfc3339(),
-                    error,
-                )?;
+            let recorded = agent_mail_store(&root).record_mail_injection_result(
+                &delivery_id,
+                &agent_id,
+                thread_id.as_deref(),
+                item_count as usize,
+                result,
+                &now_rfc3339(),
+                error,
+            )?;
             print_json(&json!({
                 "schema_version": 1,
                 "status": "ok",
@@ -709,11 +698,8 @@ fn run(mut args: Vec<String>) -> Result<()> {
             let agent_id = take_flag_value(&mut args, "mail-claim", "--agent-id")?
                 .ok_or_else(|| anyhow!("mail-claim requires --agent-id"))?;
             reject_extra_args("mail-claim", &args)?;
-            let delivery = AgentMailStore::new(root.join("context-engine")).claim_delivery(
-                &delivery_id,
-                &agent_id,
-                &now_rfc3339(),
-            )?;
+            let delivery =
+                agent_mail_store(&root).claim_delivery(&delivery_id, &agent_id, &now_rfc3339())?;
             print_json(&json!({
                 "schema_version": 1,
                 "status": "ok",
@@ -735,7 +721,7 @@ fn run(mut args: Vec<String>) -> Result<()> {
                     .as_str(),
             )?;
             reject_extra_args("mail-mark", &args)?;
-            let delivery = AgentMailStore::new(root.join("context-engine")).mark_delivery(
+            let delivery = agent_mail_store(&root).mark_delivery(
                 &delivery_id,
                 &agent_id,
                 state,
@@ -762,7 +748,7 @@ fn run(mut args: Vec<String>) -> Result<()> {
             let recipient = take_flag_value(&mut args, "mail-mark-all", "--recipient")?;
             let dry_run = take_bool_flag(&mut args, "--dry-run");
             reject_extra_args("mail-mark-all", &args)?;
-            let store = AgentMailStore::new(root.join("context-engine"));
+            let store = agent_mail_store(&root);
             let rows = store.agent_inbox(&agent_id)?;
             let selected = rows
                 .into_iter()
@@ -811,7 +797,7 @@ fn run(mut args: Vec<String>) -> Result<()> {
             let until = take_flag_value(&mut args, "mail-snooze", "--until")?
                 .ok_or_else(|| anyhow!("mail-snooze requires --until"))?;
             reject_extra_args("mail-snooze", &args)?;
-            let delivery = AgentMailStore::new(root.join("context-engine")).snooze_delivery(
+            let delivery = agent_mail_store(&root).snooze_delivery(
                 &delivery_id,
                 &agent_id,
                 &until,
@@ -832,8 +818,11 @@ fn run(mut args: Vec<String>) -> Result<()> {
             args.remove(0);
             let cursor = take_flag_value(&mut args, "notify-poll", "--cursor")?;
             reject_extra_args("notify-poll", &args)?;
-            let notifications = AgentMailStore::new(root.join("context-engine"))
-                .notification_poll(&agent_id, cursor.as_deref(), &now_rfc3339())?;
+            let notifications = agent_mail_store(&root).notification_poll(
+                &agent_id,
+                cursor.as_deref(),
+                &now_rfc3339(),
+            )?;
             print_json(&json!({
                 "schema_version": 1,
                 "status": "ok",
@@ -852,8 +841,11 @@ fn run(mut args: Vec<String>) -> Result<()> {
             let agent_id = take_flag_value(&mut args, "notify-ack", "--agent-id")?
                 .ok_or_else(|| anyhow!("notify-ack requires --agent-id"))?;
             reject_extra_args("notify-ack", &args)?;
-            let notification = AgentMailStore::new(root.join("context-engine"))
-                .acknowledge_notification(&agent_id, &notification_id, &now_rfc3339())?;
+            let notification = agent_mail_store(&root).acknowledge_notification(
+                &agent_id,
+                &notification_id,
+                &now_rfc3339(),
+            )?;
             print_json(&json!({
                 "schema_version": 1,
                 "status": "ok",
@@ -878,7 +870,7 @@ fn run(mut args: Vec<String>) -> Result<()> {
                 .unwrap_or(25)
                 .max(0) as usize;
             reject_extra_args("notify-dispatch", &args)?;
-            let store = AgentMailStore::new(root.join("context-engine"));
+            let store = agent_mail_store(&root);
             let notifications =
                 store.notification_dispatch_queue(&agent_id, None, &now_rfc3339())?;
             let mut attempts = Vec::new();
@@ -1360,6 +1352,10 @@ fn talk_attachment_inputs(
         .collect())
 }
 
+fn agent_mail_store(root: &Path) -> AgentMailStore {
+    AgentMailStore::new(root.join("context-engine/live"))
+}
+
 fn command_name(args: &[String]) -> Option<&str> {
     let mut skip_next = false;
     for arg in args {
@@ -1682,7 +1678,7 @@ fn publish(
     if !render_tool.is_file() {
         return Err(anyhow!("missing renderer: {}", render_tool.display()));
     }
-    let runs = root.join("context-engine/runs");
+    let runs = root.join("context-engine/live/runs");
     fs::create_dir_all(&runs)?;
     let result_json = runs.join("wiki-publish-result.json");
     let output = root.join("user-wiki/site");
@@ -2788,7 +2784,7 @@ mod tests {
         ])
         .unwrap();
 
-        let store = AgentMailStore::new(root.join("context-engine"));
+        let store = agent_mail_store(&root);
         let status = store
             .agent_status_by_thread("daemon-page-agent", "2026-05-21T07:01:00Z")
             .unwrap();
@@ -2813,6 +2809,10 @@ mod tests {
         let rows = store.agent_inbox(&agent.agent_id).unwrap();
         assert_eq!(rows.len(), 1);
         assert_eq!(rows[0].recipient, "mailbox://page/topics");
+        assert!(root
+            .join("context-engine/live/mail/deliveries.jsonl")
+            .exists());
+        assert!(!root.join("context-engine/mail/deliveries.jsonl").exists());
     }
 
     #[test]
@@ -3127,7 +3127,7 @@ mod tests {
             "failed staging output must not replace the last-good site"
         );
         assert!(
-            root.join("context-engine/runs/wiki-publish-staging/partial.html")
+            root.join("context-engine/live/runs/wiki-publish-staging/partial.html")
                 .exists(),
             "failed staging output should remain available for diagnostics"
         );
@@ -3399,7 +3399,7 @@ mod tests {
         );
         assert!(
             !root
-                .join("context-engine/runs/wiki-publish-result.json")
+                .join("context-engine/live/runs/wiki-publish-result.json")
                 .exists(),
             "dangling --trigger must not run the renderer"
         );

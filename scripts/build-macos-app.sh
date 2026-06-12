@@ -431,17 +431,15 @@ rsync -a \
   "$ROOT/runtime/1Context/" \
   "$RUNTIME_DEFAULTS_WORK_DIR/1Context/"
 "$WIKI_CORE_BIN" --root "$RUNTIME_DEFAULTS_WORK_DIR/1Context" page-create-all >/dev/null
-rm -rf "$RUNTIME_DEFAULTS_WORK_DIR/1Context/context-engine/runs"
-mkdir -p "$RUNTIME_DEFAULTS_WORK_DIR/1Context/context-engine/runs"
+rm -rf "$RUNTIME_DEFAULTS_WORK_DIR/1Context/context-engine/live"
 "$WIKI_CORE_BIN" --root "$RUNTIME_DEFAULTS_WORK_DIR/1Context" publish \
   --wiki-engine "$ROOT/wiki-engine" \
   --node node \
   --trigger runtime-defaults \
   --force >/dev/null
-cp "$RUNTIME_DEFAULTS_WORK_DIR/1Context/context-engine/runs/wiki-publish-result.json" \
+cp "$RUNTIME_DEFAULTS_WORK_DIR/1Context/context-engine/live/runs/wiki-publish-result.json" \
   "$RUNTIME_DEFAULTS_WORK_DIR/render-site-result.json"
-rm -rf "$RUNTIME_DEFAULTS_WORK_DIR/1Context/context-engine/runs"
-mkdir -p "$RUNTIME_DEFAULTS_WORK_DIR/1Context/context-engine/runs"
+rm -rf "$RUNTIME_DEFAULTS_WORK_DIR/1Context/context-engine/live"
 ditto "$RUNTIME_DEFAULTS_WORK_DIR/1Context" "$RUNTIME_DEFAULTS_RESOURCE_DIR/1Context"
 rsync -a \
   --exclude 'package-lock.json' \

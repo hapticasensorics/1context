@@ -34,9 +34,17 @@ fn dry_run_lists_agents_routes_packet_policy_and_publish_intent() {
     assert!(["ok", "error", "not_ready", "unavailable"]
         .contains(&dry_run.source_metadata.storage_gate_status.as_str()));
     assert!(dry_run.source_metadata.note.contains("storage readiness"));
-    assert_eq!(dry_run.packet_plan.usable_context_tokens, 258_400);
+    assert_eq!(dry_run.packet_plan.usable_context_tokens, 258_000);
     assert_eq!(dry_run.packet_plan.context_fraction, 0.62);
-    assert_eq!(dry_run.packet_plan.target_packet_tokens, 160_208);
+    assert_eq!(dry_run.packet_plan.target_packet_tokens, 160_000);
+    assert_eq!(dry_run.orchestration_plan.phase_count, 9);
+    assert!(dry_run.orchestration_plan.job_count >= 10);
+    assert_eq!(dry_run.scheduler_plan.phase_count, 9);
+    assert_eq!(
+        dry_run.scheduler_plan.ready_phase_ids,
+        vec!["import_perception"]
+    );
+    assert!(dry_run.scheduler_plan.receipt_policy.require_mail_delivery);
     assert_eq!(dry_run.harness_previews.len(), 16);
     assert!(dry_run.route_count >= 16);
     assert_eq!(dry_run.publish_intent.publisher, "onecontext-wiki-core");
@@ -53,7 +61,7 @@ fn dry_run_lists_agents_routes_packet_policy_and_publish_intent() {
     assert_eq!(scribe.agent_id, "hourly-scribe");
     assert_eq!(scribe.harness_id, "codex-app-server");
     assert_eq!(scribe.transport, "codex-app-server");
-    assert_eq!(scribe.to, vec!["role://memory.wiki.for_you_editor"]);
+    assert_eq!(scribe.to, vec!["role://memory.wiki.historian"]);
     assert!(scribe.requires_final_message);
     assert!(scribe.requires_talk_append);
     assert!(scribe.requires_mail_delivery);

@@ -68,6 +68,27 @@ access: private
   assert.match(html, /&lt;img src=x onerror=&quot;alert\(1\)&quot;&gt;/);
 });
 
+test('renderer drops raw html comments from markdown bodies', () => {
+  const source = `---
+title: Empty Comment Probe
+slug: empty-comment-probe
+section: reference
+access: private
+---
+# Empty Comment Probe
+
+Visible text.
+
+<!-- empty: context-engine had no rows for this section -->
+`;
+
+  const { html } = renderPage(source, { slug: 'empty-comment-probe' });
+
+  assert.match(html, /Visible text/);
+  assert.doesNotMatch(html, /empty: context-engine/);
+  assert.doesNotMatch(html, /&lt;!-- empty:/);
+});
+
 test('renderer emits Wikipedia-style footnote references', () => {
   const source = `---
 title: Citation Probe
@@ -823,8 +844,9 @@ The details section gets its own HTML route, markdown twin, and talk stub.
 
     writeFixtureFile(
       resolve(sourceRoot, 'families/primary/guide/talk/guide.talk/_meta.yaml'),
-      `title: Talk · Guide
+	      `title: Talk · Guide
 slug: guide.talk
+talk_for: mailbox://page/guide
 section: project
 access: private
 summary: Discussion for the guide page.
@@ -1028,6 +1050,7 @@ Hidden route body.
     assert.equal(markdownTwins.get('index.talk.md').route_index_path, 'talk/index.html');
     assert.equal(markdownTwins.get('guide.md').md_url, '/guide.md');
     assert.equal(markdownTwins.get('guide.talk.md').route, '/guide/talk');
+    assert.equal(markdownTwins.get('guide.talk.md').page_id, 'guide');
     assert.equal(markdownTwins.get('guide/details.md').route, '/guide/details');
     assert.equal(markdownTwins.get('guide/details.talk.md').route, '/guide/details/talk');
     assert.equal(markdownTwins.get('hidden/lab.md').route, '/hidden/lab');

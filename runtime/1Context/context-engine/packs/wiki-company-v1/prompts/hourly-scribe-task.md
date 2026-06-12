@@ -13,7 +13,7 @@ Required frontmatter:
 ```markdown
 ---
 kind: conversation
-author: claude-opus-hourly-scribe
+author: wiki-company.hourly-scribe
 ts: {date}T{hour}:00:00Z
 ---
 ```

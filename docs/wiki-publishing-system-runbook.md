@@ -21,11 +21,10 @@ Swift app bridge:
 swift test --package-path macos --filter OneContextWikiRuntimeTests
 ```
 
-Python adapter:
+Context Engine integration:
 
 ```bash
-cd memory-core
-uv run --with pytest pytest tests/test_wiki_core_client.py
+cargo test -p onecontext-context-engine
 ```
 
 Current contract coverage should live in Rust, Swift, or checked-in Playwright

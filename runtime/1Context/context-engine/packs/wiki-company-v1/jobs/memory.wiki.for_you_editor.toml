@@ -4,7 +4,7 @@ label = "For You Editor"
 agent = "for-you-editor"
 tools = []
 prompt_paths = ["prompts/for-you-editor-task.md"]
-inputs = ["for_you_article", "talk_folder", "scribe_artifacts", "editor_proposals", "biographer_proposals", "librarian_notes"]
+inputs = ["for_you_article", "talk_folder", "scribe_artifacts", "historian_talk_entries", "hourly_answer_replies", "librarian_notes"]
 outputs = ["for_you_editorial_review"]
 
 [params]

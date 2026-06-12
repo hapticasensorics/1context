@@ -6,7 +6,7 @@ runner = "onecontext-context-engine"
 pack_id = "wiki-company-v1"
 active_harness = "codex-app-server"
 execution_history = "mail_first_until_postgres_timescale"
-mail_thread = "context-engine/mail/threads/wiki-company.jsonl"
+mail_thread = "context-engine/live/mail/threads/wiki-company.jsonl"
 
 default_mode = "recent_first_then_backfill"
 modes = [

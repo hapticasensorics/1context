@@ -9,11 +9,11 @@ repository.workspace = true
 anyhow = "1.0"
 chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
 fs2 = "0.4"
+onecontext-agent-mail = { path = "../onecontext-agent-mail" }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 sha2 = "0.10"
 toml = "0.8"
-url = "2.5"
 
 [dev-dependencies]
 tempfile = "3.10"

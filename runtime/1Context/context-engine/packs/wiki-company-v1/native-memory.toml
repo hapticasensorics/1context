@@ -1,14 +1,14 @@
 [[native_memory_formats]]
 id = "codex-app-server-thread"
 label = "Codex App Server Thread"
-path = "../../agents/harness/codex-app-server"
+path = "../../state/codex-app-server"
 kind = "harness_thread_binding"
 purpose = "Codex app-server thread bindings and harness receipts owned by onecontext-agent-harness and onecontext-codex-adapter."
 
 [[native_memory_formats]]
 id = "codex-home"
 label = "Codex CODEX_HOME"
-path = "../../agents/harness/codex/CODEX_HOME"
+path = "../../state/codex/CODEX_HOME"
 kind = "directory"
 purpose = "Codex-native home containing Codex-owned session files and auth references when the adapter needs native continuity."
 

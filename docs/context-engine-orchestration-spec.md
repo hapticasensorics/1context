@@ -3,6 +3,7 @@
 - Status: design contract for the Rust port
 - Owner: `onecontext-context-engine`
 - Related docs:
+  - [Context Engine Storage Manifest](context-engine-storage-manifest.md)
   - [Context Engine Release Boundary](context-engine-release-boundary.md)
   - [Context Engine Orchestrator Port Checklist](context-engine-orchestrator-port-checklist.md)
   - [Agent Mail Protocol Spec](agent-mail-protocol.md)
@@ -44,7 +45,7 @@ wiki work:
 
 - Do not revive the old Python orchestrator as a release dependency.
 - Do not add schema migration scaffolds for old Python run folders.
-- Do not make `context-engine/mail/threads/wiki-company.jsonl` pretend to be
+- Do not make `context-engine/live/mail/threads/wiki-company.jsonl` pretend to be
   Agent Mail delivery.
 - Do not add a broad filesystem `runs/` clone as the permanent rich history
   store. Rich execution history belongs in Postgres/Timescale; Agent Mail is
@@ -105,12 +106,12 @@ full product workflow." It is not "prove Rust can call a command."
 
 The deleted Python `wiki_update.py` file at
 `eab09690a43c56f8366bd72e8a67041acfd5f742` is the main reference for the old
-procedure. Current surviving helpers remain in:
+procedure. Historical helper references should be read from that same commit:
 
-- `memory-core/src/onectx/memory/jobs.py`
-- `memory-core/src/onectx/memory/wiki_synthesis.py`
-- `memory-core/src/onectx/memory/day_hourlies.py`
-- `memory-core/src/onectx/memory/for_you_runner.py`
+- `git show eab09690a43c56f8366bd72e8a67041acfd5f742:memory-core/src/onectx/memory/jobs.py`
+- `git show eab09690a43c56f8366bd72e8a67041acfd5f742:memory-core/src/onectx/memory/wiki_synthesis.py`
+- `git show eab09690a43c56f8366bd72e8a67041acfd5f742:memory-core/src/onectx/memory/day_hourlies.py`
+- `git show eab09690a43c56f8366bd72e8a67041acfd5f742:memory-core/src/onectx/memory/for_you_runner.py`
 
 The old flow had four important properties:
 
@@ -260,11 +261,39 @@ the data products and handoff points:
 
 Where those live should be explicit:
 
+- static company configuration lives in `context-engine/packs` and
+  `context-engine/orchestrators`
+- static role/model/prompt configuration lives in
+  `context-engine/packs/<pack-id>/agents`; live agent directory and policy
+  metadata lives under `context-engine/live/agents`, and worker runtime outputs
+  do not belong there
+- Agent Mail truth lives in `context-engine/live/mail`; Agent Mail `message_id` plus
+  `delivery_id` owns coordination identity, while page talk is the readable wiki
+  projection of the same message
+- harness ledgers, Agent Mail service ledgers, Codex app-server bindings, and
+  cleanup/migration receipts live in service roots under `context-engine/live/state`
+- one execution's source packets and worker products live under
+  `context-engine/live/runs/<run-id>`; source packet indexes record hashes and cursor
+  links, internal proof artifacts live under `runs/<run-id>/artifacts`, and final
+  messages live at
+  `context-engine/live/runs/<run-id>/turns/<operation-id>/attempt-0001/final-message.md`,
+  with later attempt directories for retries
+- failed-run evidence moves as a whole run envelope to
+  `context-engine/live/archive/failed-runs/<archive-id>/runs/<run-id>`; the archive
+  manifest must map any old receipt path to archived content and record hashes
 - accepted wiki memory lives in `user-wiki/source`
-- talk/mail audit lives in Agent Mail and page talk folders
 - rich execution history lives in Postgres/Timescale when available
-- temporary prompt inputs may live in a run scratch directory, but scratch is
-  not the product source of truth
+- temporary prompt inputs may live in `context-engine/live/tmp`, but scratch is not
+  the product source of truth
+
+The detailed folder contract is
+[Context Engine Storage Manifest](context-engine-storage-manifest.md). In
+particular, `context-engine/live/runs/<run-id>` is the canonical execution envelope;
+top-level runtime roots such as `context-engine/artifacts`,
+`context-engine/source-packets`, `context-engine/agents`, `context-engine/mail`,
+`context-engine/runs`, and `context-engine/state` are forbidden for new runtime
+output. Agent Mail leases are separate from harness state, and cleanup is gated
+on receipt hydration plus live-run quiescence.
 
 ```mermaid
 flowchart TD
@@ -390,6 +419,29 @@ flowchart TD
 | For You curator | decide accepted For You changes | no | page decision and page draft/patch |
 | redactor | propose privacy tier changes or redactions | no | redaction proposal and talk/mail report |
 | contradiction flagger | find stale/conflicting claims | no | contradiction talk/mail entries |
+
+### Role Boundary Invariants
+
+Only scribe-family jobs may receive raw transcript/source-history packets. A
+source packet path in `context-engine/live/runs/<run-id>/source-packets` is not
+a general citation for downstream prompts. It is a bounded input for the scribe
+that owns that turn.
+
+Historian, answerer, editor, specialist, curator, redactor, contradiction, page
+writer, and publisher jobs must consume scribe artifacts, selected quotes,
+source-packet metadata, Agent Mail readbacks, page talk, and current wiki page
+bodies. If one of those roles needs more source material, it asks a scribe or
+answerer for a new artifact through Agent Mail instead of opening raw history.
+
+Every handoff across roles must be mail-shaped or artifact-shaped:
+
+- mail-shaped means `wiki.talk.append` with `delivery_mode=mail` or a direct
+  Agent Mail send with delivery ids and readback evidence
+- artifact-shaped means a file below `context-engine/live/runs/<run-id>/artifacts` with a
+  stable id, content hash, producing role, and cited source-packet or mail
+  receipt ids
+- `context-engine/live/mail/threads/wiki-company.jsonl` remains an audit mirror and
+  cannot replace Agent Mail receipts
 
 ### Conditional Roles
 
@@ -519,7 +571,7 @@ For each run:
 ### Valid Mail Receipt Shape
 
 A completion receipt must come from `onecontext-wiki-core` Agent Mail, not from
-`context-engine/mail/threads/wiki-company.jsonl`.
+`context-engine/live/mail/threads/wiki-company.jsonl`.
 
 For final reports delivered through `wiki.talk.append`, the receipt must prove:
 
@@ -651,6 +703,10 @@ Every refresh result should expose:
 - wiki state: page ids, write operation ids, old/new hashes, publish id, visible
   site path
 - failure state: typed error, retry idempotency key, operator-visible repair hint
+- artifact state: immutable artifact ids, visible/internal tier, page id or
+  packet id, and content hash
+- prompt/tool provenance: prompt source hashes, redaction status, allowed tool
+  policy, and cited external source records when tools shaped final output
 
 The app-facing response can stay compact, but the proof bundle must let a human
 answer: what source was read, which agents acted, which mail was delivered,
@@ -669,6 +725,8 @@ Failures should be explicit and product-visible without corrupting wiki truth.
 | talk append succeeds but mail delivery fails | talk entry remains; phase waits or retries with same operation id |
 | page write hash conflict | curator/synthesis output preserved as proposal; no overwrite |
 | publish fails | source remains updated; site/current remains last good publish |
+| turn adapter timeout or tool failure | attempt directory records `error.json`, adapter events, and stderr/tool evidence when available; no completion receipt |
+| cleanup requested while run may be active | reset is blocked until quiescence and receipt hydration checks pass |
 
 ## Product Acceptance Criteria
 
@@ -676,22 +734,43 @@ The first faithful Rust implementation is accepted when an installed dev app
 manual Refresh Wiki over a 3-day window can show:
 
 - `context_engine.update_wiki` response reports `status=completed`.
-- `memory_core_release_status=not_on_release_path`.
+- `context_engine_release_status=native_release_owner`.
 - Perception source status is `ok` or typed no-source.
 - Selected packet count is non-zero when new meaningful source history exists.
+- Source packets contain body-bearing hydrated Perception events, or the run
+  returns typed no-source/no-hydrated-content before waking raw-history agents.
 - The daily/editorial layer ran for each refreshed day with scribe material.
+- Worker final messages are stored under
+  `context-engine/live/runs/<run-id>/turns/<operation-id>/attempt-0001/` or a
+  later retry attempt directory.
+- Turn attempts include prompt provenance, completion or failure evidence,
+  adapter events, and tool transcript/citation records when external tools
+  materially shape the result.
 - At least one report was delivered through Agent Mail with real message and
   delivery identifiers.
 - Routed worker mail has injection, claim, and terminal mark evidence when the
   worker acts on mail-delivered context.
-- No `context-engine/mail/threads/wiki-company.jsonl` path is accepted as the
+- The historian reads the scribe delivery before asking questions, and the
+  answerer is not born unless the scheduler sees required historian mail and
+  artifacts.
+- No `context-engine/live/mail/threads/wiki-company.jsonl` path is accepted as the
   mail receipt of record.
+- No new runtime files appear under retired top-level roots such as
+  `context-engine/agents`, `context-engine/mail`, `context-engine/runs`, or
+  `context-engine/state`.
+- Agent Mail registrations, leases, notification attempts, dead letters, and
+  idempotency records live in their canonical runtime ledgers.
+- Generated talk projections are distinguishable from human-edited talk.
+- Source packet cache hits are invalidated when the source hash or
+  prompt-provenance hash changes.
 - At least one page body write happened when source content changed.
 - Published `for-you`, `your-context`, `projects`, or `topics` content reflects
   the refreshed source window.
 - No turn with "No assistant text captured" is counted complete.
 - The proof bundle includes source counts, packet ids, mail receipts, page write
   receipts, publish evidence, and visible page paths.
+- Before artifacts are moved or archived, every produced receipt hydrates or is
+  mapped into an archive manifest after a quiescence check.
 
 ## Implementation Order
 
@@ -728,12 +807,12 @@ manual Refresh Wiki over a 3-day window can show:
   same historical file around lines 950-1259 and 1479-1714.
 - Old report extraction for synthesis:
   same historical file around lines 1278-1313.
-- Current job preparation helpers:
-  `memory-core/src/onectx/memory/jobs.py`.
-- Current deterministic synthesis helper:
-  `memory-core/src/onectx/memory/wiki_synthesis.py`.
-- Current month/hour split and aggregate helper:
-  `memory-core/src/onectx/memory/day_hourlies.py`.
+- Old job preparation helpers:
+  `git show eab09690a43c56f8366bd72e8a67041acfd5f742:memory-core/src/onectx/memory/jobs.py`.
+- Old deterministic synthesis helper:
+  `git show eab09690a43c56f8366bd72e8a67041acfd5f742:memory-core/src/onectx/memory/wiki_synthesis.py`.
+- Old month/hour split and aggregate helper:
+  `git show eab09690a43c56f8366bd72e8a67041acfd5f742:memory-core/src/onectx/memory/day_hourlies.py`.
 - Current Rust Context Engine crate:
   `crates/onecontext-context-engine`.
 - Current Rust packet planner:
@@ -746,4 +825,4 @@ manual Refresh Wiki over a 3-day window can show:
   `runtime/1Context/context-engine/packs/wiki-company-v1/` and
   `runtime/1Context/context-engine/orchestrators/wiki-company-orchestrator-v1/`.
 - Current real Agent Mail implementation:
-  `crates/onecontext-wiki-core/src/agent_mail.rs`.
+  `crates/onecontext-agent-mail/src/lib.rs`.

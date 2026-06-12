@@ -3,11 +3,16 @@
 //! This module turns the loaded pack and run request into an inspectable plan:
 //! source packet policy, harness turn previews, routing, and publish intent.
 
-use crate::harness_executor::{build_harness_turn_request, HarnessTurnRequest};
+use crate::harness_executor::{build_harness_turn_request_with_orchestrator, HarnessTurnRequest};
 use crate::memoryd_client::ensure_memory_storage_gate;
 use crate::memoryd_client::query_recent_density;
+use crate::orchestration::{
+    build_executable_orchestration_plan, planner_policy_from_config, ExecutableOrchestrationPlan,
+};
+use crate::orchestrator::load_wiki_company_orchestrator_config;
 use crate::pack::WikiCompanyPackConfig;
-use crate::packet_planner::{build_packet_plan, PacketPlannerPolicy, WikiMemoryPacketPlan};
+use crate::packet_planner::{build_packet_plan, WikiMemoryPacketPlan};
+use crate::scheduler::{build_scheduler_run_plan, SchedulerRunPlan, SchedulerRunRequest};
 use crate::{ContextEnginePaths, WikiCompanyRunRequest};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
@@ -16,6 +21,8 @@ use std::collections::BTreeSet;
 pub struct WikiCompanyDryRun {
     pub source_metadata: DryRunSourceMetadata,
     pub packet_plan: WikiMemoryPacketPlan,
+    pub orchestration_plan: ExecutableOrchestrationPlan,
+    pub scheduler_plan: SchedulerRunPlan,
     pub harness_previews: Vec<HarnessTurnPreview>,
     pub route_count: usize,
     pub publish_intent: WikiPublishIntent,
@@ -74,10 +81,19 @@ pub fn build_wiki_company_dry_run(
     pack: &WikiCompanyPackConfig,
     request: &WikiCompanyRunRequest,
 ) -> Result<WikiCompanyDryRun, String> {
-    let packet_policy = PacketPlannerPolicy {
-        window_days: request.source_window_days,
-        ..PacketPlannerPolicy::default()
-    };
+    let orchestrator = load_wiki_company_orchestrator_config(paths)?;
+    let orchestration_plan = build_executable_orchestration_plan(pack, &orchestrator)?;
+    let scheduler_plan = build_scheduler_run_plan(
+        &orchestration_plan,
+        SchedulerRunRequest {
+            run_id: request.run_id.clone(),
+            max_concurrent_agents: request.max_concurrent_agents,
+            completed_phase_ids: Vec::new(),
+            available_artifacts: Vec::new(),
+            available_mail: Vec::new(),
+        },
+    );
+    let packet_policy = planner_policy_from_config(&orchestrator, request.source_window_days);
     let storage_gate = ensure_memory_storage_gate(paths, request.source_window_days);
     if !storage_gate.ready_for_source_packets() && !storage_gate.fallback_allowed {
         return Err(storage_gate.failure_message());
@@ -86,7 +102,13 @@ pub fn build_wiki_company_dry_run(
     let packet_plan = build_packet_plan(&density.source_events, packet_policy, &BTreeSet::new());
     let mut previews = Vec::new();
     for job in &pack.jobs {
-        let turn = build_harness_turn_request(paths, pack, &request.run_id, &job.id)?;
+        let turn = build_harness_turn_request_with_orchestrator(
+            paths,
+            pack,
+            &orchestrator,
+            &request.run_id,
+            &job.id,
+        )?;
         previews.push(preview_from_turn(&turn));
     }
     Ok(WikiCompanyDryRun {
@@ -108,6 +130,8 @@ pub fn build_wiki_company_dry_run(
             note: "Dry-run requires onecontext-memoryd storage readiness before source packet planning; empty source fallback is available only when ONECONTEXT_ALLOW_EMPTY_MEMORY_FALLBACK is enabled.".to_string(),
         },
         packet_plan,
+        orchestration_plan,
+        scheduler_plan,
         route_count: previews
             .iter()
             .map(|preview| preview.to.len() + preview.cc.len())

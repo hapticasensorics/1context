@@ -1,6 +1,6 @@
 # Context Engine Orchestrator Port Checklist
 
-This checklist tracks the Rust port of the old `memory-core` wiki orchestrator.
+This checklist tracks the native Rust wiki-company orchestrator.
 It is intentionally evidence-based: a milestone is checked only when the current
 worktree has code or tests that prove the behavior.
 
@@ -32,12 +32,58 @@ worktree has code or tests that prove the behavior.
     - `planner_skips_cached_packets_and_ignores_events_without_timestamps`
     - `planner_splits_large_hours_by_session_and_event_chunks`
     - `planner_default_context_fraction_targets_about_sixty_two_percent`
-    - Default scribe packet target is `160,208` tokens from `258,400 * 0.62`.
+    - Configured scribe packet target is `160,000` tokens from
+      `packet-policy.toml`.
 
-- [ ] **3. Python parity snapshot**
-  - Old `memory-core` planner and Rust planner run on the same small fixture.
-  - Packet/job selection matches except for documented intentional differences.
-  - Evidence: parity fixture and comparison test or checked output artifact.
+- [x] **2a. Executable orchestration primitives exist**
+  - `phases.toml` declares dependencies, phase strategies, completion policies,
+    and phase-to-job bindings instead of only labels.
+  - Rust builds an `ExecutableOrchestrationPlan` from pack + orchestrator TOML.
+  - Harness request previews use orchestrator routing and receipt policy instead
+    of hardcoded routes when config is available.
+  - Packet planning dry-run policy is derived from `packet-policy.toml`.
+  - Evidence:
+    - `cargo test -p onecontext-context-engine`
+    - `tests/orchestration_primitives.rs`
+    - `dry_run_lists_agents_routes_packet_policy_and_publish_intent`
+
+- [x] **2b. Scheduler scaffold plans phases without execution**
+  - Rust builds a `SchedulerRunPlan` from the executable orchestration plan.
+  - The scheduler topologically orders phase dependencies, reports missing
+    dependencies/cycles, marks ready phases from completed phase receipts, and
+    records planned jobs, routes, bindings, required artifacts, and receipt
+    policy without launching models.
+  - Dry-run output now includes the scheduler plan.
+  - Evidence:
+    - `cargo test -p onecontext-context-engine --test scheduler_scaffold -- --nocapture`
+    - `tests/scheduler_scaffold.rs`
+    - `src/scheduler.rs` unit tests for ready phases, missing dependencies,
+      cycles, and all-complete status.
+
+- [x] **2c. Runtime primitive scaffold exists**
+  - Rust has stable scaffolds for source packet materialization, fanout
+    expansion, condition evaluation, artifact storage, runtime turn
+    descriptors, scheduler receipts, run state, and wiki page-write/publish
+    proof.
+  - The scaffold does not count JSONL audit mirrors as authoritative Agent Mail
+    delivery.
+  - Evidence:
+    - `cargo test -p onecontext-context-engine`
+    - `tests/runtime_primitives_scaffold.rs`
+    - `tests/source_packets.rs`
+    - `tests/artifacts.rs`
+    - `tests/conditions.rs`
+    - `tests/runtime_executor_scaffold.rs`
+    - `tests/receipt_bridge.rs`
+    - `tests/wiki_publish_run_state.rs`
+
+- [x] **3. Historical behavior captured**
+  - The old procedure is captured in the orchestration spec and the active Rust
+    planner/scheduler tests cover the shipped packet/job policy.
+  - The active tree does not require a Python source checkout for parity.
+  - Evidence:
+    - `docs/context-engine-orchestration-spec.md`
+    - `cargo test -p onecontext-context-engine`
 
 - [x] **4. Harness request builder**
   - Rust composes one job + one agent + prompts + mail context into the expected
@@ -77,23 +123,23 @@ worktree has code or tests that prove the behavior.
     - `harness_completion_rejects_codex_exit_only`
 
 - [x] **6. Mail-first trace**
-  - Every update appends to `context-engine/mail/threads/wiki-company.jsonl`.
-  - No `context-engine/runs` folder is created.
+  - Every update appends to `context-engine/live/mail/threads/wiki-company.jsonl`.
+  - No `context-engine/live/runs` folder is created.
   - Evidence: Context Engine tests and smoke output.
   - Current evidence:
     - `cargo test -p onecontext-context-engine`
     - Temp-runtime CLI smoke verified `mail/threads/wiki-company.jsonl` exists
-      and `context-engine/runs` does not.
+      and `context-engine/live/runs` does not.
 
 - [x] **7. Dry-run local update**
   - Real Perception metadata, no model calls.
   - Output lists planned packets, agents, routes, and publish intent.
   - Evidence: CLI dry-run command and captured JSON receipt.
   - Current evidence:
-    - `colima start`
-    - `scripts/memory-db-dev.sh provision`
+    - `scripts/build-managed-postgres-runtime.sh`
+    - `scripts/release-train.sh build --channel dev`
     - `cargo build -p onecontext-memory-db --bin onecontext-memoryd`
-    - `env ONECONTEXT_MEMORY_DB_URL=postgres://onecontext:onecontext_dev@127.0.0.1:15432/onecontext_memory cargo run -q -p onecontext-context-engine -- update-wiki --root runtime/1Context --run-id dry-run-real-metadata-1m --trigger menu.update_wiki --max-concurrent 5 --source-window-days 3 --mode dry-run --no-agents --json`
+    - `cargo run -q -p onecontext-context-engine -- update-wiki --root runtime/1Context --run-id dry-run-real-metadata-1m --trigger menu.update_wiki --max-concurrent 5 --source-window-days 3 --mode dry-run --no-agents --json`
     - `source_metadata.status = ok`, `object_count = 37210`,
       `bucket_count = 3891`, `active_day_count = 3`,
       `active_hour_count = 32`.

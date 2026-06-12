@@ -248,6 +248,7 @@ fn agent_session_object(
             session.session_id
         )),
         None,
+        None,
         Vec::new(),
         None,
         options,
@@ -303,6 +304,7 @@ fn agent_turn_object(
         payload,
         Some(format!("Turn {}", turn.turn_index)),
         turn.user_goal.clone(),
+        turn.user_goal.clone(),
         edges,
         Some(i64::try_from(turn.turn_index).unwrap_or(i64::MAX)),
         options,
@@ -351,7 +353,8 @@ fn agent_item_object(
         &item.event_end,
         payload,
         Some(item_display_title(item)),
-        display_text,
+        display_text.clone(),
+        item.text.clone().or(display_text),
         Vec::new(),
         Some(i64::try_from(ordinal).unwrap_or(i64::MAX)),
         options,
@@ -428,6 +431,7 @@ fn agent_compaction_object(
             .summary_text
             .as_deref()
             .map(|text| truncate_display_text(text, options.display_text_max_chars)),
+        compaction.summary_text.clone(),
         edges,
         Some(i64::try_from(compaction.compaction_epoch).unwrap_or(i64::MAX)),
         options,
@@ -512,6 +516,7 @@ fn agent_prompt_snapshot_object(
         payload,
         Some(format!("Prompt snapshot {}", prompt.turn_id)),
         None,
+        None,
         edges,
         Some(i64::try_from(prompt.compaction_epoch).unwrap_or(i64::MAX)),
         options,
@@ -553,6 +558,7 @@ fn agent_runtime_event_object(
             .compact_text
             .as_deref()
             .map(|text| truncate_display_text(text, options.display_text_max_chars)),
+        event.compact_text.clone(),
         Vec::new(),
         Some(i64::try_from(ordinal).unwrap_or(i64::MAX)),
         options,
@@ -693,11 +699,13 @@ fn base_object(
     payload: Value,
     display_title: Option<String>,
     display_text: Option<String>,
+    body_text: Option<String>,
     edges: Vec<PerceptionEdgeInput>,
     source_sequence: Option<i64>,
     options: &AgentSessionEmitOptions,
 ) -> PerceptionObjectInput {
-    let (modality, body_type, text_value) = body_fields_for_record(kind, display_text.as_deref());
+    let text_value_source = body_text.as_deref().or(display_text.as_deref());
+    let (modality, body_type, text_value) = body_fields_for_record(kind, text_value_source);
     PerceptionObjectInput {
         client_record_id: None,
         source_id: session.source_id.clone(),
@@ -1397,6 +1405,13 @@ mod tests {
 
         assert_eq!(display_text.chars().count(), 32);
         assert!(display_text.ends_with("[truncated]"));
+        assert_eq!(
+            message
+                .text_value
+                .as_ref()
+                .map(|value| value.chars().count()),
+            Some(80)
+        );
     }
 
     fn kind_count(records: &[PerceptionObjectInput], kind: &str) -> usize {

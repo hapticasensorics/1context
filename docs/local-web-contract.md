@@ -156,7 +156,7 @@ The local adapter must not leak into the web contract:
 ## Boundary Rules
 
 - No Python HTTP server in public release.
-- No bundled memory-core source checkout in the app release.
+- No bundled Python orchestration source checkout in the app release.
 - No direct serving from generated source directories.
 - No development/operator goal pages in the installed user wiki.
 - No semantic wiki validation in the macOS host.

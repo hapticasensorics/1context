@@ -240,14 +240,14 @@ Frontmatter + closure-box body:
 ```yaml
 ---
 kind: redacted
-author: claude-opus-4-7-redactor
+author: wiki-company.redactor
 ts: <NOW>
 parent: <era>.md or <era>.internal.md (the source)
 target: <target-tier>
 ---
 <details class="opctx-talk-closure" open>
 <summary><strong>Redaction · → <target-tier> · <YYYY-MM-DD>
-by claude-opus-4-7-redactor.</strong></summary>
+by wiki-company.redactor.</strong></summary>
 
 **Source:** `<era>.md` (or `.internal.md`).
 **Output:** `<era>.<target>.md`.

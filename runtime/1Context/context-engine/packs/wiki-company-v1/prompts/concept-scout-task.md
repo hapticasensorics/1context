@@ -13,7 +13,7 @@ Required frontmatter for a proposal:
 ```markdown
 ---
 kind: proposal
-author: claude-opus-concept-scout
+author: wiki-company.concept-scout
 ts: {date}T23:59:00Z
 ---
 ```

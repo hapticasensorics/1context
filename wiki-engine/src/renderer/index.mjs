@@ -65,7 +65,11 @@ function makeMarked({ codeContextSlug = 'page' } = {}) {
         return `<pre id="${id}" class="opctx-code-block" data-1context-code-id="${id}"${languageAttr}><code${codeClass}>${escapeHtml(text)}</code></pre>\n`;
       },
       html({ text, raw }) {
-        return escapeHtml(text || raw || '');
+        const html = text || raw || '';
+        if (/^\s*<!--[\s\S]*?-->\s*$/.test(html)) {
+          return '';
+        }
+        return escapeHtml(html);
       },
       heading({ tokens, depth }) {
         const text = this.parser.parseInline(tokens);

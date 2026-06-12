@@ -256,7 +256,7 @@ frontmatter carries metadata (title, slug, era, audience).
     siblings; concept and project pages typically don't.
 
 **Usage.** Read the markdown source at:
-  - lab tree: `experiments/e08-for-you/<slug>.md` (or
+  - source tree: `user-wiki/source/families/<group>/<slug>/source/<slug>.md` (or
     `<slug>.<audience>.md` for tiered)
   - published: `https://1contxt.com/paul-demo2/<slug>.md`
 

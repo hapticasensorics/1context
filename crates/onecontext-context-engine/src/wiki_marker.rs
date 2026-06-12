@@ -69,7 +69,7 @@ pub fn append_context_engine_refresh_marker(
     };
 
     let body = format!(
-        "Context Engine refreshed the wiki through the Rust product path.\n\n- Run: `{}`\n- Trigger: `{}`\n- Orchestrator: `onecontext-context-engine`\n- Memory core: `not_on_release_path`\n- Agent execution requested: `{}`\n",
+        "Context Engine refreshed the wiki through the native product path.\n\n- Run: `{}`\n- Trigger: `{}`\n- Runtime owner: `onecontext-context-engine`\n- Agent execution requested: `{}`\n",
         safe_run_id(run_id),
         trigger,
         execute_agents

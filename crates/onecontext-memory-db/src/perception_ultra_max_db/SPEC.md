@@ -1261,7 +1261,6 @@ Files likely touched:
 ```text
 crates/onecontext-memory-db/...
 crates/*memoryd*/...
-memory-core/...
 ```
 
 Implementation:
@@ -1628,9 +1627,9 @@ Before coding, each agent should run these searches and paste results into the P
 
 ```bash
 rg "Refresh Wiki|refreshWiki|wiki refresh|Wiki" macos crates
-rg "memoryd|onecontext-memoryd|memory" macos crates memory-core
+rg "memoryd|onecontext-memoryd|memory" macos crates
 rg "DATABASE_URL|POSTGRES|PGHOST|PGPORT|timescale|Timescale" .
-rg "schema_migrations|migrations|CREATE EXTENSION|hypertable|time_bucket" crates memory-core runtime scripts
+rg "schema_migrations|migrations|CREATE EXTENSION|hypertable|time_bucket" crates runtime scripts
 rg "LaunchAgent|SMAppService|login item|launchctl|daemon" macos
 rg "Application Support|Caches|Logs|FileManager" macos crates
 rg "empty.*density|fallback|unavailable|metadata" crates/onecontext-context-engine crates

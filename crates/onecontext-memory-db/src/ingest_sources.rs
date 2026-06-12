@@ -23,6 +23,7 @@ use crate::write_objects::{
 };
 
 const DEFAULT_SOURCES: &[&str] = &["codex", "claude", "imessage"];
+const LOCAL_INGEST_WRITE_CHUNK_SIZE: usize = 250;
 
 #[derive(Debug)]
 pub enum IngestSourcesError {
@@ -317,7 +318,7 @@ fn write_request_from_perception_objects(
         write_id: write_id.to_string(),
         atomicity: Some("chunk".to_string()),
         records: records.to_vec(),
-        chunk_size: None,
+        chunk_size: Some(LOCAL_INGEST_WRITE_CHUNK_SIZE),
     }
 }
 
@@ -419,6 +420,10 @@ mod tests {
         assert_eq!(prepared.read_count, 1);
         assert_eq!(prepared.request.records, vec![object]);
         assert_eq!(prepared.request.atomicity.as_deref(), Some("chunk"));
+        assert_eq!(
+            prepared.request.chunk_size,
+            Some(LOCAL_INGEST_WRITE_CHUNK_SIZE)
+        );
     }
 
     #[test]

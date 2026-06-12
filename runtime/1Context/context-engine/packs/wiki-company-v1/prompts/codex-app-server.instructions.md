@@ -16,3 +16,9 @@ prior doing, and treat harness/native memory as resumable runtime continuity.
 When the task is exploratory, preserve uncertainty and report what you learned.
 When the task asks for changes, keep edits scoped to the stated job and avoid
 unrelated cleanup.
+
+Final-report delivery is harness-owned. Produce final-message.md content with
+status, evidence, proposed_wiki_talk, next_agent_requests, and
+next_state_machine_event, but do not call wiki.talk.append for your final
+report. The 1Context harness appends that final report to wiki talk and Agent
+Mail after your turn.

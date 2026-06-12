@@ -1,6 +1,7 @@
 use crate::ContextEnginePaths;
+use onecontext_agent_mail::MailAddress;
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::Path;
 
@@ -82,20 +83,52 @@ pub struct ModelContextConfig {
 pub struct PhasesFile {
     #[serde(default)]
     pub phases: Vec<PhaseConfig>,
+    #[serde(default)]
+    pub phase_jobs: Vec<PhaseJobConfig>,
 }
 
 #[derive(Clone, Debug, Deserialize)]
 pub struct PhaseConfig {
     pub id: String,
+    #[serde(default)]
+    pub label: Option<String>,
     pub owner: String,
     pub durable_receipt: String,
     pub reads_raw_history: bool,
+    #[serde(default)]
+    pub depends_on: Vec<String>,
+    #[serde(default)]
+    pub strategy: Option<String>,
+    #[serde(default)]
+    pub completion: Option<String>,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+pub struct PhaseJobConfig {
+    pub phase_id: String,
+    pub job_id: String,
+    #[serde(default)]
+    pub fanout: Option<String>,
+    #[serde(default)]
+    pub when: Option<String>,
+    #[serde(default)]
+    pub max_concurrent: Option<u32>,
+    #[serde(default)]
+    pub required_artifacts: Vec<String>,
+    #[serde(default)]
+    pub required_mail: Vec<String>,
+    #[serde(default)]
+    pub bindings: BTreeMap<String, String>,
 }
 
 #[derive(Clone, Debug, Deserialize)]
 pub struct PacketPolicyFile {
     pub windows: PacketWindows,
     pub context_budget: ContextBudget,
+    #[serde(default)]
+    pub packet_shape: PacketShape,
+    #[serde(default)]
+    pub cache: PacketCache,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -103,6 +136,8 @@ pub struct PacketWindows {
     pub recent_first_days: u32,
     pub backfill_days: u32,
     pub backfill_order: String,
+    #[serde(default)]
+    pub incremental_unit: Option<String>,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -110,7 +145,39 @@ pub struct ContextBudget {
     pub model_context_tokens: u32,
     pub source_context_fraction: f64,
     pub target_source_tokens: u32,
+    #[serde(default)]
+    pub min_source_tokens: Option<u32>,
     pub split_when_estimated_tokens_exceed: u32,
+    #[serde(default)]
+    pub reserve_for_prompt_mail_and_receipts: bool,
+}
+
+#[derive(Clone, Debug, Default, Deserialize)]
+pub struct PacketShape {
+    #[serde(default)]
+    pub raw_history_roles: Vec<String>,
+    #[serde(default)]
+    pub downstream_roles_read_scribe_artifacts: bool,
+    #[serde(default)]
+    pub drop_tool_noise_by_default: bool,
+    #[serde(default)]
+    pub keep_failures_commands_paths_commits_tests_and_user_decisions: bool,
+    #[serde(default)]
+    pub batch_adjacent_quiet_hours: bool,
+    #[serde(default)]
+    pub split_busy_hours_by_session_or_subhour: bool,
+}
+
+#[derive(Clone, Debug, Default, Deserialize)]
+pub struct PacketCache {
+    #[serde(default)]
+    pub enabled: bool,
+    #[serde(default)]
+    pub key: Option<String>,
+    #[serde(default)]
+    pub skip_unchanged_scribe_packets: bool,
+    #[serde(default)]
+    pub rerun_downstream_when_new_scribe_artifacts_arrive: bool,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -142,6 +209,8 @@ pub struct RequiredReceipts {
     pub harness_birth_certificate: bool,
     pub harness_turn_start: bool,
     pub context_injection_receipt: bool,
+    #[serde(default)]
+    pub adapter_events: bool,
     pub final_message: bool,
     pub talk_append: bool,
     pub mail_delivery: bool,
@@ -160,6 +229,10 @@ pub struct FinalMessageReceipt {
 pub struct TalkAppendReceipt {
     pub delivery_mode: String,
     pub thread_id: String,
+    #[serde(default)]
+    pub from: Option<String>,
+    #[serde(default)]
+    pub cc_page_mailbox: bool,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -167,6 +240,14 @@ pub struct CompletionReceipts {
     pub do_not_count_codex_exit_as_done: bool,
     pub require_final_message_and_harness_receipt: bool,
     pub require_talk_or_mail_receipt: bool,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ResolvedRoute {
+    pub from_role: String,
+    pub thread_id: String,
+    pub to: Vec<String>,
+    pub cc: Vec<String>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -224,7 +305,7 @@ pub fn validate_wiki_company_orchestrator(
             config.orchestrator.execution_history
         ));
     }
-    if config.orchestrator.mail_thread != "context-engine/mail/threads/wiki-company.jsonl" {
+    if config.orchestrator.mail_thread != "context-engine/live/mail/threads/wiki-company.jsonl" {
         issues.push(format!(
             "orchestrator mail_thread must point at wiki-company mail thread, got {:?}",
             config.orchestrator.mail_thread
@@ -277,6 +358,8 @@ pub fn validate_wiki_company_orchestrator(
         "import_perception",
         "plan_scribe_packets",
         "wake_scribes",
+        "historian_questions",
+        "hourly_answers",
         "for_you_editor",
         "specialists",
         "curators",
@@ -287,10 +370,26 @@ pub fn validate_wiki_company_orchestrator(
         }
     }
     for phase in &config.phases.phases {
-        if phase.durable_receipt != "context-engine/mail/threads/wiki-company.jsonl" {
+        if phase.durable_receipt != "context-engine/live/mail/threads/wiki-company.jsonl" {
             issues.push(format!(
                 "phase {} durable_receipt must be wiki-company mail thread, got {:?}",
                 phase.id, phase.durable_receipt
+            ));
+        }
+        for depends_on in &phase.depends_on {
+            if !phase_ids.contains(depends_on.as_str()) {
+                issues.push(format!(
+                    "phase {} depends on unknown phase {}",
+                    phase.id, depends_on
+                ));
+            }
+        }
+    }
+    for phase_job in &config.phases.phase_jobs {
+        if !phase_ids.contains(phase_job.phase_id.as_str()) {
+            issues.push(format!(
+                "phase job {} references unknown phase {}",
+                phase_job.job_id, phase_job.phase_id
             ));
         }
     }
@@ -317,6 +416,20 @@ pub fn validate_wiki_company_orchestrator(
     {
         issues.push("target_source_tokens must not exceed model_context_tokens".to_string());
     }
+    if config
+        .packet_policy
+        .packet_shape
+        .raw_history_roles
+        .is_empty()
+    {
+        issues.push("packet_shape.raw_history_roles must name raw-history roles".to_string());
+    }
+    if config.packet_policy.cache.enabled
+        && config.packet_policy.cache.key.as_deref() != Some("source_packet_hash")
+    {
+        issues
+            .push("packet cache key must be source_packet_hash when cache is enabled".to_string());
+    }
     if config.routing.default_thread != "mail://wiki-company" {
         issues.push(format!(
             "routing default_thread must be mail://wiki-company, got {:?}",
@@ -330,12 +443,35 @@ pub fn validate_wiki_company_orchestrator(
         if route.to.is_empty() {
             issues.push(format!("route from {} has no recipients", route.from_role));
         }
+        if route.from_role.trim().is_empty() {
+            issues.push("route has empty from_role".to_string());
+        }
+        for address in route.to.iter().chain(route.cc.iter()) {
+            match MailAddress::parse(address) {
+                Ok(MailAddress::Role { .. })
+                | Ok(MailAddress::List { .. })
+                | Ok(MailAddress::PageMailbox { .. }) => {}
+                Ok(_) => {
+                    issues.push(format!(
+                        "route from {} has unsupported recipient address {:?}; expected role://, list://, or mailbox://page/",
+                        route.from_role, address
+                    ));
+                }
+                Err(error) => {
+                    issues.push(format!(
+                        "route from {} has invalid recipient address {:?}: {error:#}",
+                        route.from_role, address
+                    ));
+                }
+            }
+        }
     }
 
     let required = &config.receipts.required;
     if !required.harness_birth_certificate
         || !required.harness_turn_start
         || !required.context_injection_receipt
+        || !required.adapter_events
         || !required.final_message
         || !required.talk_append
         || !required.mail_delivery
@@ -373,6 +509,20 @@ pub fn validate_wiki_company_orchestrator(
         phase_count: config.phases.phases.len(),
         route_count: config.routing.routes.len(),
         issues,
+    }
+}
+
+pub fn route_for_role(routing: &RoutingFile, role: &str) -> ResolvedRoute {
+    let route = routing.routes.iter().find(|route| route.from_role == role);
+    ResolvedRoute {
+        from_role: role.to_string(),
+        thread_id: routing.default_thread.clone(),
+        to: route
+            .map(|route| route.to.clone())
+            .unwrap_or_else(|| vec!["list://wiki-company".to_string()]),
+        cc: route
+            .map(|route| route.cc.clone())
+            .unwrap_or_else(|| vec!["list://wiki-company".to_string()]),
     }
 }
 

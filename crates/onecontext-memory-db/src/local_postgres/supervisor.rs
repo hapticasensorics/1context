@@ -857,6 +857,7 @@ mod tests {
         assert!(conf.contains("listen_addresses = ''"));
         assert!(conf.contains("unix_socket_permissions = 0700"));
         assert!(conf.contains("shared_preload_libraries = 'timescaledb,pg_stat_statements'"));
+        assert!(conf.contains("max_locks_per_transaction = 256"));
         assert!(conf.contains("dynamic_library_path = '$libdir:"));
         assert!(conf.contains("managed-postgres/macos-arm64/lib/postgresql"));
         let hba = fs::read_to_string(app_support.join("Postgres/pgdata/pg_hba.conf")).expect("hba");

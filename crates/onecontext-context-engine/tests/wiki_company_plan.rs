@@ -1,6 +1,6 @@
 use onecontext_context_engine::{
     append_wiki_company_mail_receipt, build_wiki_company_plan, read_wiki_company_mail_receipts,
-    ContextEnginePaths, WikiCompanyRunRequest,
+    safe_run_id, ContextEnginePaths, WikiCompanyRunRequest,
 };
 use std::fs;
 
@@ -57,7 +57,8 @@ fn wiki_company_plan_is_recorded_in_mail_without_file_runs() {
     .unwrap();
     fs::write(&paths.receipts_file, "[required]\nfinal_message = true\n").unwrap();
 
-    let mut request = WikiCompanyRunRequest::new("release smoke/run");
+    let raw_run_id = "release smoke/run";
+    let mut request = WikiCompanyRunRequest::new(raw_run_id);
     request.max_concurrent_agents = 5;
 
     let plan = build_wiki_company_plan(&paths, request);
@@ -90,11 +91,11 @@ fn wiki_company_plan_is_recorded_in_mail_without_file_runs() {
         .ends_with("context-engine/packs/wiki-company-v1/native-memory.toml"));
     assert_eq!(
         plan.company_pack.prompt_policy,
-        "preserve original donor prompts as much as possible"
+        "pack-local canonical wiki-company prompts"
     );
     assert_eq!(
-        plan.release_boundary.memory_core_release_status,
-        "not_on_release_path"
+        plan.release_boundary.context_engine_release_status,
+        "native_release_owner"
     );
     assert_eq!(
         plan.release_boundary.execution_history,
@@ -102,7 +103,7 @@ fn wiki_company_plan_is_recorded_in_mail_without_file_runs() {
     );
     assert!(plan
         .mail_thread
-        .ends_with("context-engine/mail/threads/wiki-company.jsonl"));
+        .ends_with("context-engine/live/mail/threads/wiki-company.jsonl"));
     assert!(plan.phases.iter().any(|phase| phase.id == "wake_scribes"));
     assert!(
         plan.phases
@@ -113,14 +114,18 @@ fn wiki_company_plan_is_recorded_in_mail_without_file_runs() {
     );
 
     let path = append_wiki_company_mail_receipt(&plan).unwrap();
-    assert!(path.ends_with("context-engine/mail/threads/wiki-company.jsonl"));
-    assert!(!root.join("context-engine/runs").exists());
+    assert!(path.ends_with("context-engine/live/mail/threads/wiki-company.jsonl"));
+    let safe_run = safe_run_id(raw_run_id);
+    assert!(!root
+        .join("context-engine/live/runs")
+        .join(&safe_run)
+        .exists());
 
     let receipts = read_wiki_company_mail_receipts(path).unwrap();
     assert_eq!(receipts.len(), 1);
     assert_eq!(receipts[0].thread_id, "mail://wiki-company");
-    assert_eq!(receipts[0].operation_id, "release-smoke-run");
-    assert_eq!(receipts[0].plan.run_id, "release-smoke-run");
+    assert_eq!(receipts[0].operation_id, safe_run);
+    assert_eq!(receipts[0].plan.run_id, safe_run);
     assert_eq!(receipts[0].plan.company_pack.id, "wiki-company-v1");
     assert_eq!(
         receipts[0].plan.company_orchestrator.id,

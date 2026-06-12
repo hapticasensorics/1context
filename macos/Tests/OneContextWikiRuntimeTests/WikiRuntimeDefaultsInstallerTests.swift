@@ -26,10 +26,6 @@ struct WikiRuntimeDefaultsInstallerTests {
       withIntermediateDirectories: true
     )
     try FileManager.default.createDirectory(
-      at: defaultOneContext.appendingPathComponent("context-engine/prompts", isDirectory: true),
-      withIntermediateDirectories: true
-    )
-    try FileManager.default.createDirectory(
       at: defaultOneContext.appendingPathComponent("context-engine/indexes", isDirectory: true),
       withIntermediateDirectories: true
     )
@@ -39,6 +35,10 @@ struct WikiRuntimeDefaultsInstallerTests {
     )
     try FileManager.default.createDirectory(
       at: defaultOneContext.appendingPathComponent("context-engine/packs/wiki-company-v1/jobs", isDirectory: true),
+      withIntermediateDirectories: true
+    )
+    try FileManager.default.createDirectory(
+      at: defaultOneContext.appendingPathComponent("context-engine/packs/wiki-company-v1/prompts", isDirectory: true),
       withIntermediateDirectories: true
     )
     try FileManager.default.createDirectory(
@@ -61,7 +61,7 @@ struct WikiRuntimeDefaultsInstallerTests {
       encoding: .utf8
     )
     try "# Prompt\n".write(
-      to: defaultOneContext.appendingPathComponent("context-engine/prompts/agent.md"),
+      to: defaultOneContext.appendingPathComponent("context-engine/packs/wiki-company-v1/prompts/agent.md"),
       atomically: true,
       encoding: .utf8
     )
@@ -142,7 +142,7 @@ struct WikiRuntimeDefaultsInstallerTests {
     #expect(result.preserved.contains("user-wiki/wiki.toml"))
     #expect(result.copied.contains("user-wiki/site/index.html"))
     #expect(result.copied.contains("user-wiki/site/.1context/route-manifest.json"))
-    #expect(result.copied.contains("context-engine/prompts/agent.md"))
+    #expect(result.copied.contains("context-engine/packs/wiki-company-v1/prompts/agent.md"))
     #expect(result.copied.contains("context-engine/indexes/index-manifest.toml"))
     #expect(result.copied.contains("context-engine/orchestrators/wiki-company-orchestrator-v1/orchestrator.toml"))
     #expect(result.copied.contains("context-engine/packs/wiki-company-v1/jobs/memory.wiki.current.toml"))
@@ -154,7 +154,7 @@ struct WikiRuntimeDefaultsInstallerTests {
     #expect(result.packagedManifest?.gitDirty == false)
     #expect(result.packagedManifest?.renderStatus == "published")
     #expect(result.packagedManifest?.renderRouteCount == 8)
-    #expect(result.proposals.contains("1Context/context-engine/proposals/wiki/runtime-defaults/user-wiki__wiki.toml.proposal.json"))
+    #expect(result.proposals.contains("1Context/context-engine/live/state/proposals/wiki/runtime-defaults/user-wiki__wiki.toml.proposal.json"))
     #expect(
       try String(contentsOf: paths.userWikiDirectory.appendingPathComponent("wiki.toml"), encoding: .utf8)
         == "user edit\n"
@@ -173,7 +173,7 @@ struct WikiRuntimeDefaultsInstallerTests {
     #expect(ledgerResult.copied.contains("user-wiki/site/index.html"))
     #expect(ledgerResult.packagedManifest == result.packagedManifest)
     #expect(ledgerResult.proposals == result.proposals)
-    let proposal = paths.userContentDirectory.appendingPathComponent("context-engine/proposals/wiki/runtime-defaults/user-wiki__wiki.toml.proposal.json")
+    let proposal = paths.userContentDirectory.appendingPathComponent("context-engine/live/state/proposals/wiki/runtime-defaults/user-wiki__wiki.toml.proposal.json")
     #expect(FileManager.default.fileExists(atPath: proposal.path))
     let proposalText = try String(contentsOf: proposal, encoding: .utf8)
     #expect(!proposalText.contains(root.path))

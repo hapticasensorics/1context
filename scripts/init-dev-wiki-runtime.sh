@@ -34,19 +34,9 @@ ensure_runtime_dirs() {
   mkdir -p \
     "$RUNTIME_TEST/1Context/user-wiki/source" \
     "$RUNTIME_TEST/1Context/user-wiki/site/.1context" \
-    "$RUNTIME_TEST/1Context/context-engine/agents/roles" \
-    "$RUNTIME_TEST/1Context/context-engine/agents/tools" \
-    "$RUNTIME_TEST/1Context/context-engine/agents/policies" \
-    "$RUNTIME_TEST/1Context/context-engine/jobs" \
-    "$RUNTIME_TEST/1Context/context-engine/prompts/shared" \
-    "$RUNTIME_TEST/1Context/context-engine/inbox" \
-    "$RUNTIME_TEST/1Context/context-engine/proposals" \
-    "$RUNTIME_TEST/1Context/context-engine/decisions" \
-    "$RUNTIME_TEST/1Context/context-engine/runs" \
-    "$RUNTIME_TEST/1Context/context-engine/artifacts" \
-    "$RUNTIME_TEST/1Context/context-engine/observations" \
-    "$RUNTIME_TEST/1Context/context-engine/ledgers" \
     "$RUNTIME_TEST/1Context/context-engine/indexes" \
+    "$RUNTIME_TEST/1Context/context-engine/orchestrators" \
+    "$RUNTIME_TEST/1Context/context-engine/packs" \
     "$RUNTIME_TEST/Library/Application Support/1Context/wiki-site/current" \
     "$RUNTIME_TEST/Library/Application Support/1Context/wiki-site/next" \
     "$RUNTIME_TEST/Library/Application Support/1Context/wiki-site/previous" \

@@ -354,7 +354,7 @@ Hook behavior becomes ghost governance unless it leaves evidence. Add a durable
 control ledger under the mail/control plane:
 
 ```text
-context-engine/mail/control-events.jsonl
+context-engine/live/mail/control-events.jsonl
 ```
 
 The ledger records Codex hooks, app-server observations, host injection

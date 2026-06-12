@@ -103,8 +103,9 @@ return, they must be derived Application Support machinery rebuilt from
 - Rendering is atomic: a failed render updates `latest_attempt` and the JSONL
   ledger without replacing `last_success` or serving a partial site.
 - Canonical render/export uses accepted `user-wiki/source` only. Proposal or
-  patch previews may exist under `context-engine/artifacts`, but they do not
-  update `user-wiki/site` until accepted changes are promoted into source.
+  patch previews may exist under `context-engine/live/runs/<run-id>/artifacts`,
+  but they do not update `user-wiki/site` until accepted changes are promoted
+  into source.
 - `user-wiki/site/` can be copied as a standalone static website export.
 - Open Wiki opens the last successful rendered site.
 - Tests or smoke scripts prove the repo-local path and the installed-path
@@ -325,7 +326,8 @@ Acceptance:
 - failed render records `latest_attempt` and leaves `last_success` untouched
 - `site/.1context/render-events.jsonl` is appended
 - `site/.1context/current-render.json` is updated
-- proposal previews, if any, write only under `context-engine/artifacts`
+- proposal previews, if any, write only under
+  `context-engine/live/runs/<run-id>/artifacts`
 - renderer failures preserve the previous served site and record stdout, stderr,
   exit code, and failed input path
 - render output contains no unresolved `{{ placeholder }}` strings in source

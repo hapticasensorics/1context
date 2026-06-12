@@ -575,9 +575,13 @@
   }
 
   function highlightExcerpt(text) {
-    return String(text || '')
-      .replace(/<span class="searchmatch">/g, '<strong>')
-      .replace(/<\/span>/g, '</strong>');
+    const markerOpen = '\u0000OPCTX_SEARCH_MATCH_OPEN\u0000';
+    const markerClose = '\u0000OPCTX_SEARCH_MATCH_CLOSE\u0000';
+    return escapeHtml(String(text || '')
+      .replace(/<span class="searchmatch">/g, markerOpen)
+      .replace(/<\/span>/g, markerClose))
+      .replaceAll(markerOpen, '<strong>')
+      .replaceAll(markerClose, '</strong>');
   }
 
   async function runSearch(q) {

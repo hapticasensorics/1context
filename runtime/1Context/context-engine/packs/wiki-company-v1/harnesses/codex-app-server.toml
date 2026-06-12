@@ -104,6 +104,3 @@ wiki = "onecontext-wiki-core"
 mail = "agent-mail"
 perception = "onecontext-memory-db"
 adapter = "onecontext-codex-adapter"
-
-[legacy_notes]
-codex_exec = "Not a release transport. Old codex exec prompt-script behavior belongs in retired docs or memory-core donor history, not in this shipped pack."

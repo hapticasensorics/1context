@@ -21,4 +21,4 @@ pack = false
 lived_experiences = "lived-experiences"
 native_memory = "native-memory.toml"
 mail = "../../mail"
-agent_harness = "../../agents/harness"
+agent_harness = "../../state/harness"

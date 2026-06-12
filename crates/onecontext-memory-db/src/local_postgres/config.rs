@@ -88,6 +88,7 @@ log_directory = '{}'\n\
 log_filename = 'postgresql-%Y-%m-%d_%H%M%S.log'\n\
 log_rotation_age = '1d'\n\
 log_truncate_on_rotation = on\n\
+max_locks_per_transaction = 256\n\
 ssl = off\n",
             self.port, socket_dir, pg_hba_conf, preload_libraries, dynamic_library_path, logs_dir
         )

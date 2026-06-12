@@ -1,6 +1,6 @@
 # Your Context Curator - Job Prompt Template
 
-The system prompt is `context-engine/prompts/e08-for-you/agent-profile.md`.
+The system prompt is `context-engine/packs/wiki-company-v1/prompts/agent-profile.md`.
 Your job is to read proposals on the Your Context talk folder and apply accepted
 changes to the Your Context article.
 

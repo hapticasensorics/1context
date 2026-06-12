@@ -46,10 +46,10 @@ runtime/1Context/              public-safe shipped defaults source
 runtime-test/                  ignored local/private scenario fixtures
 crates/onecontext-wiki-core/   portable Rust wiki semantics
 crates/onecontext-wiki-daemon/ CLI/JSON adapter for the Rust core
+crates/onecontext-context-engine/
+                               native wiki-company orchestration
 wiki-engine/                   deterministic static renderer
 macos/Sources/                 app host, daemon bridge, Local Web, setup
-memory-core/src/onectx/wiki_interface/
-                               memory-side Python adapter
 ```
 
 Installed user data:
@@ -353,13 +353,13 @@ Wiki API failures should be structured:
 Consumers should treat `repair_hints` as the next-step contract and should
 preserve the full payload in logs or ledgers.
 
-## Python Adapter
+## Context Engine Caller
 
-`memory-core/src/onectx/wiki_interface` is a thin adapter over
-`onecontext-wiki`. It should not reimplement page placement, fallback,
-tombstone, talk, asset, or publish rules.
+`onecontext-context-engine` is the native caller for wiki-company work. It
+should use the Rust wiki core/daemon APIs and must not reimplement page
+placement, fallback, tombstone, talk, asset, or publish rules.
 
-Current convenience wrappers:
+Current operation surface:
 
 ```text
 wiki_ensure

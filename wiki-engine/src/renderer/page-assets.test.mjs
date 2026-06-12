@@ -327,7 +327,7 @@ title = "1Context"
 [site.home_feed]
 enabled = true
 max_items = 5
-sources = ["page_ledger"]
+sources = ["page_ledger", "render_events", "decisions"]
 
 [[site_pages]]
 id = "home"
@@ -380,6 +380,21 @@ access: private
 `
     );
     writeFixture(
+      resolve(sourceRoot, 'families/reference/topics/talk/topics.talk/2026-05-20T12-30Z.decided.keep-topic-map.md'),
+      `---
+id: talkmsg_decision_001
+kind: decided
+author: agent://context-engine/editor
+created: 2026-05-20T12:30:00Z
+talk_for: mailbox://page/topics
+subject: Keep topic map
+state: open
+---
+
+Keep the topic map visible on the topics page.
+`
+    );
+    writeFixture(
       resolve(userWiki, '.1context/page-ledger.jsonl'),
       '{"schema_version":1,"event":"page.body_written","page":"topics","at":"2026-05-20T12:00:00Z"}\n'
     );
@@ -398,6 +413,9 @@ access: private
     assert.match(html, /Recent Changes/);
     assert.match(html, /href="\/topics"/);
     assert.match(html, /body written/);
+    assert.match(html, /rendering via render-site/);
+    assert.match(html, /href="\/topics\/talk"/);
+    assert.match(html, /Keep topic map/);
   } finally {
     rmSync(tmp, { recursive: true, force: true });
   }

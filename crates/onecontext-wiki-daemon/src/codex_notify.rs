@@ -1,5 +1,5 @@
 use anyhow::{anyhow, Result};
-use onecontext_wiki_core::agent_mail::{CodexSteeringPayload, MessagePageRef};
+use onecontext_agent_mail::{CodexSteeringPayload, MessagePageRef};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
@@ -328,7 +328,7 @@ fn hex_lower(bytes: &[u8]) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use onecontext_wiki_core::agent_mail::DeliveryState;
+    use onecontext_agent_mail::DeliveryState;
 
     #[test]
     fn active_turn_decision_steers_without_body_or_permission_request() {

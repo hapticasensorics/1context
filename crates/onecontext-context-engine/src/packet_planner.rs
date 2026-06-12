@@ -1,8 +1,7 @@
 //! Source packet planning.
 //!
-//! Port target for `memory-core/src/onectx/memory/wiki_memory_plan.py`.
-//! This module should query source metadata, split recent and backfill windows,
-//! estimate token budgets, and decide which scribe packets need fresh work.
+//! Queries source metadata, splits recent and backfill windows, estimates token
+//! budgets, and decides which scribe packets need fresh work.
 
 use chrono::{DateTime, Duration, Utc};
 use serde::{Deserialize, Serialize};
@@ -13,14 +12,44 @@ pub const DEFAULT_CONTEXT_FRACTION: f64 = 0.62;
 pub const DEFAULT_MAX_PACKETS_PER_RUN: usize = 20;
 pub const DEFAULT_RECENT_PRIORITY_DAYS: i64 = 3;
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SourceEvent {
+    #[serde(default)]
+    pub object_id: Option<String>,
     pub ts: String,
     pub session_id: String,
     pub kind: String,
     pub text: String,
     #[serde(default)]
+    pub source_id: Option<String>,
+    #[serde(default)]
+    pub source_type: Option<String>,
+    #[serde(default)]
+    pub source_key: Option<String>,
+    #[serde(default)]
+    pub source_display_name: Option<String>,
+    #[serde(default)]
     pub source: Option<String>,
+    #[serde(default)]
+    pub source_record_id: Option<String>,
+    #[serde(default)]
+    pub source_record_key: Option<String>,
+    #[serde(default)]
+    pub source_record_hash: Option<String>,
+    #[serde(default)]
+    pub series_id: Option<String>,
+    #[serde(default)]
+    pub series_kind: Option<String>,
+    #[serde(default)]
+    pub series_key: Option<String>,
+    #[serde(default)]
+    pub series_display_name: Option<String>,
+    #[serde(default)]
+    pub role: Option<String>,
+    #[serde(default)]
+    pub privacy_class: Option<String>,
+    #[serde(default)]
+    pub body_type: Option<String>,
     #[serde(default)]
     pub cwd: Option<String>,
     #[serde(default)]
@@ -49,6 +78,7 @@ pub struct PacketPlannerPolicy {
     pub window_days: u32,
     pub usable_context_tokens: u32,
     pub context_fraction: f64,
+    pub target_packet_tokens_override: Option<u32>,
     pub max_packets_per_run: usize,
     pub recent_priority_days: i64,
 }
@@ -59,6 +89,7 @@ impl Default for PacketPlannerPolicy {
             window_days: 30,
             usable_context_tokens: DEFAULT_USABLE_CONTEXT_TOKENS,
             context_fraction: DEFAULT_CONTEXT_FRACTION,
+            target_packet_tokens_override: None,
             max_packets_per_run: DEFAULT_MAX_PACKETS_PER_RUN,
             recent_priority_days: DEFAULT_RECENT_PRIORITY_DAYS,
         }
@@ -67,6 +98,9 @@ impl Default for PacketPlannerPolicy {
 
 impl PacketPlannerPolicy {
     pub fn target_packet_tokens(&self) -> u32 {
+        if let Some(tokens) = self.target_packet_tokens_override {
+            return tokens.max(2_000);
+        }
         let fraction = self.context_fraction.clamp(0.25, 0.9);
         (self.usable_context_tokens as f64 * fraction)
             .floor()

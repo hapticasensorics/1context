@@ -35,8 +35,8 @@ fn shipped_wiki_company_pack_and_orchestrator_validate() {
         orchestrator_report.orchestrator_id,
         "wiki-company-orchestrator-v1"
     );
-    assert_eq!(orchestrator_report.phase_count, 7);
-    assert_eq!(orchestrator_report.route_count, 9);
+    assert_eq!(orchestrator_report.phase_count, 9);
+    assert_eq!(orchestrator_report.route_count, 11);
 }
 
 fn repo_root() -> PathBuf {

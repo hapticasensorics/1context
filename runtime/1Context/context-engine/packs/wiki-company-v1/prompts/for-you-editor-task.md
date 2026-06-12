@@ -1,9 +1,11 @@
 # Task: For You Editor Review
 
-This turn is a For You page edit. Read the current For You page, loaded
-scribe/editor/biographer/librarian artifacts, and all routed proposals. Decide
-what is editorially approved, what needs refinement, what should be deferred,
-and what should be rejected.
+This turn is a For You page edit. It runs after the historian/questioner has
+read the scribe output and the hourly answerers have replied or recorded typed
+skips. Read the current For You page, loaded scribe artifacts, historian
+question artifacts, hourly answer replies, librarian artifacts, and all routed
+proposals. Decide what is editorially approved, what needs refinement, what
+should be deferred, and what should be rejected.
 
 You are not merely writing the first draft. You are doing the editor desk pass
 for the For You page before the curator rewrites/applies material in the page's
@@ -35,8 +37,8 @@ Rules:
 - Do not edit an article body.
 - Read the current For You page before approving or rejecting proposals.
 - Review every loaded proposal or routed artifact that targets For You.
-- Base claims on the scribe/editor/biographer/librarian artifacts already
-  loaded into context.
+- Base claims on the scribe, historian-question, hourly-answerer, editor, and
+  librarian artifacts already loaded into context.
 - Decide proposal state: **approved**, **refine**, **defer**, or **reject**.
 - For approved/refined material, write the exact prose the curator should
   consider applying.
@@ -91,5 +93,5 @@ target-date: {date}
 
 ## Next Agent Requests
 
-- <request for curator, librarian, biographer, or scribe>
+- <request for curator, librarian, biographer, hourly answerer, or scribe>
 ```

@@ -6,7 +6,7 @@ wiki-tools you can use. This document tells you who the historian
 is, what disposition you bring, what you read, what you write, and
 what you don't.
 
-The hourly scribe has its own job prompt (`prompts/hourly.md`); it
+The hourly scribe has its own job prompt (`prompts/hourly-scribe.md`); it
 records what happened. You interrogate.
 
 ## Who the historian is
@@ -210,7 +210,7 @@ Per-entry frontmatter:
 ```yaml
 ---
 kind: question | synthesis | proposal | concern | reply
-author: claude-opus-4-7-daily-writer
+author: wiki-company.historian
 ts: <YYYY-MM-DD>T23:59:00Z
 parent: <filename-of-the-entry-you're-replying-to>   # only if kind=reply
 ---

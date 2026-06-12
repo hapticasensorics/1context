@@ -141,16 +141,55 @@ function normalizeStringList(value) {
 function normalizeAttachments(value) {
   if (!Array.isArray(value)) return [];
   return value
-    .filter((item) => item && typeof item === 'object')
-    .map((item) => ({
-      filename: normalizeMetaString(item.filename),
-      media_type: normalizeMetaString(item.media_type),
-      path: normalizeMetaString(item.path),
-      handle: normalizeMetaString(item.handle),
-      caption: normalizeMetaString(item.caption),
-      alt_text: normalizeMetaString(item.alt_text),
-    }))
-    .filter((item) => item.filename && item.path);
+    .map(normalizeAttachment)
+    .filter(Boolean);
+}
+
+function normalizeAttachment(item) {
+  if (typeof item === 'string') {
+    const handle = normalizeMetaString(item);
+    if (!handle) return null;
+    const path = attachmentPathFromHandle(handle) || handle;
+    return {
+      filename: attachmentFilename(null, path, handle),
+      media_type: null,
+      path,
+      handle,
+      caption: null,
+      alt_text: null,
+    };
+  }
+  if (!item || typeof item !== 'object') return null;
+  const handle = normalizeMetaString(item.handle);
+  const explicitPath = normalizeMetaString(item.path);
+  const path = explicitPath || attachmentPathFromHandle(handle) || handle;
+  const filename = attachmentFilename(normalizeMetaString(item.filename), path, handle);
+  if (!filename || !path) return null;
+  return {
+    filename,
+    media_type: normalizeMetaString(item.media_type),
+    path,
+    handle,
+    caption: normalizeMetaString(item.caption),
+    alt_text: normalizeMetaString(item.alt_text),
+  };
+}
+
+function attachmentPathFromHandle(handle) {
+  const value = normalizeMetaString(handle);
+  if (!value) return null;
+  const match = value.match(/^user-wiki:\/\/page\/[^/]+\/talk\/(.+)$/);
+  return match ? match[1] : null;
+}
+
+function attachmentFilename(explicit, path, handle) {
+  const value = normalizeMetaString(explicit);
+  if (value) return value;
+  const source = normalizeMetaString(path) || normalizeMetaString(handle);
+  if (!source) return null;
+  const trimmed = source.replace(/[?#].*$/, '').replace(/\/+$/, '');
+  const last = trimmed.split('/').filter(Boolean).pop();
+  return last || source;
 }
 
 function normalizeTalkRoute(value) {
@@ -259,6 +298,21 @@ function buildReplyMap(entries) {
   return m;
 }
 
+function entryIdentitySet(entries) {
+  const keys = new Set();
+  for (const entry of entries) {
+    for (const key of [entry.filename, entry.stem, entry.id]) {
+      if (key) keys.add(key);
+    }
+  }
+  return keys;
+}
+
+function orphanReplies(entries) {
+  const keys = entryIdentitySet(entries);
+  return entries.filter((entry) => entry.parent && !keys.has(entry.parent));
+}
+
 // Render one entry to HTML (heading + body + signature + trailers +
 // nested replies recursively). `depth` controls blockquote nesting.
 function renderEntry(entry, replyMap, marked, talkRoute, depth = 0) {
@@ -355,6 +409,7 @@ function demoteHtmlHeadings(html, offset = 2) {
 // in SECTION_ORDER.
 function composeBody(entries, replyMap, marked, lede, seeAlso, curatorMd, talkRoute) {
   const topLevel = entries.filter((e) => !e.parent);
+  const orphans = orphanReplies(entries);
   const byKind = new Map();
   for (const e of topLevel) {
     if (!byKind.has(e.kind)) byKind.set(e.kind, []);
@@ -396,7 +451,16 @@ function composeBody(entries, replyMap, marked, lede, seeAlso, curatorMd, talkRo
     parts.push(`</section>`);
   }
 
-  if (topLevel.length === 0) {
+  if (orphans.length > 0) {
+    parts.push(`<section class="opctx-talk-section" data-kind="orphaned-replies"><h2 id="orphaned-replies">Orphaned replies</h2>`);
+    for (const entry of orphans) {
+      parts.push(`<p class="opctx-talk-orphan-parent"><strong>Missing parent:</strong> <code>${escape(entry.parent)}</code></p>`);
+      parts.push(renderEntry(entry, replyMap, marked, talkRoute));
+    }
+    parts.push(`</section>`);
+  }
+
+  if (topLevel.length === 0 && orphans.length === 0) {
     parts.push(`<p class="opctx-talk-empty"><em>No discussion yet. Add a timestamped entry here when there is a proposal, question, decision, or memory note worth preserving.</em></p>`);
   }
 

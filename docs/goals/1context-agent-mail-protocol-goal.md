@@ -353,7 +353,7 @@ Post-V0 hardening checks:
 
 - [x] Create a real `agent_mail` module boundary in `onecontext-wiki-core`
   before adding behavior. Evidence:
-  `crates/onecontext-wiki-core/src/agent_mail.rs`.
+  `crates/onecontext-agent-mail/src/lib.rs`.
 - [x] Keep the initial module private to Rust tests; do not expose CLI, Swift,
   or Python calls yet.
 - [x] Add schema/error types for addresses, agents, messages, deliveries,

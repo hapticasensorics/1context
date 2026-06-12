@@ -110,7 +110,7 @@ Move out of product core:
 
 | Area | Action | Expected Impact |
 | --- | --- | ---: |
-| `memory-core/**` | Archive/delete from active repo. | ~19.6k LOC out of active core. |
+| Old Python memory core | Removed from active repo; Rust Context Engine owns wiki-company orchestration. | ~19.6k LOC out of active core. |
 | `crates/onecontext-memory-db` | Retire/dev-scope; delete migrations. | ~14.8k Rust + SQL out of core. |
 | `crates/onecontext-attention-*` | Move to `devtools/attention` or experiment repo. | ~8.9k Rust out of core. |
 | `onecontext-capture-dashboard` + capture bundler | Devtools only; stop packaging by default. | ~5.3k immediate. |
@@ -294,9 +294,9 @@ Gate:
 
 ### Milestone 4: Retire Non-Launch Surfaces
 
-Move or delete memory-core, memory-db, attention, capture dashboards, agent
-harness, Codex adapter, browser extension, demos, and unchosen wiki
-implementation.
+Memory core is removed. Move or delete memory-db, attention, capture
+dashboards, agent harness, Codex adapter, browser extension, demos, and
+unchosen wiki implementation.
 
 Gate:
 

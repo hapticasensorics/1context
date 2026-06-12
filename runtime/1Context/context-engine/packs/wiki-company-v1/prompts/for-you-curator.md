@@ -120,7 +120,7 @@ For each `*.proposal.editor-day-*.md` without a corresponding
 3. **Decide and act:**
 
    - **Apply.** Proposal is sound. Replace the section's
-     `<!-- empty: experiment slot -->` line with the editor's
+     `<!-- empty: day slot -->` line with the editor's
      prose. If the target day-section is missing because the
      article started from a generic skeleton, create `## Daily
      Memory` if needed, add a `### <YYYY-MM-DD>` heading, and
@@ -177,12 +177,12 @@ Each day in the article has the shape:
 ```markdown
 <!-- section: { slug: "2026-04-21", talk: true, date: "2026-04-21" } -->
 ## Tuesday · 2026-04-21
-<!-- empty: experiment slot -->
+<!-- empty: day slot -->
 ```
 
 When you apply (or refine and apply):
 
-- **Replace the `<!-- empty: experiment slot -->` line** — and
+- **Replace the `<!-- empty: day slot -->` line** — and
   only that line — with the editor's prose.
 - **Don't touch** the H2 heading, the `<!-- section: ... -->`
   comment, the article frontmatter, or any other day-section.
