@@ -90,6 +90,8 @@ pub struct WikiCompanyAgentTurnResult {
     pub codex_thread_id: Option<String>,
     pub codex_turn_id: Option<String>,
     pub codex_thread_resumed: bool,
+    #[serde(default)]
+    pub usage: Option<CodexTokenUsage>,
     pub mail_agent: Option<RegisteredMailAgent>,
     pub worker_config: Value,
     pub final_message_path: String,
@@ -176,7 +178,29 @@ pub struct CodexWorkerTurnResult {
     pub mail_agent: Option<RegisteredMailAgent>,
     pub assistant_text: String,
     pub error: Option<String>,
+    #[serde(default)]
+    pub usage: Option<CodexTokenUsage>,
+    #[serde(default)]
+    pub rejected_server_requests: Vec<String>,
     pub duration_ms: u64,
+}
+
+/// Token usage reported by stock codex app-server 0.139.0 via the
+/// `thread/tokenUsage/updated` notification (`tokenUsage.total`) and, when
+/// present, the `turn/completed` payload. Field names mirror the camelCase
+/// wire shape documented in the live-probe findings.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CodexTokenUsage {
+    #[serde(default)]
+    pub total_tokens: u64,
+    #[serde(default)]
+    pub input_tokens: u64,
+    #[serde(default)]
+    pub cached_input_tokens: u64,
+    #[serde(default)]
+    pub output_tokens: u64,
+    #[serde(default)]
+    pub reasoning_output_tokens: u64,
 }
 
 pub fn execute_wiki_company_agents(
@@ -264,6 +288,11 @@ pub fn codex_worker_thread_config() -> Value {
         "features.multi_agent": false,
         "features.multi_agent_v2": false,
         "features.multi_agent_v2.enabled": false,
+        // Probe-verified on stock codex-cli 0.139.0: disabling memories saves
+        // ~4k input tokens per worker turn and keeps bounded worker turns
+        // isolated from the desktop memory system.
+        "memories.generate_memories": false,
+        "memories.use_memories": false,
     })
 }
 
@@ -641,6 +670,8 @@ fn execute_harness_turn_request(
                 "assistant_preview": preview(&worker_result.assistant_text, 500),
                 "worker_config": worker_config,
                 "resumed_thread": worker_result.resumed_thread,
+                "codex_token_usage": &worker_result.usage,
+                "rejected_server_requests": &worker_result.rejected_server_requests,
             }),
             AdapterCorrelation {
                 thread_id: worker_result.thread_id.clone(),
@@ -682,9 +713,15 @@ fn execute_harness_turn_request(
                 unit_id: child.unit_id.clone(),
                 turn_id: turn_id.clone(),
                 usage: AgentTurnUsage {
-                    input_tokens: 0,
-                    output_tokens: 0,
-                    total_tokens: Some(0),
+                    input_tokens: worker_result
+                        .usage
+                        .map(|usage| usage.input_tokens)
+                        .unwrap_or(0),
+                    output_tokens: worker_result
+                        .usage
+                        .map(|usage| usage.output_tokens)
+                        .unwrap_or(0),
+                    total_tokens: worker_result.usage.map(|usage| usage.total_tokens),
                     duration_ms: worker_result.duration_ms,
                 },
                 next_state: AgentTurnCompletionState::Ready,
@@ -701,6 +738,8 @@ fn execute_harness_turn_request(
                     "codex_thread_id": worker_result.thread_id,
                     "codex_turn_id": worker_result.turn_id,
                     "codex_thread_resumed": worker_result.resumed_thread,
+                    "codex_token_usage": &worker_result.usage,
+                    "rejected_server_requests": &worker_result.rejected_server_requests,
                     "mail_agent": &worker_result.mail_agent,
                     "worker_config": worker_config,
                 }),
@@ -732,6 +771,7 @@ fn execute_harness_turn_request(
             codex_thread_id: worker_result.thread_id,
             codex_turn_id: worker_result.turn_id,
             codex_thread_resumed: worker_result.resumed_thread,
+            usage: worker_result.usage,
             mail_agent: worker_result.mail_agent,
             worker_config: worker_config.clone(),
             final_message_path: final_message.path.display().to_string(),
@@ -1164,78 +1204,247 @@ fn run_codex_worker_turn(
         }),
     )?;
 
-    let mut assistant_text = String::new();
-    let mut codex_turn_id = None;
-    let mut final_status = "timeout".to_string();
-    let mut error = None;
+    let mut stream = WorkerTurnStream::default();
     let deadline = Duration::from_secs(worker_timeout_secs());
     let start = Instant::now();
     while start.elapsed() < deadline {
         let Some(value) = app.read_next(Duration::from_secs(5))? else {
             continue;
         };
-        if value.get("id").and_then(Value::as_str) == Some("turn") {
-            codex_turn_id = extract_turn_id(&value).or(codex_turn_id);
-        }
-        if value.get("method").and_then(Value::as_str) == Some("rawResponseItem/completed") {
-            if let Some(text) = extract_assistant_text(&value) {
-                if !assistant_text.is_empty() {
-                    assistant_text.push('\n');
-                }
-                assistant_text.push_str(&text);
-            }
-        }
-        if value.get("method").and_then(Value::as_str) == Some("agentMessage/delta") {
-            if let Some(delta) = value
-                .get("params")
-                .and_then(|params| params.get("delta"))
-                .and_then(Value::as_str)
-            {
-                assistant_text.push_str(delta);
-            }
-        }
-        if value.get("method").and_then(Value::as_str) == Some("turn/completed") {
-            let turn = value
-                .get("params")
-                .and_then(|params| params.get("turn"))
-                .cloned()
-                .unwrap_or(Value::Null);
-            codex_turn_id = turn
-                .get("id")
-                .and_then(Value::as_str)
-                .map(ToOwned::to_owned)
-                .or(codex_turn_id);
-            final_status = turn
-                .get("status")
-                .and_then(Value::as_str)
-                .unwrap_or("completed")
-                .to_string();
-            error = turn
-                .get("error")
-                .filter(|error| !error.is_null())
-                .map(|error| {
-                    serde_json::to_string(error)
-                        .unwrap_or_else(|_| "unknown codex error".to_string())
-                });
+        let turn_completed =
+            handle_worker_turn_message(&mut stream, &value, &mut |response| app.respond(response))?;
+        if turn_completed {
             break;
         }
     }
     app.shutdown();
 
-    if assistant_text.trim().is_empty() && final_status == "completed" {
-        assistant_text = "status: completed\n\nevidence:\n- Codex app-server turn completed but did not emit assistant text before completion was observed.\n\nproposed_wiki_talk:\n- No proposed talk text was emitted.\n\nnext_agent_requests:\n- none\n\nnext_state_machine_event: worker_turn_completed".to_string();
+    finalize_worker_turn_stream(
+        stream,
+        &request.operation_id,
+        thread_id,
+        thread_open.resumed,
+        mail_context.agent,
+        u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX),
+    )
+}
+
+/// Accumulated state from the codex app-server notification stream for one
+/// bounded worker turn.
+#[derive(Clone, Debug, Default, PartialEq)]
+struct WorkerTurnStream {
+    /// Text accumulated from `item/agentMessage/delta` notifications.
+    delta_text: String,
+    /// Full assistant text extracted from `item/completed` notifications
+    /// (`params.item.role == "assistant"`). Preferred over deltas to avoid
+    /// doubling when both sources fire for the same message.
+    completed_text: String,
+    /// Fallback assistant text from `rawResponseItem/completed`.
+    raw_response_text: String,
+    codex_turn_id: Option<String>,
+    final_status: Option<String>,
+    error: Option<String>,
+    usage: Option<CodexTokenUsage>,
+    /// Methods of server-initiated requests we rejected during the turn.
+    rejected_server_requests: Vec<String>,
+}
+
+impl WorkerTurnStream {
+    /// Resolve the assistant text without doubling across sources:
+    /// `item/completed` full text wins over accumulated deltas, with
+    /// `rawResponseItem/completed` as the last-resort fallback.
+    fn assistant_text(&self) -> &str {
+        if !self.completed_text.trim().is_empty() {
+            &self.completed_text
+        } else if !self.delta_text.trim().is_empty() {
+            &self.delta_text
+        } else {
+            &self.raw_response_text
+        }
     }
 
+    fn final_status(&self) -> String {
+        self.final_status
+            .clone()
+            .unwrap_or_else(|| "timeout".to_string())
+    }
+}
+
+fn worker_turn_unsupported_request_response(id: &Value, method: &str) -> Value {
+    json!({
+        "jsonrpc": "2.0",
+        "id": id,
+        "error": {
+            "code": -32601,
+            "message": format!(
+                "1Context worker turns do not support server-initiated request method {method}"
+            ),
+        }
+    })
+}
+
+/// Process one JSON-RPC message from the codex app-server during a worker
+/// turn. Returns `Ok(true)` once `turn/completed` is observed. Server-initiated
+/// requests (messages carrying both `id` and `method`) are answered with a
+/// JSON-RPC "method not supported" error via `respond` so the server never
+/// hangs waiting, and the method name is recorded for the turn receipts.
+fn handle_worker_turn_message(
+    stream: &mut WorkerTurnStream,
+    value: &Value,
+    respond: &mut dyn FnMut(Value) -> Result<(), String>,
+) -> Result<bool, String> {
+    let method = value.get("method").and_then(Value::as_str);
+    if let Some(method) = method {
+        if let Some(id) = value.get("id").filter(|id| !id.is_null()) {
+            respond(worker_turn_unsupported_request_response(id, method))?;
+            stream.rejected_server_requests.push(method.to_string());
+            return Ok(false);
+        }
+    }
+    if value.get("id").and_then(Value::as_str) == Some("turn") {
+        if let Some(turn_id) = extract_turn_id(value) {
+            stream.codex_turn_id = Some(turn_id);
+        }
+        return Ok(false);
+    }
+    let Some(method) = method else {
+        return Ok(false);
+    };
+    match method {
+        "item/agentMessage/delta" => {
+            if let Some(delta) = value
+                .get("params")
+                .and_then(|params| params.get("delta"))
+                .and_then(Value::as_str)
+            {
+                stream.delta_text.push_str(delta);
+            }
+        }
+        "item/completed" => {
+            if let Some(text) = extract_assistant_text(value) {
+                if !stream.completed_text.is_empty() {
+                    stream.completed_text.push('\n');
+                }
+                stream.completed_text.push_str(&text);
+            }
+        }
+        "rawResponseItem/completed" => {
+            if let Some(text) = extract_assistant_text(value) {
+                if !stream.raw_response_text.is_empty() {
+                    stream.raw_response_text.push('\n');
+                }
+                stream.raw_response_text.push_str(&text);
+            }
+        }
+        "thread/tokenUsage/updated" => {
+            if let Some(usage) = value.get("params").and_then(extract_token_usage) {
+                stream.usage = Some(usage);
+            }
+        }
+        "turn/completed" => {
+            let params = value.get("params").cloned().unwrap_or(Value::Null);
+            let turn = params.get("turn").cloned().unwrap_or(Value::Null);
+            if let Some(turn_id) = turn.get("id").and_then(Value::as_str) {
+                stream.codex_turn_id = Some(turn_id.to_string());
+            }
+            stream.final_status = Some(
+                turn.get("status")
+                    .and_then(Value::as_str)
+                    .unwrap_or("completed")
+                    .to_string(),
+            );
+            stream.error = turn.get("error").filter(|error| !error.is_null()).map(
+                |error| {
+                    serde_json::to_string(error)
+                        .unwrap_or_else(|_| "unknown codex error".to_string())
+                },
+            );
+            if let Some(usage) = extract_token_usage(&params) {
+                stream.usage = Some(usage);
+            }
+            return Ok(true);
+        }
+        _ => {}
+    }
+    Ok(false)
+}
+
+/// Convert the accumulated notification stream into a worker turn result.
+/// An empty assistant stream is a hard turn failure: the harness never
+/// fabricates final-message content on the worker's behalf.
+fn finalize_worker_turn_stream(
+    stream: WorkerTurnStream,
+    operation_id: &str,
+    thread_id: String,
+    resumed_thread: bool,
+    mail_agent: RegisteredMailAgent,
+    duration_ms: u64,
+) -> Result<CodexWorkerTurnResult, String> {
+    let final_status = stream.final_status();
+    let assistant_text = stream.assistant_text().to_string();
+    if assistant_text.trim().is_empty() {
+        return Err(format!(
+            "codex worker turn for {operation_id} ended with status {final_status} and no assistant output; refusing to fabricate final-message content (codex error: {})",
+            stream.error.as_deref().unwrap_or("none")
+        ));
+    }
     Ok(CodexWorkerTurnResult {
         status: final_status,
         thread_id: Some(thread_id),
-        turn_id: codex_turn_id,
-        resumed_thread: thread_open.resumed,
-        mail_agent: Some(mail_context.agent),
+        turn_id: stream.codex_turn_id,
+        resumed_thread,
+        mail_agent: Some(mail_agent),
         assistant_text,
-        error,
-        duration_ms: u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX),
+        error: stream.error,
+        usage: stream.usage,
+        rejected_server_requests: stream.rejected_server_requests,
+        duration_ms,
     })
+}
+
+fn token_usage_from_object(value: &Value) -> Option<CodexTokenUsage> {
+    let object = value.as_object()?;
+    if !object.contains_key("totalTokens")
+        && !object.contains_key("inputTokens")
+        && !object.contains_key("outputTokens")
+    {
+        return None;
+    }
+    let read = |key: &str| object.get(key).and_then(Value::as_u64).unwrap_or(0);
+    Some(CodexTokenUsage {
+        total_tokens: read("totalTokens"),
+        input_tokens: read("inputTokens"),
+        cached_input_tokens: read("cachedInputTokens"),
+        output_tokens: read("outputTokens"),
+        reasoning_output_tokens: read("reasoningOutputTokens"),
+    })
+}
+
+/// Extract a token-usage payload from notification params. Stock 0.139.0
+/// streams `thread/tokenUsage/updated` with
+/// `{tokenUsage:{total:{totalTokens,...},last:{...}}}`; `turn/completed` is
+/// also checked for the same payload under `tokenUsage`/`usage`, either at the
+/// params root or nested under `turn`.
+fn extract_token_usage(params: &Value) -> Option<CodexTokenUsage> {
+    let turn = params.get("turn");
+    let candidates = [
+        params
+            .get("tokenUsage")
+            .and_then(|usage| usage.get("total")),
+        params.get("tokenUsage"),
+        params.get("usage").and_then(|usage| usage.get("total")),
+        params.get("usage"),
+        turn.and_then(|turn| turn.get("tokenUsage"))
+            .and_then(|usage| usage.get("total")),
+        turn.and_then(|turn| turn.get("tokenUsage")),
+        turn.and_then(|turn| turn.get("usage"))
+            .and_then(|usage| usage.get("total")),
+        turn.and_then(|turn| turn.get("usage")),
+    ];
+    candidates
+        .into_iter()
+        .flatten()
+        .find_map(token_usage_from_object)
 }
 
 fn identify_mail_agent_for_turn(
@@ -1669,14 +1878,20 @@ impl CodexAppServerProcess {
             "method": method,
             "params": params,
         });
+        self.respond(message)
+    }
+
+    /// Write one raw JSON-RPC message (used both for client requests and for
+    /// responses to server-initiated requests).
+    fn respond(&mut self, message: Value) -> Result<(), String> {
         serde_json::to_writer(&mut self.stdin, &message)
-            .map_err(|error| format!("failed to encode app-server request: {error}"))?;
+            .map_err(|error| format!("failed to encode app-server message: {error}"))?;
         self.stdin
             .write_all(b"\n")
-            .map_err(|error| format!("failed to write app-server request: {error}"))?;
+            .map_err(|error| format!("failed to write app-server message: {error}"))?;
         self.stdin
             .flush()
-            .map_err(|error| format!("failed to flush app-server request: {error}"))
+            .map_err(|error| format!("failed to flush app-server message: {error}"))
     }
 
     fn read_until_id(&mut self, id: &str, timeout: Duration) -> Result<Value, String> {
@@ -1744,6 +1959,12 @@ fn write_final_message(
     request: &HarnessTurnRequest,
     worker_result: &CodexWorkerTurnResult,
 ) -> Result<FinalMessageWrite, String> {
+    if worker_result.assistant_text.trim().is_empty() {
+        return Err(format!(
+            "refusing to write final message for {}: codex worker turn ended with status {} and no assistant output; the harness never synthesizes final-message content",
+            request.operation_id, worker_result.status
+        ));
+    }
     let requested_path = paths
         .root
         .join(&request.required_receipts.final_message_path);
@@ -1752,20 +1973,8 @@ fn write_final_message(
         fs::create_dir_all(parent)
             .map_err(|error| format!("failed to create final-message dir: {error}"))?;
     }
-    let (body, origin) = if worker_result.assistant_text.trim().is_empty() {
-        (
-            format!(
-                "status: {}\n\norigin: harness_synthesized_empty_worker_output\n\nevidence:\n- No assistant text captured.\n\nproposed_wiki_talk:\n- No proposed talk text captured.\n\nnext_agent_requests:\n- none\n\nnext_state_machine_event: worker_turn_{}\n",
-                worker_result.status, worker_result.status
-            ),
-            "harness_synthesized_empty_worker_output".to_string(),
-        )
-    } else {
-        (
-            worker_result.assistant_text.clone(),
-            "model_output".to_string(),
-        )
-    };
+    let body = worker_result.assistant_text.clone();
+    let origin = "model_output".to_string();
     let content_sha256 = sha256_text(&body);
     fs::write(&path, body)
         .map_err(|error| format!("failed to write final message {}: {error}", path.display()))?;
@@ -2334,6 +2543,8 @@ fn append_agent_report(
         "unit_id": request.unit_id,
         "codex_thread_id": worker_result.thread_id,
         "codex_turn_id": worker_result.turn_id,
+        "codex_token_usage": &worker_result.usage,
+        "rejected_server_requests": &worker_result.rejected_server_requests,
         "mail_agent": &worker_result.mail_agent,
         "status": worker_result.status,
         "final_message_path": final_message.path,
@@ -2440,6 +2651,14 @@ mod tests {
             serde_json::Value::Bool(false)
         );
         assert!(multi_agent_v2_disabled(&config));
+        assert_eq!(
+            config["memories.generate_memories"],
+            serde_json::Value::Bool(false)
+        );
+        assert_eq!(
+            config["memories.use_memories"],
+            serde_json::Value::Bool(false)
+        );
         assert_eq!(config.get("tools"), None);
         assert_eq!(config.get("enabled_tools"), None);
         assert_eq!(config.get("disabled_tools"), None);
@@ -2459,6 +2678,349 @@ mod tests {
             .contains("final-report and follow-up delivery belongs to the 1Context harness"));
         assert!(CODEX_WORKER_DEVELOPER_INSTRUCTIONS
             .contains("do not call wiki.talk.append or send Agent Mail"));
+    }
+
+    fn notification(method: &str, params: Value) -> Value {
+        json!({ "jsonrpc": "2.0", "method": method, "params": params })
+    }
+
+    /// Feed a synthetic app-server message stream through the worker-turn
+    /// parsing path, collecting any responses written back to the server.
+    fn drive_worker_turn_stream(messages: Vec<Value>) -> (WorkerTurnStream, Vec<Value>, bool) {
+        let mut stream = WorkerTurnStream::default();
+        let mut responses = Vec::new();
+        let mut completed = false;
+        for message in messages {
+            let done = handle_worker_turn_message(&mut stream, &message, &mut |response| {
+                responses.push(response);
+                Ok(())
+            })
+            .expect("handle worker turn message");
+            if done {
+                completed = true;
+                break;
+            }
+        }
+        (stream, responses, completed)
+    }
+
+    fn test_mail_agent() -> RegisteredMailAgent {
+        RegisteredMailAgent {
+            agent_id: "agent-mail-a".to_string(),
+            primary_address: "role://memory.hourly.scribe".to_string(),
+            transport_kind: "codex-app-server".to_string(),
+            transport_thread_id: "thr_1".to_string(),
+            requested_roles: vec!["role://memory.hourly.scribe".to_string()],
+            granted_roles: vec!["role://memory.hourly.scribe".to_string()],
+            requested_capabilities: vec!["wiki.mail".to_string()],
+            granted_capabilities: vec!["wiki.mail".to_string()],
+            lease_expires_at: "2026-06-12T00:00:00Z".to_string(),
+            inbox_delivery_count: 0,
+            thread_message_count: 0,
+        }
+    }
+
+    #[test]
+    fn worker_turn_stream_captures_token_usage_from_thread_notification() {
+        let (stream, responses, completed) = drive_worker_turn_stream(vec![
+            notification(
+                "thread/tokenUsage/updated",
+                json!({
+                    "threadId": "thr_1",
+                    "turnId": "turn_1",
+                    "tokenUsage": {
+                        "total": {
+                            "totalTokens": 14225,
+                            "inputTokens": 13980,
+                            "cachedInputTokens": 9216,
+                            "outputTokens": 245,
+                            "reasoningOutputTokens": 64
+                        },
+                        "last": {
+                            "totalTokens": 120,
+                            "inputTokens": 100,
+                            "cachedInputTokens": 0,
+                            "outputTokens": 20,
+                            "reasoningOutputTokens": 0
+                        }
+                    }
+                }),
+            ),
+            notification(
+                "item/completed",
+                json!({ "item": { "id": "item_1", "role": "assistant", "content": [{ "type": "text", "text": "ok" }] } }),
+            ),
+            notification("turn/completed", json!({ "turn": { "id": "turn_1", "status": "completed" } })),
+        ]);
+
+        assert!(completed);
+        assert!(responses.is_empty());
+        assert_eq!(
+            stream.usage,
+            Some(CodexTokenUsage {
+                total_tokens: 14225,
+                input_tokens: 13980,
+                cached_input_tokens: 9216,
+                output_tokens: 245,
+                reasoning_output_tokens: 64,
+            })
+        );
+
+        let result = finalize_worker_turn_stream(
+            stream,
+            "op-a",
+            "thr_1".to_string(),
+            false,
+            test_mail_agent(),
+            42,
+        )
+        .expect("completed worker turn");
+        assert_eq!(result.status, "completed");
+        assert_eq!(result.turn_id.as_deref(), Some("turn_1"));
+        let usage = result.usage.expect("usage threaded into worker result");
+        assert_eq!(usage.total_tokens, 14225);
+        assert_eq!(usage.output_tokens, 245);
+    }
+
+    #[test]
+    fn turn_completed_usage_payload_overrides_running_usage() {
+        let (stream, _, completed) = drive_worker_turn_stream(vec![
+            notification(
+                "thread/tokenUsage/updated",
+                json!({
+                    "tokenUsage": {
+                        "total": { "totalTokens": 100, "inputTokens": 90, "outputTokens": 10 }
+                    }
+                }),
+            ),
+            notification(
+                "item/agentMessage/delta",
+                json!({ "delta": "final answer" }),
+            ),
+            notification(
+                "turn/completed",
+                json!({
+                    "turn": {
+                        "id": "turn_2",
+                        "status": "completed",
+                        "usage": {
+                            "totalTokens": 180,
+                            "inputTokens": 150,
+                            "cachedInputTokens": 64,
+                            "outputTokens": 30,
+                            "reasoningOutputTokens": 8
+                        }
+                    }
+                }),
+            ),
+        ]);
+
+        assert!(completed);
+        assert_eq!(
+            stream.usage,
+            Some(CodexTokenUsage {
+                total_tokens: 180,
+                input_tokens: 150,
+                cached_input_tokens: 64,
+                output_tokens: 30,
+                reasoning_output_tokens: 8,
+            })
+        );
+    }
+
+    #[test]
+    fn empty_assistant_stream_fails_worker_turn_instead_of_synthesizing() {
+        let (stream, _, completed) = drive_worker_turn_stream(vec![notification(
+            "turn/completed",
+            json!({ "turn": { "id": "turn_1", "status": "completed" } }),
+        )]);
+
+        assert!(completed);
+        let error = finalize_worker_turn_stream(
+            stream,
+            "op-empty",
+            "thr_1".to_string(),
+            false,
+            test_mail_agent(),
+            7,
+        )
+        .expect_err("empty assistant stream must fail the worker turn");
+        assert!(error.contains("no assistant output"), "error: {error}");
+        assert!(error.contains("op-empty"), "error: {error}");
+    }
+
+    #[test]
+    fn timed_out_stream_without_output_fails_worker_turn() {
+        // No turn/completed at all: the loop deadline expires with an empty stream.
+        let (stream, _, completed) = drive_worker_turn_stream(vec![notification(
+            "thread/started",
+            json!({ "threadId": "thr_1" }),
+        )]);
+
+        assert!(!completed);
+        let error = finalize_worker_turn_stream(
+            stream,
+            "op-timeout",
+            "thr_1".to_string(),
+            false,
+            test_mail_agent(),
+            7,
+        )
+        .expect_err("timeout without output must fail the worker turn");
+        assert!(error.contains("status timeout"), "error: {error}");
+    }
+
+    #[test]
+    fn write_final_message_refuses_empty_assistant_output() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let paths = ContextEnginePaths::new(temp.path().join("runtime/1Context"));
+        let request = harness_request_for_mail_roles(
+            "memory.wiki.historian",
+            vec!["role://memory.hourly.answerer"],
+            vec![],
+        );
+        let worker_result = CodexWorkerTurnResult {
+            status: "completed".to_string(),
+            thread_id: Some("thr_1".to_string()),
+            turn_id: Some("turn_1".to_string()),
+            resumed_thread: false,
+            mail_agent: Some(test_mail_agent()),
+            assistant_text: "   \n".to_string(),
+            error: None,
+            usage: None,
+            rejected_server_requests: Vec::new(),
+            duration_ms: 5,
+        };
+
+        let error = write_final_message(&paths, &request, &worker_result)
+            .expect_err("empty assistant output must not produce a final message file");
+        assert!(error.contains("no assistant output"), "error: {error}");
+        assert!(!paths
+            .root
+            .join(&request.required_receipts.final_message_path)
+            .exists());
+    }
+
+    #[test]
+    fn listener_prefers_item_completed_text_and_never_doubles_sources() {
+        let (stream, _, completed) = drive_worker_turn_stream(vec![
+            notification(
+                "item/agentMessage/delta",
+                json!({ "threadId": "thr_1", "itemId": "item_1", "delta": "Hello " }),
+            ),
+            notification(
+                "item/agentMessage/delta",
+                json!({ "threadId": "thr_1", "itemId": "item_1", "delta": "world" }),
+            ),
+            notification(
+                "rawResponseItem/completed",
+                json!({ "item": { "type": "message", "role": "assistant", "content": [{ "type": "output_text", "text": "Hello world" }] } }),
+            ),
+            notification(
+                "item/completed",
+                json!({ "item": { "id": "item_1", "role": "assistant", "content": [{ "type": "text", "text": "Hello world" }] } }),
+            ),
+            notification("turn/completed", json!({ "turn": { "id": "turn_1", "status": "completed" } })),
+        ]);
+
+        assert!(completed);
+        assert_eq!(stream.assistant_text(), "Hello world");
+        assert_eq!(stream.delta_text, "Hello world");
+        assert_eq!(stream.raw_response_text, "Hello world");
+    }
+
+    #[test]
+    fn listener_falls_back_to_deltas_then_raw_response_items() {
+        let (delta_only, _, _) = drive_worker_turn_stream(vec![
+            notification("item/agentMessage/delta", json!({ "delta": "partial " })),
+            notification("item/agentMessage/delta", json!({ "delta": "answer" })),
+            notification("turn/completed", json!({ "turn": { "status": "completed" } })),
+        ]);
+        assert_eq!(delta_only.assistant_text(), "partial answer");
+
+        let (raw_only, _, _) = drive_worker_turn_stream(vec![
+            notification(
+                "rawResponseItem/completed",
+                json!({ "item": { "role": "assistant", "content": [{ "text": "raw fallback" }] } }),
+            ),
+            notification("turn/completed", json!({ "turn": { "status": "completed" } })),
+        ]);
+        assert_eq!(raw_only.assistant_text(), "raw fallback");
+    }
+
+    #[test]
+    fn non_assistant_items_do_not_contribute_assistant_text() {
+        let (stream, _, _) = drive_worker_turn_stream(vec![
+            notification(
+                "item/completed",
+                json!({ "item": { "id": "item_0", "role": "user", "content": [{ "type": "text", "text": "prompt echo" }] } }),
+            ),
+            notification(
+                "item/completed",
+                json!({ "item": { "id": "item_1", "type": "reasoning", "content": [{ "type": "text", "text": "thinking" }] } }),
+            ),
+            notification("turn/completed", json!({ "turn": { "status": "completed" } })),
+        ]);
+        assert_eq!(stream.assistant_text(), "");
+    }
+
+    #[test]
+    fn server_initiated_request_is_rejected_and_recorded() {
+        let (stream, responses, completed) = drive_worker_turn_stream(vec![
+            json!({
+                "jsonrpc": "2.0",
+                "id": "srv-req-1",
+                "method": "execCommandApproval",
+                "params": { "threadId": "thr_1", "command": "rm -rf /" }
+            }),
+            json!({
+                "jsonrpc": "2.0",
+                "id": 42,
+                "method": "applyPatchApproval",
+                "params": { "threadId": "thr_1" }
+            }),
+            notification(
+                "item/completed",
+                json!({ "item": { "role": "assistant", "content": [{ "text": "done" }] } }),
+            ),
+            notification("turn/completed", json!({ "turn": { "id": "turn_1", "status": "completed" } })),
+        ]);
+
+        assert!(completed);
+        assert_eq!(
+            stream.rejected_server_requests,
+            vec![
+                "execCommandApproval".to_string(),
+                "applyPatchApproval".to_string()
+            ]
+        );
+        assert_eq!(responses.len(), 2);
+        assert_eq!(responses[0]["id"], json!("srv-req-1"));
+        assert_eq!(responses[0]["error"]["code"], json!(-32601));
+        assert!(responses[0]["error"]["message"]
+            .as_str()
+            .expect("error message")
+            .contains("execCommandApproval"));
+        assert_eq!(responses[1]["id"], json!(42));
+        assert_eq!(responses[1]["error"]["code"], json!(-32601));
+
+        let result = finalize_worker_turn_stream(
+            stream,
+            "op-a",
+            "thr_1".to_string(),
+            false,
+            test_mail_agent(),
+            9,
+        )
+        .expect("turn still completes after rejected server requests");
+        assert_eq!(result.assistant_text, "done");
+        assert_eq!(
+            result.rejected_server_requests,
+            vec![
+                "execCommandApproval".to_string(),
+                "applyPatchApproval".to_string()
+            ]
+        );
     }
 
     fn multi_agent_v2_disabled(config: &Value) -> bool {
@@ -2908,6 +3470,7 @@ wiki.editor.reported
             codex_thread_id: Some("thread-a".to_string()),
             codex_turn_id: Some("codex-turn-a".to_string()),
             codex_thread_resumed: false,
+            usage: None,
             mail_agent: None,
             worker_config: json!({}),
             final_message_path: "runtime/1Context/context-engine/live/runs/run-a/turns/historian/attempt-0001/final-message.md".to_string(),
@@ -3054,5 +3617,18 @@ wiki.editor.reported
             result.completion.issues
         );
         assert!(result.codex_thread_id.is_some(), "no codex thread id");
+
+        let usage = result
+            .usage
+            .expect("live turn must capture codex token usage");
+        eprintln!("=== LIVE SMOKE TOKEN USAGE ===\n{usage:#?}");
+        assert!(
+            usage.output_tokens > 0,
+            "expected non-zero outputTokens in captured usage: {usage:?}"
+        );
+        assert!(
+            usage.total_tokens >= usage.output_tokens,
+            "totalTokens should cover outputTokens: {usage:?}"
+        );
     }
 }
