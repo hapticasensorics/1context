@@ -19,9 +19,6 @@ Current goals:
 - [1Context Agent Mail Protocol Goal](1context-agent-mail-protocol-goal.md)
   - Status: planning. Defines the implementation boundary for bringing agent
     mail back beside the wiki runtime as a clean transport kernel.
-- [1Context Codex Adapter Implementation Goal](1context-codex-adapter-implementation-goal.md)
-  - Status: active. Tracks the Rust adapter spine for Codex app-server binding,
-    hooks, wake dispatch, body injection, event mirroring, and redacted proof.
 
 Archived goals:
 

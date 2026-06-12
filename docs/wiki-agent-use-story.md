@@ -14,10 +14,6 @@ The wiki editing loop is not an inbox system. Agent mail is now a separate
 protocol and toolset; page talk remains durable collaboration context, and
 explicit mail delivery turns selected talk entries into claimable work.
 
-For a generic agent runtime, the wiki operations in this story are the
-`toolset-wiki` side of the [Agent Tool Gateway](agent-tool-gateway.md). Mail
-coordination belongs in `toolset-mail`, not in this page-editing loop.
-
 ## The Agent Starts With State
 
 The agent begins by asking the core what exists:

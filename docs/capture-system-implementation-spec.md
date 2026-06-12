@@ -114,20 +114,12 @@ crates/onecontext-capture-core/
   manifest/schema types, atomic processing -> live promotion, validation,
   spool-window reads, and retention planning/audit helpers
 
-crates/onecontext-capture-bundler/
-  Rust operator CLI for describe/list/validate/sweep and an export command that
-  refuses to act as the production READY writer
-
-crates/onecontext-capture-dashboard/
-  Rust/egui live capture dashboard plus bundle-contract tests
-
 docs/capture-window-bundle-spec.md
   normalized bundle file contract
 ```
 
 The capture runtime should continue to be Swift-first for macOS APIs. Rust is
-appropriate for the debug dashboard, validators, and later bundle inspection
-tools.
+appropriate for validators and later bundle inspection tools.
 
 Current V0 ownership split:
 
@@ -139,14 +131,6 @@ Swift daemon / OneContextCapture:
 onecontext-capture-core:
   owns reusable file-level bundle mechanics that do not require macOS sensor
   access
-
-onecontext-capture-bundler:
-  owns local operator commands around existing bundle folders; its export
-  command refuses to act as production bundle export
-
-onecontext-capture-dashboard:
-  owns GUI/debug visibility into live capture state and contract tests for
-  bundle lifecycle expectations
 ```
 
 ## 3. Runtime Architecture
@@ -171,14 +155,15 @@ OneContextCapture Swift module
   -> appends live JSONL events
   -> exports READY bundles
 
-Debug dashboards
-  -> read daemon status and live spool
-  -> request fresh snapshots/samples
-  -> display storage, source health, and bundle lifecycle
+Terminal debug dashboard
+  -> reads daemon status and live spool
+  -> requests fresh snapshots/samples
+  -> displays storage, source health, and bundle lifecycle
 ```
 
-The daemon is the owner of long-lived sensors. CLI requests and dashboards may
-ask for snapshots, but they should not be the only reason the core lanes run.
+The daemon is the owner of long-lived sensors. CLI requests and the dashboard
+may ask for snapshots, but they should not be the only reason the core lanes
+run.
 
 ## 4. Storage Layout
 

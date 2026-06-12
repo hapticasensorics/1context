@@ -19,19 +19,9 @@ that operators and contributors should use.
 - [Wiki Agent Use Story](wiki-agent-use-story.md): narrative walkthrough of
   how agents should inspect wiki state, edit pages, add assets, append talk,
   publish, validate, and leave evidence without path guessing.
-- [Agent Tool Gateway](agent-tool-gateway.md): generic agent-facing tool
-  contract with one consolidated backend and two visible toolsets,
-  `toolset-mail` and `toolset-wiki`.
-- [1Context Codex Adapter Spec](1context-codex-adapter-spec.md): implementation
-  contract for the Codex-specific runtime bridge that owns app-server calls,
-  hook installation, wake dispatch, body injection, event mirroring, and
-  adapter proof.
 - [Agent Orchestration Runtime Contract](agent-orchestration-runtime-contract.md):
   main-branch decision that release orchestration is harness-only; Codex runs
   bounded worker turns and does not own native subagent scheduling.
-- [Codex Hook Control And Mail Wakeup Spec](codex-hook-control-spec.md):
-  control-plane contract for Codex steering, lifecycle hooks, notification
-  dispatch, and autonomous mail correctness.
 - [Agent Mail Protocol](agent-mail-protocol.md): design contract and V0 proof
   surface for durable agent mail, async ready/valid semantics, backpressure,
   talk-page inboxes, notifications, and governance workflows over proposals and
@@ -40,8 +30,6 @@ that operators and contributors should use.
   local proof, update policy, and self-hosted Mac proof guidance.
 - [Development And Release Notes](development.md): maintainer details for local
   files, local web, tests, and packaging.
-- [Public Export Workflow](public-export-workflow.md): private-source to
-  public-repository export contract and local dry-run/apply commands.
 - [Roadmap](../ROADMAP.md): current product and release-train priorities.
 
 ## Contracts
@@ -80,10 +68,6 @@ that operators and contributors should use.
 - [Semantic Observation Output Contract](semantic-observation-output-contract.md):
   visual-first contract for attention-highlighted screenshots, full development
   composites, and up to three attended items per minute.
-- [Attention Dashboard Skeleton Schema](attention-dashboard-skeleton-schema.md):
-  native Rust/egui judge dashboard contract for video-side review, attention
-  output inspection, timeline lanes, review labels, and four-agent
-  implementation split.
 - [Local Web Contract](local-web-contract.md): local HTTPS, Caddy, static wiki
   publication, daemon API, cloud boundary, and user-wiki ownership.
 - [User Data Spec](user-data-spec.md): filesystem and persisted-data contract

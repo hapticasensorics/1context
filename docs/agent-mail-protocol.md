@@ -15,15 +15,6 @@ delivery, and notification commands needed for dogfooding. Treat this file as
 the protocol contract and north star; later governance, list, and watch
 features should extend this shape rather than reviving the removed prototype.
 
-For generic agent consumption, mail is exposed through the consolidated
-[Agent Tool Gateway](agent-tool-gateway.md) as `toolset-mail`. The paired wiki
-toolset is `toolset-wiki`. Do not introduce narrower public toolset names such
-as role-specific variants until the two-toolset contract proves insufficient.
-Codex-specific runtime implementation is specified in
-[1Context Codex Adapter Spec](1context-codex-adapter-spec.md), with hook and
-wakeup correctness rules specified in
-[Codex Hook Control And Mail Wakeup Spec](codex-hook-control-spec.md).
-
 The key decision:
 
 ```text

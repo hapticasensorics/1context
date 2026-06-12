@@ -21,10 +21,6 @@ mail now lives as a separate Rust-backed transport kernel in
 [Agent Mail Protocol](agent-mail-protocol.md), with its own storage and
 notification contract beside page/talk/publish.
 
-Agent-facing access is defined separately in
-[Agent Tool Gateway](agent-tool-gateway.md): one consolidated backend may serve
-all tools, but ordinary agents see only `toolset-mail`, `toolset-wiki`, or both.
-
 ## North Star
 
 The wiki should feel like a tiny local database whose records are editable
@@ -337,7 +333,3 @@ transport kernel with:
 - notification/wakeup contract
 - backpressure and claim rules
 - migration story from page talk
-
-It is exposed through `toolset-mail` in the
-[Agent Tool Gateway](agent-tool-gateway.md), while pages, assets, talk,
-validation, and publishing remain in `toolset-wiki`.

@@ -61,3 +61,26 @@ This ledger tracks files moved out of the active product tree during cleanup.
 | `docs/goals/1context-professional-release-runner-goal.md` | `recycle-bin/20260528/docs/goals/1context-professional-release-runner-goal.md` | Historical release runner milestone retired; current release contracts live in `release/runner` tests and the macOS release runbook. |
 | `docs/goals/1context-release-factory-goal.md` | `recycle-bin/20260528/docs/goals/1context-release-factory-goal.md` | Historical release factory proof journal retired from active goals after shell proof wrappers moved into typed release runner tests. |
 | `docs/goals/evidence/delete-bloat-audit-2026-05-13.md` | `recycle-bin/20260528/docs/goals/evidence/delete-bloat-audit-2026-05-13.md` | Historical bloat audit referenced retired shell proof paths; cleanup guard and current typed tests now own active verification. |
+
+## 2026-06-11 Docs Sweep
+
+| Original path | Disposition | Reason |
+| --- | --- | --- |
+| `docs/1context-codex-adapter-spec.md` | deleted | Codex adapter crate deleted; spec retired with it. |
+| `docs/codex-hook-control-spec.md` | deleted | Hook/wake control plane retired with the Codex adapter. |
+| `docs/context-engine-orchestration-spec.md` | deleted | TOML pack/policy orchestration layer ripped out. |
+| `docs/context-engine-orchestrator-port-checklist.md` | deleted | Port checklist for the removed orchestration layer. |
+| `docs/agent-tool-gateway.md` | deleted | Gateway never shipped; zero code references. |
+| `docs/attention-dashboard-skeleton-schema.md` | deleted | Contract for the deleted attention-dashboard crate. |
+| `docs/attention-source-arbitration-scaffold.md` | deleted | Scaffold for the deleted attention prototype crates. |
+| `docs/schemas/attention-dashboard-session.schema.json` | deleted | Session schema for the deleted attention dashboard. |
+| `docs/cleanup-deletion-program.md` | deleted | Cleanup program complete; superseded by the FSM-DSL rip-out. |
+| `docs/cleanup-policy.md` | deleted | Superseded with the cleanup program. |
+| `docs/cleanup-verification-matrix.md` | deleted | Primary gate (cleanup-guard) was deleted. |
+| `docs/coding-agent-cleanup-questions.md` | deleted | Working notes for the finished cleanup program. |
+| `docs/handrolled-legacy-cleanup-plan.md` | deleted | Plan executed; surfaces removed. |
+| `docs/low-end-loc-cleanup-plan.md` | deleted | Plan executed; surfaces removed. |
+| `docs/public-export-workflow.md` | deleted | Private-to-public export pipeline retired. |
+| `docs/goals/1context-codex-adapter-implementation-goal.md` | deleted | Goal for the deleted Codex adapter crate. |
+| `docs/review-packets/codex-agent-harness-mail-flow-20260527/` | deleted | Review packet for the retired adapter mail flow. |
+| `docs/screencap-attention-algorithm-notes.md` | `docs/archive/screencap-attention-algorithm-notes.md` | Attention algorithm design notes kept for provenance. |

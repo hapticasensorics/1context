@@ -19,10 +19,6 @@ mail surface in the Rust core. Page lifecycle remains documented here; agent
 directory, delivery, and notification semantics belong in
 [Agent Mail Protocol](agent-mail-protocol.md).
 
-For generic agent consumption, this API is exported through the consolidated
-[Agent Tool Gateway](agent-tool-gateway.md) as `toolset-wiki`. Mail is exported
-separately as `toolset-mail`; do not mix mail controls into the wiki toolset.
-
 ## Ownership Rule
 
 ```text
@@ -401,10 +397,8 @@ Agent mail is intentionally outside the page lifecycle API. Its V0 contract
 belongs in [Agent Mail Protocol](agent-mail-protocol.md), with talk append as
 the bridge from page-local discussion into explicit mail delivery.
 
-Agent-facing mail tools are grouped by the
-[Agent Tool Gateway](agent-tool-gateway.md) as `toolset-mail`. The wiki API
-must continue to own reader content and publishing, while mail owns delivery,
-claim, mark, notification, and future send/reply semantics.
+The wiki API must continue to own reader content and publishing, while mail
+owns delivery, claim, mark, notification, and future send/reply semantics.
 
 Publishing rules remain unchanged when mail arrives:
 

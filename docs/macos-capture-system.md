@@ -40,10 +40,6 @@ It provides:
   CLI as `1context capture status` and `1context capture snapshot`.
 - `1context capture dashboard`, a terminal debug dashboard that reads persisted
   capture JSONL and can request a fresh snapshot with `--snapshot`.
-- `onecontext-capture-dashboard`, a Rust/egui debug GUI bundled into the macOS
-  app and launched with `1context capture dashboard-gui`. It polls the same
-  capture snapshot RPC and renders a low-rate live preview with the window graph
-  beside it.
 - A daemon-owned UX event tap starts with `1contextd` after capture directories
   are prepared. It runs on a dedicated retained thread/runloop, not the request
   queues or main actor, and reports lifecycle health through `capture.status`
@@ -84,12 +80,11 @@ Debug dashboard:
 1context capture dashboard
 1context capture dashboard --snapshot
 1context capture dashboard --snapshot --watch --interval-seconds 2
-1context capture dashboard-gui
 ```
 
-The terminal dashboard is the durable-log view. The Rust GUI is the live visual
-view. Both are debug surfaces: they make it obvious whether the window graph and
-preview pixels agree before browser or Gemini decoding enters the loop.
+The terminal dashboard is the durable-log debug view: it makes it obvious what
+the window graph and persisted capture evidence contain before browser or
+Gemini decoding enters the loop.
 
 UX event tap status includes `startup_wired`, `tap_active`, tap owner process
 identity, queue depth, dropped/coalesced counts, disabled/re-enable counters,

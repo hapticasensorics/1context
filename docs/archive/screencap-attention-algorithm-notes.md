@@ -1,6 +1,6 @@
 # Screencap Attention Algorithm Notes
 
-Status: working algorithm notes
+Status: archived design notes
 Version: attention-ledger.v3
 Last updated: 2026-05-25
 
