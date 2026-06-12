@@ -1,18 +1,14 @@
 //! Agent harness request construction.
 //!
-//! This is the first release-side bridge from the wiki-company pack into the
-//! native `onecontext-agent-harness` / Codex app-server executor. It does not
-//! start a model yet; it builds the durable turn request the executor must own.
+//! Builds the durable turn request the native `onecontext-agent-harness` /
+//! Codex app-server executor owns. Requests are hydrated from a runtime turn
+//! descriptor plus a plain worker profile; no pack or orchestrator TOMLs.
 
-use crate::orchestrator::{route_for_role, WikiCompanyOrchestratorConfig};
-use crate::pack::{AgentConfig, HarnessConfig, JobConfig, WikiCompanyPackConfig};
 use crate::runtime_executor::RuntimeTurnDescriptor;
 use crate::{safe_run_id, ContextEnginePaths, CONTEXT_ENGINE_SCHEMA_VERSION};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
-use std::collections::BTreeSet;
 use std::fs;
-use std::path::Path;
 
 const MAX_HARNESS_ID_LEN: usize = 128;
 
@@ -153,151 +149,76 @@ pub struct HarnessTurnCompletion {
     pub codex_exit_status: Option<i32>,
 }
 
-pub fn build_harness_turn_request(
-    paths: &ContextEnginePaths,
-    pack: &WikiCompanyPackConfig,
-    run_id: &str,
-    job_id: &str,
-) -> Result<HarnessTurnRequest, String> {
-    build_harness_turn_request_inner(paths, pack, None, run_id, job_id)
-}
-
-pub fn build_harness_turn_request_with_orchestrator(
-    paths: &ContextEnginePaths,
-    pack: &WikiCompanyPackConfig,
-    orchestrator: &WikiCompanyOrchestratorConfig,
-    run_id: &str,
-    job_id: &str,
-) -> Result<HarnessTurnRequest, String> {
-    build_harness_turn_request_inner(paths, pack, Some(orchestrator), run_id, job_id)
+/// Plain worker profile for one bounded Codex worker turn. The FSM DSL runner
+/// supplies these directly; there is no pack or orchestrator config behind it.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct HarnessWorkerProfile {
+    pub model: String,
+    pub reasoning_effort: String,
+    pub prompt_text: String,
+    pub tools: Vec<String>,
 }
 
 pub fn build_harness_turn_request_for_runtime_turn(
     paths: &ContextEnginePaths,
-    pack: &WikiCompanyPackConfig,
-    orchestrator: &WikiCompanyOrchestratorConfig,
+    profile: &HarnessWorkerProfile,
     turn: &RuntimeTurnDescriptor,
 ) -> Result<HarnessTurnRequest, String> {
-    let mut request = build_harness_turn_request_with_orchestrator(
-        paths,
-        pack,
-        orchestrator,
-        &turn.run_id,
-        &turn.job_id,
-    )?;
-    request.operation_id = turn.operation_id.clone();
-    request.unit_id = turn.harness_unit_id.clone();
-    request.mail_context =
-        mail_context_for_unit(&request.unit_id, request.mail_context.appendix_enabled);
-    request.required_receipts = receipt_requirements_from_runtime_turn(turn);
-    request.talk_report.thread_id = turn.route.thread_id.clone();
-    request.talk_report.from = turn.route.from_mailbox.clone();
-    request.talk_report.to = turn.route.to.clone();
-    request.talk_report.cc = turn.route.cc.clone();
-    request.source_packet = source_packet_from_runtime_turn(turn)?;
+    let run_id = safe_run_id(&turn.run_id);
+    let unit_id = turn.harness_unit_id.clone();
+    let mail_context = mail_context_for_unit(&unit_id, true);
+    let mut prompt_bundle = vec![HarnessPromptPart {
+        path: format!("worker-profile/{}", safe_run_id(&turn.job_id)),
+        source: format!("job:{}", turn.job_id),
+        bytes: profile.prompt_text.len(),
+        text: profile.prompt_text.clone(),
+    }];
     if let Some(prompt) = source_packet_prompt_part(turn)? {
-        request.prompt_bundle.push(prompt);
+        prompt_bundle.push(prompt);
     }
-    request.prompt_text = render_prompt_text(&request.prompt_bundle, &request.mail_context);
-    Ok(request)
-}
-
-fn build_harness_turn_request_inner(
-    paths: &ContextEnginePaths,
-    pack: &WikiCompanyPackConfig,
-    orchestrator: Option<&WikiCompanyOrchestratorConfig>,
-    run_id: &str,
-    job_id: &str,
-) -> Result<HarnessTurnRequest, String> {
-    let job = find_job(pack, job_id)?;
-    let agent = find_agent(pack, &job.agent)?;
-    let harness = find_harness(pack, &agent.harness)?;
-    let run_id = safe_run_id(run_id);
-    let memory_mode = agent
-        .memory
-        .mode
-        .clone()
-        .unwrap_or_else(|| "episodic".to_string());
-    let memory_attach = agent
-        .memory
-        .attach
-        .clone()
-        .unwrap_or_else(|| "none".to_string());
-    let persistent_session = memory_mode == "persistent";
-    let unit_id = if persistent_session {
-        short_harness_id(&format!("wiki-{}", agent.id))
-    } else {
-        short_harness_id(&format!("{}-tmp-{}", safe_run_id(&job.id), run_id))
-    };
-    let prompt_bundle = load_prompt_bundle(paths, harness, agent, job)?;
-    let mail_context = mail_context(&unit_id, harness);
     let prompt_text = render_prompt_text(&prompt_bundle, &mail_context);
-    let operation_id = format!("{}:{}", run_id, job.id);
-
-    let required_receipts = orchestrator
-        .map(|config| required_receipts_from_orchestrator(paths, config, &run_id, &operation_id))
-        .unwrap_or_else(|| HarnessReceiptRequirements {
-            final_message_path: paths.final_message_receipt_relative_path(
-                &run_id,
-                &operation_id,
-                "final-message.md",
-            ),
-            require_birth_certificate: true,
-            require_turn_start: true,
-            require_context_injection: true,
-            require_adapter_events: true,
-            require_final_message: true,
-            require_talk_append: true,
-            require_mail_delivery: true,
-            require_turn_complete: true,
-        });
-    let route = orchestrator
-        .map(|config| route_for_role(&config.routing, &job.id))
-        .unwrap_or_else(|| fallback_route_for_job(&job.id));
-
     Ok(HarnessTurnRequest {
         schema_version: CONTEXT_ENGINE_SCHEMA_VERSION,
         kind: "onecontext.agent_harness.turn_request.v1".to_string(),
-        operation_id,
         run_id,
-        unit_id: unit_id.clone(),
+        operation_id: turn.operation_id.clone(),
+        unit_id,
         harness: HarnessTurnHarness {
-            id: harness.id.clone(),
-            runner: harness.runner.clone(),
-            transport: harness
-                .transport
-                .clone()
-                .unwrap_or_else(|| "unknown".to_string()),
-            command: harness
-                .command
-                .clone()
-                .unwrap_or_else(|| "onecontext-agent-harness call".to_string()),
-            captures: harness.captures.clone(),
+            id: "codex-app-server".to_string(),
+            runner: "onecontext-agent-harness".to_string(),
+            transport: "codex-app-server".to_string(),
+            command: "codex app-server".to_string(),
+            captures: vec![
+                "harness_birth_certificate".to_string(),
+                "harness_turn_start".to_string(),
+                "context_injection_receipt".to_string(),
+                "adapter_events".to_string(),
+                "final_message".to_string(),
+                "talk_receipt".to_string(),
+                "mail_receipt".to_string(),
+                "harness_turn_complete".to_string(),
+            ],
         },
         agent: HarnessTurnAgent {
-            id: agent.id.clone(),
-            provider: agent.provider.clone(),
-            model: agent.model.clone(),
-            reasoning_effort: agent
-                .model_policy
-                .reasoning_effort
-                .clone()
-                .unwrap_or_else(|| "high".to_string()),
-            memory_mode,
-            memory_attach,
-            persistent_session,
+            id: turn.agent_id.clone(),
+            provider: "openai".to_string(),
+            model: profile.model.clone(),
+            reasoning_effort: profile.reasoning_effort.clone(),
+            memory_mode: "episodic".to_string(),
+            memory_attach: "none".to_string(),
+            persistent_session: false,
         },
         job: HarnessTurnJob {
-            id: job.id.clone(),
-            label: job.label.clone().unwrap_or_else(|| job.id.clone()),
-            inputs: job.inputs.clone(),
-            outputs: job.outputs.clone(),
-            read_permissions: job.permissions.read.clone(),
-            write_permissions: job.permissions.write.clone(),
-            deny_permissions: job.permissions.deny.clone(),
-            completion_done: job.completion.done.clone(),
-            completion_skip: job.completion.skip.clone(),
-            completion_failure: job.completion.failure.clone(),
+            id: turn.job_id.clone(),
+            label: turn.job_id.clone(),
+            inputs: turn.inputs.clone(),
+            outputs: turn.outputs.clone(),
+            read_permissions: Vec::new(),
+            write_permissions: Vec::new(),
+            deny_permissions: Vec::new(),
+            completion_done: Vec::new(),
+            completion_skip: Vec::new(),
+            completion_failure: Vec::new(),
         },
         prompt_bundle,
         prompt_text,
@@ -307,28 +228,19 @@ fn build_harness_turn_request_inner(
             source_root: paths.user_wiki.join("source").display().to_string(),
             talk_root: paths.user_wiki.join("source/talk").display().to_string(),
         },
-        source_packet: HarnessSourcePacket {
-            packet_id: "source-packet.pending".to_string(),
-            source: "perception_db".to_string(),
-            bounded_by_job: true,
-            path: None,
-            content_sha256: None,
-            bytes: None,
-        },
+        source_packet: source_packet_from_runtime_turn(turn)?,
         tool_policy: HarnessToolPolicy {
-            default_tools: harness.default_tools.clone(),
-            agent_tools: agent.tools.clone(),
-            job_tools: job.tools.clone(),
+            default_tools: profile.tools.clone(),
+            agent_tools: Vec::new(),
+            job_tools: Vec::new(),
         },
-        required_receipts,
+        required_receipts: receipt_requirements_from_runtime_turn(turn),
         talk_report: HarnessTalkReport {
-            delivery_mode: orchestrator
-                .map(|config| config.receipts.talk_append.delivery_mode.clone())
-                .unwrap_or_else(|| "mail".to_string()),
-            thread_id: route.thread_id,
-            from: agent_mail_address_for_unit(&unit_id),
-            to: route.to,
-            cc: route.cc,
+            delivery_mode: "mail".to_string(),
+            thread_id: turn.route.thread_id.clone(),
+            from: turn.route.from_mailbox.clone(),
+            to: turn.route.to.clone(),
+            cc: turn.route.cc.clone(),
         },
     })
 }
@@ -522,102 +434,6 @@ fn valid_agent_mail_receipt_segment(value: &str) -> bool {
         .all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '-' | '_' | '.'))
 }
 
-fn find_job<'a>(pack: &'a WikiCompanyPackConfig, job_id: &str) -> Result<&'a JobConfig, String> {
-    pack.jobs
-        .iter()
-        .find(|job| job.id == job_id)
-        .ok_or_else(|| format!("unknown job {job_id:?}"))
-}
-
-fn find_agent<'a>(
-    pack: &'a WikiCompanyPackConfig,
-    agent_id: &str,
-) -> Result<&'a AgentConfig, String> {
-    pack.agents
-        .iter()
-        .find(|agent| agent.id == agent_id)
-        .ok_or_else(|| format!("job references unknown agent {agent_id:?}"))
-}
-
-fn find_harness<'a>(
-    pack: &'a WikiCompanyPackConfig,
-    harness_id: &str,
-) -> Result<&'a HarnessConfig, String> {
-    pack.harnesses
-        .iter()
-        .find(|harness| harness.id == harness_id)
-        .ok_or_else(|| format!("agent references unknown harness {harness_id:?}"))
-}
-
-fn load_prompt_bundle(
-    paths: &ContextEnginePaths,
-    harness: &HarnessConfig,
-    agent: &AgentConfig,
-    job: &JobConfig,
-) -> Result<Vec<HarnessPromptPart>, String> {
-    let mut refs = Vec::<(String, String)>::new();
-    if let Some(prompt) = &harness.prompt_control.model_instructions_file {
-        refs.push((prompt.clone(), format!("harness:{}", harness.id)));
-    }
-    refs.extend(
-        agent
-            .prompt_paths
-            .iter()
-            .map(|path| (path.clone(), format!("agent:{}", agent.id))),
-    );
-    refs.extend(
-        agent
-            .reference_paths
-            .iter()
-            .map(|path| (path.clone(), format!("agent-reference:{}", agent.id))),
-    );
-    refs.extend(
-        job.prompt_paths
-            .iter()
-            .map(|path| (path.clone(), format!("job:{}", job.id))),
-    );
-
-    let mut seen = BTreeSet::<String>::new();
-    let mut bundle = Vec::new();
-    for (path, source) in refs {
-        if !seen.insert(path.clone()) {
-            continue;
-        }
-        let text = read_pack_prompt(paths, &path)?;
-        bundle.push(HarnessPromptPart {
-            bytes: text.len(),
-            path,
-            source,
-            text,
-        });
-    }
-    Ok(bundle)
-}
-
-fn read_pack_prompt(paths: &ContextEnginePaths, prompt_path: &str) -> Result<String, String> {
-    let relative = prompt_path
-        .strip_prefix("prompts/")
-        .ok_or_else(|| format!("prompt path {prompt_path:?} must be under prompts/"))?;
-    let resolved = paths.pack_prompts.join(relative);
-    read_file_to_string(&resolved)
-}
-
-fn read_file_to_string(path: &Path) -> Result<String, String> {
-    fs::read_to_string(path).map_err(|error| format!("failed to read {}: {error}", path.display()))
-}
-
-fn mail_context(unit_id: &str, harness: &HarnessConfig) -> HarnessMailContext {
-    let appendix_enabled = harness.prompt_control.mail_context_appendix;
-    let mailbox = agent_mail_address_for_unit(unit_id);
-    let appendix_text = mail_context_appendix_text(&mailbox);
-    HarnessMailContext {
-        thread_id: "mail://wiki-company".to_string(),
-        mailbox,
-        appendix_enabled,
-        appendix_text,
-    }
-}
-
 fn render_prompt_text(
     prompt_bundle: &[HarnessPromptPart],
     mail_context: &HarnessMailContext,
@@ -645,79 +461,292 @@ fn mail_context_appendix_text(mailbox: &str) -> String {
     )
 }
 
-fn required_receipts_from_orchestrator(
-    paths: &ContextEnginePaths,
-    config: &WikiCompanyOrchestratorConfig,
-    run_id: &str,
-    operation_id: &str,
-) -> HarnessReceiptRequirements {
-    let final_message_path = paths.final_message_receipt_relative_path(
-        run_id,
-        operation_id,
-        &config.receipts.final_message.path,
-    );
-    HarnessReceiptRequirements {
-        final_message_path,
-        require_birth_certificate: config.receipts.required.harness_birth_certificate,
-        require_turn_start: config.receipts.required.harness_turn_start,
-        require_context_injection: config.receipts.required.context_injection_receipt,
-        require_adapter_events: config.receipts.required.adapter_events,
-        require_final_message: config.receipts.required.final_message,
-        require_talk_append: config.receipts.required.talk_append,
-        require_mail_delivery: config.receipts.required.mail_delivery,
-        require_turn_complete: config.receipts.required.harness_turn_complete,
-    }
-}
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-fn fallback_route_for_job(job_id: &str) -> crate::orchestrator::ResolvedRoute {
-    crate::orchestrator::ResolvedRoute {
-        from_role: job_id.to_string(),
-        thread_id: "job.run_id".to_string(),
-        to: fallback_route_to(job_id),
-        cc: fallback_route_cc(job_id),
-    }
-}
-
-fn fallback_route_to(job_id: &str) -> Vec<String> {
-    match job_id {
-        "memory.hourly.scribe"
-        | "memory.hourly.block_scribe"
-        | "memory.hourly.aggregate_scribe" => vec!["role://memory.wiki.historian".to_string()],
-        "memory.wiki.historian" => vec!["role://memory.hourly.answerer".to_string()],
-        "memory.hourly.answerer" => vec!["role://memory.wiki.for_you_editor".to_string()],
-        "memory.wiki.for_you_editor" => vec!["role://memory.wiki.for_you_curator".to_string()],
-        "memory.wiki.biographer" => vec!["role://memory.wiki.for_you_curator".to_string()],
-        "memory.wiki.librarian" | "memory.wiki.librarian_sweep" => vec![
-            "role://memory.wiki.for_you_curator".to_string(),
-            "role://memory.wiki.context_curator".to_string(),
-        ],
-        "memory.wiki.for_you_curator" => vec!["mailbox://page/for-you".to_string()],
-        "memory.wiki.context_curator" => vec!["mailbox://page/your-context".to_string()],
-        _ => vec!["list://wiki-company".to_string()],
-    }
-}
-
-fn fallback_route_cc(job_id: &str) -> Vec<String> {
-    match job_id {
-        "memory.wiki.historian" => vec![
-            "role://memory.wiki.for_you_editor".to_string(),
-            "mailbox://page/for-you".to_string(),
-        ],
-        "memory.hourly.answerer" => vec![
-            "role://memory.wiki.historian".to_string(),
-            "mailbox://page/for-you".to_string(),
-        ],
-        "memory.wiki.for_you_editor" => vec![
-            "role://memory.wiki.librarian".to_string(),
-            "mailbox://page/for-you".to_string(),
-        ],
-        "memory.wiki.biographer" => vec![
-            "role://memory.wiki.librarian".to_string(),
-            "list://wiki-company".to_string(),
-        ],
-        "memory.wiki.for_you_curator" | "memory.wiki.context_curator" => {
-            vec!["list://wiki-company".to_string()]
+    fn literal_request() -> HarnessTurnRequest {
+        HarnessTurnRequest {
+            schema_version: CONTEXT_ENGINE_SCHEMA_VERSION,
+            kind: "onecontext.agent_harness.turn_request.v1".to_string(),
+            run_id: "literal-run".to_string(),
+            operation_id: "literal-run:memory.wiki.for_you_curator".to_string(),
+            unit_id: "literal-run-memory.wiki.for_you_curator".to_string(),
+            harness: HarnessTurnHarness {
+                id: "codex-app-server".to_string(),
+                runner: "onecontext-agent-harness".to_string(),
+                transport: "codex-app-server".to_string(),
+                command: "codex app-server".to_string(),
+                captures: vec!["final_message".to_string()],
+            },
+            agent: HarnessTurnAgent {
+                id: "for-you-curator".to_string(),
+                provider: "openai".to_string(),
+                model: "gpt-5.2".to_string(),
+                reasoning_effort: "high".to_string(),
+                memory_mode: "episodic".to_string(),
+                memory_attach: "none".to_string(),
+                persistent_session: false,
+            },
+            job: HarnessTurnJob {
+                id: "memory.wiki.for_you_curator".to_string(),
+                label: "Curate For You".to_string(),
+                inputs: Vec::new(),
+                outputs: Vec::new(),
+                read_permissions: Vec::new(),
+                write_permissions: Vec::new(),
+                deny_permissions: Vec::new(),
+                completion_done: Vec::new(),
+                completion_skip: Vec::new(),
+                completion_failure: Vec::new(),
+            },
+            prompt_bundle: Vec::new(),
+            prompt_text: "curate".to_string(),
+            mail_context: mail_context_for_unit("literal-run-memory.wiki.for_you_curator", true),
+            wiki_context: HarnessWikiContext {
+                user_wiki_root: "/tmp/1Context/user-wiki".to_string(),
+                source_root: "/tmp/1Context/user-wiki/source".to_string(),
+                talk_root: "/tmp/1Context/user-wiki/source/talk".to_string(),
+            },
+            source_packet: HarnessSourcePacket {
+                packet_id: "source-packet.pending".to_string(),
+                source: "perception_db".to_string(),
+                bounded_by_job: true,
+                path: None,
+                content_sha256: None,
+                bytes: None,
+            },
+            tool_policy: HarnessToolPolicy {
+                default_tools: vec!["agent.mail.read".to_string()],
+                agent_tools: Vec::new(),
+                job_tools: Vec::new(),
+            },
+            required_receipts: HarnessReceiptRequirements {
+                final_message_path:
+                    "context-engine/live/runs/literal-run/turns/op/attempt-0001/final-message.md"
+                        .to_string(),
+                require_birth_certificate: true,
+                require_turn_start: true,
+                require_context_injection: true,
+                require_adapter_events: true,
+                require_final_message: true,
+                require_talk_append: true,
+                require_mail_delivery: true,
+                require_turn_complete: true,
+            },
+            talk_report: HarnessTalkReport {
+                delivery_mode: "mail".to_string(),
+                thread_id: "mail://wiki-company".to_string(),
+                from: "agent://context-engine/literal-run-memory.wiki.for_you_curator".to_string(),
+                to: vec!["mailbox://page/for-you".to_string()],
+                cc: vec!["list://wiki-company".to_string()],
+            },
         }
-        _ => vec!["list://wiki-company".to_string()],
+    }
+
+    fn complete_receipts() -> HarnessTurnReceipts {
+        HarnessTurnReceipts {
+            codex_exit_status: Some(0),
+            harness_birth_certificate: true,
+            harness_turn_start: true,
+            context_injection_receipt: true,
+            adapter_events: true,
+            final_message: Some("status: completed".to_string()),
+            talk_receipt: Some("wiki.talk.append:for-you".to_string()),
+            mail_receipt: Some("agent-mail://msg-1/delivery-1".to_string()),
+            harness_turn_complete: true,
+        }
+    }
+
+    #[test]
+    fn harness_completion_requires_all_required_receipts() {
+        let request = literal_request();
+        let completion = evaluate_harness_turn_completion(&request, &complete_receipts());
+
+        assert!(completion.complete);
+        assert_eq!(completion.status, "complete");
+        assert!(completion.issues.is_empty());
+    }
+
+    #[test]
+    fn harness_completion_rejects_missing_final_message() {
+        let request = literal_request();
+        let mut receipts = complete_receipts();
+        receipts.final_message = Some("   ".to_string());
+        let completion = evaluate_harness_turn_completion(&request, &receipts);
+
+        assert!(!completion.complete);
+        assert!(completion
+            .issues
+            .iter()
+            .any(|issue| issue.contains("missing non-empty final message")));
+    }
+
+    #[test]
+    fn harness_completion_rejects_missing_talk_or_mail_receipt() {
+        let request = literal_request();
+        let mut receipts = complete_receipts();
+        receipts.talk_receipt = None;
+        receipts.mail_receipt = None;
+        let completion = evaluate_harness_turn_completion(&request, &receipts);
+
+        assert!(!completion.complete);
+        assert!(completion
+            .issues
+            .iter()
+            .any(|issue| issue.contains("wiki.talk.append")));
+        assert!(completion
+            .issues
+            .iter()
+            .any(|issue| issue.contains("Agent Mail delivery")));
+    }
+
+    #[test]
+    fn harness_completion_rejects_audit_jsonl_as_agent_mail_receipt() {
+        let request = literal_request();
+        let mut receipts = complete_receipts();
+        receipts.mail_receipt =
+            Some("context-engine/live/mail/threads/wiki-company.jsonl".to_string());
+        let completion = evaluate_harness_turn_completion(&request, &receipts);
+
+        assert!(!completion.complete);
+        assert!(completion
+            .issues
+            .iter()
+            .any(|issue| issue == "missing Agent Mail delivery receipt"));
+    }
+
+    #[test]
+    fn harness_completion_rejects_mail_thread_uri_as_agent_mail_receipt() {
+        let request = literal_request();
+        let mut receipts = complete_receipts();
+        receipts.mail_receipt = Some("mail://wiki-company".to_string());
+        let completion = evaluate_harness_turn_completion(&request, &receipts);
+
+        assert!(!completion.complete);
+        assert!(completion
+            .issues
+            .iter()
+            .any(|issue| issue == "missing Agent Mail delivery receipt"));
+    }
+
+    #[test]
+    fn harness_completion_rejects_codex_exit_only() {
+        let request = literal_request();
+        let receipts = HarnessTurnReceipts {
+            codex_exit_status: Some(0),
+            ..HarnessTurnReceipts::default()
+        };
+        let completion = evaluate_harness_turn_completion(&request, &receipts);
+
+        assert!(!completion.complete);
+        assert!(completion
+            .issues
+            .iter()
+            .any(|issue| issue == "codex exit status alone is not a completion receipt"));
+    }
+
+    #[test]
+    fn harness_completion_rejects_failed_codex_worker_turn() {
+        let request = literal_request();
+        let mut receipts = complete_receipts();
+        receipts.codex_exit_status = Some(1);
+        let completion = evaluate_harness_turn_completion(&request, &receipts);
+
+        assert!(!completion.complete);
+        assert!(completion
+            .issues
+            .iter()
+            .any(|issue| issue == "codex adapter did not report a successful worker turn"));
+    }
+
+    #[test]
+    fn runtime_turn_request_uses_worker_profile_and_route() {
+        use crate::runtime_executor::RuntimeTurnRoute;
+        use crate::scheduler::ScheduledReceiptExpectations;
+        use std::collections::BTreeMap;
+
+        let temp = tempfile::tempdir().expect("tempdir");
+        let paths = ContextEnginePaths::new(temp.path().join("runtime/1Context"));
+        let turn = RuntimeTurnDescriptor {
+            schema_version: CONTEXT_ENGINE_SCHEMA_VERSION,
+            kind: "onecontext.context_engine.runtime_turn_descriptor.v1".to_string(),
+            run_id: "profile-run".to_string(),
+            status: "runnable".to_string(),
+            operation_id: "profile-run:scribe-unit".to_string(),
+            harness_unit_id: "profile-run-scribe-unit".to_string(),
+            harness_turn_id: "turn-profile-run-scribe-unit".to_string(),
+            phase_id: "wake_scribes".to_string(),
+            job_id: "memory.hourly.scribe".to_string(),
+            agent_id: "hourly-scribe".to_string(),
+            unit_id: "scribe-unit".to_string(),
+            fanout: "once".to_string(),
+            max_concurrent: None,
+            packet_id: None,
+            date: None,
+            hour: None,
+            bindings: BTreeMap::new(),
+            unit_scope: BTreeMap::new(),
+            inputs: vec!["source_packet".to_string()],
+            outputs: vec!["scribe_artifacts".to_string()],
+            required_artifacts: Vec::new(),
+            required_mail: Vec::new(),
+            route: RuntimeTurnRoute {
+                thread_id: "mail://wiki-company".to_string(),
+                from_role: "memory.hourly.scribe".to_string(),
+                from_mailbox: agent_mail_address_for_unit("profile-run-scribe-unit"),
+                to: vec!["role://memory.wiki.historian".to_string()],
+                cc: vec!["list://wiki-company".to_string()],
+            },
+            receipt_expectations: ScheduledReceiptExpectations {
+                durable_receipt: "mail://wiki-company".to_string(),
+                require_birth_certificate: true,
+                require_turn_start: true,
+                require_context_injection: true,
+                require_adapter_events: true,
+                require_final_message: true,
+                require_talk_append: true,
+                require_mail_delivery: true,
+                require_turn_complete: true,
+                final_message_path: "final-message.md".to_string(),
+                final_message_fields: Vec::new(),
+                talk_delivery_mode: "mail".to_string(),
+                require_non_empty_final_message: true,
+                do_not_count_codex_exit_as_done: true,
+            },
+            final_message_path:
+                "context-engine/live/runs/profile-run/turns/profile-run-scribe-unit/attempt-0001/final-message.md"
+                    .to_string(),
+            source_packet_path: None,
+            source_packet_hash: None,
+            condition: None,
+        };
+        let profile = HarnessWorkerProfile {
+            model: "gpt-5.2".to_string(),
+            reasoning_effort: "high".to_string(),
+            prompt_text: "SCRIBE_PROFILE_PROMPT".to_string(),
+            tools: vec!["agent.mail.read".to_string(), "artifact.write".to_string()],
+        };
+
+        let request = build_harness_turn_request_for_runtime_turn(&paths, &profile, &turn)
+            .expect("build runtime turn request");
+
+        assert_eq!(request.run_id, "profile-run");
+        assert_eq!(request.operation_id, turn.operation_id);
+        assert_eq!(request.unit_id, turn.harness_unit_id);
+        assert_eq!(request.agent.id, "hourly-scribe");
+        assert_eq!(request.agent.model, "gpt-5.2");
+        assert_eq!(request.agent.reasoning_effort, "high");
+        assert_eq!(request.job.id, "memory.hourly.scribe");
+        assert_eq!(request.tool_policy.default_tools, profile.tools);
+        assert!(request.prompt_text.contains("SCRIBE_PROFILE_PROMPT"));
+        assert!(request.prompt_text.contains("## Agent Mail Context"));
+        assert_eq!(request.talk_report.from, turn.route.from_mailbox);
+        assert_eq!(request.talk_report.to, turn.route.to);
+        assert_eq!(request.talk_report.cc, turn.route.cc);
+        assert_eq!(
+            request.required_receipts.final_message_path,
+            turn.final_message_path
+        );
     }
 }

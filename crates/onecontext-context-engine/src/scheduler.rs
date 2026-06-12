@@ -5,9 +5,8 @@
 
 use crate::orchestration::{
     ExecutableOrchestrationPlan, ExecutablePacketPolicy, ExecutablePhaseJob,
-    ExecutableReceiptPolicy,
+    ExecutableReceiptPolicy, ResolvedRoute,
 };
-use crate::orchestrator::ResolvedRoute;
 use crate::scheduler_bindings::{parse_binding_expression, BindingReference};
 use crate::{safe_run_id, CONTEXT_ENGINE_SCHEMA_VERSION};
 use serde::{Deserialize, Serialize};

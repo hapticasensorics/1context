@@ -11,12 +11,11 @@ use crate::fanout::FanoutContext;
 use crate::harness_executor::{
     build_harness_turn_request_for_runtime_turn, evaluate_harness_turn_completion,
     short_harness_id, HarnessTurnCompletion, HarnessTurnReceipts, HarnessTurnRequest,
+    HarnessWorkerProfile,
 };
 use crate::memoryd_client::{ensure_memory_storage_gate, query_recent_source_events};
-use crate::orchestration::{build_executable_orchestration_plan, planner_policy_from_config};
-use crate::orchestrator::load_wiki_company_orchestrator_config;
-use crate::pack::WikiCompanyPackConfig;
-use crate::packet_planner::build_packet_plan;
+use crate::orchestration::ExecutableOrchestrationPlan;
+use crate::packet_planner::{build_packet_plan, PacketPlannerPolicy};
 use crate::receipt_bridge::{
     agent_mail_receipt_for_job, append_scheduler_receipt, apply_appended_receipt_to_state,
     AgentMailReceiptState, ReceiptAuthority,
@@ -182,21 +181,21 @@ pub struct CodexWorkerTurnResult {
 
 pub fn execute_wiki_company_agents(
     paths: &ContextEnginePaths,
-    pack: &WikiCompanyPackConfig,
+    executable: &ExecutableOrchestrationPlan,
+    worker_profiles: &BTreeMap<String, HarnessWorkerProfile>,
+    packet_policy: &PacketPlannerPolicy,
     run_id: &str,
     max_agents: u32,
     source_window_days: u32,
 ) -> Result<WikiCompanyAgentExecution, String> {
     let mut turns = Vec::new();
     let mut issues = Vec::new();
-    let orchestrator = load_wiki_company_orchestrator_config(paths)?;
-    let executable = build_executable_orchestration_plan(pack, &orchestrator)?;
     let mut state = load_or_new_state(paths, run_id)?;
 
     let live_scaffold = build_live_runtime_scaffold(
         paths,
-        &orchestrator,
-        &executable,
+        executable,
+        packet_policy,
         run_id,
         max_agents,
         source_window_days,
@@ -208,8 +207,10 @@ pub fn execute_wiki_company_agents(
     ensure_orchestrator_unit(paths)?;
     let mut completed_operation_ids = BTreeSet::new();
     for turn in &requested_turns {
-        let request =
-            build_harness_turn_request_for_runtime_turn(paths, pack, &orchestrator, turn)?;
+        let profile = worker_profiles.get(turn.job_id.as_str()).ok_or_else(|| {
+            format!("no worker profile provided for job {}", turn.job_id)
+        })?;
+        let request = build_harness_turn_request_for_runtime_turn(paths, profile, turn)?;
         match execute_harness_turn_request(paths, request) {
             Ok(result) => {
                 if !result.completion.complete {
@@ -260,7 +261,6 @@ pub fn execute_wiki_company_agents(
 
 pub fn codex_worker_thread_config() -> Value {
     json!({
-        "onecontext_worker_turn": true,
         "features.multi_agent": false,
         "features.multi_agent_v2": false,
         "features.multi_agent_v2.enabled": false,
@@ -338,8 +338,8 @@ fn ensure_orchestrator_unit(paths: &ContextEnginePaths) -> Result<(), String> {
 
 fn build_live_runtime_scaffold(
     paths: &ContextEnginePaths,
-    orchestrator: &crate::orchestrator::WikiCompanyOrchestratorConfig,
-    executable: &crate::orchestration::ExecutableOrchestrationPlan,
+    executable: &ExecutableOrchestrationPlan,
+    packet_policy: &PacketPlannerPolicy,
     run_id: &str,
     max_agents: u32,
     source_window_days: u32,
@@ -355,7 +355,7 @@ fn build_live_runtime_scaffold(
         && selected_packets.is_empty()
     {
         let (packet, source_artifact) =
-            materialize_live_source_packet(paths, orchestrator, run_id, source_window_days)?;
+            materialize_live_source_packet(paths, packet_policy, run_id, source_window_days)?;
         selected_packets.push(packet.clone());
         available_artifacts.push(source_artifact.clone());
         state.add_artifact(source_artifact);
@@ -880,7 +880,7 @@ fn complete_harness_turn_after_error(
 
 fn materialize_live_source_packet(
     paths: &ContextEnginePaths,
-    orchestrator: &crate::orchestrator::WikiCompanyOrchestratorConfig,
+    packet_policy: &PacketPlannerPolicy,
     run_id: &str,
     source_window_days: u32,
 ) -> Result<(MaterializedSourcePacket, crate::artifacts::ArtifactHandle), String> {
@@ -911,7 +911,8 @@ fn materialize_live_source_packet(
         ));
     }
 
-    let mut packet_policy = planner_policy_from_config(orchestrator, source_window_days);
+    let mut packet_policy = packet_policy.clone();
+    packet_policy.window_days = source_window_days;
     packet_policy.max_packets_per_run = 1;
     let packet_plan =
         build_packet_plan(&source_probe.source_events, packet_policy, &BTreeSet::new());
@@ -2433,10 +2434,7 @@ mod tests {
     #[test]
     fn worker_thread_config_is_harness_only() {
         let config = codex_worker_thread_config();
-        assert_eq!(
-            config["onecontext_worker_turn"],
-            serde_json::Value::Bool(true)
-        );
+        assert_eq!(config.get("onecontext_worker_turn"), None);
         assert_eq!(
             config["features.multi_agent"],
             serde_json::Value::Bool(false)
