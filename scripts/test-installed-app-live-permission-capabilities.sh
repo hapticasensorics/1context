@@ -12,7 +12,6 @@ Environment:
   ONECONTEXT_APP                         Timestamped dev permission-test app bundle to verify. Required.
   ONECONTEXT_CAPABILITY_EVIDENCE_DIR     Defaults to dist/live-permission-capability-evidence/<timestamp>.
   ONECONTEXT_PERMISSION_PROBE_TIMEOUT    Per-capability timeout in seconds. Defaults to 5.
-  ONECONTEXT_INCLUDE_BROWSER_EXTENSION=1 Include the dev browser extension probe. Defaults to skipped.
 
 Runs the installed timestamped dev app executable in hidden one-shot probe mode,
 using the app bundle's signed TCC identity. This is the only live TCC probe path
@@ -57,9 +56,6 @@ codesign -dv --verbose=4 "$APP" >"$EVIDENCE_DIR/codesign.txt" 2>&1 || true
 codesign -d --entitlements :- "$APP" >"$EVIDENCE_DIR/entitlements.plist" 2>"$EVIDENCE_DIR/entitlements.err" || true
 
 args=(--permission-capability-probe --json "$REPORT" --timeout "$TIMEOUT")
-if [[ "${ONECONTEXT_INCLUDE_BROWSER_EXTENSION:-0}" == "1" ]]; then
-  args+=(--include-browser-extension)
-fi
 
 set +e
 "$MAIN_EXE" "${args[@]}" >"$STDOUT" 2>"$STDERR"

@@ -9,9 +9,7 @@ recycle-bin/
 dist/
 target/
 node_modules/
-.playwright-cli/
-.playwright-mcp/
-.playwright-artifacts/
+.playwright*/
 .tmp-wiki-browser-*/
 test-results/
 docs/assets/attention-capture-mockup/
@@ -19,8 +17,7 @@ docs/assets/**/*.mov
 docs/assets/**/*.mp4
 demos/agent-mail-triad/static/fixtures/latest.json
 demos/peekaboo-evidence-wall/.evidence/
-demos/peekaboo-evidence-wall/__pycache__/
-scripts/__pycache__/
+__pycache__/
 .vscode/
 macos/.build/
 memory-core/.venv/
@@ -33,8 +30,8 @@ memory-core/storage/artifacts/
 memory-core/storage/cursors/
 memory-core/storage/lakestore/*.lance/
 wiki-engine/node_modules/
-wiki-engine/**/__pycache__/
 *.pyc
 release/runner/node_modules/
 release/runner/dist/
 release/managed-postgres/runtime/
+TODO.md

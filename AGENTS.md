@@ -37,7 +37,6 @@ open -na "/Applications/$APP_NAME.app"
 "/Applications/$APP_NAME.app/Contents/MacOS/1context-cli" diagnose
 
 ONECONTEXT_APP="/Applications/$APP_NAME.app" \
-ONECONTEXT_INCLUDE_BROWSER_EXTENSION=1 \
 ./scripts/test-installed-app-live-permission-capabilities.sh
 ```
 
