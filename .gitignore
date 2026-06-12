@@ -38,3 +38,4 @@ wiki-engine/**/__pycache__/
 release/runner/node_modules/
 release/runner/dist/
 release/managed-postgres/runtime/
+release/node-runtime/

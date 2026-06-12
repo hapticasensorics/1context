@@ -24,7 +24,7 @@ public final class WikiCoreRPCBridge: @unchecked Sendable {
         try client.call(arguments)
       },
       defaultWikiEngineDirectory: rendererConfig?.engineDirectory.path,
-      defaultNodeExecutable: rendererConfig?.nodeExecutable.path
+      defaultNodeExecutable: rendererConfig?.node.executable?.path
     )
   }
 

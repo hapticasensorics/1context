@@ -10,6 +10,7 @@ import OneContextProtocol
 import OneContextSetup
 import OneContextSupervisor
 import OneContextUpdate
+import OneContextWikiRuntime
 
 @main
 struct OneContextCLI {
@@ -196,6 +197,7 @@ struct OneContextCLI {
 
     printMemoryDiagnostics(redact: redact)
     printLocalWebDiagnostics(redact: redact)
+    printWikiRendererDiagnostics(redact: redact)
 
     print("\nSetup:")
     for line in OneContextAppSetupDiagnostics.render(
@@ -263,6 +265,51 @@ struct OneContextCLI {
     print("  Next Site: \(displayPath(diagnostics.nextSitePath, redact: redact))")
     print("  Current Has Index: \(yesNo(diagnostics.currentSiteHasIndex))")
     print("  Current Has Health: \(yesNo(diagnostics.currentSiteHasHealth))")
+  }
+
+  static func printWikiRendererDiagnostics(redact: Bool) {
+    let config = WikiEngineRendererConfig.discover()
+    let node = config?.node ?? WikiEngineRendererConfig.resolveNode()
+
+    print("\nWiki Renderer:")
+    if let engineDirectory = config?.engineDirectory {
+      print("  Engine: \(displayPath(engineDirectory.path, redact: redact))")
+    } else {
+      print("  Engine: missing")
+    }
+    print("  Node Source: \(node.source.rawValue)")
+    guard let executable = node.executable else {
+      print("  Node: FAILING - no Node.js runtime found (checked ONECONTEXT_NODE, bundled node-runtime, PATH); wiki re-publish cannot run")
+      return
+    }
+    print("  Node Path: \(displayPath(executable.path, redact: redact))")
+    if let version = nodeVersionString(executable) {
+      print("  Node Version: \(version)")
+    } else {
+      print("  Node Version: FAILING - node --version did not run; wiki re-publish cannot run")
+    }
+  }
+
+  static func nodeVersionString(_ executable: URL) -> String? {
+    let process = Process()
+    process.executableURL = executable
+    process.arguments = (executable.lastPathComponent == "env" ? ["node"] : []) + ["--version"]
+    process.standardInput = FileHandle.nullDevice
+    let stdout = Pipe()
+    process.standardOutput = stdout
+    process.standardError = Pipe()
+    do {
+      try process.run()
+    } catch {
+      return nil
+    }
+    let data = stdout.fileHandleForReading.readDataToEndOfFile()
+    process.waitUntilExit()
+    guard process.terminationStatus == 0 else {
+      return nil
+    }
+    let version = String(decoding: data, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
+    return version.isEmpty ? nil : version
   }
 
   static func printMemoryDiagnostics(redact: Bool) {

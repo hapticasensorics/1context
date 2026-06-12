@@ -361,6 +361,73 @@ package_managed_postgres() {
   verify_managed_postgres_bundle "$MANAGED_POSTGRES_RESOURCE_DIR" >/dev/null
 }
 
+# >>> bundled node runtime (wiki renderer; staged by scripts/stage-node-runtime.sh) >>>
+NODE_RUNTIME_SOURCE_DIR="${ONECONTEXT_NODE_RUNTIME_SOURCE_DIR:-$ROOT/release/node-runtime/macos-arm64}"
+
+package_node_runtime() {
+  local dest="$RESOURCES_DIR/node-runtime"
+  if [[ "${ONECONTEXT_BUNDLE_NODE:-}" == "1" && ! -x "$NODE_RUNTIME_SOURCE_DIR/bin/node" ]]; then
+    "$ROOT/scripts/stage-node-runtime.sh" --dest "$NODE_RUNTIME_SOURCE_DIR"
+  fi
+  if [[ ! -x "$NODE_RUNTIME_SOURCE_DIR/bin/node" ]]; then
+    echo "Skipping bundled Node runtime: no staged runtime at $NODE_RUNTIME_SOURCE_DIR (run scripts/stage-node-runtime.sh or set ONECONTEXT_BUNDLE_NODE=1). Installed-app wiki re-render will need ONECONTEXT_NODE or node on PATH." >&2
+    return
+  fi
+  mkdir -p "$dest/bin"
+  cp "$NODE_RUNTIME_SOURCE_DIR/bin/node" "$dest/bin/node"
+  chmod 755 "$dest/bin/node"
+  if [[ -f "$NODE_RUNTIME_SOURCE_DIR/LICENSE" ]]; then
+    cp "$NODE_RUNTIME_SOURCE_DIR/LICENSE" "$dest/LICENSE"
+  fi
+  "$dest/bin/node" --version > "$dest/node.version"
+  cat > "$dest/THIRD_PARTY_NOTICES.txt" <<'EOF'
+Node.js
+Homepage: https://nodejs.org/
+Source: https://github.com/nodejs/node
+License: MIT (see LICENSE for bundled component licenses)
+Bundled by 1Context so post-install wiki re-renders never depend on a
+host-installed Node.js.
+EOF
+}
+
+node_runtime_entitlements_file() {
+  local node_bin="$1"
+  local entitlements="$ROOT/dist/node-runtime-entitlements.plist"
+  if codesign -d --entitlements - --xml "$node_bin" > "$entitlements" 2>/dev/null && [[ -s "$entitlements" ]]; then
+    # Notarization rejects get-task-allow; Node only needs its JIT entitlements.
+    /usr/libexec/PlistBuddy -c 'Delete :com.apple.security.get-task-allow' "$entitlements" >/dev/null 2>&1 || true
+    printf '%s\n' "$entitlements"
+  fi
+}
+
+sign_node_runtime_release() {
+  local node_bin="$RESOURCES_DIR/node-runtime/bin/node"
+  [[ -f "$node_bin" ]] || return 0
+  # Node needs its shipped JIT entitlements to survive hardened-runtime re-signing.
+  local entitlements
+  entitlements="$(node_runtime_entitlements_file "$node_bin")"
+  local args=()
+  if [[ -n "$entitlements" ]]; then
+    args+=(--entitlements "$entitlements")
+  fi
+  codesign_release "${args[@]}" --identifier "$BUNDLE_IDENTIFIER.node" --sign "$IDENTITY" "$node_bin" >/dev/null
+  "$node_bin" --version >/dev/null
+}
+
+sign_node_runtime_adhoc() {
+  local node_bin="$RESOURCES_DIR/node-runtime/bin/node"
+  [[ -f "$node_bin" ]] || return 0
+  local entitlements
+  entitlements="$(node_runtime_entitlements_file "$node_bin")"
+  if [[ -n "$entitlements" ]]; then
+    codesign_adhoc_runtime --entitlements "$entitlements" "$node_bin" >/dev/null
+  else
+    codesign_adhoc_runtime "$node_bin" >/dev/null
+  fi
+  "$node_bin" --version >/dev/null
+}
+# <<< bundled node runtime <<<
+
 swift build --package-path "$MACOS_DIR" -c release --arch "$ARCH"
 BIN_DIR="$(swift build --package-path "$MACOS_DIR" -c release --arch "$ARCH" --show-bin-path)"
 cargo build --release --package onecontext-wiki-daemon
@@ -396,6 +463,7 @@ if [[ ! -d "$BIN_DIR/Sparkle.framework" ]]; then
 fi
 ditto "$BIN_DIR/Sparkle.framework" "$FRAMEWORKS_DIR/Sparkle.framework"
 package_managed_postgres
+package_node_runtime # bundled node runtime (wiki renderer)
 CADDY_BUNDLE_DIR="$RESOURCES_DIR/local-web/caddy"
 resolve_caddy_source
 if [[ -z "$CADDY_SOURCE" || ! -x "$CADDY_SOURCE" ]]; then
@@ -700,6 +768,7 @@ if [[ "$SIGNING_MODE" == "developer-id" || "$SIGNING_MODE" == "apple-development
     --sign "$IDENTITY" \
     "$RESOURCES_DIR/1context-local-web-proxy" >/dev/null
   sign_managed_postgres_release
+  sign_node_runtime_release # bundled node runtime (wiki renderer)
   codesign_release \
     --entitlements "$MACOS_DIR/entitlements.plist" \
     --sign "$IDENTITY" \
@@ -722,6 +791,7 @@ elif command -v codesign >/dev/null 2>&1; then
   codesign_adhoc_runtime --entitlements "$MACOS_DIR/entitlements.plist" "$MACOS_APP_DIR/onecontext-context-engine" >/dev/null
   codesign_adhoc_runtime --entitlements "$MACOS_DIR/entitlements.plist" "$RESOURCES_DIR/1context-local-web-proxy" >/dev/null
   sign_managed_postgres_adhoc
+  sign_node_runtime_adhoc # bundled node runtime (wiki renderer)
   codesign_adhoc_runtime --entitlements "$MACOS_DIR/entitlements.plist" "$MACOS_APP_DIR/1Context" >/dev/null
   write_runtime_defaults_manifest
   codesign_adhoc_runtime --entitlements "$MACOS_DIR/entitlements.plist" "$APP_DIR" >/dev/null
