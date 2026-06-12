@@ -3631,4 +3631,479 @@ wiki.editor.reported
             "totalTokens should cover outputTokens: {usage:?}"
         );
     }
+
+    /// Replace exactly one occurrence, failing loudly if the trim target has
+    /// drifted out of the committed prompt text.
+    fn trim_prompt(text: &str, label: &str, from: &str, to: &str) -> String {
+        assert!(
+            text.contains(from),
+            "prompt trim {label} no longer matches the committed prompt text; \
+             update the trim target. missing:\n{from}"
+        );
+        eprintln!("--- prompt trim {label} applied");
+        text.replacen(from, to, 1)
+    }
+
+    /// Live two-role chain: scribe -> historian through the real
+    /// `execute_harness_turn_request` path on stock codex-cli, using the REAL
+    /// pack role prompts and a synthetic source packet materialized by the
+    /// real planner + materializer. The historian receives the scribe's
+    /// product push-mail style: embedded verbatim in its turn input.
+    ///
+    /// `cargo test -p onecontext-context-engine --lib live_two_role_chain_smoke -- --ignored --nocapture`
+    #[test]
+    #[ignore = "live: spawns stock codex app-server twice and spends tokens"]
+    fn live_two_role_chain_smoke() {
+        use crate::harness_executor::{
+            agent_mail_address_for_unit, build_harness_turn_request_for_runtime_turn,
+            HarnessWorkerProfile,
+        };
+        use crate::packet_planner::SourceEvent;
+        use crate::runtime_executor::{RuntimeTurnDescriptor, RuntimeTurnRoute};
+        use crate::scheduler::ScheduledReceiptExpectations;
+        use std::collections::BTreeMap;
+
+        std::env::set_var("ONECONTEXT_CONTEXT_ENGINE_WORKER_TIMEOUT_SECS", "240");
+        let temp = tempfile::tempdir().expect("tempdir");
+        let paths = ContextEnginePaths::new(temp.path().join("runtime/1Context"));
+        paths.ensure_release_dirs().expect("release dirs");
+        let seed_wiki = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../runtime/1Context/user-wiki");
+        let copy_status = std::process::Command::new("cp")
+            .arg("-R")
+            .arg(&seed_wiki)
+            .arg(paths.user_wiki.parent().expect("user-wiki parent"))
+            .status()
+            .expect("seed user-wiki copy");
+        assert!(copy_status.success(), "seed user-wiki copy failed");
+        ensure_orchestrator_unit(&paths).expect("orchestrator root unit");
+
+        // --- Synthetic source packet: 5 realistic coding-session events in
+        // one hour window, defined as JSON and pushed through the REAL
+        // packet planner + materializer so the packet format, packet_id,
+        // date/hour, path, and source_packet_hash all match production.
+        let packet_date = "2026-06-11";
+        let packet_hour = "14";
+        let events_json = r#"[
+          {
+            "ts": "2026-06-11T14:03:12Z",
+            "session_id": "codex-0611-memdb",
+            "kind": "user_message",
+            "role": "user",
+            "source": "codex",
+            "privacy_class": "private",
+            "body_type": "text",
+            "cwd": "/Users/paulhan/dev/1context",
+            "project_key": "1context",
+            "text": "Refactor the memory DB schema: drop the legacy_events table and add source_record_hash to perception_events. The migration has to be reversible."
+          },
+          {
+            "ts": "2026-06-11T14:09:47Z",
+            "session_id": "codex-0611-memdb",
+            "kind": "file_change",
+            "role": "assistant",
+            "source": "codex",
+            "privacy_class": "private",
+            "body_type": "text",
+            "cwd": "/Users/paulhan/dev/1context",
+            "project_key": "1context",
+            "text": "Edited crates/onecontext-memory-db/schema/current.sql: added source_record_hash TEXT NOT NULL DEFAULT '' to perception_events, dropped the legacy_events table, and wrote companion migration migrations/0042_add_source_record_hash.sql."
+          },
+          {
+            "ts": "2026-06-11T14:17:05Z",
+            "session_id": "codex-0611-memdb",
+            "kind": "exec_command",
+            "role": "assistant",
+            "source": "codex",
+            "privacy_class": "private",
+            "body_type": "text",
+            "cwd": "/Users/paulhan/dev/1context",
+            "project_key": "1context",
+            "text": "Ran `cargo test -p onecontext-memory-db`: 2 failures — schema_roundtrip_includes_all_columns and migration_0042_is_reversible (down migration is missing the DROP COLUMN)."
+          },
+          {
+            "ts": "2026-06-11T14:24:30Z",
+            "session_id": "codex-0611-memdb",
+            "kind": "file_change",
+            "role": "assistant",
+            "source": "codex",
+            "privacy_class": "private",
+            "body_type": "text",
+            "cwd": "/Users/paulhan/dev/1context",
+            "project_key": "1context",
+            "text": "Edited crates/onecontext-memory-db/migrations/0042_add_source_record_hash.down.sql: added ALTER TABLE perception_events DROP COLUMN source_record_hash. Re-ran `cargo test -p onecontext-memory-db`: all 31 tests green."
+          },
+          {
+            "ts": "2026-06-11T14:41:58Z",
+            "session_id": "codex-0611-memdb",
+            "kind": "user_message",
+            "role": "user",
+            "source": "codex",
+            "privacy_class": "private",
+            "body_type": "text",
+            "cwd": "/Users/paulhan/dev/1context",
+            "project_key": "1context",
+            "text": "good. leaving the legacy_events backfill for tomorrow — need to check the perception cursor logic first. commit as 'Drop legacy_events, add source_record_hash (0042)'"
+          }
+        ]"#;
+        let events: Vec<SourceEvent> =
+            serde_json::from_str(events_json).expect("synthetic source events parse");
+        assert_eq!(events.len(), 5, "expected 5 synthetic events");
+        let plan = build_packet_plan(&events, PacketPlannerPolicy::default(), &BTreeSet::new());
+        assert_eq!(
+            plan.selected_packets.len(),
+            1,
+            "synthetic hour should plan as exactly one packet: {plan:#?}"
+        );
+        let materialized = materialize_source_packets(
+            &paths,
+            &plan,
+            &events,
+            SourcePacketMaterializationRequest {
+                run_id: "live-chain".to_string(),
+                source_window_days: 1,
+                current_pages: Vec::new(),
+            },
+        )
+        .expect("materialize synthetic source packet");
+        assert!(
+            materialized.issues.is_empty(),
+            "packet materialization issues: {:?}",
+            materialized.issues
+        );
+        let packet = &materialized.packets[0];
+        assert_eq!(packet.date, packet_date);
+        assert_eq!(packet.hour, packet_hour);
+        assert_eq!(packet.event_count, 5);
+        eprintln!(
+            "=== SYNTHETIC PACKET ===\npacket_id: {}\npath: {}\nhash: {}",
+            packet.packet_id, packet.path, packet.source_packet_hash
+        );
+
+        // --- REAL role prompts from the wiki-company-v1 pack, with dead pack
+        // scaffolding trimmed (every trim asserted + logged via trim_prompt).
+        let prompts_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../runtime/1Context/context-engine/packs/wiki-company-v1/prompts");
+
+        // Scribe role prompt. TRIM S1: the pack's task prompt named a target
+        // file path; in this harness the turn product is the final message.
+        let scribe_role = std::fs::read_to_string(prompts_dir.join("hourly-scribe.md"))
+            .expect("read hourly-scribe.md");
+        let scribe_role = trim_prompt(
+            &scribe_role,
+            "S1 (scribe output = final message, not a file)",
+            "Write exactly one markdown file at the path named in the task prompt.",
+            "Deliver exactly one talk entry as your final assistant message; the 1Context harness owns file delivery.",
+        );
+
+        // Scribe task prompt. TRIM S2: {output_path} target-file block is dead
+        // (no file write). TRIM S3/S5/S7: file-write phrasing follows S2.
+        // HYDRATE S6: {date}/{hour} template variables filled like the old
+        // pack runner did.
+        let scribe_task = std::fs::read_to_string(prompts_dir.join("hourly-scribe-task.md"))
+            .expect("read hourly-scribe-task.md");
+        let scribe_task = trim_prompt(
+            &scribe_task,
+            "S2 (drop {output_path} target-file block)",
+            "Target file:\n\n```text\n{output_path}\n```",
+            "Deliver the entry as your final assistant message; do not create files.",
+        );
+        let scribe_task = trim_prompt(
+            &scribe_task,
+            "S3 (create-the-file -> write-the-entry)",
+            "- Create the target file if and only if the inherited hour contains meaningful\n  activity worth remembering.",
+            "- Write the entry if and only if the inherited hour contains meaningful\n  activity worth remembering.",
+        );
+        let scribe_task = trim_prompt(
+            &scribe_task,
+            "S5 (no target file to except)",
+            "- Do not edit any file except the target file.",
+            "- Do not edit, create, or read any files, and do not run commands.",
+        );
+        let scribe_task = trim_prompt(
+            &scribe_task,
+            "S7 (important artifact is the final message)",
+            "The target workspace is temporary. The important artifact is the markdown file.",
+            "The target workspace is temporary. The important artifact is your final message.",
+        );
+        let scribe_task = scribe_task
+            .replace("{date}", packet_date)
+            .replace("{hour}", packet_hour);
+        eprintln!("--- prompt hydration S6 applied ({{date}} -> {packet_date}, {{hour}} -> {packet_hour})");
+        let scribe_prompt = format!("{scribe_role}\n\n---\n\n{scribe_task}");
+
+        // --- TURN 1: SCRIBE (live).
+        let scribe_turn = RuntimeTurnDescriptor {
+            schema_version: CONTEXT_ENGINE_SCHEMA_VERSION,
+            kind: "onecontext.context_engine.runtime_turn_descriptor.v1".to_string(),
+            run_id: "live-chain".to_string(),
+            status: "runnable".to_string(),
+            operation_id: "live-chain:scribe-unit".to_string(),
+            harness_unit_id: "live-chain-scribe-unit".to_string(),
+            harness_turn_id: "turn-live-chain-scribe-unit".to_string(),
+            phase_id: "wake_scribes".to_string(),
+            job_id: "memory.hourly.scribe".to_string(),
+            agent_id: "hourly-scribe".to_string(),
+            unit_id: "scribe-unit".to_string(),
+            fanout: "once".to_string(),
+            max_concurrent: None,
+            packet_id: Some(packet.packet_id.clone()),
+            date: Some(packet_date.to_string()),
+            hour: Some(packet_hour.to_string()),
+            bindings: BTreeMap::new(),
+            unit_scope: BTreeMap::new(),
+            inputs: vec!["source_packet".to_string()],
+            outputs: vec!["scribe_artifacts".to_string()],
+            required_artifacts: Vec::new(),
+            required_mail: Vec::new(),
+            route: RuntimeTurnRoute {
+                thread_id: "mail://wiki-company".to_string(),
+                from_role: "memory.hourly.scribe".to_string(),
+                from_mailbox: agent_mail_address_for_unit("live-chain-scribe-unit"),
+                to: vec!["role://memory.wiki.historian".to_string()],
+                cc: vec!["list://wiki-company".to_string()],
+            },
+            receipt_expectations: ScheduledReceiptExpectations {
+                durable_receipt: "mail://wiki-company".to_string(),
+                require_birth_certificate: true,
+                require_turn_start: true,
+                require_context_injection: true,
+                require_adapter_events: true,
+                require_final_message: true,
+                require_talk_append: true,
+                require_mail_delivery: true,
+                require_turn_complete: true,
+                final_message_path: "final-message.md".to_string(),
+                final_message_fields: Vec::new(),
+                talk_delivery_mode: "mail".to_string(),
+                require_non_empty_final_message: true,
+                do_not_count_codex_exit_as_done: true,
+            },
+            final_message_path:
+                "context-engine/live/runs/live-chain/turns/live-chain-scribe-unit/attempt-0001/final-message.md"
+                    .to_string(),
+            source_packet_path: Some(packet.path.clone()),
+            source_packet_hash: Some(packet.source_packet_hash.clone()),
+            condition: None,
+        };
+        let scribe_profile = HarnessWorkerProfile {
+            model: "gpt-5.5".to_string(),
+            reasoning_effort: "low".to_string(),
+            prompt_text: scribe_prompt,
+            tools: Vec::new(),
+        };
+        let scribe_request =
+            build_harness_turn_request_for_runtime_turn(&paths, &scribe_profile, &scribe_turn)
+                .expect("build scribe turn request");
+        let scribe_result =
+            execute_harness_turn_request(&paths, scribe_request).expect("live scribe turn");
+
+        let scribe_entry = std::fs::read_to_string(&scribe_result.final_message_path)
+            .expect("read scribe final message");
+        eprintln!("=== TURN 1: SCRIBE OUTPUT (full) ===\n{scribe_entry}\n=== END SCRIBE OUTPUT ===");
+        assert_eq!(
+            scribe_result.final_message_origin, "model_output",
+            "scribe: expected model-authored output, got origin {} (preview: {})",
+            scribe_result.final_message_origin, scribe_result.assistant_preview
+        );
+        assert!(
+            scribe_result.completion.complete,
+            "scribe completion incomplete: {:?}",
+            scribe_result.completion.issues
+        );
+        assert!(
+            !scribe_entry.trim().is_empty(),
+            "scribe final message empty"
+        );
+        let scribe_usage = scribe_result
+            .usage
+            .as_ref()
+            .expect("scribe turn must capture codex token usage");
+        eprintln!("=== TURN 1: SCRIBE TOKEN USAGE ===\n{scribe_usage:#?}");
+        assert!(scribe_usage.output_tokens > 0, "scribe outputTokens zero");
+
+        // --- Historian role prompt. Trims H1-H5 remove dead pack scaffolding
+        // (talk folders on disk, concept index, q.py escalation, file
+        // writes); the scribe entries arrive push-mail style in this turn
+        // input instead.
+        let historian_role = std::fs::read_to_string(prompts_dir.join("historian.md"))
+            .expect("read historian.md");
+        let historian_role = trim_prompt(
+            &historian_role,
+            "H1 (day's entries arrive in-band, not from a talk folder)",
+            "- **All hourly entries on the talk folder for the day you're\n  processing** — markdown files named\n  `YYYY-MM-DDTHH-MMZ.conversation.md` for that date. Read in\n  chronological order (filename order does this for free).",
+            "- **All hourly entries for the day you're processing**, embedded\n  verbatim in this turn input under \"Today's Scribe Entries\". They\n  are your complete evidence; read them in the order given.",
+        );
+        let historian_role = trim_prompt(
+            &historian_role,
+            "H2 (no prior historian entries exist)",
+            "- **Your own prior entries on the same talk folder**, if any. You\n  don't repeat questions you've already asked; you may build on\n  them or revise them.",
+            "- You have no prior entries for this day; this is your first pass.",
+        );
+        let historian_role = trim_prompt(
+            &historian_role,
+            "H3 (concept index unavailable)",
+            "- **Concept page index** at `/paul-demo2/concept/` (or\n  `content/paul-demo/concept/<slug>.md` for the lab tree). Use this\n  to know which named subjects already have pages — you propose\n  new candidates only for things that don't.",
+            "- The concept page index is unavailable in this harness; treat\n  every named subject as having no existing page, and skip the\n  skip-if-already-decided lookups (no prior eras exist).",
+        );
+        let historian_role = trim_prompt(
+            &historian_role,
+            "H4 (q.py escalation tool is gone)",
+            "- **Raw events** via `agent/tools/q.py` if a scribe entry references\n  something you can't parse from the entry alone. Treat this as\n  escalation, not default behavior; the scribes already did the\n  primary read.",
+            "- Raw-event escalation tooling is unavailable in this harness; the\n  scribe entries in this turn input are your complete evidence. Do\n  not read files or run commands.",
+        );
+        let historian_role = trim_prompt(
+            &historian_role,
+            "H5 (entries delivered as final message, not files)",
+            "Markdown files in the same talk folder the scribes posted to (and\nin the destination talk folders for proposals targeting other\npages, per the routing above). Same filename convention, same\nper-entry frontmatter shape (see\n`prompts/for-you-talk-conventions.md`).",
+            "Entries delivered in your final assistant message; the 1Context\nharness owns file delivery. For each entry, state the intended\nfilename (same filename convention), then the frontmatter block,\nthen the body. Name the destination talk folder for proposals\ntargeting other pages, per the routing above.",
+        );
+        let historian_role = trim_prompt(
+            &historian_role,
+            "H6 (run report lists intended filenames, not written paths)",
+            "- The absolute paths of every file you wrote.",
+            "- The intended filename of every entry you produced.",
+        );
+
+        // Push-mail embedding: the scribe's product IS the historian's input.
+        let historian_prompt = format!(
+            "{historian_role}\n\n---\n\n## Today's Scribe Entries ({packet_date})\n\n\
+             The following are all of the day's scribe entries, delivered\n\
+             in-band. This is your complete input; read nothing from disk and\n\
+             run no commands.\n\n\
+             ### Entry `{packet_date}T{packet_hour}-00Z.conversation.md`\n\n{scribe_entry}\n"
+        );
+
+        // --- TURN 2: HISTORIAN (live), fresh unit/operation ids.
+        let historian_turn = RuntimeTurnDescriptor {
+            schema_version: CONTEXT_ENGINE_SCHEMA_VERSION,
+            kind: "onecontext.context_engine.runtime_turn_descriptor.v1".to_string(),
+            run_id: "live-chain".to_string(),
+            status: "runnable".to_string(),
+            operation_id: "live-chain:historian-unit".to_string(),
+            harness_unit_id: "live-chain-historian-unit".to_string(),
+            harness_turn_id: "turn-live-chain-historian-unit".to_string(),
+            phase_id: "wake_historian".to_string(),
+            job_id: "memory.wiki.historian".to_string(),
+            agent_id: "historian".to_string(),
+            unit_id: "historian-unit".to_string(),
+            fanout: "once".to_string(),
+            max_concurrent: None,
+            packet_id: None,
+            date: Some(packet_date.to_string()),
+            hour: None,
+            bindings: BTreeMap::new(),
+            unit_scope: BTreeMap::new(),
+            inputs: vec!["scribe_artifacts".to_string()],
+            outputs: vec!["historian_entries".to_string()],
+            required_artifacts: Vec::new(),
+            required_mail: Vec::new(),
+            route: RuntimeTurnRoute {
+                thread_id: "mail://wiki-company".to_string(),
+                from_role: "memory.wiki.historian".to_string(),
+                from_mailbox: agent_mail_address_for_unit("live-chain-historian-unit"),
+                to: vec!["role://memory.wiki.editor".to_string()],
+                cc: vec!["list://wiki-company".to_string()],
+            },
+            receipt_expectations: ScheduledReceiptExpectations {
+                durable_receipt: "mail://wiki-company".to_string(),
+                require_birth_certificate: true,
+                require_turn_start: true,
+                require_context_injection: true,
+                require_adapter_events: true,
+                require_final_message: true,
+                require_talk_append: true,
+                require_mail_delivery: true,
+                require_turn_complete: true,
+                final_message_path: "final-message.md".to_string(),
+                final_message_fields: Vec::new(),
+                talk_delivery_mode: "mail".to_string(),
+                require_non_empty_final_message: true,
+                do_not_count_codex_exit_as_done: true,
+            },
+            final_message_path:
+                "context-engine/live/runs/live-chain/turns/live-chain-historian-unit/attempt-0001/final-message.md"
+                    .to_string(),
+            source_packet_path: None,
+            source_packet_hash: None,
+            condition: None,
+        };
+        let historian_profile = HarnessWorkerProfile {
+            model: "gpt-5.5".to_string(),
+            reasoning_effort: "low".to_string(),
+            prompt_text: historian_prompt,
+            tools: Vec::new(),
+        };
+        let historian_request = build_harness_turn_request_for_runtime_turn(
+            &paths,
+            &historian_profile,
+            &historian_turn,
+        )
+        .expect("build historian turn request");
+        let historian_result = execute_harness_turn_request(&paths, historian_request)
+            .expect("live historian turn");
+
+        let historian_entry = std::fs::read_to_string(&historian_result.final_message_path)
+            .expect("read historian final message");
+        eprintln!(
+            "=== TURN 2: HISTORIAN OUTPUT (full) ===\n{historian_entry}\n=== END HISTORIAN OUTPUT ==="
+        );
+        assert_eq!(
+            historian_result.final_message_origin, "model_output",
+            "historian: expected model-authored output, got origin {} (preview: {})",
+            historian_result.final_message_origin, historian_result.assistant_preview
+        );
+        assert!(
+            historian_result.completion.complete,
+            "historian completion incomplete: {:?}",
+            historian_result.completion.issues
+        );
+        assert!(
+            !historian_entry.trim().is_empty(),
+            "historian final message empty"
+        );
+        let historian_usage = historian_result
+            .usage
+            .as_ref()
+            .expect("historian turn must capture codex token usage");
+        eprintln!("=== TURN 2: HISTORIAN TOKEN USAGE ===\n{historian_usage:#?}");
+        assert!(
+            historian_usage.output_tokens > 0,
+            "historian outputTokens zero"
+        );
+
+        // Loose engagement check: the historian must visibly engage with the
+        // scribe's material — mention something from the synthetic hour, or
+        // pose a question.
+        let historian_lower = historian_entry.to_lowercase();
+        let engagement_terms = [
+            "source_record_hash",
+            "legacy_events",
+            "0042",
+            "onecontext-memory-db",
+            "migration",
+            "backfill",
+            "perception",
+        ];
+        let mentions_event = engagement_terms
+            .iter()
+            .any(|term| historian_lower.contains(term));
+        let poses_question = historian_entry.contains('?');
+        assert!(
+            mentions_event || poses_question,
+            "historian output engages with neither the synthetic events nor poses a question:\n{historian_entry}"
+        );
+
+        eprintln!(
+            "=== CHAIN SUMMARY ===\nscribe: thread={:?} usage(total/in/out)={}/{}/{}\nhistorian: thread={:?} usage(total/in/out)={}/{}/{}\nengagement: mentions_event={mentions_event} poses_question={poses_question}",
+            scribe_result.codex_thread_id,
+            scribe_usage.total_tokens,
+            scribe_usage.input_tokens,
+            scribe_usage.output_tokens,
+            historian_result.codex_thread_id,
+            historian_usage.total_tokens,
+            historian_usage.input_tokens,
+            historian_usage.output_tokens,
+        );
+    }
 }
